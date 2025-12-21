@@ -1,5 +1,5 @@
-import { getCurrentActiveBoard } from './dominoFill/Boards'
-import DominoClient from './dominoFill/DominoClient';
+import { getCurrentActiveBoard } from './Boards'
+import DominoClient from './DominoClient';
 export default function Home() {
   const board = JSON.parse(JSON.stringify(getCurrentActiveBoard()))
   console.log('boards', board)

@@ -9,6 +9,9 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "mobx": "^6.15.0",
+    "mobx-react": "^9.2.1",
+    "motion": "^12.23.26",
     "next": "16.0.10",
     "react": "19.2.1",
     "react-dom": "19.2.1"

@@ -1,0 +1,29 @@
+"use client"
+import { motion } from 'motion/react'
+import DominoPieceOne from "./DominoPieceOne"
+import DominoPieceTwo from "./DominoPieceTwo";
+import { observer } from 'mobx-react';
+import { useStores } from '@/app/hooks/useStore';
+
+const DominoPieces: React.FC = ({ }) => {
+    console.log('pieces rerender')
+    const { boardsStore } = useStores()
+    const onClickPieceOne = () => {
+        boardsStore.setSelectedPiece(1)
+    }
+    const onClickPieceTwo = () => {
+        return boardsStore.setSelectedPiece(2)
+    }
+    return (
+        <div className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center">
+            <motion.div style={{ opacity: boardsStore.selectedPiece == 1 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceOne} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}  >
+                <DominoPieceOne />
+            </motion.div>
+            <motion.div style={{ opacity: boardsStore.selectedPiece == 2 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceTwo} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}>
+                <DominoPieceTwo />
+            </motion.div>
+        </div >
+    );
+}
+
+export default observer(DominoPieces)
