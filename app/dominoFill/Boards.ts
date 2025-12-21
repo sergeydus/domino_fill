@@ -26,7 +26,7 @@ function generateMediumBoards(): [DominoBoard, DominoBoard, DominoBoard] {
     return [new DominoBoard(7, 9), new DominoBoard(7, 7), new DominoBoard(7, 5)]
 }
 function generateHardBoards(): [DominoBoard, DominoBoard, DominoBoard] {
-    return [new DominoBoard(8, 10), new DominoBoard(8, 8), new DominoBoard(8, 6)]
+    return [new DominoBoard(8, 10, false), new DominoBoard(8, 8, false), new DominoBoard(8, 6, false)]
 }
 
 const currentActiveBoard = new Boards()

@@ -4,7 +4,7 @@ class DominoBoard {
     boardHorizontalNumbers: string
     boardVerticalNumbers: string
     completed: boolean
-    constructor(size = 8, rocks = 10) {
+    constructor(size = 8, rocks = 10, allow0Lines = true) {
         let boardHorizontalNumbers: string | null = null
         let boardVerticalNumbers: string | null = null
         let finalBoard: number[][] | null = null
@@ -18,7 +18,7 @@ class DominoBoard {
             console.log('created board')
             const isvalid = this.testRockValidity(finalBoard)
             console.log('board is', isvalid ? 'valid' : 'not valid')
-            const boardResult = this.fillBoard(finalBoard);
+            const boardResult = this.fillBoard(finalBoard, allow0Lines);
             if (boardResult.isPossible && boardResult.boardCode) {
                 boardHorizontalNumbers = boardResult.boardCode.slice(0, size)
                 boardVerticalNumbers = boardResult.boardCode.slice(size)
@@ -101,7 +101,7 @@ class DominoBoard {
         }
         return null
     }
-    fillBoard(board: number[][]) {
+    fillBoard(board: number[][], allow0Lines: boolean): { isPossible: boolean, boardCode: string | null } {
         // console.log('fill board:', this.board)
         const boardSize = board.length;
         const possibleBoards = new Map<string, number>()
@@ -171,6 +171,10 @@ class DominoBoard {
         //recur end
         // console.log('possibleBoards', possibleBoards, board)
         const possibleBoard = Array.from(possibleBoards.entries()).find(([code, solutions]) => {
+            if (!allow0Lines && code.includes('0')) {
+                console.log('board has 0 line, not allowed')
+                return false
+            }
             return solutions === 1
         })
         return {
