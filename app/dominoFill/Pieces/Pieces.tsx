@@ -27,8 +27,8 @@ const Hover: React.FC = () => {
             e.stopPropagation()
         }
     }
-    console.log('ones and twos', { ones, twos })
-    return <div className="absolute bg-green-500 z-20">
+
+    return <div className="absolute z-20">
         {/* <AnimatePresence> */}
         {ones.map(([i, j]) =>
             <motion.div key={`one_${i},${j}`} className="absolute cursor-pointer"

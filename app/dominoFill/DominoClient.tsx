@@ -7,6 +7,7 @@ import DominoPieces from './Pieces/DominoPieces'
 import { useStores } from '../hooks/useStore'
 import { observer } from 'mobx-react'
 import LevelSelector from './LevelSelector'
+import Tutorial from './Tutorial'
 
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
@@ -34,6 +35,7 @@ const DominoClient: React.FC = () => {
         <ClientBoard size={currentBoard.board.length} board={currentBoard} />
         <DominoPieces />
         <LevelSelector />
+        <Tutorial />
       </div>
     </div >
   );

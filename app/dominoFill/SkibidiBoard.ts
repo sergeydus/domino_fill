@@ -171,7 +171,7 @@ class SkibidiBoard {
         recur(board);
         //recur end
         console.log('possibleBoards', possibleBoards, board)
-        const possibleBoard = Array.from(possibleBoards.entries()).find(([code, solutions]) => {
+        const possibleBoard = Array.from(possibleBoards.entries()).find(([, solutions]) => {
             return solutions === 1
         })
         return {

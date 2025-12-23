@@ -12,11 +12,15 @@ export class BoardsStore {
     hardBoards: DominoBoard[] = []
     hoverCords: [number, number] | null = null
     hoveredSquare: [number, number] | null = null
+    boardWidth: number = 768 //default for hard
     constructor() {
         let audio: HTMLAudioElement | null = null
         if (typeof Audio != 'undefined') {
             audio = new Audio('winSilent.mp3')
         }
+        // if (typeof window !== 'undefined') {
+        //     this.boardWidth = window.innerWidth < 768 ? window.innerWidth : this.boardWidth
+        // }
         makeAutoObservable(this)
         autorun(() => {
             if (this.currentBoard && this.correctHorizontalValues.join('') == this.currentBoard?.boardHorizontalNumbers
@@ -68,14 +72,17 @@ export class BoardsStore {
     setHoverCords(cords: [number, number] | null) {
         this.hoverCords = cords
     }
+    setBoardWidth(width: number) {
+        this.boardWidth = width
+    }
     get squareSize() {
         switch (this.difficulty) {
             case 'easy':
-                return 96
+                return Math.round(this.boardWidth / 8)
             case 'normal':
-                return 96 - 8
+                return Math.round(this.boardWidth / 9)
             case 'hard':
-                return 96 - 16
+                return Math.round(this.boardWidth / 10)
             default:
                 return 96
         }
@@ -106,7 +113,7 @@ export class BoardsStore {
         return correctIndexes
     }
     get correctVerticalValues() {
-        return this.currentBoard.board.map((arr, index) => {
+        return this.currentBoard.board.map((arr) => {
             const sum = arr.reduce<number>((acc, cur) => {
                 if (cur == -1) {
                     return acc
@@ -218,7 +225,6 @@ export class BoardsStore {
                 this.currentBoard.board[i][j] = 1
                 this.currentBoard.board[i2][j2] = 0
             }
-            console.log('set piece 1')
         }
         else if (this.selectedPiece == 2) {
             if (j > j2) {
@@ -228,13 +234,10 @@ export class BoardsStore {
                 this.currentBoard.board[i][j] = 0
                 this.currentBoard.board[i2][j2] = 2
             }
-            console.log('set piece 2')
         }
     }
     removePiece(i: number, j: number) {
         const value = this.currentBoard.board[i][j]
-        console.log('remove piece', { i, j, value })
-        console.log('board b4', JSON.stringify(this.currentBoard.board))
         if (value === null) return
         if (value == 1) {
             this.currentBoard.board[i][j] = null
@@ -244,7 +247,5 @@ export class BoardsStore {
             this.currentBoard.board[i][j] = null
             this.currentBoard.board[i][j - 1] = null
         }
-        console.log('board now is ', this.currentBoard.board)
-        console.log('board after', JSON.stringify(this.currentBoard.board))
     }
 }

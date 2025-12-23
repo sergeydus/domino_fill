@@ -1,5 +1,5 @@
 "use client"
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext } from "react";
 import { rootStore } from "@/app/stores/RootStore";
 
 export const StoreContext = createContext(rootStore);
