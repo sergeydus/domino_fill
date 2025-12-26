@@ -28,7 +28,7 @@ const Tutorial = () => {
             <div className="absolute top-0 left-0 right-0 bottom-0 backdrop-blur-sm flex items-center justify-center">
                 <div className="bg-white rounded-2xl text-black w-[min(90%,1080px)] p-8 flex items-center justify-center flex-col gap-4">
                     <h2 className="text-3xl font-bold mb-4">Domino Fill Tutorial</h2>
-                    complete:{tutorialBoard.completed ? 'yes' : 'no'}
+                    {/* complete:{tutorialBoard.completed ? 'yes' : 'no'} */}
                     <p>Welcome to Domino Fill! The goal of the game is to fill the entire board with domino pieces.</p>
                     <p>Each domino piece covers two adjacent squares on the board.</p>
                     <p>The numbers on the edges of the board indicate how many domino pieces should be placed in that row or column.</p>
