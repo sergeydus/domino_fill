@@ -1,12 +1,12 @@
 import { observer } from "mobx-react"
-import { useStores } from "@/app/hooks/useStore"
 import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
 import Rock from "./Rock"
-const Hover: React.FC = () => {
+import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore"
+
+const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
-    const { boardsStore } = useStores()
     const size = boardsStore.squareSize
     const board = boardsStore.currentBoard.board
     const ones: [number, number][] = []
@@ -34,6 +34,7 @@ const Hover: React.FC = () => {
             <motion.div key={`one_${i},${j}`} className="absolute cursor-pointer"
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
                 <DominoPieceOne onClick={onclick(i, j)}
+                    boardsStore={boardsStore}
                     // style={{ top: `${i * size}px`, left: `${j * size}px` }}
                     className="absolute z-30 cursor-pointer"
                 />
@@ -43,6 +44,7 @@ const Hover: React.FC = () => {
             <motion.div key={`two_${i},${j}`} className="absolute cursor-pointer"
                 style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
                 <DominoPieceTwo onClick={onclick(i, j)}
+                    boardsStore={boardsStore}
                     key={`${i},${j}`}
 
                 />
@@ -51,7 +53,7 @@ const Hover: React.FC = () => {
         {rocks.map(([i, j]) =>
             <div key={`${i},${j}`} className="absolute"
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }}>
-                <Rock
+                <Rock boardsStore={boardsStore}
                     key={`rock_${i},${j}`}
                 />
             </div>

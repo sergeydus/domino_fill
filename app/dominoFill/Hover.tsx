@@ -1,10 +1,8 @@
 import { observer } from "mobx-react"
-import { useStores } from "../hooks/useStore"
-import { i } from "motion/react-client"
+import { CurrentBoardStore } from "../stores/CurrentBoardStore"
 
-const Hover: React.FC = () => {
+const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
-    const { boardsStore } = useStores()
     const highlightedSquares = boardsStore.highlightedSquares2
     const size = boardsStore.squareSize
     if (!highlightedSquares) return null

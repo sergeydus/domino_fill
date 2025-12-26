@@ -1,8 +1,7 @@
 import { observer } from "mobx-react"
-import { useStores } from "../hooks/useStore"
 import { motion } from 'motion/react'
-const HorizontalNumbers: React.FC = () => {
-    const { boardsStore } = useStores()
+import { CurrentBoardStore } from "../stores/CurrentBoardStore"
+const HorizontalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
     const board = boardsStore.currentBoard
     const size = boardsStore.squareSize
     const split = board.boardHorizontalNumbers.split('')

@@ -1,11 +1,16 @@
 "use server"
-import DominoBoard from "./dominoBoard";
+import DominoBoard, { DominoLevel } from "./dominoBoard";
 
-class Boards {
+export type BoardsResponse = {
+    easyBoards: [DominoLevel, DominoLevel, DominoLevel],
+    mediumBoards: [DominoLevel, DominoLevel, DominoLevel],
+    hardBoards: [DominoLevel, DominoLevel, DominoLevel],
+}
+class Boards implements BoardsResponse {
     created = new Date()
-    easyBoards!: [DominoBoard, DominoBoard, DominoBoard]
-    mediumBoards!: [DominoBoard, DominoBoard, DominoBoard]
-    hardBoards!: [DominoBoard, DominoBoard, DominoBoard]
+    easyBoards!: [DominoLevel, DominoLevel, DominoLevel]
+    mediumBoards!: [DominoLevel, DominoLevel, DominoLevel]
+    hardBoards!: [DominoLevel, DominoLevel, DominoLevel]
     constructor() {
         // intentionally empty
         this.generateBoards()
@@ -20,17 +25,17 @@ class Boards {
 
 
 function generateEasyBoards(): [DominoBoard, DominoBoard, DominoBoard] {
-    return [new DominoBoard(6, 8), new DominoBoard(6, 6), new DominoBoard(6, 4)]
+    return [new DominoBoard({ size: 6, rocks: 8 }), new DominoBoard({ size: 6, rocks: 6 }), new DominoBoard({ size: 6, rocks: 4 })]
 }
 function generateMediumBoards(): [DominoBoard, DominoBoard, DominoBoard] {
-    return [new DominoBoard(7, 9), new DominoBoard(7, 7), new DominoBoard(7, 5)]
+    return [new DominoBoard({ size: 7, rocks: 9 }), new DominoBoard({ size: 7, rocks: 7 }), new DominoBoard({ size: 7, rocks: 5 })]
 }
 function generateHardBoards(): [DominoBoard, DominoBoard, DominoBoard] {
-    return [new DominoBoard(8, 10, false), new DominoBoard(8, 8, false), new DominoBoard(8, 6, false)]
+    return [new DominoBoard({ size: 8, rocks: 10, allow0Lines: false }), new DominoBoard({ size: 8, rocks: 8, allow0Lines: false }), new DominoBoard({ size: 8, rocks: 6, allow0Lines: false })]
 }
 
 const currentActiveBoard = new Boards()
-const getCurrentActiveBoard = async (): Promise<Boards> => {
+const getCurrentActiveBoard = async (): Promise<BoardsResponse> => {
     const now = new Date()
     const created = currentActiveBoard.created
 

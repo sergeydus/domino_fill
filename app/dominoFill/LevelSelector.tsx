@@ -1,9 +1,9 @@
 "use client"
 import { observer } from "mobx-react"
-import { useStores } from "../hooks/useStore"
 import { motion } from 'motion/react'
-const LevelSelector: React.FC = () => {
-    const { boardsStore } = useStores()
+import { LevelStore } from "../stores/BoardsStore"
+
+const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {
     const currentLevel = boardsStore.level
     const hasNextLevel = boardsStore.level < 3
     const hasPreviousLevel = boardsStore.level > 1

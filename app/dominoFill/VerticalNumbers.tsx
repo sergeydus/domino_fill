@@ -1,9 +1,8 @@
 import { observer } from "mobx-react"
-import { useStores } from "../hooks/useStore"
 import { motion } from 'motion/react'
-const VerticalNumbers: React.FC = () => {
+import { CurrentBoardStore } from "../stores/CurrentBoardStore"
+const VerticalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
-    const { boardsStore } = useStores()
     const board = boardsStore.currentBoard
     const size = boardsStore.squareSize
     const split = board.boardVerticalNumbers.split('')

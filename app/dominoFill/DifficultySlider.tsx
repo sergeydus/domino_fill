@@ -1,10 +1,9 @@
 "use client"
 import { motion } from "motion/react"
-import { useStores } from "../hooks/useStore"
 import { observer } from "mobx-react"
+import { LevelStore } from "../stores/BoardsStore"
 
-const DominoSlider: React.FC = () => {
-    const { boardsStore } = useStores()
+const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {
     console.log('difficluly slider rerender')
     const onClick = (dif: 'easy' | 'normal' | 'hard') => {
         return () => { boardsStore.setDifficulty(dif) }

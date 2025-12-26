@@ -1,10 +1,25 @@
 "use server"
-class DominoBoard {
+
+export type DominoLevel = {
     board: (number | null)[][];
-    boardHorizontalNumbers: string
-    boardVerticalNumbers: string
+    boardHorizontalNumbers: string;
+    boardVerticalNumbers: string;
+    completed?: boolean
+}
+
+class DominoBoard implements DominoLevel {
+    board: (number | null)[][];
+    boardHorizontalNumbers: string;
+    boardVerticalNumbers: string;
     completed: boolean
-    constructor(size = 8, rocks = 10, allow0Lines = true) {
+    constructor({ size = 8, rocks = 10, allow0Lines = true, dominoBoard = null }: { size?: number, rocks?: number, allow0Lines?: boolean, dominoBoard?: DominoLevel | null } = {}) {
+        if (dominoBoard) {
+            this.board = dominoBoard.board
+            this.boardHorizontalNumbers = dominoBoard.boardHorizontalNumbers
+            this.boardVerticalNumbers = dominoBoard.boardVerticalNumbers
+            this.completed = false
+            return
+        }
         let boardHorizontalNumbers: string | null = null
         let boardVerticalNumbers: string | null = null
         let finalBoard: number[][] | null = null
@@ -27,9 +42,9 @@ class DominoBoard {
             }
         } while (!boardHorizontalNumbers || !boardVerticalNumbers)
         console.log('success!', `generating size:${size},rocks:${rocks}`)
+        this.board = finalBoard
         this.boardHorizontalNumbers = boardHorizontalNumbers
         this.boardVerticalNumbers = boardVerticalNumbers
-        this.board = finalBoard
     }
 
     addRocks(rockCount = 2, board: number[][]) {

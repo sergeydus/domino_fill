@@ -3,11 +3,12 @@ import { motion } from 'motion/react'
 import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo";
 import { observer } from 'mobx-react';
+import { CurrentBoardStore } from '@/app/stores/CurrentBoardStore';
 import { useStores } from '@/app/hooks/useStore';
 
-const DominoPieces: React.FC = ({ }) => {
-    console.log('pieces rerender')
+const DominoPieces: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore:currentBoard }) => {
     const { boardsStore } = useStores()
+    console.log('pieces rerender')
     const onClickPieceOne = () => {
         boardsStore.setSelectedPiece(1)
     }
@@ -17,10 +18,10 @@ const DominoPieces: React.FC = ({ }) => {
     return (
         <div className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center">
             <motion.div style={{ opacity: boardsStore.selectedPiece == 1 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceOne} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}  >
-                <DominoPieceOne />
+                <DominoPieceOne boardsStore={currentBoard} />
             </motion.div>
             <motion.div style={{ opacity: boardsStore.selectedPiece == 2 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceTwo} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}>
-                <DominoPieceTwo />
+                <DominoPieceTwo boardsStore={currentBoard} />
             </motion.div>
         </div >
     );

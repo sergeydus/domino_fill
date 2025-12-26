@@ -1,14 +1,14 @@
 import React from "react";
-import { useStores } from "@/app/hooks/useStore";
 import { observer } from "mobx-react";
+import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore";
 
 const strokeWidth = 6
 
-const DominoPieceTwo: React.FC<React.SVGProps<SVGSVGElement>> = (props) => {
-    const { boardsStore } = useStores()
+const DominoPieceTwo: React.FC<React.SVGProps<SVGSVGElement> & { boardsStore: CurrentBoardStore }> = (props) => {
+    const { boardsStore, ...rest } = props
     const size = boardsStore.squareSize
     return (
-        <svg width={size * 2} height={size + 16} {...props} className="-translate-y-4">
+        <svg width={size * 2} height={size + 16} {...rest} className="-translate-y-4">
             <rect width={size * 2 - 8} x={4} y={4 + 16} height={size - 8} fill="#8d8778" strokeWidth={strokeWidth} rx={8} ry={8} />
             <rect width={size * 2 - 8} x={4} y={4} height={size - 8} fill="#FFF3D6" strokeWidth={strokeWidth} rx={8} ry={8} />
             <rect width={size * 2 - 8} x={4} y={4} height={size - 8 + 16} stroke="black" fill="transparent" strokeWidth={strokeWidth} rx={8} ry={8} />

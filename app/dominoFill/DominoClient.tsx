@@ -25,18 +25,19 @@ const DominoClient: React.FC = () => {
   const onRightClick = (e: React.MouseEvent<HTMLDivElement>) => {
     console.log('e', e)
     boardsStore.setSelectedPiece(boardsStore.selectedPiece == 1 ? 2 : 1)
+
     e.preventDefault()
   }
   if (isLoading || !currentBoard) return <div>no board</div>
   return (
-    <div onContextMenu={onRightClick} className="flex flex-col min-h-screen items-center justify-center bg-[#e8e7e7] font-sans">
-      <div className='flex flex-col gap-4 items-center justify-center'>
-        <DifficultySlider />
-        <ClientBoard size={currentBoard.board.length} board={currentBoard} />
-        <DominoPieces />
-        <LevelSelector />
-        <Tutorial />
+    <div className="flex flex-col min-h-screen items-center justify-center bg-[#e8e7e7] font-sans">
+      <div onContextMenu={onRightClick} className='flex flex-col gap-4 items-center justify-center'>
+        <DifficultySlider boardsStore={boardsStore} />
+        <ClientBoard boardsStore={currentBoard} />
+        <DominoPieces boardsStore={currentBoard} />
+        <LevelSelector boardsStore={boardsStore} />
       </div>
+      <Tutorial />
     </div >
   );
 }

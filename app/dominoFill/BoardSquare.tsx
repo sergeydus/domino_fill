@@ -1,21 +1,22 @@
 "use client"
 import React, { CSSProperties, useMemo } from "react";
 import { observer } from "mobx-react";
-import { useStores } from "../hooks/useStore";
+import { CurrentBoardStore } from "../stores/CurrentBoardStore";
 
 type Props = {
     i: number
     j: number
+    boardsStore: CurrentBoardStore
 };
 type Props2 = {
     i: number,
     j: number
     isRock: boolean,
+    boardsStore: CurrentBoardStore
 }
 
-const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j }) => {
+const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) => {
     // console.log('square rerender')
-    const { boardsStore } = useStores()
     const currentBoard = boardsStore.currentBoard
     const size = currentBoard.board.length
     const isDark = (i + j) % 2 === 0;
@@ -65,14 +66,13 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j }) => {
 
 })
 //prevent all squares from rerendering
-const SquareWrapper: React.FC<Props> = ({ i, j }) => {
+const SquareWrapper: React.FC<Props> = ({ i, j, boardsStore }) => {
     // console.log('wrapper rerender')
-    const { boardsStore } = useStores()
     const currentBoard = boardsStore.currentBoard
 
     const isRock = currentBoard.board[i][j] == -1
     // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false
-    return <BoardSquare i={i} j={j} isRock={isRock} />
+    return <BoardSquare i={i} j={j} isRock={isRock} boardsStore={boardsStore} />
 }
 
 export default observer(SquareWrapper)

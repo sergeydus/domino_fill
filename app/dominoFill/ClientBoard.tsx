@@ -1,21 +1,22 @@
 "use client"
-import React, { CSSProperties, useEffect } from "react";
-import DominoBoard from "./dominoBoard";
+import React, { CSSProperties } from "react";
 import BoardSquare from "./BoardSquare";
 import { observer } from "mobx-react";
-import { useStores } from "../hooks/useStore";
 import Hover from "./Hover";
 import Pieces from "./Pieces/Pieces";
 import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
+import { useStores } from "../hooks/useStore";
+import { CurrentBoardStore } from "../stores/CurrentBoardStore";
 
 type Props = {
-    size: number;
-    board: DominoBoard
+    boardsStore: CurrentBoardStore
 };
 
-const ClientBoard: React.FC<Props> = ({ size, board }: Props) => {
-    const { boardsStore } = useStores()
+const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
+    const { sizeStore } = useStores()
+    const size = boardsStore.currentBoard.board.length
+    const board = boardsStore.currentBoard
     console.log('rerender client board')
     const gridStyle: CSSProperties = {
         display: "grid",
@@ -26,9 +27,9 @@ const ClientBoard: React.FC<Props> = ({ size, board }: Props) => {
         // console.log('rect', rect)
         const x = e.clientX - rect.left; //x position within the element.
         const y = e.clientY - rect.top;  //y position within the element.
-        boardsStore.setHoverCords([x, y])
+        sizeStore.setHoverCords([x, y])
     }
-    const onclick = (_e: React.MouseEvent<HTMLDivElement>) => {
+    const onclick = () => {
         // const rect = e.currentTarget.getBoundingClientRect();
         // const x = e.clientX - rect.left; //x position within the element.
         // const y = e.clientY - rect.top;  //y position within the element.
@@ -38,39 +39,39 @@ const ClientBoard: React.FC<Props> = ({ size, board }: Props) => {
     }
 
     const ref = React.useRef<HTMLDivElement>(null)
-    useEffect(() => {
-        window.onresize = (e) => {
-            const size = ref.current?.getBoundingClientRect()
-            if (size) {
-                // console.log('resize', e, size.width)
-                boardsStore.setBoardWidth(size.width)
-            }
-        }
-        return () => {
-            window.onresize = null
-        }
-    }, [boardsStore])
+    // useEffect(() => {
+    //     window.onresize = () => {
+    //         const size = ref.current?.getBoundingClientRect()
+    //         if (size) {
+    //             // console.log('resize', e, size.width)
+    //             boardsStore.setBoardWidth(size.width)
+    //         }
+    //     }
+    //     return () => {
+    //         window.onresize = null
+    //     }
+    // }, [boardsStore])
 
     const isDisabled = boardsStore.currentBoard.completed
     return (
         <div className="flex flex-row items-center justify-center select-none" style={{ pointerEvents: isDisabled ? 'none' : 'auto' }}>
-            <div className="flex-1 flex-col items-center justify-center w-[min(768px,100vw)]" ref={ref}>
-                <HorizontalNumbers />
+            <div className="flex flex-1 flex-col items-center justify-center" style={{width: sizeStore.boardSize}} ref={ref}>
+                <HorizontalNumbers boardsStore={boardsStore} />
                 <div className="flex flex-row">
-                    <VerticalNumbers />
+                    <VerticalNumbers boardsStore={boardsStore} />
                     <div className="border-[#666666] border-4 rounded-2xl">
-                        <div key={boardsStore.difficulty} onMouseMove={onmousemove} onClick={onclick} draggable={false} style={gridStyle} className="relative">
-                            <Hover />
-                            <Pieces />
+                        <div onMouseMove={onmousemove} onClick={onclick} draggable={false} style={gridStyle} className="relative">
+                            <Hover boardsStore={boardsStore} />
+                            <Pieces boardsStore={boardsStore} />
                             {board.board.flat().map((_el, index) => {
                                 const i = Math.floor(index / size)
                                 const j = index % size
                                 // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false
-                                return (<BoardSquare key={`${i}_${j}`} i={i} j={j} />)
+                                return (<BoardSquare key={`${i}_${j}`} i={i} j={j} boardsStore={boardsStore} />)
                             })}
                         </div>
                     </div>
-                    <VerticalNumbers />
+                    <VerticalNumbers boardsStore={boardsStore} />
                 </div>
             </div>
         </div>
