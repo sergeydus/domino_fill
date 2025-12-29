@@ -5,7 +5,7 @@ const VerticalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsS
     // console.log('wrapper rerender')
     const board = boardsStore.currentBoard
     const size = boardsStore.squareSize
-    const split = board.boardVerticalNumbers.split('')
+    const split = board.boardVerticalNumbers.split(',')
     const correctIndexes = boardsStore.correctVerticalValues
     return <div className="flex flex-col text-6xl">
         {split.map((el, index) => {

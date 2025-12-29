@@ -10,7 +10,7 @@ export class LevelStore {
     difficulty: 'easy' | 'normal' | 'hard' = 'easy'
     level: 1 | 2 | 3 = 1
     selectedPiece: 1 | 2 = 1
-    tutorial: DominoLevel = { board: [[null, null], [null, null]], boardHorizontalNumbers: '11', boardVerticalNumbers: '20', completed: false }
+    tutorial: DominoLevel = { board: [[null, null], [null, null]], boardHorizontalNumbers: '1,1', boardVerticalNumbers: '2,0', completed: false }
     easyBoards: DominoLevel[] | null = null
     mediumBoards: DominoLevel[] | null = null
     hardBoards: DominoLevel[] | null = null
@@ -31,8 +31,8 @@ export class LevelStore {
         makeAutoObservable(this)
         autorun(() => {
             const currentBoard = this.currentBoard
-            if (currentBoard && this.correctHorizontalValues?.join('') == currentBoard?.currentBoard.boardHorizontalNumbers
-                && this.correctVerticalValues?.join('') == currentBoard?.currentBoard.boardVerticalNumbers
+            if (currentBoard && this.correctHorizontalValues?.join(',') == currentBoard?.currentBoard.boardHorizontalNumbers
+                && this.correctVerticalValues?.join(',') == currentBoard?.currentBoard.boardVerticalNumbers
                 && !currentBoard?.currentBoard.completed) {
                 // console.log('level complete')
                 // this.currentBoard.currentBoard.completed = true

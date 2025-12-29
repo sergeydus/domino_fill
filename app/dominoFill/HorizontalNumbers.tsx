@@ -4,7 +4,7 @@ import { CurrentBoardStore } from "../stores/CurrentBoardStore"
 const HorizontalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
     const board = boardsStore.currentBoard
     const size = boardsStore.squareSize
-    const split = board.boardHorizontalNumbers.split('')
+    const split = board.boardHorizontalNumbers.split(',')
     const correctIndexes = boardsStore.correctHorizontalValues
     return <div className="flex flex-row text-6xl">
         {split.map((el, index) => {

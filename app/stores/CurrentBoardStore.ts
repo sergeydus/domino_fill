@@ -159,8 +159,8 @@ export class CurrentBoardStore {
         }
     }
     get completed() {
-        return this.currentBoard && this.correctHorizontalValues?.join('') == this.currentBoard.boardHorizontalNumbers
-            && this.correctVerticalValues?.join('') == this.currentBoard.boardVerticalNumbers
+        return this.currentBoard && this.correctHorizontalValues?.join(',') == this.currentBoard.boardHorizontalNumbers
+            && this.correctVerticalValues?.join(',') == this.currentBoard.boardVerticalNumbers
     }
     setCompleted(isCompleted: boolean) {
         this.currentBoard.completed = isCompleted

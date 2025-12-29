@@ -9,7 +9,7 @@ import { CurrentBoardStore } from "../stores/CurrentBoardStore";
 
 const Tutorial = () => {
     const { boardsStore } = useStores();
-    const [tutorialBoard,] = useState(new CurrentBoardStore({ board: [[null, null], [null, null]], boardHorizontalNumbers: '11', boardVerticalNumbers: '20', completed: false }, boardsStore.rootStore));
+    const [tutorialBoard,] = useState(new CurrentBoardStore({ board: [[null, null], [null, null]], boardHorizontalNumbers: '1,1', boardVerticalNumbers: '2,0', completed: false }, boardsStore.rootStore));
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalhost('hasSeenTutorial', false);
     // useEffect(() => {
     //     boardsStore.setTutorial(true);
