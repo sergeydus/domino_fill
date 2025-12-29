@@ -4,7 +4,7 @@ import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
 
 const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {
-    console.log('difficluly slider rerender')
+    // console.log('difficluly slider rerender')
     const onClick = (dif: 'easy' | 'normal' | 'hard') => {
         return () => { boardsStore.setDifficulty(dif) }
     }

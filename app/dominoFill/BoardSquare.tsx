@@ -41,8 +41,7 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
     const style = useMemo(() => ({ ...squareStyle, backgroundColor: color }), [color, squareStyle])
     const onClick = () => {
         try {
-
-            console.log('clicked', { i, j })
+            // console.log('clicked', { i, j })
             const audio = new Audio('snap.mp3');
             audio.play();
         } catch (e) {

@@ -1,5 +1,5 @@
 "use client"
-import { autorun, makeAutoObservable, reaction } from "mobx"
+import { autorun, makeAutoObservable, reaction, runInAction } from "mobx"
 import { DominoLevel } from "../dominoFill/dominoBoard"
 import { BoardsResponse } from "../dominoFill/Boards"
 import { RootStore } from "./RootStore"
@@ -30,11 +30,15 @@ export class LevelStore {
         }
         makeAutoObservable(this)
         autorun(() => {
-            if (this.currentBoard && this.correctHorizontalValues?.join('') == this.currentBoard?.currentBoard.boardHorizontalNumbers
-                && this.correctVerticalValues?.join('') == this.currentBoard?.currentBoard.boardVerticalNumbers
-                && !this.currentBoard?.currentBoard.completed) {
-                console.log('level complete')
-                this.currentBoard.currentBoard.completed = true
+            const currentBoard = this.currentBoard
+            if (currentBoard && this.correctHorizontalValues?.join('') == currentBoard?.currentBoard.boardHorizontalNumbers
+                && this.correctVerticalValues?.join('') == currentBoard?.currentBoard.boardVerticalNumbers
+                && !currentBoard?.currentBoard.completed) {
+                // console.log('level complete')
+                // this.currentBoard.currentBoard.completed = true
+                runInAction(() => {
+                    currentBoard.setCompleted(true)
+                })
                 audio?.play()
             }
         })
@@ -60,9 +64,9 @@ export class LevelStore {
             }
             //find first uncompleted level
             const index = boards.findIndex(el => !el.completed)
-            console.log('on change difficutly, index:', index)
+            // console.log('on change difficutly, index:', index)
             if (index != -1) {
-                console.log('set level', index + 1)
+                // console.log('set level', index + 1)
                 this.setLevel((index + 1) as 1 | 2 | 3)
             } else {
                 //if all levels completed, move to last level
@@ -82,7 +86,7 @@ export class LevelStore {
     setDifficulty(dif: 'easy' | 'normal' | 'hard') { this.difficulty = dif }
     setSelectedPiece(piece: 1 | 2) { this.selectedPiece = piece }
     get currentBoard() {
-        console.log('get currentBoard recalculated', this.difficulty, this.level)
+        // console.log('get currentBoard recalculated', this.difficulty, this.level)
         // console.log('get currentBoard', this.difficulty, this.level, JSON.stringify({ easyboards: this.easyBoards, mediumBoards: this.mediumBoards, hardBoards: this.hardBoards }))
         let board: DominoLevel | null = null
         if (!this.easyBoards || !this.mediumBoards || !this.hardBoards) {
@@ -97,7 +101,7 @@ export class LevelStore {
             case 'hard': board = this.hardBoards[this.level - 1]; break;
             default: board = this.easyBoards[this.level - 1];
         }
-        console.log('new currentBoard...')
+        // console.log('new currentBoard...')
         return new CurrentBoardStore(board, this.rootStore)
         // return board
     }

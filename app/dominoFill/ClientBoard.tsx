@@ -17,7 +17,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     const { sizeStore } = useStores()
     const size = boardsStore.currentBoard.board.length
     const board = boardsStore.currentBoard
-    console.log('rerender client board')
+    // console.log('rerender client board')
     const gridStyle: CSSProperties = {
         display: "grid",
         gridTemplateColumns: `repeat(${size}, 0fr)`,

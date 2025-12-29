@@ -14,18 +14,17 @@ const DominoClient: React.FC = () => {
   const { boardsStore } = useStores()
   useEffect(() => {
     getCurrentActiveBoard().then((boards) => {
-      console.log('get active board res!!!', boards)
+      // console.log('get active board res!!!', boards)
       boardsStore.setBoards(boards)
       setisLoading(false)
     })
   }, [boardsStore])
 
   const currentBoard = boardsStore.currentBoard
-  console.log('client rerender')
+  // console.log('client rerender')
   const onRightClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    console.log('e', e)
+    // console.log('e', e)
     boardsStore.setSelectedPiece(boardsStore.selectedPiece == 1 ? 2 : 1)
-
     e.preventDefault()
   }
   if (isLoading || !currentBoard) return <div>no board</div>

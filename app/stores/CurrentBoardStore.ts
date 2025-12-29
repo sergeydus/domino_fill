@@ -118,9 +118,9 @@ export class CurrentBoardStore {
     }
     setPieceOnBoard() {
         const selectedPiece = this.rootStore.boardsStore.selectedPiece
-        console.log('setPieceOnBoard', this.highlightedSquares2)
+        // console.log('setPieceOnBoard', this.highlightedSquares2)
         if (!this.highlightedSquares2 || !this.currentBoard?.board || !selectedPiece) {
-            console.log('no set piece', this.highlightedSquares2, this.currentBoard?.board)
+            // console.log('no set piece', this.highlightedSquares2, this.currentBoard?.board)
             return
         }
         const [[i, j], [i2, j2]] = this.highlightedSquares2
@@ -161,5 +161,8 @@ export class CurrentBoardStore {
     get completed() {
         return this.currentBoard && this.correctHorizontalValues?.join('') == this.currentBoard.boardHorizontalNumbers
             && this.correctVerticalValues?.join('') == this.currentBoard.boardVerticalNumbers
+    }
+    setCompleted(isCompleted: boolean) {
+        this.currentBoard.completed = isCompleted
     }
 }

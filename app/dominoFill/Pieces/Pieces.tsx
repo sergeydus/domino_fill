@@ -22,7 +22,7 @@ const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) =>
     const onclick = (i: number, j: number) => {
         // console.log('remove click1')
         return (e: React.MouseEvent) => {
-            console.log('remove click2', { i, j });
+            // console.log('remove click2', { i, j });
             boardsStore.removePiece(i, j)
             e.stopPropagation()
         }

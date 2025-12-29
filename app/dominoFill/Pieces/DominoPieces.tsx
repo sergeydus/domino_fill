@@ -8,7 +8,7 @@ import { useStores } from '@/app/hooks/useStore';
 
 const DominoPieces: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore:currentBoard }) => {
     const { boardsStore } = useStores()
-    console.log('pieces rerender')
+    // console.log('pieces rerender')
     const onClickPieceOne = () => {
         boardsStore.setSelectedPiece(1)
     }

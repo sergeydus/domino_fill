@@ -1,5 +1,6 @@
 "use server"
 import DominoBoard, { DominoLevel } from "./dominoBoard";
+import dominoBoardsData from '@/app/mocks/dominoBoards.json';
 
 export type BoardsResponse = {
     easyBoards: [DominoLevel, DominoLevel, DominoLevel],
@@ -34,23 +35,20 @@ function generateHardBoards(): [DominoBoard, DominoBoard, DominoBoard] {
     return [new DominoBoard({ size: 8, rocks: 10, allow0Lines: false }), new DominoBoard({ size: 8, rocks: 8, allow0Lines: false }), new DominoBoard({ size: 8, rocks: 6, allow0Lines: false })]
 }
 
-const currentActiveBoard = new Boards()
+// const currentActiveBoard = new Boards()
+const data: BoardsResponse[] = dominoBoardsData as BoardsResponse[];
+function dayDiff(date1: Date, date2: Date) {
+    const oneDay = 1000 * 60 * 60 * 24;
+    const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());
+    const d2 = new Date(date2.getFullYear(), date2.getMonth(), date2.getDate());
+    return Math.round((d2.getTime() - d1.getTime()) / oneDay);
+}
+
 const getCurrentActiveBoard = async (): Promise<BoardsResponse> => {
     const now = new Date()
-    const created = currentActiveBoard.created
-
-    const differentDay =
-        created.getFullYear() !== now.getFullYear() ||
-        created.getMonth() !== now.getMonth() ||
-        created.getDate() !== now.getDate()
-
-    if (differentDay) {
-        currentActiveBoard.generateBoards()
-        currentActiveBoard.created = now
-        console.log('regenerated boards for new day')
-    }
-
-    return JSON.parse(JSON.stringify(currentActiveBoard))
+    const differenceInDays = dayDiff(new Date(0), now)
+    console.log('returning item no', differenceInDays % data.length, 'out of', data.length)
+    return data[differenceInDays % data.length]
 }
 
 export default Boards
