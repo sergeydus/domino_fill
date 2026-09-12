@@ -1,7 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
-
-const PORT = 3100
-const baseURL = `http://127.0.0.1:${PORT}`
+import { BASE_URL } from './e2e/server'
 
 /**
  * Browser-level tests (spec P1-9).
@@ -13,6 +11,11 @@ const baseURL = `http://127.0.0.1:${PORT}`
  *
  * Runs against a production build rather than `next dev`: the dev overlay and its indicator
  * are extra fixed-position chrome that layout assertions should not have to reason about.
+ *
+ * The server is started and stopped by e2e/globalSetup.ts rather than Playwright's managed
+ * `webServer`. See e2e/server.ts for why: the managed lifecycle was reported hanging at
+ * "Terminating the WebServer" on Windows, and it would also silently reuse whatever happened
+ * to be listening on the port.
  */
 export default defineConfig({
     testDir: './e2e',
@@ -20,8 +23,9 @@ export default defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     reporter: process.env.CI ? 'line' : [['list']],
+    globalSetup: './e2e/globalSetup.ts',
     use: {
-        baseURL,
+        baseURL: BASE_URL,
         trace: 'on-first-retry',
     },
     projects: [
@@ -35,12 +39,4 @@ export default defineConfig({
             use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 640 } },
         },
     ],
-    webServer: {
-        command: `npm run build && npx next start --port ${PORT}`,
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
-        timeout: 180_000,
-        stdout: 'ignore',
-        stderr: 'pipe',
-    },
 })
