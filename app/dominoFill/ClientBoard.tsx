@@ -7,16 +7,15 @@ import Pieces from "./Pieces/Pieces";
 import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
 import { useStores } from "../hooks/useStore";
-import { CurrentBoardStore } from "../stores/CurrentBoardStore";
+import { PuzzleSession } from "../stores/PuzzleSession";
 
 type Props = {
-    boardsStore: CurrentBoardStore
+    boardsStore: PuzzleSession
 };
 
 const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     const { sizeStore } = useStores()
-    const size = boardsStore.currentBoard.board.length
-    const board = boardsStore.currentBoard
+    const size = boardsStore.board.length
     // console.log('rerender client board')
     const gridStyle: CSSProperties = {
         display: "grid",
@@ -52,7 +51,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     //     }
     // }, [boardsStore])
 
-    const isDisabled = boardsStore.currentBoard.completed
+    const isDisabled = boardsStore.completed
     return (
         <div className="flex flex-row items-center justify-center select-none" style={{ pointerEvents: isDisabled ? 'none' : 'auto' }}>
             <div className="flex flex-1 flex-col items-center justify-center" style={{width: sizeStore.boardSize}} ref={ref}>
@@ -63,7 +62,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                         <div onMouseMove={onmousemove} onClick={onclick} draggable={false} style={gridStyle} className="relative">
                             <Hover boardsStore={boardsStore} />
                             <Pieces boardsStore={boardsStore} />
-                            {board.board.flat().map((_el, index) => {
+                            {boardsStore.board.flat().map((_el: number | null, index: number) => {
                                 const i = Math.floor(index / size)
                                 const j = index % size
                                 // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false

@@ -1,104 +1,113 @@
 "use client"
-import { autorun, makeAutoObservable, reaction, runInAction } from "mobx"
-import { DominoLevel } from "../dominoFill/dominoBoard"
+import { autorun, makeAutoObservable, runInAction } from "mobx"
 import { BoardsResponse } from "../dominoFill/Boards"
 import { RootStore } from "./RootStore"
-import { CurrentBoardStore } from "./CurrentBoardStore"
+import { PuzzleSession } from "./PuzzleSession"
+import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
+
+type Difficulty = 'easy' | 'normal' | 'hard'
+type Level = 1 | 2 | 3
 
 export class LevelStore {
     rootStore: RootStore
-    difficulty: 'easy' | 'normal' | 'hard' = 'easy'
-    level: 1 | 2 | 3 = 1
+    difficulty: Difficulty = 'easy'
+    level: Level = 1
     selectedPiece: 1 | 2 = 1
-    tutorial: DominoLevel = { board: [[null, null], [null, null]], boardHorizontalNumbers: '1,1', boardVerticalNumbers: '2,0', completed: false }
-    easyBoards: DominoLevel[] | null = null
-    mediumBoards: DominoLevel[] | null = null
-    hardBoards: DominoLevel[] | null = null
     hasBegan: boolean = false
+
+    /** Immutable puzzle content, by difficulty. */
+    easyBoards: PuzzleDefinition[] | null = null
+    mediumBoards: PuzzleDefinition[] | null = null
+    hardBoards: PuzzleDefinition[] | null = null
+
+    /**
+     * One live session per puzzleId. Populated eagerly in `setBoards` (an action) so that
+     * `currentBoard` can be a pure lookup: constructing a store inside a computed makes
+     * MobX throw once side effects in derivations are enforced, and hands back a new
+     * identity on every cache miss.
+     */
+    sessions = new Map<string, PuzzleSession>()
+
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
         let audio: HTMLAudioElement | null = null
         if (typeof Audio != 'undefined') {
             audio = new Audio('winSilent.mp3')
         }
-        // if (typeof window !== 'undefined') {
-        //     this.boardWidth = window.innerWidth < 768 ? window.innerWidth : this.boardWidth
-        // }
         makeAutoObservable(this)
+
         autorun(() => {
-            const currentBoard = this.currentBoard
-            if (currentBoard && this.correctHorizontalValues?.join(',') == currentBoard?.currentBoard.boardHorizontalNumbers
-                && this.correctVerticalValues?.join(',') == currentBoard?.currentBoard.boardVerticalNumbers
-                && !currentBoard?.currentBoard.completed) {
-                // console.log('level complete')
-                // this.currentBoard.currentBoard.completed = true
-                runInAction(() => {
-                    currentBoard.setCompleted(true)
-                })
+            const session = this.currentBoard
+            if (session && session.completedByRules && !session.completed) {
+                runInAction(() => { session.setCompleted(true) })
                 audio?.play()
             }
         })
-        reaction(() => this.difficulty, () => {
-            let boards: DominoLevel[] | null = null
-            switch (this.difficulty) {
-                case 'easy':
-                    boards = this.easyBoards
-                    break;
-                case 'normal':
-                    boards = this.mediumBoards
-                    break;
-                case 'hard':
-                    boards = this.hardBoards
-                    break;
+    }
 
-                default:
-                    boards = this.easyBoards
-                    break;
-            }
-            if (!boards) {
-                return
-            }
-            //find first uncompleted level
-            const index = boards.findIndex(el => !el.completed)
-            // console.log('on change difficutly, index:', index)
-            if (index != -1) {
-                // console.log('set level', index + 1)
-                this.setLevel((index + 1) as 1 | 2 | 3)
-            } else {
-                //if all levels completed, move to last level
-                this.setLevel(3)
-            }
-        })
-    }
     setBoards(boards: BoardsResponse) {
-        this.easyBoards = boards.easyBoards
-        this.mediumBoards = boards.mediumBoards
-        this.hardBoards = boards.hardBoards
+        const build = (list: StoredPuzzle[], difficulty: string) =>
+            list.map((stored, i) => definitionFrom(stored, `unknown-${difficulty}-${i + 1}`))
+
+        this.easyBoards = build(boards.easyBoards, 'easy')
+        this.mediumBoards = build(boards.mediumBoards, 'medium')
+        this.hardBoards = build(boards.hardBoards, 'hard')
+
+        this.reconcileSessions([
+            ...this.easyBoards, ...this.mediumBoards, ...this.hardBoards,
+        ])
     }
-    setLevel(level: 1 | 2 | 3) { this.level = level }
-    setDifficulty(dif: 'easy' | 'normal' | 'hard') { this.difficulty = dif }
+
+    /**
+     * Reconcile live sessions against incoming definitions, by puzzleId.
+     *
+     * Deliberately NOT a clear-and-rebuild: a duplicate effect or a refetch would then wipe
+     * a player's in-progress board. Obsolete entries are left alone; expiring them is a
+     * separate, intentional act (day rollover).
+     */
+    private reconcileSessions(definitions: PuzzleDefinition[]) {
+        for (const definition of definitions) {
+            const existing = this.sessions.get(definition.puzzleId)
+            if (existing && existing.definition.definitionHash === definition.definitionHash) {
+                continue // same puzzle, same content: keep the session and its moves
+            }
+            // New puzzle, or the content changed under a reused id: start a fresh session.
+            this.sessions.set(definition.puzzleId, new PuzzleSession(definition, this.rootStore))
+        }
+    }
+
+    private definitionsFor(difficulty: Difficulty): PuzzleDefinition[] | null {
+        switch (difficulty) {
+            case 'easy': return this.easyBoards
+            case 'normal': return this.mediumBoards
+            case 'hard': return this.hardBoards
+            default: return this.easyBoards
+        }
+    }
+
+    setLevel(level: Level) { this.level = level }
     setSelectedPiece(piece: 1 | 2) { this.selectedPiece = piece }
-    get currentBoard() {
-        // console.log('get currentBoard recalculated', this.difficulty, this.level)
-        // console.log('get currentBoard', this.difficulty, this.level, JSON.stringify({ easyboards: this.easyBoards, mediumBoards: this.mediumBoards, hardBoards: this.hardBoards }))
-        let board: DominoLevel | null = null
-        if (!this.easyBoards || !this.mediumBoards || !this.hardBoards) {
-            return null
-        }
-        switch (this.difficulty) {
-            case 'easy': board = this.easyBoards[this.level - 1]; break;
-            case 'normal': board = this.mediumBoards[this.level - 1]; break;
-            case 'hard': board = this.hardBoards[this.level - 1]; break;
-            default: board = this.easyBoards[this.level - 1];
-        }
-        // console.log('new currentBoard...')
-        return new CurrentBoardStore(board, this.rootStore)
-        // return board
+
+    setDifficulty(dif: Difficulty) {
+        this.difficulty = dif
+        // Land on the first unsolved level of the new difficulty, or the last if all are done.
+        const definitions = this.definitionsFor(dif)
+        if (!definitions) return
+        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        this.setLevel((index === -1 ? 3 : index + 1) as Level)
     }
-    get correctHorizontalValues() {
-        return this.currentBoard?.correctHorizontalValues
+
+    get currentDefinition(): PuzzleDefinition | null {
+        return this.definitionsFor(this.difficulty)?.[this.level - 1] ?? null
     }
-    get correctVerticalValues() {
-        return this.currentBoard?.correctVerticalValues
+
+    /** Pure lookup: no construction, no mutation. */
+    get currentBoard(): PuzzleSession | null {
+        const definition = this.currentDefinition
+        if (!definition) return null
+        return this.sessions.get(definition.puzzleId) ?? null
     }
+
+    get correctHorizontalValues() { return this.currentBoard?.correctHorizontalValues }
+    get correctVerticalValues() { return this.currentBoard?.correctVerticalValues }
 }

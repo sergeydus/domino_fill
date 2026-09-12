@@ -1,10 +1,10 @@
 import React from "react";
 import { observer } from "mobx-react";
-import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore";
+import { PuzzleSession } from "@/app/stores/PuzzleSession";
 
 const strokeWidth = 6
 
-const DominoPieceTwo: React.FC<React.SVGProps<SVGSVGElement> & { boardsStore: CurrentBoardStore }> = (props) => {
+const DominoPieceTwo: React.FC<React.SVGProps<SVGSVGElement> & { boardsStore: PuzzleSession }> = (props) => {
     const { boardsStore, ...rest } = props
     const size = boardsStore.squareSize
     return (

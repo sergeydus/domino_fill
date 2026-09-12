@@ -3,7 +3,7 @@ import { makeAutoObservable } from "mobx"
 import { DominoLevel } from "../dominoFill/dominoBoard"
 import { RootStore } from "./RootStore"
 
-export class CurrentBoardStore {
+export class PuzzleSession {
     rootStore: RootStore
     currentBoard: DominoLevel
     boardWidth: number = 768 //default for hard

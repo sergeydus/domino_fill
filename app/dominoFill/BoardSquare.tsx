@@ -1,24 +1,23 @@
 "use client"
 import React, { CSSProperties, useMemo } from "react";
 import { observer } from "mobx-react";
-import { CurrentBoardStore } from "../stores/CurrentBoardStore";
+import { PuzzleSession } from "../stores/PuzzleSession";
 
 type Props = {
     i: number
     j: number
-    boardsStore: CurrentBoardStore
+    boardsStore: PuzzleSession
 };
 type Props2 = {
     i: number,
     j: number
     isRock: boolean,
-    boardsStore: CurrentBoardStore
+    boardsStore: PuzzleSession
 }
 
 const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) => {
     // console.log('square rerender')
-    const currentBoard = boardsStore.currentBoard
-    const size = currentBoard.board.length
+    const size = boardsStore.board.length
     const isDark = (i + j) % 2 === 0;
     const color = isDark ? '#cbcbcb' : '#ababab'
     //ignore now
@@ -67,9 +66,7 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
 //prevent all squares from rerendering
 const SquareWrapper: React.FC<Props> = ({ i, j, boardsStore }) => {
     // console.log('wrapper rerender')
-    const currentBoard = boardsStore.currentBoard
-
-    const isRock = currentBoard.board[i][j] == -1
+    const isRock = boardsStore.board[i][j] == -1
     // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false
     return <BoardSquare i={i} j={j} isRock={isRock} boardsStore={boardsStore} />
 }

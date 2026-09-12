@@ -3,10 +3,10 @@ import { motion } from 'motion/react'
 import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo";
 import { observer } from 'mobx-react';
-import { CurrentBoardStore } from '@/app/stores/CurrentBoardStore';
+import { PuzzleSession } from '@/app/stores/PuzzleSession';
 import { useStores } from '@/app/hooks/useStore';
 
-const DominoPieces: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore:currentBoard }) => {
+const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore:currentBoard }) => {
     const { boardsStore } = useStores()
     // console.log('pieces rerender')
     const onClickPieceOne = () => {

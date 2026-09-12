@@ -1,13 +1,12 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
-import { CurrentBoardStore } from "../stores/CurrentBoardStore"
-const HorizontalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
-    const board = boardsStore.currentBoard
+import { PuzzleSession } from "../stores/PuzzleSession"
+const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
-    const split = board.boardHorizontalNumbers.split(',')
+    const split = boardsStore.definition.boardHorizontalNumbers.split(',')
     const correctIndexes = boardsStore.correctHorizontalValues
     return <div className="flex flex-row text-6xl">
-        {split.map((el, index) => {
+        {split.map((el: string, index: number) => {
             let color = '#ababab'
             if (correctIndexes[index] == Number(el)) {
                 color = '#4bce4b'

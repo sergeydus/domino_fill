@@ -1,7 +1,7 @@
 import { observer } from "mobx-react"
-import { CurrentBoardStore } from "../stores/CurrentBoardStore"
+import { PuzzleSession } from "../stores/PuzzleSession"
 
-const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
+const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
     const highlightedSquares = boardsStore.highlightedSquares2
     const size = boardsStore.squareSize

@@ -53,7 +53,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,4,1,5,4,6",
-        "boardVerticalNumbers": "3,4,3,3,4,4"
+        "boardVerticalNumbers": "3,4,3,3,4,4",
+        "puzzleId": "v1-000-easy-1"
       },
       {
         "board": [
@@ -107,7 +108,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,8,2,2,7,4",
-        "boardVerticalNumbers": "4,2,6,2,6,4"
+        "boardVerticalNumbers": "4,2,6,2,6,4",
+        "puzzleId": "v1-000-easy-2"
       },
       {
         "board": [
@@ -161,7 +163,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,7,1,7,3,6",
-        "boardVerticalNumbers": "6,4,4,3,2,6"
+        "boardVerticalNumbers": "6,4,4,3,2,6",
+        "puzzleId": "v1-000-easy-3"
       }
     ],
     "mediumBoards": [
@@ -232,7 +235,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,7,4,1,6,5,6",
-        "boardVerticalNumbers": "5,5,4,1,6,6,4"
+        "boardVerticalNumbers": "5,5,4,1,6,6,4",
+        "puzzleId": "v1-000-medium-1"
       },
       {
         "board": [
@@ -301,7 +305,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,9,2,3,6,7,6",
-        "boardVerticalNumbers": "7,2,4,6,2,7,6"
+        "boardVerticalNumbers": "7,2,4,6,2,7,6",
+        "puzzleId": "v1-000-medium-2"
       },
       {
         "board": [
@@ -370,7 +375,8 @@
           ]
         ],
         "boardHorizontalNumbers": "3,2,6,1,9,2,11",
-        "boardVerticalNumbers": "7,4,7,4,4,4,4"
+        "boardVerticalNumbers": "7,4,7,4,4,4,4",
+        "puzzleId": "v1-000-medium-3"
       }
     ],
     "hardBoards": [
@@ -458,7 +464,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,8,1,6,6,5,3,5",
-        "boardVerticalNumbers": "6,7,5,2,4,5,3,4"
+        "boardVerticalNumbers": "6,7,5,2,4,5,3,4",
+        "puzzleId": "v1-000-hard-1"
       },
       {
         "board": [
@@ -544,7 +551,8 @@
           ]
         ],
         "boardHorizontalNumbers": "3,3,9,2,9,5,4,8",
-        "boardVerticalNumbers": "8,6,5,6,7,4,3,4"
+        "boardVerticalNumbers": "8,6,5,6,7,4,3,4",
+        "puzzleId": "v1-000-hard-2"
       },
       {
         "board": [
@@ -630,7 +638,8 @@
           ]
         ],
         "boardHorizontalNumbers": "3,3,7,7,7,5,4,8",
-        "boardVerticalNumbers": "7,5,6,6,7,5,2,6"
+        "boardVerticalNumbers": "7,5,6,6,7,5,2,6",
+        "puzzleId": "v1-000-hard-3"
       }
     ]
   },
@@ -688,7 +697,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,5,3,2,7,3",
-        "boardVerticalNumbers": "5,4,3,4,2,4"
+        "boardVerticalNumbers": "5,4,3,4,2,4",
+        "puzzleId": "v1-001-easy-1"
       },
       {
         "board": [
@@ -742,7 +752,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,4,4,2,1,7",
-        "boardVerticalNumbers": "5,1,3,5,2,4"
+        "boardVerticalNumbers": "5,1,3,5,2,4",
+        "puzzleId": "v1-001-easy-2"
       },
       {
         "board": [
@@ -796,7 +807,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,5,2,8,4,3",
-        "boardVerticalNumbers": "6,4,4,4,4,2"
+        "boardVerticalNumbers": "6,4,4,4,4,2",
+        "puzzleId": "v1-001-easy-3"
       }
     ],
     "mediumBoards": [
@@ -867,7 +879,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,8,1,8,5,3,3",
-        "boardVerticalNumbers": "5,5,2,2,5,6,4"
+        "boardVerticalNumbers": "5,5,2,2,5,6,4",
+        "puzzleId": "v1-001-medium-1"
       },
       {
         "board": [
@@ -936,7 +949,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,9,3,2,5,4,6",
-        "boardVerticalNumbers": "6,5,1,6,3,3,6"
+        "boardVerticalNumbers": "6,5,1,6,3,3,6",
+        "puzzleId": "v1-001-medium-2"
       },
       {
         "board": [
@@ -1005,7 +1019,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,10,2,11,3,3,7",
-        "boardVerticalNumbers": "7,5,5,5,2,7,6"
+        "boardVerticalNumbers": "7,5,5,5,2,7,6",
+        "puzzleId": "v1-001-medium-3"
       }
     ],
     "hardBoards": [
@@ -1093,7 +1108,8 @@
           ]
         ],
         "boardHorizontalNumbers": "1,9,4,6,5,4,4,5",
-        "boardVerticalNumbers": "6,3,4,6,3,6,2,8"
+        "boardVerticalNumbers": "6,3,4,6,3,6,2,8",
+        "puzzleId": "v1-001-hard-1"
       },
       {
         "board": [
@@ -1179,7 +1195,8 @@
           ]
         ],
         "boardHorizontalNumbers": "3,3,9,6,4,8,6,6",
-        "boardVerticalNumbers": "8,6,3,7,3,6,6,6"
+        "boardVerticalNumbers": "8,6,3,7,3,6,6,6",
+        "puzzleId": "v1-001-hard-2"
       },
       {
         "board": [
@@ -1265,7 +1282,8 @@
           ]
         ],
         "boardHorizontalNumbers": "2,7,3,11,3,8,2,13",
-        "boardVerticalNumbers": "7,6,2,6,6,8,6,8"
+        "boardVerticalNumbers": "7,6,2,6,6,8,6,8",
+        "puzzleId": "v1-001-hard-3"
       }
     ]
   }

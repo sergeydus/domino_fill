@@ -3,12 +3,12 @@ import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
 import Rock from "./Rock"
-import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore"
+import { PuzzleSession } from "@/app/stores/PuzzleSession"
 
-const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
+const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
     const size = boardsStore.squareSize
-    const board = boardsStore.currentBoard.board
+    const board = boardsStore.board
     const ones: [number, number][] = []
     const twos: [number, number][] = []
     const rocks: [number, number][] = []

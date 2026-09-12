@@ -1,14 +1,13 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
-import { CurrentBoardStore } from "../stores/CurrentBoardStore"
-const VerticalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
+import { PuzzleSession } from "../stores/PuzzleSession"
+const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
-    const board = boardsStore.currentBoard
     const size = boardsStore.squareSize
-    const split = board.boardVerticalNumbers.split(',')
+    const split = boardsStore.definition.boardVerticalNumbers.split(',')
     const correctIndexes = boardsStore.correctVerticalValues
     return <div className="flex flex-col text-6xl">
-        {split.map((el, index) => {
+        {split.map((el: string, index: number) => {
             let color = '#ababab'
             if (correctIndexes[index] == Number(el)) {
                 color = '#4bce4b'

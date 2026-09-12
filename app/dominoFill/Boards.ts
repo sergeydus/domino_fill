@@ -1,11 +1,12 @@
 "use server"
 import DominoBoard, { DominoLevel } from "./dominoBoard";
+import type { StoredPuzzle } from "../stores/PuzzleDefinition";
 import dominoBoardsData from '@/app/mocks/dominoBoards.json';
 
 export type BoardsResponse = {
-    easyBoards: [DominoLevel, DominoLevel, DominoLevel],
-    mediumBoards: [DominoLevel, DominoLevel, DominoLevel],
-    hardBoards: [DominoLevel, DominoLevel, DominoLevel],
+    easyBoards: StoredPuzzle[],
+    mediumBoards: StoredPuzzle[],
+    hardBoards: StoredPuzzle[],
 }
 class Boards implements BoardsResponse {
     created = new Date()
@@ -36,7 +37,7 @@ function generateHardBoards(): [DominoBoard, DominoBoard, DominoBoard] {
 }
 
 // const currentActiveBoard = new Boards()
-const data: BoardsResponse[] = dominoBoardsData as BoardsResponse[];
+const data = dominoBoardsData as unknown as BoardsResponse[];
 function dayDiff(date1: Date, date2: Date) {
     const oneDay = 1000 * 60 * 60 * 24;
     const d1 = new Date(date1.getFullYear(), date1.getMonth(), date1.getDate());

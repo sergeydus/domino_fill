@@ -5,11 +5,21 @@ import React, { useState } from "react";
 import ClientBoard from "./ClientBoard";
 import { cn } from "../utils";
 import { observer } from "mobx-react";
-import { CurrentBoardStore } from "../stores/CurrentBoardStore";
+import { PuzzleSession } from "../stores/PuzzleSession";
+import { definitionFrom } from "../stores/PuzzleDefinition";
 
 const Tutorial = () => {
     const { boardsStore } = useStores();
-    const [tutorialBoard,] = useState(new CurrentBoardStore({ board: [[null, null], [null, null]], boardHorizontalNumbers: '1,1', boardVerticalNumbers: '2,0', completed: false }, boardsStore.rootStore));
+    // The tutorial is a puzzle like any other, with its own frozen identity.
+    const [tutorialBoard] = useState(() => new PuzzleSession(
+        definitionFrom({
+            puzzleId: 'tutorial-v1',
+            board: [[null, null], [null, null]],
+            boardHorizontalNumbers: '1,1',
+            boardVerticalNumbers: '2,0',
+        }, 'tutorial-v1'),
+        boardsStore.rootStore,
+    ));
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('hasSeenTutorial', false);
     // useEffect(() => {
     //     boardsStore.setTutorial(true);
@@ -36,7 +46,7 @@ const Tutorial = () => {
                     <p>Right-click to switch between the two types of domino pieces.</p>
                     <p>Click on the board to place a domino.</p>
                     <ClientBoard boardsStore={tutorialBoard} />
-                    <button disabled={!tutorialBoard.completed} className={cn({ "mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer": true, "opacity-50 cursor-not-allowed": !tutorialBoard.completed })}
+                    <button disabled={!tutorialBoard.completedByRules} className={cn({ "mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer": true, "opacity-50 cursor-not-allowed": !tutorialBoard.completedByRules })}
                         onClick={() => {
                             // console.log('asd', boardsStore.currentBoard)
                             setHasSeenTutorial(true);
