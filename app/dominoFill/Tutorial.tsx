@@ -1,5 +1,5 @@
 import { useStores } from "@/app/hooks/useStore";
-import { useLocalhost } from "../hooks/useLocalhost";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import React, { useState } from "react";
 // import { TutorialStore } from "../stores/TutorialStore";
 import ClientBoard from "./ClientBoard";
@@ -10,7 +10,7 @@ import { CurrentBoardStore } from "../stores/CurrentBoardStore";
 const Tutorial = () => {
     const { boardsStore } = useStores();
     const [tutorialBoard,] = useState(new CurrentBoardStore({ board: [[null, null], [null, null]], boardHorizontalNumbers: '1,1', boardVerticalNumbers: '2,0', completed: false }, boardsStore.rootStore));
-    const [hasSeenTutorial, setHasSeenTutorial] = useLocalhost('hasSeenTutorial', false);
+    const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('hasSeenTutorial', false);
     // useEffect(() => {
     //     boardsStore.setTutorial(true);
     //     return () => {
@@ -40,7 +40,6 @@ const Tutorial = () => {
                         onClick={() => {
                             // console.log('asd', boardsStore.currentBoard)
                             setHasSeenTutorial(true);
-                            boardsStore.setHasSeenTutorial(true);
                             // boardsStore.setTutorial(false);
                         }}>
                         Got it!

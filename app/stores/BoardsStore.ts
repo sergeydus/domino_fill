@@ -15,7 +15,6 @@ export class LevelStore {
     mediumBoards: DominoLevel[] | null = null
     hardBoards: DominoLevel[] | null = null
     hasBegan: boolean = false
-    hasSeenTutorial: boolean = false
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
         let audio: HTMLAudioElement | null = null
@@ -25,9 +24,6 @@ export class LevelStore {
         // if (typeof window !== 'undefined') {
         //     this.boardWidth = window.innerWidth < 768 ? window.innerWidth : this.boardWidth
         // }
-        if (typeof localStorage !== 'undefined') {
-            this.hasSeenTutorial = localStorage.getItem('hasSeenTutorial') === 'true'
-        }
         makeAutoObservable(this)
         autorun(() => {
             const currentBoard = this.currentBoard
@@ -79,9 +75,6 @@ export class LevelStore {
         this.mediumBoards = boards.mediumBoards
         this.hardBoards = boards.hardBoards
     }
-    setHasSeenTutorial(seen: boolean) {
-        this.hasSeenTutorial = seen
-    }
     setLevel(level: 1 | 2 | 3) { this.level = level }
     setDifficulty(dif: 'easy' | 'normal' | 'hard') { this.difficulty = dif }
     setSelectedPiece(piece: 1 | 2) { this.selectedPiece = piece }
@@ -92,9 +85,6 @@ export class LevelStore {
         if (!this.easyBoards || !this.mediumBoards || !this.hardBoards) {
             return null
         }
-        // if (!this.hasSeenTutorial) {
-        //     return new CurrentBoardStore(this.tutorial, this.rootStore)
-        // }
         switch (this.difficulty) {
             case 'easy': board = this.easyBoards[this.level - 1]; break;
             case 'normal': board = this.mediumBoards[this.level - 1]; break;
