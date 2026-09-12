@@ -107,8 +107,19 @@ imposes a 60px floor on a box declared `height: ${cell}px`**. Alignment therefor
 | 360 phone | 8×8 | 32px | 4px | **480 vs 256 — collapses** |
 
 `cell = min(0.9·innerWidth, 768)/(n+2) < 60` whenever `innerWidth < 667px` — i.e. browser zoom
-beyond ~190% on a 1280 screen, or **any phone**. The row labels then drift progressively out of
-alignment with their rows, and the row can no longer shrink, so the page scrolls horizontally.
+beyond ~190% on a 1280 screen, or **any phone**.
+
+> **Measured in a real browser (P1-9 harness), which revises this.** At 360×640 the gutter
+> boxes render at the declared cell height (39px), *not* floored at 60px: `min-height: auto`
+> only prevents a flex item shrinking below its content, and nothing is applying shrink
+> pressure here — the column has auto height, so it grows instead. Label-to-row drift is a
+> **constant 4px** (the grid's left `border-4`), not progressive. After the shell-width fix
+> (P0-9a follow-up) there is also **no horizontal page overflow** at 360 or at 1280.
+>
+> So what remains for P0-3 is narrower than this section assumed: a **60px glyph rendered
+> inside a 39px box**, which overflows its cell visually and collides with its neighbours,
+> plus that constant 4px offset. Fix the font scaling and the border accounting; do not go
+> looking for accumulating drift.
 
 Two compounding factors: `boardSize` consults **width only**, so a landscape phone (800×400)
 produces a 648px-tall board inside a `min-h-screen … justify-center` flex container
