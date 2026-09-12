@@ -1,0 +1,207 @@
+import { describe, it, expect, beforeEach } from 'vitest'
+import { RootStore } from '@/app/stores/RootStore'
+import { CurrentBoardStore } from '@/app/stores/CurrentBoardStore'
+import type { DominoLevel } from '@/app/dominoFill/dominoBoard'
+
+/**
+ * P0-10 characterisation tests.
+ *
+ * These pin the rules layer AS IT BEHAVES TODAY, before P0 changes it. They deliberately
+ * do NOT assert behaviour the spec has yet to build:
+ *   - corrected `removePiece` (either half / rocks / edges) lands with P0-7
+ *   - undo round-trips land with P1-3
+ *   - the board-full assertion in `completed` lands with P0-6
+ * Adding those here would assert behaviour that does not exist and fail on arrival.
+ */
+
+const SIZE = 96 // squareSize for a 6x6 board at the default 768px boardSize
+
+const level = (over: Partial<DominoLevel> = {}): DominoLevel => ({
+    board: Array.from({ length: 6 }, () => Array(6).fill(null)),
+    boardHorizontalNumbers: '0,0,0,0,0,0',
+    boardVerticalNumbers: '0,0,0,0,0,0',
+    completed: false,
+    ...over,
+})
+
+let root: RootStore
+
+const makeBoard = (over: Partial<DominoLevel> = {}) =>
+    new CurrentBoardStore(level(over), root)
+
+/** Point the hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
+const hover = (i: number, j: number, fx = 0.5, fy = 0.5) =>
+    root.sizeStore.setHoverCords([j * SIZE + SIZE * fx, i * SIZE + SIZE * fy])
+
+beforeEach(() => {
+    root = new RootStore()
+})
+
+describe('squareSize', () => {
+    it('divides the board width by n+2 to reserve the number gutters', () => {
+        expect(makeBoard().squareSize).toBe(SIZE) // 768 / (6+2)
+    })
+})
+
+describe('correct{Horizontal,Vertical}Values', () => {
+    // Naming note (spec D10-d2): `correctHorizontalValues` sums COLUMNS and
+    // `correctVerticalValues` sums ROWS. Inverted, but self-consistent; pinned here so a
+    // future rename cannot silently change the semantics.
+    it('sums columns for "horizontal" and rows for "vertical"', () => {
+        const b = makeBoard()
+        b.currentBoard.board[0][0] = 1
+        b.currentBoard.board[1][0] = 0
+        b.currentBoard.board[0][3] = 0
+        b.currentBoard.board[0][4] = 2
+
+        expect(b.correctHorizontalValues).toEqual([1, 0, 0, 0, 2, 0]) // per column
+        expect(b.correctVerticalValues).toEqual([3, 0, 0, 0, 0, 0])   // per row
+    })
+
+    it('treats rocks (-1) as contributing nothing', () => {
+        const b = makeBoard()
+        b.currentBoard.board[0][0] = -1
+        b.currentBoard.board[0][1] = 1
+        expect(b.correctVerticalValues[0]).toBe(1)
+        expect(b.correctHorizontalValues[0]).toBe(0)
+    })
+})
+
+describe('completed (as currently defined: sums only)', () => {
+    // The 2x2 tutorial board; its only solution is two vertical dominoes.
+    const tutorial = (): DominoLevel => ({
+        board: [[null, null], [null, null]],
+        boardHorizontalNumbers: '1,1',
+        boardVerticalNumbers: '2,0',
+        completed: false,
+    })
+
+    it('is false for an untouched board', () => {
+        expect(new CurrentBoardStore(tutorial(), root).completed).toBe(false)
+    })
+
+    it('is true once both vertical dominoes are placed', () => {
+        const b = new CurrentBoardStore(tutorial(), root)
+        b.currentBoard.board[0][0] = 1; b.currentBoard.board[1][0] = 0
+        b.currentBoard.board[0][1] = 1; b.currentBoard.board[1][1] = 0
+        expect(b.completed).toBe(true)
+    })
+})
+
+describe('setPieceOnBoard', () => {
+    it('places a vertical domino as 1 above 0', () => {
+        const b = makeBoard()
+        root.boardsStore.setSelectedPiece(1)
+        hover(2, 2, 0.5, 0.9) // lower half -> extends downward
+        b.setPieceOnBoard()
+
+        expect(b.currentBoard.board[2][2]).toBe(1)
+        expect(b.currentBoard.board[3][2]).toBe(0)
+    })
+
+    it('places a horizontal domino as 0 left of 2', () => {
+        const b = makeBoard()
+        root.boardsStore.setSelectedPiece(2)
+        hover(2, 2, 0.9, 0.5) // right half -> extends rightward
+        b.setPieceOnBoard()
+
+        expect(b.currentBoard.board[2][2]).toBe(0)
+        expect(b.currentBoard.board[2][3]).toBe(2)
+    })
+
+    it('rejects a placement onto an occupied cell', () => {
+        const b = makeBoard()
+        b.currentBoard.board[2][2] = -1
+        root.boardsStore.setSelectedPiece(1)
+        hover(2, 2)
+        b.setPieceOnBoard()
+
+        expect(b.currentBoard.board[2][2]).toBe(-1)
+        expect(b.currentBoard.board[3][2]).toBeNull()
+    })
+
+    it('rejects a placement with no hover', () => {
+        const b = makeBoard()
+        root.sizeStore.setHoverCords(null)
+        b.setPieceOnBoard()
+        expect(b.currentBoard.board.flat().every(c => c === null)).toBe(true)
+    })
+
+    it('falls back to the opposite neighbour when the preferred one is blocked', () => {
+        // Documents the silent fall-through the spec flags in P1-1 as undiscoverable.
+        const b = makeBoard()
+        b.currentBoard.board[3][2] = -1 // block below
+        root.boardsStore.setSelectedPiece(1)
+        hover(2, 2, 0.5, 0.9) // asks to extend DOWN, but down is blocked
+
+        b.setPieceOnBoard()
+        expect(b.currentBoard.board[1][2]).toBe(1) // extended UP instead
+        expect(b.currentBoard.board[2][2]).toBe(0)
+    })
+})
+
+describe('removePiece (only values 1 and 2 are reachable today)', () => {
+    it('clears both halves of a vertical domino from its anchor', () => {
+        const b = makeBoard()
+        b.currentBoard.board[2][2] = 1
+        b.currentBoard.board[3][2] = 0
+        b.removePiece(2, 2)
+        expect(b.currentBoard.board[2][2]).toBeNull()
+        expect(b.currentBoard.board[3][2]).toBeNull()
+    })
+
+    it('clears both halves of a horizontal domino from its anchor', () => {
+        const b = makeBoard()
+        b.currentBoard.board[2][2] = 0
+        b.currentBoard.board[2][3] = 2
+        b.removePiece(2, 3) // anchor is the cell holding the 2
+        expect(b.currentBoard.board[2][3]).toBeNull()
+        expect(b.currentBoard.board[2][2]).toBeNull()
+    })
+
+    it('is a no-op on an empty cell', () => {
+        const b = makeBoard()
+        b.removePiece(2, 2)
+        expect(b.currentBoard.board[2][2]).toBeNull()
+    })
+})
+
+describe('domino pairing invariant (spec D6)', () => {
+    // This invariant is what makes a sums-match-but-not-full board impossible.
+    // P0-7 exists to protect it; if it ever breaks, premature wins become reachable.
+    const assertPaired = (board: (number | null)[][]) => {
+        for (let i = 0; i < board.length; i++) {
+            for (let j = 0; j < board[i].length; j++) {
+                if (board[i][j] === 1) {
+                    expect(board[i + 1]?.[j], `1 at ${i},${j} must have 0 below`).toBe(0)
+                }
+                if (board[i][j] === 2) {
+                    expect(board[i]?.[j - 1], `2 at ${i},${j} must have 0 left`).toBe(0)
+                }
+            }
+        }
+    }
+
+    it('holds after a mix of placements', () => {
+        const b = makeBoard()
+        root.boardsStore.setSelectedPiece(1)
+        hover(0, 0, 0.5, 0.9); b.setPieceOnBoard()
+        hover(2, 4, 0.5, 0.9); b.setPieceOnBoard()
+        root.boardsStore.setSelectedPiece(2)
+        hover(4, 0, 0.9, 0.5); b.setPieceOnBoard()
+        hover(5, 2, 0.9, 0.5); b.setPieceOnBoard()
+
+        assertPaired(b.currentBoard.board)
+    })
+
+    it('holds after placements are removed again', () => {
+        const b = makeBoard()
+        root.boardsStore.setSelectedPiece(1)
+        hover(1, 1, 0.5, 0.9); b.setPieceOnBoard()
+        expect(b.currentBoard.board[1][1]).toBe(1)
+
+        b.removePiece(1, 1)
+        assertPaired(b.currentBoard.board)
+        expect(b.currentBoard.board.flat().every(c => c === null)).toBe(true)
+    })
+})
