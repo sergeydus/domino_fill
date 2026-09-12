@@ -2,6 +2,7 @@
 import { makeAutoObservable } from "mobx"
 import { RootStore } from "./RootStore"
 import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
+import { columnSums, rowSums, isBoardFull, targetsMatch } from "./boardRules"
 
 /**
  * The mutable half of a puzzle: one player's progress on one `PuzzleDefinition`.
@@ -34,22 +35,22 @@ export class PuzzleSession {
 
     get correctHorizontalValues() {
         // Sums a COLUMN despite the name; see spec D10-d2.
-        return this.board.map((_row, index) => {
-            let sum = 0
-            for (let i = 0; i < this.board.length; i++) {
-                const cur = this.board[i][index]
-                if (cur == -1) continue
-                sum += (cur || 0)
-            }
-            return sum
-        })
+        return columnSums(this.board, this.definition.size)
     }
 
     get correctVerticalValues() {
         // Sums a ROW despite the name; see spec D10-d2.
-        return this.board.map((row) =>
-            row.reduce<number>((acc, cur) => (cur == -1 ? acc : (acc || 0) + (cur || 0)), 0)
-        )
+        return rowSums(this.board, this.definition.size)
+    }
+
+    /** Every non-rock cell covered, on a well-formed board. Pure; no side effects. */
+    get isBoardFull() {
+        return isBoardFull(this.board, this.definition.size)
+    }
+
+    /** Both target axes match exactly. Pure; no side effects. */
+    get targetsMatch() {
+        return targetsMatch(this.board, this.definition)
     }
 
     get squareSize() {
@@ -204,9 +205,19 @@ export class PuzzleSession {
         return true
     }
 
+    /**
+     * The puzzle is solved: the board is full AND both target axes match.
+     *
+     * The fullness half is an assertion rather than a fix for a reachable bug -- matching
+     * the column sums alone already implies a full board, given every 1 is paired with a 0
+     * below and every 2 with a 0 to its left (spec D6). It holds only while that pairing
+     * invariant holds, which is what `removePiece`'s guard protects. Cheap insurance
+     * against a future change that breaks the pairing.
+     *
+     * Pure: the stored `completed` flag is written only by LevelStore's autorun.
+     */
     get completedByRules() {
-        return this.correctHorizontalValues.join(',') == this.definition.boardHorizontalNumbers
-            && this.correctVerticalValues.join(',') == this.definition.boardVerticalNumbers
+        return this.isBoardFull && this.targetsMatch
     }
 
     setCompleted(isCompleted: boolean) {

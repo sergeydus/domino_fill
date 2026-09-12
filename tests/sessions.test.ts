@@ -18,8 +18,9 @@ import sourceData from '@/app/mocks/dominoBoards.json'
  *  - `setBoards` reconciles by puzzleId rather than clearing
  */
 
-// Targets are deliberately non-zero: an all-zero target is satisfied by an EMPTY board,
-// which makes the win autorun mark every session complete as soon as it is observed.
+// Targets are deliberately non-zero so these fixtures start unsolved. (Since P0-6 an
+// all-zero target no longer auto-completes an empty board -- completion requires fullness
+// too -- but keeping them non-zero makes these fixtures realistic either way.)
 const puzzle = (id: string, over: Partial<StoredPuzzle> = {}): StoredPuzzle => ({
     puzzleId: id,
     board: Array.from({ length: 6 }, () => Array(6).fill(null)),
