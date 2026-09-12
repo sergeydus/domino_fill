@@ -7,6 +7,7 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { StoreContext } from '@/app/provider'
 import Tutorial from '@/app/dominoFill/Tutorial'
+import ClientBoard from '@/app/dominoFill/ClientBoard'
 
 /**
  * P0-9a: the tutorial's correctness bugs.
@@ -132,10 +133,12 @@ describe('tutorial board sizing', () => {
         expect(s.squareSize).not.toBe(96)
     })
 
-    it('fits its shell inside the cap', () => {
+    it('fits the ACTUAL shell -- including the grid border -- inside the cap', () => {
         const s = tutorialSession()
-        // Two gutter columns plus the board itself.
-        expect(s.squareSize * (2 + 2)).toBeLessThanOrEqual(320)
+        // squareSize * (size + 2) omits the 8px border, so it measures only the cell
+        // allocation. shellWidth is what the board really occupies.
+        expect(s.shellWidth).toBeLessThanOrEqual(320)
+        expect(s.shellWidth).toBe(s.squareSize * 4 + 8)
     })
 
     it('shrinks with the available width on a narrow screen', () => {
@@ -143,9 +146,12 @@ describe('tutorial board sizing', () => {
         const atDesktop = s.squareSize
         runInAction(() => { root.sizeStore.setBoardSize(200) })
         expect(s.squareSize).toBeLessThan(atDesktop)
+        expect(s.shellWidth).toBeLessThanOrEqual(200)
     })
 
-    it('leaves the real board sizes unchanged', () => {
+    it('every board size fits the width it was sized to, border included', () => {
+        // The previous values (96/85/77) were pinned as "unchanged", but they were
+        // computed without the border: a 6x6 shell was 776px inside a 768px budget.
         const make = (n: number) => new PuzzleSession(definitionFrom({
             puzzleId: `g-${n}`,
             board: Array.from({ length: n }, () => Array(n).fill(null)),
@@ -153,9 +159,25 @@ describe('tutorial board sizing', () => {
             boardVerticalNumbers: Array(n).fill(0).join(','),
         }), root)
 
-        // The generalised formula must reproduce the old switch exactly at 768px.
-        expect(make(6).squareSize).toBe(96)
-        expect(make(7).squareSize).toBe(85)
-        expect(make(8).squareSize).toBe(77)
+        for (const n of [2, 6, 7, 8]) {
+            const s = make(n)
+            expect(s.shellWidth, `${n}x${n} shell`).toBeLessThanOrEqual(s.availableWidth)
+            expect(s.squareSize).toBeGreaterThan(0)
+        }
+    })
+
+    it('the rendered wrapper is given the shell width, not the raw available width', () => {
+        const s = tutorialSession()
+        const { container } = render(
+            <StoreContext.Provider value={root}>
+                <ClientBoard boardsStore={s} />
+            </StoreContext.Provider>
+        )
+        const wrapper = container.querySelector('[style*="width"]') as HTMLElement
+        expect(wrapper).toBeTruthy()
+        expect(wrapper.style.width).toBe(`${s.shellWidth}px`)
+        // The bug this replaces: the wrapper took the global boardSize (768 on desktop)
+        // and ignored the session's cap entirely.
+        expect(wrapper.style.width).not.toBe(`${root.sizeStore.boardSize}px`)
     })
 })

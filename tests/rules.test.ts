@@ -14,8 +14,6 @@ import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
  * Adding those here would assert behaviour that does not exist and fail on arrival.
  */
 
-const SIZE = 96 // squareSize for a 6x6 board at the default 768px boardSize
-
 const level = (over: Partial<StoredPuzzle> = {}): StoredPuzzle => ({
     puzzleId: 'test-6x6',
     board: Array.from({ length: 6 }, () => Array(6).fill(null)),
@@ -30,16 +28,20 @@ const makeBoard = (over: Partial<StoredPuzzle> = {}) =>
     new PuzzleSession(definitionFrom(level(over)), root)
 
 /** Point a session's hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
-const hover = (s: PuzzleSession, i: number, j: number, fx = 0.5, fy = 0.5) =>
-    s.setHoverPoint([j * SIZE + SIZE * fx, i * SIZE + SIZE * fy])
+const hover = (s: PuzzleSession, i: number, j: number, fx = 0.5, fy = 0.5) => {
+    const c = s.squareSize // derived, so sizing changes cannot silently shift these points
+    s.setHoverPoint([j * c + c * fx, i * c + c * fy])
+}
 
 beforeEach(() => {
     root = new RootStore()
 })
 
 describe('squareSize', () => {
-    it('divides the board width by n+2 to reserve the number gutters', () => {
-        expect(makeBoard().squareSize).toBe(SIZE) // 768 / (6+2)
+    it('reserves a gutter column on each side and fits inside the available width', () => {
+        const b = makeBoard()
+        expect(b.squareSize).toBe(Math.floor((768 - 8) / 8))
+        expect(b.shellWidth).toBeLessThanOrEqual(b.availableWidth)
     })
 })
 

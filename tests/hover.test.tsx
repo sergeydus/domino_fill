@@ -16,8 +16,6 @@ import ClientBoard from '@/app/dominoFill/ClientBoard'
  * board behind it, each interpreting the same coordinates through its own squareSize.
  */
 
-const SIZE = 96 // squareSize for a 6x6 board at the default 768px boardSize
-
 let root: RootStore
 
 const session = (n = 6, id = 'hover-test') => new PuzzleSession(definitionFrom({
@@ -40,14 +38,16 @@ describe('hover is owned by the session', () => {
     it('highlights the pair under the pointer', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
-        s.setHoverPoint([2 * SIZE + SIZE / 2, 2 * SIZE + SIZE * 0.9])
+        const c = s.squareSize
+        s.setHoverPoint([2 * c + c / 2, 2 * c + c * 0.9])
 
         expect(s.highlightedPair).toEqual([[2, 2], [3, 2]])
     })
 
     it('clearHover drops the highlight', () => {
         const s = session()
-        s.setHoverPoint([2 * SIZE + SIZE / 2, 2 * SIZE + SIZE * 0.9])
+        const c = s.squareSize
+        s.setHoverPoint([2 * c + c / 2, 2 * c + c * 0.9])
         expect(s.highlightedPair).not.toBeNull()
 
         s.clearHover()

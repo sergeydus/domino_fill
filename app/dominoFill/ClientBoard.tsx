@@ -6,7 +6,6 @@ import Hover from "./Hover";
 import Pieces from "./Pieces/Pieces";
 import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
-import { useStores } from "../hooks/useStore";
 import { PuzzleSession } from "../stores/PuzzleSession";
 
 type Props = {
@@ -14,7 +13,6 @@ type Props = {
 };
 
 const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
-    const { sizeStore } = useStores()
     const size = boardsStore.board.length
     // console.log('rerender client board')
     const gridStyle: CSSProperties = {
@@ -55,7 +53,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     const isDisabled = boardsStore.completed
     return (
         <div className="flex flex-row items-center justify-center select-none" style={{ pointerEvents: isDisabled ? 'none' : 'auto' }}>
-            <div className="flex flex-1 flex-col items-center justify-center" style={{width: sizeStore.boardSize}} ref={ref}>
+            <div className="flex flex-1 flex-col items-center justify-center" style={{ width: boardsStore.shellWidth }} ref={ref}>
                 <HorizontalNumbers boardsStore={boardsStore} />
                 <div className="flex flex-row">
                     <VerticalNumbers boardsStore={boardsStore} />

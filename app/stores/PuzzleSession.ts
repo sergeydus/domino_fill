@@ -5,6 +5,12 @@ import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
 import { columnSums, rowSums, isBoardFull, targetsMatch } from "./boardRules"
 
 /**
+ * Total horizontal border around the grid: `border-4` on each side (ClientBoard).
+ * Interim, like the rest of this px-driven sizing -- P0-3 replaces it with a CSS shell.
+ */
+const GRID_BORDER_PX = 8
+
+/**
  * The mutable half of a puzzle: one player's progress on one `PuzzleDefinition`.
  *
  * Sessions are long-lived and stable — `LevelStore` keeps one per `puzzleId` so that
@@ -80,17 +86,34 @@ export class PuzzleSession {
         return targetsMatch(this.board, this.definition)
     }
 
+    /** Width this board may occupy, in CSS px. */
+    get availableWidth() {
+        return Math.min(this.rootStore.sizeStore.boardSize, this.maxBoardWidth)
+    }
+
     /**
      * Cell size in CSS px.
      *
-     * `size + 2` reserves a gutter column on each side for the row/column numbers. This
-     * used to be a switch over 6/7/8 with a magic `default: 96`, so any other board -- the
-     * 2x2 tutorial being the only one -- got a fixed 192px regardless of screen width and
-     * overflowed a phone. Generalising covers every board size.
+     * `size + 2` reserves a gutter column on each side for the row/column numbers, and the
+     * grid's border is subtracted before dividing -- otherwise the rendered shell is wider
+     * than the width it was sized to fit. `floor`, not `round`, for the same reason:
+     * rounding up overflows.
+     *
+     * This used to be a switch over 6/7/8 with a magic `default: 96`, so any other board --
+     * the 2x2 tutorial being the only one -- got a fixed 192px regardless of screen width.
      */
     get squareSize() {
-        const available = Math.min(this.rootStore.sizeStore.boardSize, this.maxBoardWidth)
-        return Math.round(available / (this.definition.size + 2))
+        const usable = this.availableWidth - GRID_BORDER_PX
+        return Math.max(1, Math.floor(usable / (this.definition.size + 2)))
+    }
+
+    /**
+     * Total width the board shell actually occupies: both gutters, the grid, and the
+     * border. This is what the layout must be given -- sizing the wrapper from the raw
+     * available width instead lets the content overflow it.
+     */
+    get shellWidth() {
+        return (this.definition.size + 2) * this.squareSize + GRID_BORDER_PX
     }
 
     setMaxBoardWidth(width: number) {
