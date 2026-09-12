@@ -190,33 +190,31 @@ describe('the stored completion flag is written only by the store reaction', () 
         hardBoards: [solvable('h1'), solvable('h2'), solvable('h3')],
     })
 
-    it('picks up a board that is already solved when it arrives', () => {
+    it('flags a board that arrives already solved, without any move being made', () => {
         // There is no fireImmediately on the reaction: at construction currentBoard is
-        // necessarily null. A pre-solved board is caught by the null -> session transition
-        // when setBoards runs.
+        // necessarily null. A board that is *already* solved on arrival must therefore be
+        // caught by the ordinary null -> session transition when setBoards runs.
+        //
+        // An all-rock board with zero targets is exactly that board: rocks survive
+        // canonicalization (only placed dominoes are stripped) and count as occupying a
+        // cell, so isBoardFull and targetsMatch are both true the moment the session is
+        // constructed -- before the player touches anything.
         const store = root.boardsStore
-        const preSolved = (id: string) => ({
+        const allRock = (id: string) => ({
             puzzleId: id,
-            board: [[1, 1], [0, 0]] as (number | null)[][],
-            boardHorizontalNumbers: '1,1',
-            boardVerticalNumbers: '2,0',
+            board: [[-1, -1], [-1, -1]] as (number | null)[][],
+            boardHorizontalNumbers: '0,0',
+            boardVerticalNumbers: '0,0',
         })
         store.setBoards({
-            easyBoards: [preSolved('p1'), preSolved('p2'), preSolved('p3')],
-            mediumBoards: [preSolved('p4'), preSolved('p5'), preSolved('p6')],
-            hardBoards: [preSolved('p7'), preSolved('p8'), preSolved('p9')],
+            easyBoards: [allRock('r1'), allRock('r2'), allRock('r3')],
+            mediumBoards: [allRock('r4'), allRock('r5'), allRock('r6')],
+            hardBoards: [allRock('r7'), allRock('r8'), allRock('r9')],
         })
 
-        // Definitions strip placed pieces, so sessions start empty and unsolved...
-        expect(store.currentBoard!.completed).toBe(false)
-
-        // ...and solving it after arrival still flips the flag.
         const s = store.currentBoard!
-        runInAction(() => {
-            s.board[0][0] = 1; s.board[1][0] = 0
-            s.board[0][1] = 1; s.board[1][1] = 0
-        })
-        expect(s.completed).toBe(true)
+        expect(s.completedByRules).toBe(true)
+        expect(s.completed).toBe(true) // flagged by the reaction, with no mutation at all
     })
 
     it('stays false until the combined predicate becomes true, then flips', () => {
