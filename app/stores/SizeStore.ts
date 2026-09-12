@@ -5,7 +5,6 @@ import { RootStore } from "./RootStore"
 export class SizeStore {
     rootStore: RootStore
     boardSize: number = 768 //default for hard
-    hoverCords: [number, number] | null = null
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
         if (typeof window !== 'undefined') {
@@ -24,8 +23,5 @@ export class SizeStore {
     // }
     setBoardSize(size: number) {
         this.boardSize = size
-    }
-    setHoverCords(cords: [number, number] | null) {
-        this.hoverCords = cords
     }
 }

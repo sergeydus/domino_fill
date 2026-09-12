@@ -29,9 +29,9 @@ let root: RootStore
 const makeBoard = (over: Partial<StoredPuzzle> = {}) =>
     new PuzzleSession(definitionFrom(level(over)), root)
 
-/** Point the hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
-const hover = (i: number, j: number, fx = 0.5, fy = 0.5) =>
-    root.sizeStore.setHoverCords([j * SIZE + SIZE * fx, i * SIZE + SIZE * fy])
+/** Point a session's hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
+const hover = (s: PuzzleSession, i: number, j: number, fx = 0.5, fy = 0.5) =>
+    s.setHoverPoint([j * SIZE + SIZE * fx, i * SIZE + SIZE * fy])
 
 beforeEach(() => {
     root = new RootStore()
@@ -92,7 +92,7 @@ describe('setPieceOnBoard', () => {
     it('places a vertical domino as 1 above 0', () => {
         const b = makeBoard()
         root.boardsStore.setSelectedPiece(1)
-        hover(2, 2, 0.5, 0.9) // lower half -> extends downward
+        hover(b, 2, 2, 0.5, 0.9) // lower half -> extends downward
         b.setPieceOnBoard()
 
         expect(b.board[2][2]).toBe(1)
@@ -102,7 +102,7 @@ describe('setPieceOnBoard', () => {
     it('places a horizontal domino as 0 left of 2', () => {
         const b = makeBoard()
         root.boardsStore.setSelectedPiece(2)
-        hover(2, 2, 0.9, 0.5) // right half -> extends rightward
+        hover(b, 2, 2, 0.9, 0.5) // right half -> extends rightward
         b.setPieceOnBoard()
 
         expect(b.board[2][2]).toBe(0)
@@ -113,7 +113,7 @@ describe('setPieceOnBoard', () => {
         const b = makeBoard()
         b.board[2][2] = -1
         root.boardsStore.setSelectedPiece(1)
-        hover(2, 2)
+        hover(b, 2, 2)
         b.setPieceOnBoard()
 
         expect(b.board[2][2]).toBe(-1)
@@ -122,7 +122,7 @@ describe('setPieceOnBoard', () => {
 
     it('rejects a placement with no hover', () => {
         const b = makeBoard()
-        root.sizeStore.setHoverCords(null)
+        b.setHoverPoint(null)
         b.setPieceOnBoard()
         expect(b.board.flat().every(c => c === null)).toBe(true)
     })
@@ -132,7 +132,7 @@ describe('setPieceOnBoard', () => {
         const b = makeBoard()
         b.board[3][2] = -1 // block below
         root.boardsStore.setSelectedPiece(1)
-        hover(2, 2, 0.5, 0.9) // asks to extend DOWN, but down is blocked
+        hover(b, 2, 2, 0.5, 0.9) // asks to extend DOWN, but down is blocked
 
         b.setPieceOnBoard()
         expect(b.board[1][2]).toBe(1) // extended UP instead
@@ -161,11 +161,11 @@ describe('domino pairing invariant (spec D6)', () => {
     it('holds after a mix of placements', () => {
         const b = makeBoard()
         root.boardsStore.setSelectedPiece(1)
-        hover(0, 0, 0.5, 0.9); b.setPieceOnBoard()
-        hover(2, 4, 0.5, 0.9); b.setPieceOnBoard()
+        hover(b, 0, 0, 0.5, 0.9); b.setPieceOnBoard()
+        hover(b, 2, 4, 0.5, 0.9); b.setPieceOnBoard()
         root.boardsStore.setSelectedPiece(2)
-        hover(4, 0, 0.9, 0.5); b.setPieceOnBoard()
-        hover(5, 2, 0.9, 0.5); b.setPieceOnBoard()
+        hover(b, 4, 0, 0.9, 0.5); b.setPieceOnBoard()
+        hover(b, 5, 2, 0.9, 0.5); b.setPieceOnBoard()
 
         assertPaired(b.board)
     })
@@ -173,7 +173,7 @@ describe('domino pairing invariant (spec D6)', () => {
     it('holds after placements are removed again', () => {
         const b = makeBoard()
         root.boardsStore.setSelectedPiece(1)
-        hover(1, 1, 0.5, 0.9); b.setPieceOnBoard()
+        hover(b, 1, 1, 0.5, 0.9); b.setPieceOnBoard()
         expect(b.board[1][1]).toBe(1)
 
         b.removePiece(1, 1)

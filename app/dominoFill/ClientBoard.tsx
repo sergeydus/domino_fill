@@ -23,11 +23,12 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     }
     const onmousemove = (e: React.MouseEvent<HTMLDivElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        // console.log('rect', rect)
         const x = e.clientX - rect.left; //x position within the element.
         const y = e.clientY - rect.top;  //y position within the element.
-        sizeStore.setHoverCords([x, y])
+        boardsStore.setHoverPoint([x, y])
     }
+    // Without this the highlight stays frozen wherever the pointer left the grid.
+    const onmouseleave = () => boardsStore.clearHover()
     const onclick = () => {
         // const rect = e.currentTarget.getBoundingClientRect();
         // const x = e.clientX - rect.left; //x position within the element.
@@ -59,7 +60,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                 <div className="flex flex-row">
                     <VerticalNumbers boardsStore={boardsStore} />
                     <div className="border-[#666666] border-4 rounded-2xl">
-                        <div onMouseMove={onmousemove} onClick={onclick} draggable={false} style={gridStyle} className="relative">
+                        <div onMouseMove={onmousemove} onMouseLeave={onmouseleave} onClick={onclick} draggable={false} style={gridStyle} className="relative">
                             <Hover boardsStore={boardsStore} />
                             <Pieces boardsStore={boardsStore} />
                             {boardsStore.board.flat().map((_el: number | null, index: number) => {

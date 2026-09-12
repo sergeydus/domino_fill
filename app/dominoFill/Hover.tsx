@@ -3,7 +3,7 @@ import { PuzzleSession } from "../stores/PuzzleSession"
 
 const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
-    const highlightedSquares = boardsStore.highlightedSquares2
+    const highlightedSquares = boardsStore.highlightedPair
     const size = boardsStore.squareSize
     if (!highlightedSquares) return null
 

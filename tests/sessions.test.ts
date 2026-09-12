@@ -125,7 +125,7 @@ describe('source immutability', () => {
 
         const size = session.squareSize
         root.boardsStore.setSelectedPiece(1)
-        root.sizeStore.setHoverCords([cell[1] * size + size / 2, cell[0] * size + size * 0.9])
+        session.setHoverPoint([cell[1] * size + size / 2, cell[0] * size + size * 0.9])
         session.setPieceOnBoard()
         session.setCompleted(true)
 

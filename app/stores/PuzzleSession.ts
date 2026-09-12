@@ -17,6 +17,16 @@ export class PuzzleSession {
     readonly definition: PuzzleDefinition
     board: (number | null)[][]
     completed: boolean = false
+    /**
+     * Pointer position within this board's grid, in CSS px, or null when the pointer is
+     * not over it.
+     *
+     * Per-session rather than global: two boards can be mounted at once (the tutorial
+     * renders its own 2x2 over the live board), and a shared slot means the tutorial's
+     * pointer drives a phantom highlight on the board behind it -- each interpreting the
+     * same coordinates through its own squareSize.
+     */
+    hoverPoint: [number, number] | null = null
 
     constructor(definition: PuzzleDefinition, rootStore: RootStore) {
         this.definition = definition
@@ -27,10 +37,20 @@ export class PuzzleSession {
 
     get puzzleId() { return this.definition.puzzleId }
 
+    setHoverPoint(point: [number, number] | null) {
+        this.hoverPoint = point
+    }
+
+    /** Called when the pointer leaves this board; without it the highlight sticks. */
+    clearHover() {
+        this.hoverPoint = null
+    }
+
     /** Discard all progress and start this puzzle again from its definition. */
     reset() {
         this.board = cloneInitialBoard(this.definition)
         this.completed = false
+        this.hoverPoint = null
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -64,8 +84,9 @@ export class PuzzleSession {
         }
     }
 
-    get highlightedSquares2(): [[number, number], [number, number]] | null {
-        const hoverCords = this.rootStore.sizeStore.hoverCords
+    /** The pair of cells the currently selected piece would occupy, or null. */
+    get highlightedPair(): [[number, number], [number, number]] | null {
+        const hoverCords = this.hoverPoint
         if (!hoverCords) return null
         const selectedPiece = this.rootStore.boardsStore.selectedPiece
         if (!selectedPiece) return null
@@ -104,7 +125,7 @@ export class PuzzleSession {
 
     setPieceOnBoard() {
         const selectedPiece = this.rootStore.boardsStore.selectedPiece
-        const highlighted = this.highlightedSquares2
+        const highlighted = this.highlightedPair
         if (!highlighted || !selectedPiece) return
 
         const [[i, j], [i2, j2]] = highlighted
