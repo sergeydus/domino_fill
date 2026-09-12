@@ -9,7 +9,6 @@ import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
  *
  * These pin the rules layer AS IT BEHAVES TODAY, before P0 changes it. They deliberately
  * do NOT assert behaviour the spec has yet to build:
- *   - corrected `removePiece` (either half / rocks / edges) lands with P0-7
  *   - undo round-trips land with P1-3
  *   - the board-full assertion in `completed` lands with P0-6
  * Adding those here would assert behaviour that does not exist and fail on arrival.
@@ -141,31 +140,7 @@ describe('setPieceOnBoard', () => {
     })
 })
 
-describe('removePiece (only values 1 and 2 are reachable today)', () => {
-    it('clears both halves of a vertical domino from its anchor', () => {
-        const b = makeBoard()
-        b.board[2][2] = 1
-        b.board[3][2] = 0
-        b.removePiece(2, 2)
-        expect(b.board[2][2]).toBeNull()
-        expect(b.board[3][2]).toBeNull()
-    })
-
-    it('clears both halves of a horizontal domino from its anchor', () => {
-        const b = makeBoard()
-        b.board[2][2] = 0
-        b.board[2][3] = 2
-        b.removePiece(2, 3) // anchor is the cell holding the 2
-        expect(b.board[2][3]).toBeNull()
-        expect(b.board[2][2]).toBeNull()
-    })
-
-    it('is a no-op on an empty cell', () => {
-        const b = makeBoard()
-        b.removePiece(2, 2)
-        expect(b.board[2][2]).toBeNull()
-    })
-})
+// removePiece is covered comprehensively in tests/removePiece.test.ts (P0-7).
 
 describe('domino pairing invariant (spec D6)', () => {
     // This invariant is what makes a sums-match-but-not-full board impossible.

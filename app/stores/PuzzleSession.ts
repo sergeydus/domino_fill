@@ -118,16 +118,61 @@ export class PuzzleSession {
         }
     }
 
-    removePiece(i: number, j: number) {
-        const value = this.board[i][j]
-        if (value === null) return
-        if (value == 1) {
-            this.board[i][j] = null
-            this.board[i + 1][j] = null
-        } else {
-            this.board[i][j] = null
-            this.board[i][j - 1] = null
+    private inBounds(i: number, j: number) {
+        return Number.isInteger(i) && Number.isInteger(j)
+            && i >= 0 && j >= 0
+            && i < this.board.length && j < this.board.length
+    }
+
+    private at(i: number, j: number): number | null | undefined {
+        return this.inBounds(i, j) ? this.board[i][j] : undefined
+    }
+
+    /**
+     * Resolve the cell (i,j) to the complete pair of cells its domino occupies, or null if
+     * it does not belong to exactly one well-formed domino.
+     *
+     * A vertical domino is a 1 with a 0 directly below; a horizontal is a 2 with a 0
+     * directly to its left. A 0 is therefore owned by a 1 above OR a 2 to its right --
+     * and if it has neither owner, or both, the board is corrupt and we refuse to guess.
+     *
+     * Resolving before mutating is what keeps the pairing invariant (spec D6) intact: a
+     * half-removal would leave an orphan, and orphans are the only way a sums-match board
+     * with empty cells becomes reachable.
+     */
+    pairAt(i: number, j: number): readonly [readonly [number, number], readonly [number, number]] | null {
+        const value = this.at(i, j)
+        if (value === undefined || value === null || value === -1) return null
+
+        if (value === 1) {
+            // Vertical: 1 on top, 0 below.
+            return this.at(i + 1, j) === 0 ? [[i, j], [i + 1, j]] : null
         }
+        if (value === 2) {
+            // Horizontal: 2 on the right, 0 to its left.
+            return this.at(i, j - 1) === 0 ? [[i, j], [i, j - 1]] : null
+        }
+        if (value === 0) {
+            const verticalOwner = this.at(i - 1, j) === 1      // 1 above me
+            const horizontalOwner = this.at(i, j + 1) === 2    // 2 to my right
+            if (verticalOwner === horizontalOwner) return null // neither, or ambiguous
+            return verticalOwner ? [[i - 1, j], [i, j]] : [[i, j], [i, j + 1]]
+        }
+        return null // unknown value
+    }
+
+    /**
+     * Remove the domino occupying (i,j), from either of its halves.
+     * Returns whether anything was removed; callers use it for feedback and undo.
+     */
+    removePiece(i: number, j: number): boolean {
+        const pair = this.pairAt(i, j)
+        if (!pair) return false // rejected: nothing is mutated
+
+        const [[ai, aj], [bi, bj]] = pair
+        this.board[ai][aj] = null
+        this.board[bi][bj] = null
+        return true
     }
 
     get completedByRules() {
