@@ -4,15 +4,15 @@ import { PuzzleSession } from "../stores/PuzzleSession"
 const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     // console.log('wrapper rerender')
     const size = boardsStore.squareSize
-    const split = boardsStore.definition.boardVerticalNumbers.split(',')
-    const correctIndexes = boardsStore.correctVerticalValues
+    const split = boardsStore.definition.rowTargets.split(',')
+    const currentSums = boardsStore.currentRowSums
     return <div className="flex flex-col text-6xl">
         {split.map((el: string, index: number) => {
             let color = '#ababab'
-            if (correctIndexes[index] == Number(el)) {
+            if (currentSums[index] == Number(el)) {
                 color = '#4bce4b'
             }
-            else if(correctIndexes[index] > Number(el)) {
+            else if(currentSums[index] > Number(el)) {
                 color = '#ff0000'
             }
             return (

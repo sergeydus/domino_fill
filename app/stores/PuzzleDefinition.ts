@@ -15,8 +15,16 @@ export type PuzzleDefinition = {
     readonly size: number
     /** Rocks (-1) and empty cells (null). Never contains placed pieces. */
     readonly initialBoard: readonly (readonly (number | null)[])[]
-    readonly boardHorizontalNumbers: string
-    readonly boardVerticalNumbers: string
+    /**
+     * Targets, named for what they actually are.
+     *
+     * The stored JSON calls these `boardHorizontalNumbers`/`boardVerticalNumbers`, but
+     * "horizontal" holds the per-COLUMN sums (rendered along the top) and "vertical" the
+     * per-ROW sums. The inverted names stop at the data boundary: `StoredPuzzle` keeps
+     * them for file compatibility, everything inside uses these.
+     */
+    readonly columnTargets: string
+    readonly rowTargets: string
 }
 
 export type StoredPuzzle = DominoLevel & { puzzleId: string }
@@ -57,8 +65,8 @@ export const definitionFrom = (stored: StoredPuzzle): PuzzleDefinition => {
         definitionHash,
         size: initialBoard.length,
         initialBoard: Object.freeze(initialBoard.map(row => Object.freeze(row))),
-        boardHorizontalNumbers: stored.boardHorizontalNumbers,
-        boardVerticalNumbers: stored.boardVerticalNumbers,
+        columnTargets: stored.boardHorizontalNumbers,
+        rowTargets: stored.boardVerticalNumbers,
     })
 }
 

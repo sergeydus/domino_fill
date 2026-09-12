@@ -43,31 +43,31 @@ describe('squareSize', () => {
     })
 })
 
-describe('correct{Horizontal,Vertical}Values', () => {
-    // Naming note (spec D10-d2): `correctHorizontalValues` sums COLUMNS and
-    // `correctVerticalValues` sums ROWS. Inverted, but self-consistent; pinned here so a
-    // future rename cannot silently change the semantics.
-    it('sums columns for "horizontal" and rows for "vertical"', () => {
+describe('current{Column,Row}Sums', () => {
+    // The stored JSON still calls these boardHorizontalNumbers/boardVerticalNumbers, but
+    // the inverted naming now stops at the data boundary (spec D10-d2, resolved in P0-6).
+    // Pinned here so the axes cannot be silently swapped.
+    it('sums columns and rows on the correct axes', () => {
         const b = makeBoard()
         b.board[0][0] = 1
         b.board[1][0] = 0
         b.board[0][3] = 0
         b.board[0][4] = 2
 
-        expect(b.correctHorizontalValues).toEqual([1, 0, 0, 0, 2, 0]) // per column
-        expect(b.correctVerticalValues).toEqual([3, 0, 0, 0, 0, 0])   // per row
+        expect(b.currentColumnSums).toEqual([1, 0, 0, 0, 2, 0]) // per column
+        expect(b.currentRowSums).toEqual([3, 0, 0, 0, 0, 0])   // per row
     })
 
     it('treats rocks (-1) as contributing nothing', () => {
         const b = makeBoard()
         b.board[0][0] = -1
         b.board[0][1] = 1
-        expect(b.correctVerticalValues[0]).toBe(1)
-        expect(b.correctHorizontalValues[0]).toBe(0)
+        expect(b.currentRowSums[0]).toBe(1)
+        expect(b.currentColumnSums[0]).toBe(0)
     })
 })
 
-describe('completedByRules (sums only; board-full check lands with P0-6)', () => {
+describe('completedByRules (fullness + targets, since P0-6)', () => {
     // The 2x2 tutorial board; its only solution is two vertical dominoes.
     const tutorial = () => definitionFrom({
         puzzleId: 'tutorial-v1',

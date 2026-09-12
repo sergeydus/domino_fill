@@ -254,7 +254,7 @@ describe('setBoards reconciles rather than clearing', () => {
         const fresh = store.sessions.get('e1')!
         expect(fresh).not.toBe(stale)
         expect(fresh.board[0][0]).toBeNull()
-        expect(fresh.definition.boardHorizontalNumbers).toBe('1,2,3,4,5,6')
+        expect(fresh.definition.columnTargets).toBe('1,2,3,4,5,6')
     })
 
     it('adds new ids without disturbing existing sessions', () => {

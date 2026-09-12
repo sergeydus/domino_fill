@@ -33,13 +33,13 @@ export class PuzzleSession {
         this.completed = false
     }
 
-    get correctHorizontalValues() {
-        // Sums a COLUMN despite the name; see spec D10-d2.
+    /** Sum of pips in each column; compared against `definition.columnTargets`. */
+    get currentColumnSums() {
         return columnSums(this.board, this.definition.size)
     }
 
-    get correctVerticalValues() {
-        // Sums a ROW despite the name; see spec D10-d2.
+    /** Sum of pips in each row; compared against `definition.rowTargets`. */
+    get currentRowSums() {
         return rowSums(this.board, this.definition.size)
     }
 

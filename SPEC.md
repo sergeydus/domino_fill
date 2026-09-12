@@ -205,7 +205,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | b | `page.tsx:8` + `DominoClient.tsx:32` | The same `min-h-screen` wrapper nested twice: the page is two viewports tall and always has a scrollbar. |
 | c | `DominoClient.tsx:16` | The board is fetched by a Server Action from a `useEffect`, so first paint costs an RPC round-trip for a static JSON import, and the game SSRs **nothing** (`:30` renders `no board`). Pass it as a prop from the server component. |
 | d | `Boards.ts:1` + `:54` | A `"use server"` module may only export async functions, yet it `export default`s a class — dragging the whole generator into a server-action bundle. |
-| d2 | `CurrentBoardStore.ts:19,34` | **Inverted naming.** `correctHorizontalValues` sums a **column** and `correctVerticalValues` sums a **row**; `boardHorizontalNumbers` holds column sums and renders as column headers. Self-consistent, and works only because boards are square — a readability trap, not a live bug. Rename when P0-6 touches this code. |
+| d2 | ~~`CurrentBoardStore.ts:19,34`~~ | **✅ Fixed in P0-6.** `correctHorizontalValues` summed a **column** and `correctVerticalValues` a **row**. Now `currentColumnSums`/`currentRowSums`, with `definition.columnTargets`/`rowTargets`. The inverted names survive only in `StoredPuzzle` and the JSON file, for data compatibility, and are mapped in `definitionFrom`. |
 | e | `BoardsStore.ts:34` | `audio?.play()` has no `.catch` → unhandled rejection whenever autoplay policy blocks it. `public/win.mp3` exists and is unused; the file that plays is `winSilent.mp3`. |
 | f | `BoardSquare.tsx:42` | `snap.mp3` plays on **every** square click, including rejected placements — the feedback lies. Also allocates a new `Audio` per click. |
 | g | `VerticalNumbers.tsx:13-18`, `HorizontalNumbers.tsx:12-17` | State is encoded by colour **only** (`#4bce4b` / `#ff0000`) — a WCAG 1.4.1 failure. And green fires on *sum satisfied*, not *line correct*, so a line goes green with empty cells still in it. Default `#ababab` on `#e8e7e7` is ~1.8:1, failing 1.4.3. |
@@ -335,7 +335,15 @@ that merely *supports* a day index changes nothing by itself. Specify:
 **P0-6. De-duplicate the win check (D6).** Delete the inlined copy at `BoardsStore.ts:34-35`; drive
 completion from a `reaction` on the single `CurrentBoardStore.completed` getter. Add the
 board-full predicate there as a named, separately testable getter — as an assertion protecting the
-D6 invariant, not as a bug fix.
+D6 invariant, not as a bug fix. **Also resolve D10-d2 here**, since this is the change that
+touches the sum getters.
+
+> **As landed.** The predicates live in `app/stores/boardRules.ts` as pure functions rather than
+> as methods, because a live MobX-backed session cannot hold a sparse board — MobX normalises
+> holes away — so the `flat()/every()` trap is only testable against a decoupled function.
+> `completedByRules = isBoardFull && targetsMatch`; the stored flag is written only by
+> `LevelStore`'s reaction. Note that the `===` in `targetsMatch` is defensive typing, not
+> test-covered behaviour: both operands are always strings, so `==` would behave identically.
 
 **P0-7. Guard `removePiece` (D7).** Resolve a clicked cell to its piece's anchor, so either half
 works; reject `-1`/`null` explicitly; bound-check. Load-bearing for D6.
@@ -563,7 +571,7 @@ whole of P0 into one oversized set.)
 | 3 | **P0-2** construct the store in the provider; move `StoreWrapper` inside `<body>` | unit |
 | 4 | **P0-5** `puzzleId` (+ interim IDs for the existing 18) + puzzle/session split + store Map | unit |
 | 5 | **P0-7** guard `removePiece` | unit (corrected-behaviour tests land here) |
-| 6 | **P0-6** de-duplicate the win check; add the board-full assertion | unit |
+| 6 | **P0-6** de-duplicate the win check; board-full assertion; resolve D10-d2 naming | unit |
 | 7 | **P0-8** hover state onto `CurrentBoardStore`; clear on leave | unit |
 | 8 | **P0-9a** tutorial: rule text, skip button, `fixed inset-0`, sizing | unit + manual |
 | 9 | **P1-9** Playwright harness + `test:e2e` script | — |

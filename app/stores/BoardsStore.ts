@@ -1,5 +1,5 @@
 "use client"
-import { autorun, makeAutoObservable, observable, runInAction } from "mobx"
+import { makeAutoObservable, observable, reaction } from "mobx"
 import { BoardsResponse } from "../dominoFill/Boards"
 import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
@@ -46,13 +46,30 @@ export class LevelStore {
             sessions: observable.shallow,
         })
 
-        autorun(() => {
-            const session = this.currentBoard
-            if (session && session.completedByRules && !session.completed) {
-                runInAction(() => { session.setCompleted(true) })
+        // A focused reaction, not an autorun: it tracks exactly one derived value -- the
+        // session that has just become solved but is not yet flagged -- and the effect runs
+        // outside the derivation, so writing `completed` cannot feed back into tracking.
+        //
+        // It yields the session rather than a boolean so the effect acts on the session the
+        // derivation actually saw, instead of re-reading `currentBoard` and risking acting
+        // on a different one. (A boolean would behave the same today: the effect flips
+        // `completed` synchronously, so the expression always settles back to false between
+        // boards. This is about not depending on that timing.)
+        // `fireImmediately` covers a board that arrives already satisfying the rules.
+        reaction(
+            () => {
+                const session = this.currentBoard
+                return session && session.completedByRules && !session.completed
+                    ? session
+                    : null
+            },
+            (session) => {
+                if (!session) return
+                session.setCompleted(true)
                 audio?.play()
-            }
-        })
+            },
+            { fireImmediately: true },
+        )
     }
 
     setBoards(boards: BoardsResponse) {
@@ -117,6 +134,6 @@ export class LevelStore {
         return this.sessions.get(definition.puzzleId) ?? null
     }
 
-    get correctHorizontalValues() { return this.currentBoard?.correctHorizontalValues }
-    get correctVerticalValues() { return this.currentBoard?.correctVerticalValues }
+    get currentColumnSums() { return this.currentBoard?.currentColumnSums }
+    get currentRowSums() { return this.currentBoard?.currentRowSums }
 }

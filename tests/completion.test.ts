@@ -172,11 +172,11 @@ describe('completedByRules combines both halves', () => {
             s.board[0][1] = 1; s.board[1][1] = 0
         })
         expect(s.completedByRules).toBe(true)
-        expect(s.completed).toBe(false) // only the autorun may write this
+        expect(s.completed).toBe(false) // only the store's reaction may write this
     })
 })
 
-describe('the stored completion flag is written only by the autorun', () => {
+describe('the stored completion flag is written only by the store reaction', () => {
     const solvable = (id: string) => ({
         puzzleId: id,
         board: [[null, null], [null, null]],
@@ -206,6 +206,34 @@ describe('the stored completion flag is written only by the autorun', () => {
         runInAction(() => { s.board[0][1] = 1; s.board[1][1] = 0 })
         expect(s.completedByRules).toBe(true)
         expect(s.completed).toBe(true)
+    })
+
+    it('marks a second already-solved board when switching to it', () => {
+        // Switching to a board that is already solved must still flag it. (Note this also
+        // passes when the reaction tracks a plain boolean -- the effect flips `completed`
+        // synchronously, so the expression settles back to false between boards. The test
+        // pins the behaviour, not the implementation choice.)
+        const store = root.boardsStore
+        store.setBoards(response())
+
+        const first = store.currentBoard!
+        runInAction(() => {
+            first.board[0][0] = 1; first.board[1][0] = 0
+            first.board[0][1] = 1; first.board[1][1] = 0
+        })
+        expect(first.completed).toBe(true)
+
+        const second = store.sessions.get('e2')!
+        runInAction(() => {
+            second.board[0][0] = 1; second.board[1][0] = 0
+            second.board[0][1] = 1; second.board[1][1] = 0
+        })
+        // Not current yet, so nothing has observed it.
+        expect(second.completed).toBe(false)
+
+        store.setLevel(2)
+        expect(store.currentBoard).toBe(second)
+        expect(second.completed).toBe(true)
     })
 
     it('does not mark an all-zero-target board complete while it is empty', () => {

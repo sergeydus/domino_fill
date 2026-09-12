@@ -3,15 +3,15 @@ import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
 const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
-    const split = boardsStore.definition.boardHorizontalNumbers.split(',')
-    const correctIndexes = boardsStore.correctHorizontalValues
+    const split = boardsStore.definition.columnTargets.split(',')
+    const currentSums = boardsStore.currentColumnSums
     return <div className="flex flex-row text-6xl">
         {split.map((el: string, index: number) => {
             let color = '#ababab'
-            if (correctIndexes[index] == Number(el)) {
+            if (currentSums[index] == Number(el)) {
                 color = '#4bce4b'
             }
-            else if (correctIndexes[index] > Number(el)) {
+            else if (currentSums[index] > Number(el)) {
                 color = '#ff0000'
             }
             return (

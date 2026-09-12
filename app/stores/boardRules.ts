@@ -65,6 +65,6 @@ export const rowSums = (board: Board, size: number): number[] => {
 /** Do both target axes match exactly? Strict equality; no coercion. */
 export const targetsMatch = (board: Board, definition: PuzzleDefinition): boolean => {
     const size = definition.size
-    return columnSums(board, size).join(',') === definition.boardHorizontalNumbers
-        && rowSums(board, size).join(',') === definition.boardVerticalNumbers
+    return columnSums(board, size).join(',') === definition.columnTargets
+        && rowSums(board, size).join(',') === definition.rowTargets
 }
