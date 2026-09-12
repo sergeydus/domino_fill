@@ -27,6 +27,13 @@ export class PuzzleSession {
      * same coordinates through its own squareSize.
      */
     hoverPoint: [number, number] | null = null
+    /**
+     * Optional ceiling on the width this board may occupy, in CSS px.
+     *
+     * The tutorial renders inside a modal and must not claim the full board width.
+     * Interim: P0-3 replaces this whole px-driven sizing with a CSS shell formula.
+     */
+    maxBoardWidth: number = Infinity
 
     constructor(definition: PuzzleDefinition, rootStore: RootStore) {
         this.definition = definition
@@ -73,15 +80,21 @@ export class PuzzleSession {
         return targetsMatch(this.board, this.definition)
     }
 
+    /**
+     * Cell size in CSS px.
+     *
+     * `size + 2` reserves a gutter column on each side for the row/column numbers. This
+     * used to be a switch over 6/7/8 with a magic `default: 96`, so any other board -- the
+     * 2x2 tutorial being the only one -- got a fixed 192px regardless of screen width and
+     * overflowed a phone. Generalising covers every board size.
+     */
     get squareSize() {
-        const boardWidth = this.rootStore.sizeStore.boardSize
-        const size = this.board.length
-        switch (size) {
-            case 6: return Math.round(boardWidth / 8)
-            case 7: return Math.round(boardWidth / 9)
-            case 8: return Math.round(boardWidth / 10)
-            default: return 96
-        }
+        const available = Math.min(this.rootStore.sizeStore.boardSize, this.maxBoardWidth)
+        return Math.round(available / (this.definition.size + 2))
+    }
+
+    setMaxBoardWidth(width: number) {
+        this.maxBoardWidth = width
     }
 
     /** The pair of cells the currently selected piece would occupy, or null. */
