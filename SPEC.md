@@ -526,7 +526,14 @@ children and a **roving tabindex** (container `tabIndex={0}`, focused cell `0`, 
 focusable cells is otherwise 64 tab stops; a `role="group"` of labelled buttons is the simpler
 option. `<MotionConfig reducedMotion="user">` at the root covers every animation in one line.
 
-**P1-9. Tests — Playwright, explicit and not optional.** jsdom has no layout, so
+**P1-9. Tests — Playwright, explicit and not optional.**
+
+> **Carried in from P0-9a:** add a **360×640 tutorial check** — no horizontal overflow, the
+> modal's content scrolls when it is taller than the viewport, and **Skip stays reachable**.
+> jsdom cannot verify any of the three, so the tutorial's escape hatch is currently unproven
+> on a phone-sized screen.
+
+jsdom has no layout, so
   `getBoundingClientRect()` returns zeros and it **cannot** verify label alignment, clipping,
   horizontal overflow, duplicate taps from compat `click`, pointer-overlay hit regions, or the
   tutorial at phone sizes — i.e. most of D3, D4, D9 and every layout acceptance criterion. Those
@@ -574,7 +581,7 @@ whole of P0 into one oversized set.)
 | 6 | **P0-6** de-duplicate the win check; board-full assertion; resolve D10-d2 naming | unit |
 | 7 | **P0-8** hover state onto `CurrentBoardStore`; clear on leave | unit |
 | 8 | **P0-9a** tutorial: rule text, skip button, `fixed inset-0`, sizing | unit + manual |
-| 9 | **P1-9** Playwright harness + `test:e2e` script | — |
+| 9 | **P1-9** Playwright harness + `test:e2e` script (incl. the tutorial check below) | — |
 | 10 | **P0-4** piece-overlay hit regions | E2E |
 | 11 | **P0-3** responsive layout: gutter, `min-*: 0`, `clamp()` font, shell formula | E2E (geometry/alignment/overflow) |
 | 12 | **P1-2** move hit-testing onto the cells | E2E |
