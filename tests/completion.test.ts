@@ -190,6 +190,35 @@ describe('the stored completion flag is written only by the store reaction', () 
         hardBoards: [solvable('h1'), solvable('h2'), solvable('h3')],
     })
 
+    it('picks up a board that is already solved when it arrives', () => {
+        // There is no fireImmediately on the reaction: at construction currentBoard is
+        // necessarily null. A pre-solved board is caught by the null -> session transition
+        // when setBoards runs.
+        const store = root.boardsStore
+        const preSolved = (id: string) => ({
+            puzzleId: id,
+            board: [[1, 1], [0, 0]] as (number | null)[][],
+            boardHorizontalNumbers: '1,1',
+            boardVerticalNumbers: '2,0',
+        })
+        store.setBoards({
+            easyBoards: [preSolved('p1'), preSolved('p2'), preSolved('p3')],
+            mediumBoards: [preSolved('p4'), preSolved('p5'), preSolved('p6')],
+            hardBoards: [preSolved('p7'), preSolved('p8'), preSolved('p9')],
+        })
+
+        // Definitions strip placed pieces, so sessions start empty and unsolved...
+        expect(store.currentBoard!.completed).toBe(false)
+
+        // ...and solving it after arrival still flips the flag.
+        const s = store.currentBoard!
+        runInAction(() => {
+            s.board[0][0] = 1; s.board[1][0] = 0
+            s.board[0][1] = 1; s.board[1][1] = 0
+        })
+        expect(s.completed).toBe(true)
+    })
+
     it('stays false until the combined predicate becomes true, then flips', () => {
         const store = root.boardsStore
         store.setBoards(response())

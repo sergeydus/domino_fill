@@ -55,7 +55,11 @@ export class LevelStore {
         // on a different one. (A boolean would behave the same today: the effect flips
         // `completed` synchronously, so the expression always settles back to false between
         // boards. This is about not depending on that timing.)
-        // `fireImmediately` covers a board that arrives already satisfying the rules.
+        //
+        // No `fireImmediately`: `currentBoard` is necessarily null here -- boards arrive via
+        // `setBoards` long after construction -- so it would only invoke the effect once with
+        // null. A board that arrives already solved is picked up by the ordinary
+        // null -> session transition.
         reaction(
             () => {
                 const session = this.currentBoard
@@ -68,7 +72,6 @@ export class LevelStore {
                 session.setCompleted(true)
                 audio?.play()
             },
-            { fireImmediately: true },
         )
     }
 
