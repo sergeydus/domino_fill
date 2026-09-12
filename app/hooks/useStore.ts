@@ -2,6 +2,9 @@ import { useContext } from "react";
 import { StoreContext } from "@/app/provider";
 
 export const useStores = () => {
-    // useContext(StoreContext);
-    return useContext(StoreContext);
+    const store = useContext(StoreContext);
+    if (!store) {
+        throw new Error("useStores must be used within a <StoreWrapper>");
+    }
+    return store;
 };

@@ -25,15 +25,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <StoreWrapper>
-      <html lang="en">
-        <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        >
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        {/* Inside <body>, not wrapping <html>: the provider is a client component, and
+            handing it the document element pulls the whole store graph into every route's
+            SSR module graph and makes <head> hoisting/streaming fragile. */}
+        <StoreWrapper>
           {children}
-          <SpeedInsights />
-        </body>
-      </html>
-    </StoreWrapper>
+        </StoreWrapper>
+        <SpeedInsights />
+      </body>
+    </html>
   );
 }
