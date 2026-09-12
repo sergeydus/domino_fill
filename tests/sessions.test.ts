@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
 import { definitionFrom, cloneInitialBoard } from '@/app/stores/PuzzleDefinition'
 import { PuzzleSession } from '@/app/stores/PuzzleSession'
@@ -41,7 +42,7 @@ describe('PuzzleDefinition', () => {
     it('strips placed pieces, keeping only rocks and empties', () => {
         const board = Array.from({ length: 6 }, () => Array(6).fill(null))
         board[0][0] = -1; board[1][1] = 1; board[2][1] = 0
-        const def = definitionFrom(puzzle('p', { board }), 'p')
+        const def = definitionFrom(puzzle('p', { board }))
 
         expect(def.initialBoard[0][0]).toBe(-1)
         expect(def.initialBoard[1][1]).toBeNull()
@@ -49,18 +50,56 @@ describe('PuzzleDefinition', () => {
     })
 
     it('gives the same hash for identical content and a different one otherwise', () => {
-        const a = definitionFrom(puzzle('p'), 'p')
-        const b = definitionFrom(puzzle('p'), 'p')
-        const c = definitionFrom(puzzle('p', { boardHorizontalNumbers: '1,0,0,0,0,0' }), 'p')
+        const a = definitionFrom(puzzle('p'))
+        const b = definitionFrom(puzzle('p'))
+        const c = definitionFrom(puzzle('p', { boardHorizontalNumbers: '1,0,0,0,0,0' }))
 
         expect(a.definitionHash).toBe(b.definitionHash)
         expect(a.definitionHash).not.toBe(c.definitionHash)
     })
 
     it('is frozen', () => {
-        const def = definitionFrom(puzzle('p'), 'p')
+        const def = definitionFrom(puzzle('p'))
         expect(Object.isFrozen(def)).toBe(true)
         expect(Object.isFrozen(def.initialBoard)).toBe(true)
+    })
+})
+
+describe('definitions stay frozen inside the store', () => {
+    // makeAutoObservable deep-converts by default, which would replace each frozen
+    // definition with an observable copy and silently undo definitionFrom's guarantee.
+    // The definition collections are observable.ref for exactly this reason.
+    it('currentDefinition is still the frozen object after setBoards', () => {
+        const store = root.boardsStore
+        store.setBoards(response())
+        const def = store.currentDefinition!
+
+        expect(Object.isFrozen(def)).toBe(true)
+        expect(Object.isFrozen(def.initialBoard)).toBe(true)
+        expect(Object.isFrozen(def.initialBoard[0])).toBe(true)
+    })
+
+    it("a session's definition is still frozen after setBoards", () => {
+        const store = root.boardsStore
+        store.setBoards(response())
+        const def = store.currentBoard!.definition
+
+        expect(Object.isFrozen(def)).toBe(true)
+        expect(Object.isFrozen(def.initialBoard[0])).toBe(true)
+    })
+
+    it('the stored definition is the same object the factory produced', () => {
+        const store = root.boardsStore
+        store.setBoards(response())
+        expect(store.currentBoard!.definition).toBe(store.currentDefinition)
+    })
+})
+
+describe('puzzleId is required at ingestion', () => {
+    it('throws rather than inventing a positional id', () => {
+        const orphan = { ...puzzle('x') } as Partial<StoredPuzzle>
+        delete orphan.puzzleId
+        expect(() => definitionFrom(orphan as StoredPuzzle)).toThrow(/requires a puzzleId/)
     })
 })
 
@@ -97,7 +136,7 @@ describe('source immutability', () => {
         // Pins the explicit mechanism. Note that MobX's deep observable conversion also
         // copies the array, so isolation would survive an accidental alias -- but that is an
         // implicit guarantee of makeAutoObservable, not of this code. Depend on the clone.
-        const def = definitionFrom(puzzle('p'), 'p')
+        const def = definitionFrom(puzzle('p'))
         const clone = cloneInitialBoard(def)
 
         expect(clone).not.toBe(def.initialBoard)
@@ -107,9 +146,9 @@ describe('source immutability', () => {
     })
 
     it('a session board is not the definition board', () => {
-        const def = definitionFrom(puzzle('p'), 'p')
+        const def = definitionFrom(puzzle('p'))
         const session = new PuzzleSession(def, root)
-        session.board[0][0] = 1
+        runInAction(() => { session.board[0][0] = 1 })
         expect(def.initialBoard[0][0]).toBeNull()
     })
 })
@@ -145,8 +184,8 @@ describe('session identity and isolation', () => {
         store.setBoards(response())
 
         const easy = store.currentBoard!
-        easy.board[0][0] = 1
-        easy.board[1][0] = 0
+        runInAction(() => { easy.board[0][0] = 1 })
+        runInAction(() => { easy.board[1][0] = 0 })
 
         store.setDifficulty('hard')
         expect(store.currentBoard).not.toBe(easy)
@@ -161,8 +200,8 @@ describe('session identity and isolation', () => {
         store.setBoards(response())
 
         const first = store.currentBoard!
-        first.board[2][2] = 1
-        first.board[3][2] = 0
+        runInAction(() => { first.board[2][2] = 1 })
+        runInAction(() => { first.board[3][2] = 0 })
 
         store.setLevel(3)
         expect(store.currentBoard).not.toBe(first)
@@ -176,7 +215,7 @@ describe('session identity and isolation', () => {
         const store = root.boardsStore
         store.setBoards(response())
 
-        store.sessions.get('e1')!.board[0][0] = 1
+        runInAction(() => { store.sessions.get('e1')!.board[0][0] = 1 })
         expect(store.sessions.get('e2')!.board[0][0]).toBeNull()
         expect(store.sessions.get('h1')!.board[0][0]).toBeNull()
     })
@@ -188,7 +227,7 @@ describe('setBoards reconciles rather than clearing', () => {
         store.setBoards(response())
 
         const session = store.sessions.get('e1')!
-        session.board[0][0] = 1
+        runInAction(() => { session.board[0][0] = 1 })
 
         // A duplicate effect or a refetch must not wipe live progress.
         store.setBoards(response())
@@ -202,7 +241,7 @@ describe('setBoards reconciles rather than clearing', () => {
         store.setBoards(response())
 
         const stale = store.sessions.get('e1')!
-        stale.board[0][0] = 1
+        runInAction(() => { stale.board[0][0] = 1 })
 
         store.setBoards(response({
             easyBoards: [
@@ -221,7 +260,7 @@ describe('setBoards reconciles rather than clearing', () => {
         const store = root.boardsStore
         store.setBoards(response())
         const kept = store.sessions.get('e1')!
-        kept.board[0][0] = 1
+        runInAction(() => { kept.board[0][0] = 1 })
 
         store.setBoards(response({
             easyBoards: [puzzle('e1'), puzzle('e2'), puzzle('e9')],

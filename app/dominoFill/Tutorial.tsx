@@ -17,7 +17,7 @@ const Tutorial = () => {
             board: [[null, null], [null, null]],
             boardHorizontalNumbers: '1,1',
             boardVerticalNumbers: '2,0',
-        }, 'tutorial-v1'),
+        }),
         boardsStore.rootStore,
     ));
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('hasSeenTutorial', false);

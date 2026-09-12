@@ -23,7 +23,7 @@ const session = (rocks: [number, number][] = []) => {
         board,
         boardHorizontalNumbers: '3,3,3,3,3,3',
         boardVerticalNumbers: '3,3,3,3,3,3',
-    }, 'rm-test'), root)
+    }), root)
 }
 
 /** Place a vertical domino with its top at (i,j): 1 above, 0 below. */
@@ -208,6 +208,43 @@ describe('orphans and corruption are refused, not guessed', () => {
 
         expect(s.removePiece(2, 2)).toBe(false)
         expect(snapshot(s)).toBe(before)
+    })
+
+    it('refuses the ambiguous pattern from ALL THREE of its cells', () => {
+        // 1 at (1,2) and 2 at (2,3) both claim the 0 at (2,2). Removing from the 1 or the 2
+        // would clear a valid-looking pair and leave the OTHER numbered cell orphaned --
+        // which is exactly how the pairing invariant gets broken. Checking only the 0 is
+        // not enough: every branch must inspect the 0's complete owner set.
+        const build = () => {
+            const s = session()
+            s.board[1][2] = 1
+            s.board[2][2] = 0
+            s.board[2][3] = 2
+            return s
+        }
+        for (const [i, j] of [[1, 2], [2, 2], [2, 3]] as const) {
+            const s = build()
+            const before = snapshot(s)
+            expect(s.removePiece(i, j), `removing at ${i},${j}`).toBe(false)
+            expect(snapshot(s), `board after ${i},${j}`).toBe(before)
+        }
+    })
+
+    it('refuses the mirrored ambiguous pattern from all three cells', () => {
+        // Same shape with the 2 to the left of the shared 0's column neighbour.
+        const build = () => {
+            const s = session()
+            s.board[0][0] = 1
+            s.board[1][0] = 0
+            s.board[1][1] = 2
+            return s
+        }
+        for (const [i, j] of [[0, 0], [1, 0], [1, 1]] as const) {
+            const s = build()
+            const before = snapshot(s)
+            expect(s.removePiece(i, j), `removing at ${i},${j}`).toBe(false)
+            expect(snapshot(s)).toBe(before)
+        }
     })
 
     it('rejects a 1 whose cell below holds another piece rather than its 0', () => {

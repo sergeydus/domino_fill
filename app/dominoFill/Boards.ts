@@ -8,7 +8,10 @@ export type BoardsResponse = {
     mediumBoards: StoredPuzzle[],
     hardBoards: StoredPuzzle[],
 }
-class Boards implements BoardsResponse {
+// Not `implements BoardsResponse`: the runtime shape now requires a puzzleId, which this
+// generator does not mint. It is dead scaffolding (never instantiated) and is deleted in
+// P2-1 along with the rest; the generator's output contract is rewritten in P1-6.
+class Boards {
     created = new Date()
     easyBoards!: [DominoLevel, DominoLevel, DominoLevel]
     mediumBoards!: [DominoLevel, DominoLevel, DominoLevel]

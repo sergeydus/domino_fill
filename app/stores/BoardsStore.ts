@@ -1,5 +1,5 @@
 "use client"
-import { autorun, makeAutoObservable, runInAction } from "mobx"
+import { autorun, makeAutoObservable, observable, runInAction } from "mobx"
 import { BoardsResponse } from "../dominoFill/Boards"
 import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
@@ -34,7 +34,17 @@ export class LevelStore {
         if (typeof Audio != 'undefined') {
             audio = new Audio('winSilent.mp3')
         }
-        makeAutoObservable(this)
+        // Definitions are frozen value objects: observe the *reference*, never the
+        // contents. Deep conversion would replace each frozen definition with an
+        // observable copy, silently undoing definitionFrom's immutability guarantee.
+        // `sessions` is shallow for the same reason -- the sessions inside are already
+        // observable, and the Map only needs to track membership.
+        makeAutoObservable(this, {
+            easyBoards: observable.ref,
+            mediumBoards: observable.ref,
+            hardBoards: observable.ref,
+            sessions: observable.shallow,
+        })
 
         autorun(() => {
             const session = this.currentBoard
@@ -46,12 +56,11 @@ export class LevelStore {
     }
 
     setBoards(boards: BoardsResponse) {
-        const build = (list: StoredPuzzle[], difficulty: string) =>
-            list.map((stored, i) => definitionFrom(stored, `unknown-${difficulty}-${i + 1}`))
+        const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
 
-        this.easyBoards = build(boards.easyBoards, 'easy')
-        this.mediumBoards = build(boards.mediumBoards, 'medium')
-        this.hardBoards = build(boards.hardBoards, 'hard')
+        this.easyBoards = build(boards.easyBoards)
+        this.mediumBoards = build(boards.mediumBoards)
+        this.hardBoards = build(boards.hardBoards)
 
         this.reconcileSessions([
             ...this.easyBoards, ...this.mediumBoards, ...this.hardBoards,

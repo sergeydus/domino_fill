@@ -19,7 +19,7 @@ export type PuzzleDefinition = {
     readonly boardVerticalNumbers: string
 }
 
-export type StoredPuzzle = DominoLevel & { puzzleId?: string }
+export type StoredPuzzle = DominoLevel & { puzzleId: string }
 
 /**
  * Small stable string hash (FNV-1a). Not cryptographic — it only needs to change when the
@@ -39,7 +39,12 @@ const hash = (input: string): string => {
 const toInitialBoard = (board: (number | null)[][]): (number | null)[][] =>
     board.map(row => row.map(cell => (cell === -1 ? -1 : null)))
 
-export const definitionFrom = (stored: StoredPuzzle, fallbackId: string): PuzzleDefinition => {
+export const definitionFrom = (stored: StoredPuzzle): PuzzleDefinition => {
+    // Required, not defaulted. A generated id would be positional, so reordering or
+    // extending the data file would silently re-point every saved session.
+    if (!stored.puzzleId) {
+        throw new Error('PuzzleDefinition requires a puzzleId; none found on the stored puzzle')
+    }
     const initialBoard = toInitialBoard(stored.board)
     const definitionHash = hash(JSON.stringify([
         initialBoard,
@@ -48,7 +53,7 @@ export const definitionFrom = (stored: StoredPuzzle, fallbackId: string): Puzzle
     ]))
 
     return Object.freeze({
-        puzzleId: stored.puzzleId ?? fallbackId,
+        puzzleId: stored.puzzleId,
         definitionHash,
         size: initialBoard.length,
         initialBoard: Object.freeze(initialBoard.map(row => Object.freeze(row))),

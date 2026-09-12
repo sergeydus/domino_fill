@@ -140,23 +140,52 @@ export class PuzzleSession {
      * half-removal would leave an orphan, and orphans are the only way a sums-match board
      * with empty cells becomes reachable.
      */
+    /**
+     * How many well-formed dominoes claim the 0 at (i,j): a 1 directly above, and/or a 2
+     * directly to the right. Exactly one means the 0 is unambiguously owned.
+     */
+    private ownersOfZero(i: number, j: number): number {
+        if (this.at(i, j) !== 0) return 0
+        return (this.at(i - 1, j) === 1 ? 1 : 0) + (this.at(i, j + 1) === 2 ? 1 : 0)
+    }
+
+    /**
+     * Resolve the cell (i,j) to the complete pair of cells its domino occupies, or null if
+     * it does not belong to exactly one well-formed domino.
+     *
+     * A vertical domino is a 1 with a 0 directly below; a horizontal is a 2 with a 0
+     * directly to its left. A 0 is therefore owned by a 1 above OR a 2 to its right.
+     *
+     * Every branch checks the 0's *complete* owner set, not just its own claim on it. A 1
+     * above a 0 that a 2 also claims is not a removable domino: removing that pair would
+     * leave the 2 orphaned. So an ambiguous pattern is refused from all three of its cells,
+     * not only from the 0.
+     *
+     * Resolving before mutating is what keeps the pairing invariant (spec D6) intact: a
+     * half-removal leaves an orphan, and orphans are the only way a sums-match board with
+     * empty cells becomes reachable.
+     */
     pairAt(i: number, j: number): readonly [readonly [number, number], readonly [number, number]] | null {
         const value = this.at(i, j)
         if (value === undefined || value === null || value === -1) return null
 
         if (value === 1) {
-            // Vertical: 1 on top, 0 below.
-            return this.at(i + 1, j) === 0 ? [[i, j], [i + 1, j]] : null
+            // Vertical: 1 on top, 0 below -- and that 0 must be claimed by this 1 alone.
+            if (this.at(i + 1, j) !== 0) return null
+            if (this.ownersOfZero(i + 1, j) !== 1) return null
+            return [[i, j], [i + 1, j]]
         }
         if (value === 2) {
-            // Horizontal: 2 on the right, 0 to its left.
-            return this.at(i, j - 1) === 0 ? [[i, j], [i, j - 1]] : null
+            // Horizontal: 2 on the right, 0 to its left -- claimed by this 2 alone.
+            if (this.at(i, j - 1) !== 0) return null
+            if (this.ownersOfZero(i, j - 1) !== 1) return null
+            return [[i, j], [i, j - 1]]
         }
         if (value === 0) {
-            const verticalOwner = this.at(i - 1, j) === 1      // 1 above me
-            const horizontalOwner = this.at(i, j + 1) === 2    // 2 to my right
-            if (verticalOwner === horizontalOwner) return null // neither, or ambiguous
-            return verticalOwner ? [[i - 1, j], [i, j]] : [[i, j], [i, j + 1]]
+            if (this.ownersOfZero(i, j) !== 1) return null // no owner, or ambiguous
+            return this.at(i - 1, j) === 1
+                ? [[i - 1, j], [i, j]]
+                : [[i, j], [i, j + 1]]
         }
         return null // unknown value
     }

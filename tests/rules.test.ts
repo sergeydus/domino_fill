@@ -27,7 +27,7 @@ const level = (over: Partial<StoredPuzzle> = {}): StoredPuzzle => ({
 let root: RootStore
 
 const makeBoard = (over: Partial<StoredPuzzle> = {}) =>
-    new PuzzleSession(definitionFrom(level(over), 'test-6x6'), root)
+    new PuzzleSession(definitionFrom(level(over)), root)
 
 /** Point the hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
 const hover = (i: number, j: number, fx = 0.5, fy = 0.5) =>
@@ -74,7 +74,7 @@ describe('completedByRules (sums only; board-full check lands with P0-6)', () =>
         board: [[null, null], [null, null]],
         boardHorizontalNumbers: '1,1',
         boardVerticalNumbers: '2,0',
-    }, 'tutorial-v1')
+    })
 
     it('is false for an untouched board', () => {
         expect(new PuzzleSession(tutorial(), root).completedByRules).toBe(false)
