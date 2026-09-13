@@ -612,13 +612,26 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 > `FAILED GET /_next/static/chunks/18a5a133fb68ca26.js :: net::ERR_NO_BUFFER_SPACE`.
 >
 > Hardened in `e2e/openBoard.ts`: every startup wait reports hydration state, body text, the
-> action's fetches, the script tags present and the request-level failures, so this class of
-> failure names itself instead of presenting as a missing element. A load killed by socket
-> exhaustion is reloaded once — gated on having actually observed such an error, and announced on
-> the console when it happens, so a genuinely broken page still fails on the first attempt with its
-> diagnostics intact. The levers if it persists are fewer Playwright workers or a pause between
-> runs; the structural fix is D10-c, which by SSR-ing the board removes both the round-trip and the
-> "nothing renders until hydration" property that makes this failure total.
+> action's fetches, the script tags present, the request-level failures and the retry rule's
+> verdict, so this class of failure names itself instead of presenting as a missing element.
+>
+> The one automatic reload is decided by `shouldRetryStartup` in `e2e/startupRetry.ts` — a pure
+> function with its own tests, because the condition it guards appears about once in twelve full
+> runs and so cannot be checked by running the browser suite. A reload requires **all** of: a
+> *critical* request failed at the transport layer (the document or a `/_next/static/chunks` script
+> — a lost sound or image cannot stop hydration); `hydrated === false`, since if React took control
+> the bundle arrived and anything after that is the app's defect to report; and no reload used yet.
+> The vocabulary is kept to what was measured: `ERR_NO_BUFFER_SPACE` alone is diagnosed as socket
+> exhaustion, while `ERR_INSUFFICIENT_RESOURCES` and `ERR_NETWORK_CHANGED` are retried as transient
+> resource failures **with no cause claimed**. Every decision is announced, refusals included.
+>
+> An earlier version of this rule was looser than the sentence it printed — three codes, any failed
+> resource, and a confident "the machine ran out of sockets" — which is the shape of harness that
+> eventually retries past a real defect and blames the network.
+>
+> The levers if it persists are fewer Playwright workers or a pause between runs; the structural fix
+> is D10-c, which by SSR-ing the board removes both the round-trip and the "nothing renders until
+> hydration" property that makes this failure total.
 >
 > Touch is exercised in a real touch context (a mobile device descriptor: `hasTouch`, `isMobile`,
 > coarse pointer), not a phone-sized desktop viewport, and input is dispatched through CDP
