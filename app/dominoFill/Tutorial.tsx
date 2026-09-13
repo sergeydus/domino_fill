@@ -8,7 +8,7 @@ import { PuzzleSession } from "../stores/PuzzleSession";
 import { definitionFrom } from "../stores/PuzzleDefinition";
 
 /** Keeps the 2x2 board inside the modal instead of claiming the full board width. */
-const TUTORIAL_BOARD_WIDTH = 320;
+const TUTORIAL_BOARD_SIZE = 320;
 
 const Tutorial = () => {
     const { boardsStore } = useStores();
@@ -23,7 +23,7 @@ const Tutorial = () => {
             }),
             boardsStore.rootStore,
         );
-        session.setMaxBoardWidth(TUTORIAL_BOARD_WIDTH);
+        session.setMaxBoardSize(TUTORIAL_BOARD_SIZE);
         return session;
     });
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('hasSeenTutorial', false);

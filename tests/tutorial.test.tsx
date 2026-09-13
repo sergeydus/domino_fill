@@ -124,7 +124,7 @@ describe('tutorial board sizing', () => {
             boardHorizontalNumbers: '1,1',
             boardVerticalNumbers: '2,0',
         }), root)
-        s.setMaxBoardWidth(320)
+        s.setMaxBoardSize(320)
         return s
     }
 
@@ -135,10 +135,9 @@ describe('tutorial board sizing', () => {
 
     it('fits the ACTUAL shell -- including the grid border -- inside the cap', () => {
         const s = tutorialSession()
-        // squareSize * (size + 2) omits the 8px border, so it measures only the cell
-        // allocation. shellWidth is what the board really occupies.
+        // The shell is one gutter, n cells and the border -- not (n+2) cells.
         expect(s.shellWidth).toBeLessThanOrEqual(320)
-        expect(s.shellWidth).toBe(s.squareSize * 4 + 8)
+        expect(s.shellWidth).toBe(s.gutterSize + s.squareSize * 2 + 8)
     })
 
     it('shrinks with the available width on a narrow screen', () => {

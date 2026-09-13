@@ -5,7 +5,7 @@ export default function Home() {
   console.log('boards', board)
 
   return (
-    <div className="flex flex-col min-h-screen items-center justify-center bg-[#e8e7e7] font-sans">
+    <div className="flex flex-col min-h-svh bg-[#e8e7e7] font-sans">
       <DominoClient />
     </div >
   );

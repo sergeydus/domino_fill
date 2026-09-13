@@ -38,9 +38,11 @@ beforeEach(() => {
 })
 
 describe('squareSize', () => {
-    it('reserves a gutter column on each side and fits inside the available width', () => {
+    // The full geometry surface lives in tests/geometry.test.ts; this is the one case the
+    // hit-test points in this file are derived from.
+    it('reserves one 0.7-cell gutter and fits inside the available width', () => {
         const b = makeBoard()
-        expect(b.squareSize).toBe(Math.floor((768 - 8) / 8))
+        expect(b.squareSize).toBe(Math.floor((768 - 8) / (6 + 0.7)))
         expect(b.shellWidth).toBeLessThanOrEqual(b.availableWidth)
     })
 })

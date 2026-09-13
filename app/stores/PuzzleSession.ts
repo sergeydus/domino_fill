@@ -4,11 +4,36 @@ import { RootStore } from "./RootStore"
 import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
 import { columnSums, rowSums, isBoardFull, targetsMatch } from "./boardRules"
 
+/** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
+export const GRID_BORDER_PX = 8
+
 /**
- * Total horizontal border around the grid: `border-4` on each side (ClientBoard).
- * Interim, like the rest of this px-driven sizing -- P0-3 replaces it with a CSS shell.
+ * The label gutter, as a fraction of a cell (spec P0-3).
+ *
+ * 0.7, not a full cell. At a full cell the shell is `(n + 1)*cell + border`, which cannot
+ * fit an 8x8 board on a 360px screen at any usable cell size. 0.7 is the smallest gutter
+ * that still holds a two-digit label: sums reach 13, and at `LABEL_FONT_FRACTION` a
+ * two-digit label measures about 0.61 cell.
+ *
+ * One gutter per axis, not two. The right-hand gutter used to be rendered as a duplicate
+ * of the left one, costing a whole column of width on the device with none to spare.
  */
-const GRID_BORDER_PX = 8
+export const GUTTER_FRACTION = 0.7
+
+/** Label font size as a fraction of a cell. Was a constant `text-6xl` (60px). */
+export const LABEL_FONT_FRACTION = 0.55
+
+/**
+ * Cell floor, in CSS px, below which the board stops shrinking to fit the viewport
+ * *height* and the page scrolls vertically instead.
+ *
+ * This is the same 38px the acceptance criteria pin, and it is deliberately one-sided:
+ * the width budget is never overridden, because overflowing horizontally is forbidden
+ * outright, while a page that scrolls vertically is merely a page that scrolls. Without
+ * the floor, a 400px-tall landscape phone produces ~11px cells once the chrome above and
+ * below the board is counted -- arithmetically correct and completely unplayable.
+ */
+export const MIN_CELL_PX = 38
 
 /**
  * The mutable half of a puzzle: one player's progress on one `PuzzleDefinition`.
@@ -34,12 +59,23 @@ export class PuzzleSession {
      */
     hoverPoint: [number, number] | null = null
     /**
-     * Optional ceiling on the width this board may occupy, in CSS px.
-     *
+     * Ceiling on the shell size this board may occupy, in CSS px, on both axes.
      * The tutorial renders inside a modal and must not claim the full board width.
-     * Interim: P0-3 replaces this whole px-driven sizing with a CSS shell formula.
      */
-    maxBoardWidth: number = Infinity
+    maxBoardSize: number = Infinity
+
+    /**
+     * The box the board may occupy, in CSS px, as measured from the page.
+     *
+     * Null until the first measurement: on the server, and on the first client render,
+     * there is nothing to measure. `FALLBACK_BOX` stands in until then.
+     *
+     * Measured from the viewport minus the chrome around the board -- never from the
+     * board's own container. The board is laid out from this number, so measuring a box
+     * whose size depends on the board's would be a feedback loop: a floored board
+     * overflows its area, the column grows, the area grows, the cell grows.
+     */
+    availableBox: { width: number, height: number } | null = null
 
     constructor(definition: PuzzleDefinition, rootStore: RootStore) {
         this.definition = definition
@@ -86,38 +122,80 @@ export class PuzzleSession {
         return targetsMatch(this.board, this.definition)
     }
 
-    /** Width this board may occupy, in CSS px. */
+    /** The box this board may occupy, in CSS px, after its own ceiling is applied. */
     get availableWidth() {
-        return Math.min(this.rootStore.sizeStore.boardSize, this.maxBoardWidth)
+        const measured = this.availableBox?.width ?? this.rootStore.sizeStore.boardSize
+        return Math.min(measured, this.maxBoardSize)
+    }
+
+    get availableHeight() {
+        const measured = this.availableBox?.height ?? this.rootStore.sizeStore.boardSize
+        return Math.min(measured, this.maxBoardSize)
+    }
+
+    /** Cells this axis has to pay for: n cells plus one fractional label gutter. */
+    private get trackCount() {
+        return this.definition.size + GUTTER_FRACTION
+    }
+
+    /** The largest cell that fits a budget of `px` on one axis. */
+    private cellFor(px: number) {
+        return Math.floor((px - GRID_BORDER_PX) / this.trackCount)
     }
 
     /**
-     * Cell size in CSS px.
+     * Cell size in CSS px: the largest that fits both axes, floored at `MIN_CELL_PX`
+     * against the height only.
      *
-     * `size + 2` reserves a gutter column on each side for the row/column numbers, and the
-     * grid's border is subtracted before dividing -- otherwise the rendered shell is wider
-     * than the width it was sized to fit. `floor`, not `round`, for the same reason:
-     * rounding up overflows.
+     * Both axes, because width alone is what made a 360px-wide board overflow a 400px-tall
+     * landscape screen. Asymmetric, because horizontal overflow is forbidden and vertical
+     * scrolling is not: the width budget always wins, and only the height budget may be
+     * overridden by the floor.
      *
-     * This used to be a switch over 6/7/8 with a magic `default: 96`, so any other board --
-     * the 2x2 tutorial being the only one -- got a fixed 192px regardless of screen width.
+     * `floor`, not `round`: rounding up overflows the box by up to a pixel per track.
      */
     get squareSize() {
-        const usable = this.availableWidth - GRID_BORDER_PX
-        return Math.max(1, Math.floor(usable / (this.definition.size + 2)))
+        const byWidth = this.cellFor(this.availableWidth)
+        const byHeight = this.cellFor(this.availableHeight)
+        return Math.max(1, Math.min(byWidth, Math.max(byHeight, MIN_CELL_PX)))
+    }
+
+    /** Width of the label gutter, in CSS px. Integer, so it cannot smear the alignment. */
+    get gutterSize() {
+        return Math.floor(this.squareSize * GUTTER_FRACTION)
+    }
+
+    /** Label font size in CSS px, derived from the cell rather than a fixed `text-6xl`. */
+    get labelFontSize() {
+        return Math.round(this.squareSize * LABEL_FONT_FRACTION)
     }
 
     /**
-     * Total width the board shell actually occupies: both gutters, the grid, and the
-     * border. This is what the layout must be given -- sizing the wrapper from the raw
-     * available width instead lets the content overflow it.
+     * What the board shell actually occupies on one axis: the gutter, the n cells, and
+     * the grid's border. Both axes are the same -- one gutter each, above and to the left.
+     *
+     * This is what the layout must be given. Sizing the wrapper from the raw available
+     * width instead lets the content overflow it.
      */
     get shellWidth() {
-        return (this.definition.size + 2) * this.squareSize + GRID_BORDER_PX
+        return this.gutterSize + this.definition.size * this.squareSize + GRID_BORDER_PX
     }
 
-    setMaxBoardWidth(width: number) {
-        this.maxBoardWidth = width
+    get shellHeight() {
+        return this.shellWidth
+    }
+
+    /** True when the height budget was overridden by the floor, so the page must scroll. */
+    get isHeightConstrained() {
+        return this.cellFor(this.availableHeight) < this.squareSize
+    }
+
+    setMaxBoardSize(size: number) {
+        this.maxBoardSize = size
+    }
+
+    setAvailableBox(box: { width: number, height: number } | null) {
+        this.availableBox = box
     }
 
     /** The pair of cells the currently selected piece would occupy, or null. */

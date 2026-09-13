@@ -31,12 +31,21 @@ export default defineConfig({
     projects: [
         {
             name: 'desktop',
+            // layout.spec.ts drives its own viewport matrix; running it again under each
+            // fixed-viewport project would only re-run it at a size it then overrides.
+            testIgnore: /layout\.spec\.ts/,
             use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
         },
         {
             // The phone size the spec's layout criteria are written against.
             name: 'phone-360',
+            testIgnore: /layout\.spec\.ts/,
             use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 640 } },
+        },
+        {
+            name: 'layout',
+            testMatch: /layout\.spec\.ts/,
+            use: { ...devices['Desktop Chrome'] },
         },
     ],
 })

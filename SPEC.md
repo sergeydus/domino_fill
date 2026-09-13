@@ -213,7 +213,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | # | Location | Defect |
 |---|---|---|
 | a | `app/page.tsx:4`, `app/dominoFill/page.tsx:4` | Both `JSON.stringify` an **un-awaited Promise** — the build log prints `boards {}`. Dead server work producing nothing, plus a `console.log`. |
-| b | `page.tsx:8` + `DominoClient.tsx:32` | The same `min-h-screen` wrapper nested twice: the page is two viewports tall and always has a scrollbar. |
+| b | ~~`page.tsx:8` + `DominoClient.tsx:32`~~ | **✅ Fixed in P0-3.** The same `min-h-screen` wrapper was nested twice, so the page was two viewports tall and always had a scrollbar. One wrapper now, and `svh` rather than `vh`. |
 | c | `DominoClient.tsx:16` | The board is fetched by a Server Action from a `useEffect`, so first paint costs an RPC round-trip for a static JSON import, and the game SSRs **nothing** (`:30` renders `no board`). Pass it as a prop from the server component. |
 | d | `Boards.ts:1` + `:54` | A `"use server"` module may only export async functions, yet it `export default`s a class — dragging the whole generator into a server-action bundle. |
 | d2 | ~~`CurrentBoardStore.ts:19,34`~~ | **✅ Fixed in P0-6.** `correctHorizontalValues` summed a **column** and `correctVerticalValues` a **row**. Now `currentColumnSums`/`currentRowSums`, with `definition.columnTargets`/`rowTargets`. The inverted names survive only in `StoredPuzzle` and the JSON file, for data compatibility, and are mapped in `definitionFrom`. |
@@ -225,7 +225,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | j | `dominoBoard.ts:137,147` + `Boards.ts:38` | **The generator's output format no longer matches the parser.** It builds `boardCode` by bare concatenation and slices it per character, but the runtime compares against a **comma-joined** string (commit `7ef3094`). Single-char slicing also silently corrupts any sum ≥ 10 — and shipped boards contain `10`, `11`, `13`. Any board `DominoBoard` produces today is uncompletable. `allow0Lines`' `code.includes('0')` test is broken for the same reason. |
 | k0 | `Tutorial.tsx:27` | `absolute w-full h-full` with no positioned ancestor covers only the first viewport. (`z-999` itself is valid — see D9.) |
 | k | ~~`useLocalhost.ts:4`~~ | **✅ Fixed in P0-1.** Read `localStorage` during render (latent SSR crash); misnamed; and wrote `JSON.stringify(value)` while `BoardsStore.ts:29` read `=== 'true'` on the same key. Replaced by `app/hooks/useLocalStorage.ts`; the duplicate encoding is gone with the dead field. |
-| l | `SizeStore.ts:12` | `window.onresize =` clobbers any other listener, is never removed, and is unthrottled — a desktop window-drag re-renders all 36–64 cells ~60×/s. |
+| l | ~~`SizeStore.ts:12`~~ | **✅ Fixed in P0-3.** `window.onresize =` clobbered any other listener, was never removed, and was unthrottled. Resize is now owned by `useAvailableBoardBox`: `addEventListener`, coalesced to one measurement per animation frame, removed on unmount, and paired with a `ResizeObserver` and `visualViewport`. |
 | m | `SkibidiBoard.ts` | 183-line dead copy of `dominoBoard.ts`, never imported. |
 | n | `app/constants.ts` | Unused heterogeneous enum. |
 | o | `dominoBoard.ts:110` | `findFirstEmpty` uses `i < board[i].length`; at `i === n` this **throws**, it doesn't merely mis-bound. |
@@ -306,6 +306,27 @@ wraps `<html>` for no benefit and hands the document element to a client render.
   *minus* the difficulty slider, piece tray, level controls and safe-area insets. A 360px-wide
   board still overflows a 400px-tall landscape screen once that chrome is counted, so the height
   term is not optional.
+
+> **Implemented in row 11, with three corrections measured along the way.**
+>
+> 1. **The chrome must not be sized from the board.** `availH` is the viewport minus the chrome,
+>    so anything in the chrome that derives its size from the cell closes a feedback loop. The
+>    piece tray drew its dominoes at the board's own cell size: measured, the cell crept
+>    48 → 50 → 51 over successive frames before settling. The tray now uses a constant.
+>    `e2e/layout.spec.ts` asserts the layout does not creep.
+> 2. **Centring only strands content when the container height is definite.** This section
+>    implies `min-h-screen` + `justify-center` clips the top of an overflowing board. It does
+>    not — a `min-height` container grows instead, and measured at 800×400 nothing is clipped.
+>    Replace the `min-h` with `h-svh` and it clips immediately. The fix (auto margins) is kept
+>    because it makes the distinction stop mattering, but the defect as stated was not real.
+> 3. **The floor is one-sided.** Below `MIN_CELL_PX` the board stops shrinking to the viewport
+>    *height* and the page scrolls; the *width* budget is never overridden, because horizontal
+>    overflow is forbidden outright and vertical scrolling is not. Without a floor, 800×400
+>    yields ~11px cells: arithmetically correct, unplayable.
+>
+> Sizing is measured from the page (`useAvailableBoardBox`) rather than from `innerWidth`, which
+> also retires `SizeStore`'s clobbering unthrottled `window.onresize` (D10-l). `SizeStore` remains
+> only as the pre-measurement fallback.
 
 **P0-4. Fix the piece-overlay hit regions (D4).** `pointer-events: none` on the `Pieces` layer
 (`Pieces.tsx:31`), removal handled on the cells instead; and `fill="none"` rather than
@@ -609,7 +630,7 @@ whole of P0 into one oversized set.)
 | 8 | **P0-9a** tutorial: rule text, skip button, `fixed inset-0`, sizing | unit + manual |
 | 9 | **P1-9** Playwright harness + `test:e2e` script (incl. the tutorial check below) | — |
 | 10 | **P0-4** piece-overlay hit regions (+ `data-cell`/`data-piece` test hooks, see P1-2 note) | E2E |
-| 11 | **P0-3** responsive layout: gutter, `min-*: 0`, `clamp()` font, shell formula | E2E (geometry/alignment/overflow) |
+| 11 | **P0-3** responsive layout: gutter, `min-*: 0`, cell-derived font, shell formula, both-axis budget | E2E (geometry/alignment/overflow) |
 | 12 | **P1-2** move hit-testing onto the cells | E2E |
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E |
 | 14 | **P1-3** undo + reset | unit (undo tests land here) |
