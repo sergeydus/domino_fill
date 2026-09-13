@@ -3,10 +3,12 @@ import React, { CSSProperties } from "react";
 import BoardSquare from "./BoardSquare";
 import { observer } from "mobx-react";
 import Hover from "./Hover";
+import Selection from "./Selection";
 import Pieces from "./Pieces/Pieces";
 import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
-import { CellHover, GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
+import { GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
+import { Cell } from "../stores/placement";
 
 type Props = {
     boardsStore: PuzzleSession
@@ -48,52 +50,87 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     } as CSSProperties
 
     /*
-     * Which cell the pointer is over, asked of the browser rather than worked out (P1-2).
+     * Which cell a pointer event is over, asked of the browser rather than worked out.
      *
-     * `closest('[data-cell]')` from the event target means the index comes from the same
-     * hit-test that decided where the click landed -- no dividing a coordinate by the
-     * store's idea of the cell size, and nothing that can disagree with the layout at a
-     * fractional cell size or a stale measurement. The overlays above the cells are
-     * `pointer-events: none`, so the target is the cell itself.
+     * `elementFromPoint` first, then the event target. Touch pointers get *implicit
+     * pointer capture*: every `pointermove` after `pointerdown` retargets to the element
+     * the gesture started on, so `e.target` during a touch drag names the cell the finger
+     * left, not the one it is over. Capture is released in `pointerdown` below, and
+     * `elementFromPoint` is asked directly, which is correct whether or not any given
+     * browser honoured that release.
      *
-     * The one rect read is of that single cell, and only to say which half of it the
-     * pointer is in -- which way the domino points, never which cell it is in.
+     * The overlays above the cells are `pointer-events: none`, so both routes resolve to
+     * the cell itself. No rect is read and no coordinate is divided: there is no
+     * grid-to-cell arithmetic here that could name a cell the browser did not.
      */
-    const readHover = (e: React.MouseEvent<HTMLDivElement>): CellHover | null => {
-        const cell = (e.target as Element | null)?.closest?.('[data-cell]')
-        if (!cell) return null
+    const cellFrom = (e: { clientX: number, clientY: number, target: EventTarget | null }): Cell | null => {
+        // Feature-checked, not just presence-checked: jsdom has a `document` but no
+        // `elementFromPoint`, and calling it threw straight out of the handler.
+        const atPoint = typeof document?.elementFromPoint === 'function'
+            ? document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-cell]')
+            : null
+        const el = atPoint ?? (e.target as Element | null)?.closest?.('[data-cell]')
+        if (!el) return null
 
-        const [i, j] = (cell.getAttribute('data-cell') ?? '').split(',').map(Number)
-        if (!Number.isInteger(i) || !Number.isInteger(j)) return null
-
-        const rect = cell.getBoundingClientRect()
-        // A zero rect means there is no layout to read -- jsdom, or a hidden board. The
-        // cell is still known; only the half is not, so treat the pointer as centred
-        // rather than discarding a hover the browser is certain about.
-        const fx = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5
-        const fy = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5
-        return { i, j, fx, fy }
+        const [i, j] = (el.getAttribute('data-cell') ?? '').split(',').map(Number)
+        return Number.isInteger(i) && Number.isInteger(j) ? [i, j] : null
     }
 
-    const onmousemove = (e: React.MouseEvent<HTMLDivElement>) => {
-        boardsStore.setHover(readHover(e))
-    }
-    // Without this the highlight stays frozen wherever the pointer left the grid.
-    const onmouseleave = () => boardsStore.clearHover()
     /*
-     * Place or remove, decided from the cell under the pointer. Removal used to be the
-     * piece overlay's own handler, whose hit region overhung the cell above it (D4).
+     * All-pointer, and deliberately no `onClick`.
      *
-     * The click resolves its own cell rather than acting on whatever the last move left
-     * behind. Reading the stored hover looked equivalent -- a mouse click is always
-     * preceded by a move over the same cell -- but it made the click depend on a move
-     * having happened at all: a click dispatched straight at a cell placed nothing, and a
-     * stale hover would have made a click act on the previous cell. Nothing about a click
-     * needs the pointer's history; the event says where it landed.
+     * Mobile browsers synthesise a compatibility `click` after `pointerup`; keeping a
+     * click handler alongside these would run the whole verb twice per tap and place two
+     * dominoes. `pointermove` is also non-passive, unlike React's `touchmove`, which is
+     * the other reason not to mix the two families.
      */
-    const onclick = (e: React.MouseEvent<HTMLDivElement>) => {
-        boardsStore.setHover(readHover(e))
-        boardsStore.activateHoveredCell()
+    const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        // Release the implicit capture touch pointers get, so moves retarget to the cell
+        // under the finger. Wrapped because a pointer that has already gone can throw.
+        try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* already released */ }
+        const cell = cellFrom(e)
+        boardsStore.setHover(cell)
+        if (cell) boardsStore.pointerDown(cell)
+    }
+
+    const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+        boardsStore.setHover(cellFrom(e))
+    }
+
+    const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        boardsStore.pointerUp(cellFrom(e))
+    }
+
+    /*
+     * `pointercancel` is the one to handle: the browser took the gesture away (a scroll
+     * or zoom claimed it, the touch was interrupted), and no `pointerup` is coming.
+     *
+     * `lostpointercapture` is deliberately *not* wired to cancellation. We release capture
+     * ourselves in `pointerdown`, so it fires immediately on every touch gesture -- wiring
+     * it here would cancel every drag on the frame it began.
+     */
+    const onPointerCancel = () => boardsStore.cancelDrag()
+
+    /*
+     * A drag that leaves the board is abandoned, and the highlight goes with it; without
+     * this the preview stays frozen wherever the pointer left.
+     *
+     * `cancelDrag`, not `cancelGesture`: a touch pointer ceases to exist at `pointerup`,
+     * and the browser then fires `pointerout` and `pointerleave` up the whole tree.
+     * Measured -- every tap produced a `pointerleave` on the grid right after the release,
+     * so cancelling everything here dismissed the candidates the tap had just offered.
+     */
+    const onPointerLeave = () => boardsStore.cancelDrag()
+
+    /*
+     * The same verb from the keyboard: arrows move the focused cell, Space or Enter makes
+     * it the anchor, then arrows choose the neighbour. Escape leaves any state it entered.
+     *
+     * `preventDefault` only when the board actually used the key, so arrows still scroll
+     * the page and Space still does whatever it would otherwise do.
+     */
+    const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (boardsStore.handleKey(e.key)) e.preventDefault()
     }
 
     const isDisabled = boardsStore.completed
@@ -110,8 +147,24 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
             <div className="border-[#666666] border-4 rounded-2xl">
                 {/* `cursor-pointer` lives here now: it used to be on the piece overlay,
                     which no longer takes pointer events and so no longer sets a cursor. */}
-                <div onMouseMove={onmousemove} onMouseLeave={onmouseleave} onClick={onclick} draggable={false} style={gridStyle} className="relative cursor-pointer">
+                {/* `board-grid` carries the static touch policy; see globals.css. */}
+                <div
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerUp}
+                    onPointerCancel={onPointerCancel}
+                    onPointerLeave={onPointerLeave}
+                    onKeyDown={onKeyDown}
+                    onBlur={() => boardsStore.cancelGesture()}
+                    tabIndex={0}
+                    role="grid"
+                    aria-label="Domino board"
+                    draggable={false}
+                    style={gridStyle}
+                    className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-blue-500"
+                >
                     <Hover boardsStore={boardsStore} />
+                    <Selection boardsStore={boardsStore} />
                     <Pieces boardsStore={boardsStore} />
                     {boardsStore.board.flat().map((_el: number | null, index: number) => {
                         const i = Math.floor(index / size)

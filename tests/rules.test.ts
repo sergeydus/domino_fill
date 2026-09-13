@@ -27,13 +27,6 @@ let root: RootStore
 const makeBoard = (over: Partial<StoredPuzzle> = {}) =>
     new PuzzleSession(definitionFrom(level(over)), root)
 
-/** Point a session's hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
-const hover = (s: PuzzleSession, i: number, j: number, fx = 0.5, fy = 0.5) => {
-    // No coordinates any more: the browser resolves the cell, so the store is told the
-    // cell directly (spec P1-2). These points can no longer drift with the cell size.
-    s.setHover({ i, j, fx, fy })
-}
-
 beforeEach(() => {
     root = new RootStore()
 })
@@ -93,55 +86,93 @@ describe('completedByRules (fullness + targets, since P0-6)', () => {
     })
 })
 
-describe('setPieceOnBoard', () => {
-    it('places a vertical domino as 1 above 0', () => {
+describe('placeToward', () => {
+    it('places an upright domino as 1 above 0', () => {
         const b = makeBoard()
-        root.boardsStore.setSelectedPiece(1)
-        hover(b, 2, 2, 0.5, 0.9) // lower half -> extends downward
-        b.setPieceOnBoard()
+        expect(b.placeToward([2, 2], 'down')).toBe(true)
 
         expect(b.board[2][2]).toBe(1)
         expect(b.board[3][2]).toBe(0)
     })
 
-    it('places a horizontal domino as 0 left of 2', () => {
+    it('dragging up is not the same placement as dragging down', () => {
+        // The direction fixes the pip values, not just the shape: the anchor is the top
+        // half going down and the bottom half going up.
         const b = makeBoard()
-        root.boardsStore.setSelectedPiece(2)
-        hover(b, 2, 2, 0.9, 0.5) // right half -> extends rightward
-        b.setPieceOnBoard()
+        expect(b.placeToward([2, 2], 'up')).toBe(true)
+
+        expect(b.board[1][2]).toBe(1)
+        expect(b.board[2][2]).toBe(0)
+    })
+
+    it('places a flat domino as 0 left of 2', () => {
+        const b = makeBoard()
+        expect(b.placeToward([2, 2], 'right')).toBe(true)
 
         expect(b.board[2][2]).toBe(0)
         expect(b.board[2][3]).toBe(2)
     })
 
-    it('rejects a placement onto an occupied cell', () => {
+    it('dragging left carries the 2 on the anchor', () => {
+        const b = makeBoard()
+        expect(b.placeToward([2, 2], 'left')).toBe(true)
+
+        expect(b.board[2][1]).toBe(0)
+        expect(b.board[2][2]).toBe(2)
+    })
+
+    it('refuses a placement onto an occupied cell, and changes nothing', () => {
         const b = makeBoard()
         b.board[2][2] = -1
-        root.boardsStore.setSelectedPiece(1)
-        hover(b, 2, 2)
-        b.setPieceOnBoard()
+        expect(b.placeToward([2, 2], 'down')).toBe(false)
 
         expect(b.board[2][2]).toBe(-1)
         expect(b.board[3][2]).toBeNull()
     })
 
-    it('rejects a placement with no hover', () => {
+    it('refuses a placement whose neighbour is occupied', () => {
         const b = makeBoard()
-        b.setHover(null)
-        b.setPieceOnBoard()
+        b.board[3][2] = -1
+        expect(b.placeToward([2, 2], 'down')).toBe(false)
+        expect(b.board[2][2]).toBeNull()
+    })
+
+    it('refuses a placement off the edge of the board', () => {
+        const b = makeBoard()
+        expect(b.placeToward([0, 0], 'up')).toBe(false)
+        expect(b.placeToward([0, 0], 'left')).toBe(false)
         expect(b.board.flat().every(c => c === null)).toBe(true)
     })
 
-    it('falls back to the opposite neighbour when the preferred one is blocked', () => {
-        // Documents the silent fall-through the spec flags in P1-1 as undiscoverable.
+    it('never falls through to the opposite direction', () => {
+        // The defect P1-1 names: the old rule asked to extend DOWN, found it blocked, and
+        // silently placed UP instead -- violating the stated rule exactly when the board
+        // gets interesting. A refused direction is now simply refused.
         const b = makeBoard()
-        b.board[3][2] = -1 // block below
-        root.boardsStore.setSelectedPiece(1)
-        hover(b, 2, 2, 0.5, 0.9) // asks to extend DOWN, but down is blocked
+        b.board[3][2] = -1
 
-        b.setPieceOnBoard()
-        expect(b.board[1][2]).toBe(1) // extended UP instead
-        expect(b.board[2][2]).toBe(0)
+        expect(b.placeToward([2, 2], 'down')).toBe(false)
+        expect(b.board[1][2]).toBeNull()
+        expect(b.board[2][2]).toBeNull()
+    })
+})
+
+describe('legalDirections', () => {
+    it('lists every direction a domino fits', () => {
+        const b = makeBoard()
+        expect(b.legalDirections([2, 2]).sort()).toEqual(['down', 'left', 'right', 'up'])
+    })
+
+    it('excludes blocked neighbours and the board edge', () => {
+        const b = makeBoard()
+        b.board[1][0] = -1
+        expect(b.legalDirections([0, 0]).sort()).toEqual(['right'])
+    })
+
+    it('is empty for an occupied cell', () => {
+        const b = makeBoard()
+        b.board[2][2] = -1
+        expect(b.legalDirections([2, 2])).toEqual([])
     })
 })
 
@@ -163,22 +194,19 @@ describe('domino pairing invariant (spec D6)', () => {
         }
     }
 
-    it('holds after a mix of placements', () => {
+    it('holds after a mix of placements in every direction', () => {
         const b = makeBoard()
-        root.boardsStore.setSelectedPiece(1)
-        hover(b, 0, 0, 0.5, 0.9); b.setPieceOnBoard()
-        hover(b, 2, 4, 0.5, 0.9); b.setPieceOnBoard()
-        root.boardsStore.setSelectedPiece(2)
-        hover(b, 4, 0, 0.9, 0.5); b.setPieceOnBoard()
-        hover(b, 5, 2, 0.9, 0.5); b.setPieceOnBoard()
+        b.placeToward([0, 0], 'down')
+        b.placeToward([3, 4], 'up')
+        b.placeToward([4, 0], 'right')
+        b.placeToward([5, 3], 'left')
 
         assertPaired(b.board)
     })
 
     it('holds after placements are removed again', () => {
         const b = makeBoard()
-        root.boardsStore.setSelectedPiece(1)
-        hover(b, 1, 1, 0.5, 0.9); b.setPieceOnBoard()
+        b.placeToward([1, 1], 'down')
         expect(b.board[1][1]).toBe(1)
 
         b.removePiece(1, 1)

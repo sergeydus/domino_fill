@@ -123,9 +123,7 @@ describe('source immutability', () => {
         )!
         expect(cell).toBeTruthy()
 
-        root.boardsStore.setSelectedPiece(1)
-        session.setHover({ i: cell[0], j: cell[1], fx: 0.5, fy: 0.9 })
-        session.setPieceOnBoard()
+        session.placeToward([cell[0], cell[1]], 'down')
         session.setCompleted(true)
 
         expect(session.board.flat().some(c => c === 1 || c === 2)).toBe(true)

@@ -1,10 +1,8 @@
 "use client"
-import { motion } from 'motion/react'
 import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo";
 import { observer } from 'mobx-react';
 import { PuzzleSession } from '@/app/stores/PuzzleSession';
-import { useStores } from '@/app/hooks/useStore';
 
 /**
  * Cell size for the pieces in the tray, in CSS px.
@@ -15,23 +13,24 @@ import { useStores } from '@/app/hooks/useStore';
  */
 const TRAY_CELL_PX = 44;
 
-const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore:currentBoard }) => {
-    const { boardsStore } = useStores()
-    // console.log('pieces rerender')
-    const onClickPieceOne = () => {
-        boardsStore.setSelectedPiece(1)
-    }
-    const onClickPieceTwo = () => {
-        return boardsStore.setSelectedPiece(2)
-    }
+/**
+ * The piece tray, which is a **legend** and not a mode selector (spec P1-1).
+ *
+ * It used to select which piece the next click would place, which is the orientation mode
+ * the drag verb deletes: you drag toward the neighbour you want, so there is no selection
+ * to make and no wrong mode to be stuck in. What is left is the scoring key -- this shape
+ * is worth 1, that one 2 -- which is the part players actually need and could not get
+ * anywhere else.
+ */
+const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: currentBoard }) => {
     return (
-        <div className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center">
-            <motion.div style={{ opacity: boardsStore.selectedPiece == 1 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceOne} data-select-piece="1" className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}  >
+        <div className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center control-surface" data-legend>
+            <div className='p-2' data-legend-piece="1" aria-label="An upright domino scores 1 in its top square and 0 below">
                 <DominoPieceOne boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
-            </motion.div>
-            <motion.div style={{ opacity: boardsStore.selectedPiece == 2 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceTwo} data-select-piece="2" className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}>
+            </div>
+            <div className='p-2' data-legend-piece="2" aria-label="A flat domino scores 0 in its left square and 2 on the right">
                 <DominoPieceTwo boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
-            </motion.div>
+            </div>
         </div >
     );
 }

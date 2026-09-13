@@ -75,9 +75,12 @@ describe('StoreWrapper', () => {
         )
         const [first, second] = seen.slice(-2)
 
-        first.boardsStore.setSelectedPiece(2)
-        expect(first.boardsStore.selectedPiece).toBe(2)
-        expect(second.boardsStore.selectedPiece).toBe(1)
+        // `selectedPiece` used to be the observable checked here; the drag verb deleted
+        // it (P1-1), so this uses the difficulty instead. The point is unchanged: two
+        // roots share no state.
+        first.boardsStore.setDifficulty('hard')
+        expect(first.boardsStore.difficulty).toBe('hard')
+        expect(second.boardsStore.difficulty).toBe('easy')
     })
 })
 

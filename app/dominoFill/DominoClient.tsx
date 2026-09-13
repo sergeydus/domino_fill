@@ -33,10 +33,13 @@ const DominoClient: React.FC = () => {
     currentBoard?.setAvailableBox(box)
   }, [currentBoard, box])
 
-  const onRightClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    boardsStore.setSelectedPiece(boardsStore.selectedPiece == 1 ? 2 : 1)
-    e.preventDefault()
-  }
+  /*
+   * No `onContextMenu` any more.
+   *
+   * Right-click used to flip the selected piece, which the drag verb removes entirely
+   * (P1-1). It was bound to the whole wrapper, so right-clicking the difficulty slider or
+   * the level arrows rotated the piece too, and Android fired it on long-press (D10-r).
+   */
   if (isLoading || !currentBoard) return <div>no board</div>
   return (
     /*
@@ -60,7 +63,6 @@ const DominoClient: React.FC = () => {
      */
     <div
       ref={setColumn}
-      onContextMenu={onRightClick}
       className='m-auto flex flex-col gap-4 items-center justify-center'
       style={{
         // The page margin plus whatever the device's safe area asks for, so the board is

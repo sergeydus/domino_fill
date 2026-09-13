@@ -81,11 +81,38 @@ const cellBox = async (page: Page, i: number, j: number) => {
     return box
 }
 
-/** Place an upright domino occupying (i,j) and (i+1,j). */
-const placeUpright = async (page: Page, i: number, j: number) => {
+/** The centre of a cell, in viewport coordinates. */
+const centreOf = async (page: Page, i: number, j: number) => {
     const box = await cellBox(page, i, j)
-    // Lower half of the cell: `highlightedPair` then prefers the neighbour *below*.
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.75)
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+}
+
+/**
+ * Drag from one cell to another with the mouse: press, move, release.
+ *
+ * The verb is a drag now (P1-1) -- the direction decides the orientation -- so a bare
+ * click no longer places anything except where exactly one direction is legal.
+ */
+const dragCells = async (page: Page, from: [number, number], to: [number, number]) => {
+    const a = await centreOf(page, from[0], from[1])
+    const b = await centreOf(page, to[0], to[1])
+    await page.mouse.move(a.x, a.y)
+    await page.mouse.down()
+    await page.mouse.move(b.x, b.y)
+    await page.mouse.up()
+}
+
+/** Tap a cell: press and release without moving. */
+const tapCell = async (page: Page, i: number, j: number) => {
+    const c = await centreOf(page, i, j)
+    await page.mouse.move(c.x, c.y)
+    await page.mouse.down()
+    await page.mouse.up()
+}
+
+/** Place an upright domino occupying (i,j) and (i+1,j), by dragging downward. */
+const placeUpright = async (page: Page, i: number, j: number) => {
+    await dragCells(page, [i, j], [i + 1, j])
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
 }
 
@@ -97,8 +124,7 @@ test('a domino can be placed and removed by clicking it', async ({ page }) => {
 
     // Removal used to be the overlay's own click handler. With the overlay inert it has
     // to be routed from the cell underneath, so this guards the fix as much as the bug.
-    const box = await cellBox(page, i, j)
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+    await tapCell(page, i, j)
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toHaveCount(0)
 })
 
@@ -110,22 +136,29 @@ test('clicking just above a domino does not delete it (D4)', async ({ page }) =>
     // 4px inside the bottom edge of the cell ABOVE the domino. The domino's outline rect
     // reaches 12px into this cell, so before the fix this point hit the overlay and the
     // handler deleted the domino the player was trying to build on top of.
-    await page.mouse.click(above.x + above.width / 2, above.y + above.height - 4)
+    const x = above.x + above.width / 2
+    const y = above.y + above.height - 4
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.up()
 
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
 })
 
-test('clicking just above a domino places a piece there', async ({ page }) => {
-    // Two free cells above, not one: the lower half of (i-1,j) resolves downward first,
-    // and with (i,j) taken it falls back to (i-2,j) -- which has to exist and be free.
+test('a drag started just above a domino places a piece there', async ({ page }) => {
     const { i, j } = await freeColumnRun(page, 2)
     await placeUpright(page, i, j)
     const before = (await occupied(page)).size
 
+    // Press in the bottom strip of the cell above -- the strip the overlay used to steal
+    // -- and drag away from the domino, which is a placement the board must accept.
     const above = await cellBox(page, i - 1, j)
-    await page.mouse.click(above.x + above.width / 2, above.y + above.height - 4)
+    await page.mouse.move(above.x + above.width / 2, above.y + above.height - 4)
+    await page.mouse.down()
+    const target = await centreOf(page, i - 2, j)
+    await page.mouse.move(target.x, target.y)
+    await page.mouse.up()
 
-    // Not merely "nothing was destroyed": the click must also do what it was aimed at.
     expect((await occupied(page)).size).toBe(before + 2)
     await expect(page.locator(`[data-piece="one"][data-at="${i - 2},${j}"]`)).toBeVisible()
 })
@@ -150,10 +183,8 @@ test('every decorative outline rect is fill="none", on all three shapes', async 
     const { i, j } = await freeColumnRun(page, 1)
     await placeUpright(page, i, j)
 
-    await page.locator('[data-select-piece="2"]').click()
     const flat = await freeColumnRun(page, 1)
-    const flatCell = await cellBox(page, flat.i, flat.j)
-    await page.mouse.click(flatCell.x + flatCell.width * 0.75, flatCell.y + flatCell.height / 2)
+    await dragCells(page, [flat.i, flat.j], [flat.i, flat.j + 1])
     await expect(page.locator('[data-piece="two"]').first()).toBeVisible()
 
     // All three shapes must be on the board, or the loop below proves nothing about the
@@ -169,17 +200,16 @@ test('every decorative outline rect is fill="none", on all three shapes', async 
     }
 })
 
-test('the piece tray is still selectable', async ({ page }) => {
-    // The tray renders the same SVGs outside the inert layer, so `fill="none"` reaches
-    // them too. Selecting the flat piece there must still work.
-    await page.locator('[data-select-piece="2"]').click()
+test('the piece tray is a legend, not a mode selector', async ({ page }) => {
+    // P1-1 deletes the orientation mode, so what is asserted now is that the tray is
+    // inert and still shows both shapes with their scores.
+    await expect(page.locator('[data-legend-piece="1"]')).toBeVisible()
+    await expect(page.locator('[data-legend-piece="2"]')).toBeVisible()
+    await expect(page.locator('[data-select-piece]')).toHaveCount(0)
 
-    const { i, j } = await freeColumnRun(page)
-    const cell = await cellBox(page, i, j)
-    // Right half of the cell: `highlightedPair` then prefers the neighbour to the right,
-    // so the 2 lands at (i, j+1).
-    await page.mouse.click(cell.x + cell.width * 0.75, cell.y + cell.height / 2)
-    await expect(page.locator(`[data-piece="two"][data-at="${i},${j + 1}"]`)).toBeVisible()
+    const before = (await occupied(page)).size
+    await page.locator('[data-legend-piece="2"]').click()
+    expect((await occupied(page)).size).toBe(before)
 })
 
 /**
@@ -191,7 +221,7 @@ test('the piece tray is still selectable', async ({ page }) => {
  * deliberately and check that clicks still land where they are aimed.
  */
 test.describe('hit-testing does not depend on the store agreeing with the layout', () => {
-    test('a click lands in the cell it is over, under a transform', async ({ page }) => {
+    test('a drag lands in the cells it is over, under a transform', async ({ page }) => {
         const { i, j } = await freeColumnRun(page, 1)
 
         // A scale the store knows nothing about: every cell is now 60% of the size the
@@ -203,13 +233,12 @@ test.describe('hit-testing does not depend on the store agreeing with the layout
             shell.style.transform = 'scale(0.6)'
         })
 
-        const cell = await cellBox(page, i, j)
-        await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+        await dragCells(page, [i, j], [i + 1, j])
 
         await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
     })
 
-    test('a click lands in the cell it is over, when cells are not uniform', async ({ page }) => {
+    test('a drag lands in the cells it is over, when cells are not uniform', async ({ page }) => {
         // `above: 2` guarantees the cell is at least two rows below the row we distort.
         const { i, j } = await freeColumnRun(page, 2)
 
@@ -231,8 +260,7 @@ test.describe('hit-testing does not depend on the store agreeing with the layout
             }
         })
 
-        const cell = await cellBox(page, i, j)
-        await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+        await dragCells(page, [i, j], [i + 1, j])
 
         await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
     })
@@ -295,8 +323,7 @@ test('the piece appears where the pointer was, not merely where the store says',
     if (!target) throw new Error('no free off-diagonal cell; the fixture board changed')
     const { i, j } = target
 
-    const cell = await cellBox(page, i, j)
-    await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+    await dragCells(page, [i, j], [i + 1, j])
 
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
 
@@ -344,24 +371,30 @@ test('the piece appears where the pointer was, not merely where the store says',
     expect(o.coversCell, 'piece covers the cell').toBeGreaterThanOrEqual(0)
 })
 
-test.describe('a click does not depend on the pointer having moved first', () => {
-    test('a click dispatched straight at a cell places there', async ({ page }) => {
-        // `dispatchEvent` sends the click without moving the mouse, which is what exposed
-        // this: the handler read the hover the last move had stored, so with no move
-        // there was nothing to act on and the click placed nothing.
+test.describe('a gesture does not depend on the pointer having moved first', () => {
+    /*
+     * `dispatchEvent` sends the event straight at an element without moving the pointer.
+     *
+     * The handler must resolve its own cell from each event rather than reading whatever
+     * a previous move happened to store -- otherwise a gesture with no preceding move
+     * does nothing, and a stale hover makes it act on the wrong cell. Both were real:
+     * the click handler had exactly this bug before P1-1 replaced it.
+     */
+    test('a press and release with no preceding move still places', async ({ page }) => {
         const { i, j } = await freeColumnRun(page, 1)
 
-        await page.locator(`[data-cell="${i},${j}"]`).dispatchEvent('click')
+        await page.locator(`[data-cell="${i},${j}"]`).dispatchEvent('pointerdown')
+        await page.locator(`[data-cell="${i + 1},${j}"]`).dispatchEvent('pointerup')
 
-        await expect(page.locator(`[data-piece="one"]`)).toHaveCount(1)
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
     })
 
-    test('the clicked cell wins over a stale hover', async ({ page }) => {
+    test('the pressed cell wins over a stale hover', async ({ page }) => {
         const a = await freeColumnRun(page, 1)
 
-        // Hover one cell, then click a different one without moving the pointer to it.
-        const boxA = await cellBox(page, a.i, a.j)
-        await page.mouse.move(boxA.x + boxA.width / 2, boxA.y + boxA.height / 2)
+        // Hover one cell, then press a different one without moving the pointer to it.
+        const boxA = await centreOf(page, a.i, a.j)
+        await page.mouse.move(boxA.x, boxA.y)
 
         const taken = await occupied(page)
         const n = Math.sqrt(await boardSize(page))
@@ -374,7 +407,8 @@ test.describe('a click does not depend on the pointer having moved first', () =>
         }
         if (!b) throw new Error('no second free cell far from the first')
 
-        await page.locator(`[data-cell="${b.i},${b.j}"]`).dispatchEvent('click')
+        await page.locator(`[data-cell="${b.i},${b.j}"]`).dispatchEvent('pointerdown')
+        await page.locator(`[data-cell="${b.i + 1},${b.j}"]`).dispatchEvent('pointerup')
 
         await expect(page.locator(`[data-piece="one"][data-at="${b.i},${b.j}"]`)).toBeVisible()
         await expect(page.locator(`[data-piece="one"][data-at="${a.i},${a.j}"]`)).toHaveCount(0)

@@ -231,7 +231,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | o | `dominoBoard.ts:110` | `findFirstEmpty` uses `i < board[i].length`; at `i === n` this **throws**, it doesn't merely mis-bound. |
 | p | `layout.tsx:17` | Metadata is still `"Create Next App"`. |
 | q | `globals.css:15` | A dark-mode block darkens `body` while every game surface is hard-coded light grey. |
-| r | `DominoClient.tsx:33` | `onContextMenu` is bound to the whole wrapper, so right-clicking the difficulty slider or level arrows also rotates the piece. Fires on Android long-press. |
+| r | ~~`DominoClient.tsx:33`~~ | **✅ Fixed in P1-1.** `onContextMenu` was bound to the whole wrapper, so right-clicking the difficulty slider or the level arrows rotated the piece too, and Android fired it on long-press. The handler is gone with the orientation mode it toggled. |
 | s | repo-wide | No tests, no runner, no CI. `motion/react` animates everywhere with no `prefers-reduced-motion` handling. |
 
 ### 1.11 Content
@@ -423,9 +423,12 @@ Deliberately **not** in P0-9a: the instructions describing *how to place a piece
 "right-click to switch" and "click to place". Those describe a verb P1-1 replaces, so rewriting
 them now means writing them twice.
 
-**P0-9b. Rewrite the tutorial's input instructions.** Lands **with P1-1**, teaching the verb that
-actually shipped. Leaving a known-incorrect hard gate in place until then would make every
-intermediate build awkward to test — which is why the gate itself is removed in P0-9a.
+**P0-9b. Rewrite the tutorial's input instructions.** ✅ **Done in row 13**, with P1-1, teaching the
+verb that actually shipped: drag toward the neighbour, tap for the unambiguous case, tap again to
+choose, and the keyboard equivalent. It previously described a right-click mode toggle that no
+longer exists and never worked on a phone. (The hard gate was removed in P0-9a for the same
+reason it is mentioned here: leaving a known-incorrect one in place until row 13 would have made
+every intermediate build awkward to test.)
 
 **P0-10. Tests — Vitest harness.** *(Was P2-1; promoted because P0 changes completion, removal,
 store identity and board state — the exact rules most in need of protection. Pinning them
@@ -506,12 +509,48 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 - **Tap is the baseline and never depends on any of this.** If `pinch-zoom` proves unreliable on a
   target browser, drop drag on that browser and keep tap plus pinch. Never trade away pinch.
 
+> **Implemented in row 13.** The verb lives in `app/stores/placement.ts` (pure direction rules) and
+> `PuzzleSession` (the state machine). A drag, a tap and an arrow key all reduce to an anchor plus a
+> direction before anything is placed. `selectedPiece` is deleted, the tray is a legend, and
+> `onContextMenu` is gone with it (D10-r).
+>
+> Five platform findings, each measured rather than assumed:
+>
+> 1. **`pointerleave` fires after every touch `pointerup`.** A touch pointer stops existing when the
+>    finger lifts, and the browser then fires `pointerout` and `pointerleave` all the way up the
+>    tree. Wiring `pointerleave` to full cancellation therefore dismissed the candidates the tap had
+>    just offered, so an ambiguous tap did nothing at all on a touch device. Measured: every tap
+>    produced `pointerdown, pointerup, pointerout, pointerleave×8, touchend, click`. `pointerleave`
+>    and `pointercancel` now abandon only an in-flight *drag*; a pending offer is dismissed by
+>    Escape, by a tap elsewhere, or by the board losing focus.
+> 2. **`lostpointercapture` is deliberately not wired to cancellation**, contrary to the bullet
+>    above. Capture is released in `pointerdown` on purpose, which *is* what fires
+>    `lostpointercapture` -- handling it as a cancellation would kill every touch drag on the frame
+>    it began. `pointercancel` is the event that carries the meaning the bullet intended.
+> 3. **`-webkit-touch-callout` cannot be verified in Chromium at all.** Blink does not implement it,
+>    so it computes to the empty string, and the CSSOM drops the declaration from `cssText` even
+>    though the built stylesheet ships `board-grid{touch-action:pinch-zoom;-webkit-touch-callout:none}`.
+>    The test fetches the stylesheet as text and asserts the declaration is in the shipped bytes.
+>    Whether it suppresses the long-press magnifier **needs a real iOS device**.
+> 4. **`touch-action: pinch-zoom` computes correctly in Chromium** and is asserted both as a value
+>    and as *not* an inline style, which is the "static, in CSS" half of the policy. Chromium's
+>    emulation is not WebKit: **real iOS Safari still needs checking**, and the fallback if it
+>    proves unreliable is unchanged -- drop drag there, keep tap and pinch.
+> 5. **Compatibility clicks are covered by a sharper test than "two dominoes".** The synthesised
+>    `click` targets the *release* cell, which is occupied by the domino just placed -- so a second
+>    handler running the verb would **remove** it. A domino still present after the click has
+>    arrived is the evidence.
+>
+> Touch is exercised in a real touch context (a mobile device descriptor: `hasTouch`, `isMobile`,
+> coarse pointer), not a phone-sized desktop viewport, and input is dispatched through CDP
+> `Input.dispatchTouchEvent` so drags are real touch sequences. A guard test asserts the context is
+> actually touch-enabled, so the file cannot quietly stop testing what it claims to.
+
 **P1-2. Hit-test from the cell, not from arithmetic.** Put the handler on `BoardSquare` (or delegate
 via `closest('[data-cell]')`). The cell index then comes from the browser's own hit-testing — **no
-grid-to-cell index arithmetic**, correct at any zoom, DPR, or fractional cell size. The only rect
-read is of the one small cell you're provably over, and only to say which half of it the pointer is
-in; `fx`/`fy` are cell-relative fractions, so there is arithmetic here, just none that can name the
-wrong cell. This is *robustness*, not a zoom fix — the current math is already self-consistent
+grid-to-cell index arithmetic**, correct at any zoom, DPR, or fractional cell size. As of row 13 no rect is read at
+all: the half-of-the-cell rule that needed one was replaced by the drag direction, so `hover` is a
+cell index and nothing else. This is *robustness*, not a zoom fix — the current math is already self-consistent
 (see §0).
 
 > **Markers landed early in row 10; implemented in row 12.** `data-cell="i,j"`, plus
@@ -530,6 +569,9 @@ wrong cell. This is *robustness*, not a zoom fix — the current math is already
 >   changed is its blast radius: it now affects **visible sizing only**. A stale or wrong
 >   measurement makes the board the wrong *size*, which anyone can see, instead of putting clicks
 >   in the wrong *cell*, which nobody can.
+> - **`fx`/`fy` are gone as of row 13.** They fed the half-of-the-cell rule, which the drag
+>   direction replaced, so the last cell-relative arithmetic went with them. Hit-testing now reads
+>   no rect at all: `hover` is a cell index and nothing else.
 > - **A translation does not discriminate between the two approaches.** The old code measured the
 >   pointer against the grid's own rect, which moves with the grid, so it survives
 >   `translate(...)` unchanged. The browser tests use a `scale()` and a non-uniform row instead --
@@ -683,7 +725,7 @@ whole of P0 into one oversized set.)
 | 10 | **P0-4** piece-overlay hit regions (+ `data-cell`/`data-piece` test hooks, see P1-2 note) | E2E |
 | 11 | **P0-3** responsive layout: gutter, `min-*: 0`, cell-derived font, shell formula, both-axis budget | E2E (geometry/alignment/overflow) |
 | 12 | **P1-2** move hit-testing onto the cells (`CellHover`, `closest('[data-cell]')`) | E2E |
-| 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E |
+| 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E (touch context + keyboard) |
 | 14 | **P1-3** undo + reset | unit (undo tests land here) |
 | 15 | **P1-4** completion feedback | E2E |
 | 16 | **P1-5** honest feedback; shake on reject; check/hint only if the solver contract is built | unit |

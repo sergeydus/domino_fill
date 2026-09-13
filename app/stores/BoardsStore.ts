@@ -12,7 +12,6 @@ export class LevelStore {
     rootStore: RootStore
     difficulty: Difficulty = 'easy'
     level: Level = 1
-    selectedPiece: 1 | 2 = 1
     hasBegan: boolean = false
 
     /** Immutable puzzle content, by difficulty. */
@@ -115,7 +114,6 @@ export class LevelStore {
     }
 
     setLevel(level: Level) { this.level = level }
-    setSelectedPiece(piece: 1 | 2) { this.selectedPiece = piece }
 
     setDifficulty(dif: Difficulty) {
         this.difficulty = dif

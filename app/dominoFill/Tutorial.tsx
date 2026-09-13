@@ -64,9 +64,22 @@ const Tutorial = () => {
                     row or column — not a count of dominoes.
                 </p>
 
-                {/* Input instructions describe the current mouse-only model; P0-9b rewrites
-                    them alongside P1-1's unified pointer/touch/keyboard verb. */}
-                <p className="text-sm opacity-80">Click the board to place a domino. Right-click to switch between the two shapes.</p>
+                {/*
+                  P0-9b: the input instructions, teaching the verb that actually shipped.
+                  This previously read "Click the board to place a domino. Right-click to
+                  switch between the two shapes" -- describing a mode that no longer
+                  exists, and a right-click that never worked on a phone at all.
+                */}
+                <p className="mt-2">
+                    <strong>Drag from a square toward the neighbour</strong> you want the domino to
+                    cover. The direction you drag decides its shape and which way round it scores.
+                </p>
+                <p className="text-sm opacity-80">
+                    Tapping a square places the only domino that fits; if more than one fits, tap
+                    again on the square you want. Tap a domino to take it off. By keyboard: arrow
+                    keys move, <kbd>Space</kbd> picks the square, then an arrow key places.
+                    <kbd>Esc</kbd> cancels.
+                </p>
 
                 <p className="mt-2">Try it: fill this board so the top numbers and the side numbers both match.</p>
                 <ClientBoard boardsStore={tutorialBoard} />

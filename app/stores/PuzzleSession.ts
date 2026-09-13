@@ -3,6 +3,9 @@ import { makeAutoObservable } from "mobx"
 import { RootStore } from "./RootStore"
 import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
 import { columnSums, rowSums, isBoardFull, targetsMatch } from "./boardRules"
+import {
+    Cell, DIRECTIONS, Direction, directionBetween, dominoFrom, neighbourOf, orderedPair, sameCell,
+} from "./placement"
 
 /** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
 export const GRID_BORDER_PX = 8
@@ -44,28 +47,28 @@ export const LABEL_FONT_FRACTION = 0.5
 export const MIN_CELL_PX = 38
 
 /**
- * Where the pointer is, as a cell plus a position inside it (spec P1-2).
+ * Where the pointer is: a cell, and nothing else (spec P1-2).
  *
- * The cell index comes from the browser's own hit-testing -- the pointer's target, via
- * `data-cell` -- rather than from dividing a coordinate by the store's idea of the cell
- * size. `fx`/`fy` are fractions of that one cell, 0 at its left/top edge and 1 at its
- * right/bottom, and only ever decide *which way* a domino points.
- *
- * The arithmetic this replaces was self-consistent (spec §0 overturned the claim that zoom
- * broke it) but it depended on the store and the layout agreeing about the cell size. They
- * agree today because the cells are laid out at exactly `squareSize`. This makes that
- * agreement stop being load-bearing: fractional cells, a stale measurement, or any future
- * CSS-driven sizing cannot put the hit-test and the layout out of step, because there is
- * no second calculation to disagree with.
+ * The cell index comes from the browser's own hit-testing -- the element under the pointer,
+ * via `data-cell` -- rather than from dividing a coordinate by the store's idea of the cell
+ * size. There is no sub-cell position any more either: the half-of-the-cell rule it used to
+ * feed was replaced by the drag direction (P1-1), so the last piece of cell-relative
+ * arithmetic went with it. Hit-testing now reads no rect at all.
  */
-export type CellHover = {
-    i: number
-    j: number
-    /** 0..1 across the cell, left to right. */
-    fx: number
-    /** 0..1 down the cell, top to bottom. */
-    fy: number
-}
+/** What a press or a key press did, for feedback and for the tests. */
+export type PlacementOutcome = 'placed' | 'removed' | 'candidates' | 'cleared' | 'none'
+
+/**
+ * A gesture in progress.
+ *
+ * `drag` is a pointer held down on a cell. `pending` is a tap that could not decide --
+ * more than one direction was legal -- waiting for a second tap or an arrow key. Both are
+ * the same shape because they are the same verb at different stages: an anchor, awaiting
+ * a direction.
+ */
+export type Gesture =
+    | { kind: 'drag', from: Cell }
+    | { kind: 'pending', from: Cell }
 
 /**
  * The mutable half of a puzzle: one player's progress on one `PuzzleDefinition`.
@@ -81,14 +84,13 @@ export class PuzzleSession {
     board: (number | null)[][]
     completed: boolean = false
     /**
-     * The cell the pointer is over and where inside it, or null when it is not over this
-     * board at all.
+     * The cell the pointer is over, or null when it is not over this board at all.
      *
      * Per-session rather than global: two boards can be mounted at once (the tutorial
      * renders its own 2x2 over the live board), and a shared slot means the tutorial's
      * pointer drives a phantom highlight on the board behind it.
      */
-    hover: CellHover | null = null
+    hover: Cell | null = null
     /**
      * Ceiling on the shell size this board may occupy, in CSS px, on both axes.
      * The tutorial renders inside a modal and must not claim the full board width.
@@ -108,6 +110,12 @@ export class PuzzleSession {
      */
     availableBox: { width: number, height: number } | null = null
 
+    /** The gesture in progress, if any. See `Gesture`. */
+    gesture: Gesture | null = null
+
+    /** The cell the keyboard is on. Null until the board is first used from a keyboard. */
+    focusedCell: Cell | null = null
+
     constructor(definition: PuzzleDefinition, rootStore: RootStore) {
         this.definition = definition
         this.rootStore = rootStore
@@ -117,10 +125,10 @@ export class PuzzleSession {
 
     get puzzleId() { return this.definition.puzzleId }
 
-    setHover(hover: CellHover | null) {
+    setHover(cell: Cell | null) {
         // Guard here rather than at the call site: an index that is not a cell of this
         // board is no hover at all, however it was arrived at.
-        this.hover = hover && this.inBounds(hover.i, hover.j) ? hover : null
+        this.hover = cell && this.inBounds(cell[0], cell[1]) ? cell : null
     }
 
     /** Called when the pointer leaves this board; without it the highlight sticks. */
@@ -133,6 +141,7 @@ export class PuzzleSession {
         this.board = cloneInitialBoard(this.definition)
         this.completed = false
         this.hover = null
+        this.gesture = null
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -231,91 +240,6 @@ export class PuzzleSession {
         this.availableBox = box
     }
 
-    /** The pair of cells the currently selected piece would occupy, or null. */
-    get highlightedPair(): [[number, number], [number, number]] | null {
-        const hover = this.hover
-        if (!hover) return null
-        const selectedPiece = this.rootStore.boardsStore.selectedPiece
-        if (!selectedPiece) return null
-
-        const { i, j, fx, fy } = hover
-        const boardSize = this.board.length
-        if (!this.inBounds(i, j) || this.board[i][j] != null) return null
-
-        // The half of the cell the pointer is in picks which neighbour to prefer; the
-        // other one is the fallback when that neighbour is taken or off the board.
-        if (selectedPiece == 1) {
-            const prefersBelow = fy > 0.5
-            const order = prefersBelow ? [i + 1, i - 1] : [i - 1, i + 1]
-            for (const other of order) {
-                if (other >= 0 && other < boardSize && this.board[other][j] == null) {
-                    return [[i, j], [other, j]]
-                }
-            }
-        }
-        if (selectedPiece == 2) {
-            const prefersRight = fx > 0.5
-            const order = prefersRight ? [j + 1, j - 1] : [j - 1, j + 1]
-            for (const other of order) {
-                if (other >= 0 && other < boardSize && this.board[i][other] == null) {
-                    return [[i, j], [i, other]]
-                }
-            }
-        }
-        return null
-    }
-
-    /**
-     * The cell the pointer is currently over, or null.
-     *
-     * No arithmetic left: the browser decided which cell this is when it hit-tested the
-     * pointer, and `setHover` has already rejected anything out of bounds.
-     */
-    get hoveredCell(): [number, number] | null {
-        return this.hover ? [this.hover.i, this.hover.j] : null
-    }
-
-    /** Returns whether a piece was placed. */
-    setPieceOnBoard(): boolean {
-        const selectedPiece = this.rootStore.boardsStore.selectedPiece
-        const highlighted = this.highlightedPair
-        if (!highlighted || !selectedPiece) return false
-
-        const [[i, j], [i2, j2]] = highlighted
-        if (this.board[i][j] != null) return false
-
-        if (selectedPiece == 1) {
-            if (i > i2) { this.board[i2][j2] = 1; this.board[i][j] = 0 }
-            else { this.board[i][j] = 1; this.board[i2][j2] = 0 }
-        } else if (selectedPiece == 2) {
-            if (j > j2) { this.board[i2][j2] = 0; this.board[i][j] = 2 }
-            else { this.board[i][j] = 0; this.board[i2][j2] = 2 }
-        }
-        return true
-    }
-
-    /**
-     * One click on the board, routed by what is under the pointer: an occupied cell
-     * removes its domino, an empty one places the selected piece.
-     *
-     * Removal used to live on the piece overlay's own click handler (spec D4). That
-     * overlay is 16px taller than its cell and shifted up, so its hit region reached 12px
-     * into the *empty cell above* -- clicking there deleted the domino a player was
-     * trying to build on top of. The overlay is now inert and the decision is made here,
-     * from a single cell index, so a piece can never claim a click outside its own cell.
-     *
-     * Returns whether the board changed; callers use it for feedback and undo (P1-3/P1-4).
-     */
-    activateHoveredCell(): boolean {
-        const cell = this.hoveredCell
-        if (!cell) return false
-        const [i, j] = cell
-        // Occupied -- a domino half or a rock -- means this click is a removal attempt,
-        // never a placement. Rocks resolve to no pair, so clicking one does nothing.
-        if (this.board[i][j] !== null) return this.removePiece(i, j)
-        return this.setPieceOnBoard()
-    }
-
     private inBounds(i: number, j: number) {
         return Number.isInteger(i) && Number.isInteger(j)
             && i >= 0 && j >= 0
@@ -386,6 +310,257 @@ export class PuzzleSession {
                 : [[i, j], [i, j + 1]]
         }
         return null // unknown value
+    }
+
+    /** Both cells of a domino from `anchor` toward `direction` are free board cells. */
+    canPlace(anchor: Cell, direction: Direction): boolean {
+        const { cells } = dominoFrom(anchor, direction)
+        return cells.every(([i, j]) => this.inBounds(i, j) && this.board[i][j] === null)
+    }
+
+    /** Every direction a domino could be placed in from this cell. */
+    legalDirections(cell: Cell): Direction[] {
+        if (!this.inBounds(cell[0], cell[1]) || this.board[cell[0]][cell[1]] !== null) return []
+        return DIRECTIONS.filter(direction => this.canPlace(cell, direction))
+    }
+
+    /**
+     * Place a domino from `anchor` toward `direction`. Returns whether it was placed.
+     *
+     * The direction fixes the pip values as well as the shape: dragging up from a cell is
+     * a different placement from dragging down from it, because the anchor is the bottom
+     * half in one and the top half in the other.
+     */
+    placeToward(anchor: Cell, direction: Direction): boolean {
+        if (!this.canPlace(anchor, direction)) return false
+        const { cells, values } = dominoFrom(anchor, direction)
+        cells.forEach(([i, j], index) => { this.board[i][j] = values[index] })
+        return true
+    }
+
+    /**
+     * The cell the pointer is currently over, or null.
+     *
+     * No grid-to-cell index arithmetic: the browser decided which cell this is when it
+     * hit-tested the pointer, and `setHover` has already rejected anything out of bounds.
+     */
+    get hoveredCell(): Cell | null {
+        return this.hover
+    }
+
+    /**
+     * The cells that would complete a placement from the pending anchor.
+     *
+     * Offered after a tap on a cell with more than one legal direction: the tap cannot
+     * know which way the player meant, so it asks rather than guessing. The rule this
+     * replaces guessed, and silently fell through to the opposite direction when the
+     * preferred neighbour was taken -- exactly when the board gets interesting.
+     */
+    get candidateCells(): Cell[] {
+        if (this.gesture?.kind !== 'pending') return []
+        const anchor = this.gesture.from
+        return this.legalDirections(anchor).map(direction => neighbourOf(anchor, direction))
+    }
+
+    /** The anchor awaiting a second tap or an arrow key, if there is one. */
+    get pendingAnchor(): Cell | null {
+        return this.gesture?.kind === 'pending' ? this.gesture.from : null
+    }
+
+    /**
+     * The pair a placement would occupy right now, for the preview.
+     *
+     * During a drag it follows the pointer away from the anchor. With no gesture it
+     * previews the cell under the pointer, but only when that cell has exactly one legal
+     * direction -- the same condition under which a tap commits without asking.
+     */
+    get highlightedPair(): [[number, number], [number, number]] | null {
+        const hovered = this.hoveredCell
+        const anchor = this.gesture?.kind === 'drag' ? this.gesture.from : hovered
+        if (!anchor) return null
+
+        if (hovered && !sameCell(anchor, hovered)) {
+            const direction = directionBetween(anchor, hovered)
+            if (direction && this.canPlace(anchor, direction)) {
+                return orderedPair(anchor, neighbourOf(anchor, direction))
+            }
+            return null
+        }
+
+        const legal = this.legalDirections(anchor)
+        if (legal.length !== 1) return null
+        return orderedPair(anchor, neighbourOf(anchor, legal[0]))
+    }
+
+    // ---- pointer -------------------------------------------------------------------
+
+    /**
+     * The pointer went down on a cell.
+     *
+     * A press on one of the pending anchor's candidates is the second half of an ambiguous
+     * tap, so it must not become a new anchor -- otherwise the candidate the player just
+     * aimed at would replace the anchor it was offered for.
+     */
+    pointerDown(cell: Cell) {
+        this.focusedCell = cell
+        const pending = this.pendingAnchor
+        if (pending) {
+            const direction = directionBetween(pending, cell)
+            if (direction && this.canPlace(pending, direction)) return
+        }
+        this.gesture = { kind: 'drag', from: cell }
+    }
+
+    /**
+     * The pointer came up, over `cell` or over nothing.
+     *
+     * One entry point for both gestures, because a tap is a drag that did not move: if the
+     * release is over a neighbour the drag direction commits, and if it is over the anchor
+     * itself tap rules apply.
+     */
+    pointerUp(cell: Cell | null): PlacementOutcome {
+        const pending = this.pendingAnchor
+        if (pending && cell) {
+            const direction = directionBetween(pending, cell)
+            if (direction && this.canPlace(pending, direction)) {
+                this.placeToward(pending, direction)
+                this.gesture = null
+                this.focusedCell = pending
+                return 'placed'
+            }
+        }
+
+        const anchor = this.gesture?.kind === 'drag' ? this.gesture.from : null
+        this.gesture = null
+        if (!anchor || !cell) return pending ? 'cleared' : 'none'
+
+        if (!sameCell(anchor, cell)) {
+            const direction = directionBetween(anchor, cell)
+            if (direction && this.canPlace(anchor, direction)) {
+                this.placeToward(anchor, direction)
+                this.focusedCell = anchor
+                return 'placed'
+            }
+            // Released where the domino cannot go: nothing happens, and any pending
+            // anchor is dismissed.
+            return pending ? 'cleared' : 'none'
+        }
+
+        return this.tap(cell)
+    }
+
+    /**
+     * A press and release on the same cell.
+     *
+     * Occupied removes. Empty places, if exactly one direction is legal; if several are,
+     * the anchor is held and the candidates are offered for a second tap.
+     */
+    private tap(cell: Cell): PlacementOutcome {
+        const [i, j] = cell
+        if (this.board[i][j] !== null) {
+            const pair = this.pairAt(i, j)
+            if (!this.removePiece(i, j)) return 'none'
+            // Focus follows the removal to the pair's anchor, so a keyboard user is left
+            // somewhere related to what just happened.
+            this.focusedCell = pair ? [pair[0][0], pair[0][1]] : cell
+            return 'removed'
+        }
+
+        const legal = this.legalDirections(cell)
+        if (legal.length === 0) return 'none'
+        if (legal.length === 1) {
+            this.placeToward(cell, legal[0])
+            this.focusedCell = cell
+            return 'placed'
+        }
+
+        this.gesture = { kind: 'pending', from: cell }
+        return 'candidates'
+    }
+
+    /**
+     * Abandon an in-flight drag, leaving a pending anchor alone.
+     *
+     * This is what `pointerleave` and `pointercancel` want. A touch pointer stops existing
+     * at `pointerup`, and the browser then fires `pointerout` and `pointerleave` all the
+     * way up the tree -- measured: every tap produced a `pointerleave` on the grid
+     * immediately after the release. Cancelling everything there dismissed the candidates
+     * the tap had just offered, so a tap on an ambiguous cell appeared to do nothing at
+     * all on a touch device. A drag that leaves the board is still abandoned.
+     */
+    cancelDrag() {
+        if (this.gesture?.kind === 'drag') this.gesture = null
+        this.hover = null
+    }
+
+    /** Abandon everything, pending offer included: the board lost focus entirely. */
+    cancelGesture() {
+        this.gesture = null
+        this.hover = null
+    }
+
+    // ---- keyboard ------------------------------------------------------------------
+
+    setFocusedCell(cell: Cell | null) {
+        this.focusedCell = cell && this.inBounds(cell[0], cell[1]) ? cell : null
+    }
+
+    /**
+     * The keyboard verb, which is the same verb: an anchor and a direction.
+     *
+     * Arrows move the focus until an anchor is set, and choose the neighbour once one is.
+     * Returns whether the key was handled, so the caller knows whether to `preventDefault`
+     * -- arrows must still scroll the page when the board did not use them.
+     */
+    handleKey(key: string): boolean {
+        const arrow: Record<string, Direction> = {
+            ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+        }
+
+        if (key === 'Escape') {
+            if (!this.gesture) return false
+            this.gesture = null
+            return true
+        }
+
+        const focused: Cell = this.focusedCell ?? [0, 0]
+        if (!this.focusedCell) {
+            this.focusedCell = focused
+            // Entering the board is itself the action; do not also move or place.
+            if (key in arrow || key === ' ' || key === 'Enter') return true
+        }
+
+        if (key in arrow) {
+            const direction = arrow[key]
+            const pending = this.pendingAnchor
+            if (pending) {
+                // A refused direction keeps the anchor rather than silently choosing
+                // another one, which is the whole complaint against the old rule.
+                if (!this.canPlace(pending, direction)) return true
+                this.placeToward(pending, direction)
+                this.gesture = null
+                this.focusedCell = pending
+                return true
+            }
+            const next = neighbourOf(focused, direction)
+            if (this.inBounds(next[0], next[1])) this.focusedCell = next
+            return true
+        }
+
+        if (key === ' ' || key === 'Enter') {
+            return this.tap(focused) !== 'none'
+        }
+
+        if (key === 'Delete' || key === 'Backspace') {
+            const [i, j] = focused
+            if (this.board[i][j] === null) return false
+            const pair = this.pairAt(i, j)
+            if (!this.removePiece(i, j)) return false
+            this.focusedCell = pair ? [pair[0][0], pair[0][1]] : focused
+            return true
+        }
+
+        return false
     }
 
     /**

@@ -33,14 +33,31 @@ export default defineConfig({
             name: 'desktop',
             // layout.spec.ts drives its own viewport matrix; running it again under each
             // fixed-viewport project would only re-run it at a size it then overrides.
-            testIgnore: /layout\.spec\.ts/,
+            testIgnore: [/layout\.spec\.ts/, /touch\.spec\.ts/],
             use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
         },
         {
             // The phone size the spec's layout criteria are written against.
             name: 'phone-360',
-            testIgnore: /layout\.spec\.ts/,
+            testIgnore: [/layout\.spec\.ts/, /touch\.spec\.ts/, /keyboard\.spec\.ts/],
             use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 640 } },
+        },
+        {
+            /*
+             * A genuinely touch-enabled context, not a phone-sized desktop one.
+             *
+             * The other projects set a small viewport, which changes layout and nothing
+             * else: no touch pointers, no implicit pointer capture, no compatibility
+             * mouse events. The device descriptor turns `hasTouch` and `isMobile` on, so
+             * the touch half of P1-1 is exercised rather than assumed.
+             *
+             * Still Chromium. Whether `touch-action: pinch-zoom` and
+             * `-webkit-touch-callout` behave as specified in WebKit is not answerable
+             * here and needs a real iOS device; see the note in e2e/touch.spec.ts.
+             */
+            name: 'touch',
+            testMatch: /touch\.spec\.ts/,
+            use: { ...devices['Pixel 5'] },
         },
         {
             name: 'layout',
