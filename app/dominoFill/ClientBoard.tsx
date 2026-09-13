@@ -106,16 +106,22 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     }
 
     /*
-     * `pointercancel` is the one to handle: the browser took the gesture away (a scroll
-     * or zoom claimed it, the touch was interrupted), and no `pointerup` is coming.
+     * Two ways a gesture can end other than a release, both of which abandon an in-flight
+     * *drag* and leave a pending offer alone.
      *
-     * `lostpointercapture` is deliberately *not* wired to cancellation, but not for the
-     * reason an earlier draft gave. Measured: with the implicit capture left alone it
-     * fires *after* `pointerup`, once the gesture is already resolved -- so handling it
-     * would either duplicate `pointerup` or cancel a placement that had just been made.
-     * `pointercancel` is the event that carries the meaning here.
+     * `pointercancel`: the browser took the gesture away (a scroll or zoom claimed it, the
+     * touch was interrupted) and no `pointerup` is coming.
+     *
+     * `lostpointercapture`: capture went away. On the normal path this fires *after*
+     * `pointerup` -- measured, and contrary to an earlier claim here that it fires
+     * immediately on `pointerdown` -- by which time the drag is already resolved: a
+     * placement cleared the gesture, and an ambiguous tap turned it into `pending`.
+     * `cancelDrag` discards only a `drag`, so arriving late costs nothing. What it buys is
+     * the abnormal path: capture lost *before* the release, with no `pointercancel` to
+     * follow, otherwise leaves a drag armed with no event left to close it.
      */
     const onPointerCancel = () => boardsStore.cancelDrag()
+    const onLostPointerCapture = () => boardsStore.cancelDrag()
 
     /*
      * A drag that leaves the board is abandoned, and the highlight goes with it; without
@@ -159,6 +165,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
                     onPointerCancel={onPointerCancel}
+                    onLostPointerCapture={onLostPointerCapture}
                     onPointerLeave={onPointerLeave}
                     onKeyDown={onKeyDown}
                     onBlur={() => boardsStore.cancelGesture()}

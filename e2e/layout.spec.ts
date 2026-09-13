@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { openBoard } from './openBoard'
 
 /**
  * The layout acceptance criteria (spec P0-3 / D3), across the viewport and zoom matrix.
@@ -32,17 +33,6 @@ const DIFFICULTIES = [
     { name: 'easy 6x6', label: /easy/i, n: 6 },
     { name: 'hard 8x8', label: /hard/i, n: 8 },
 ]
-
-const openBoard = async (page: Page) => {
-    // Suppressed before the first paint rather than dismissed afterwards. Clicking Skip
-    // works only on the first visit, and probing for the button races the first render --
-    // when it lost, the tutorial's own 2x2 board was still mounted and every
-    // `[data-board-shell]` query matched two elements. The tutorial's own behaviour is
-    // covered in e2e/tutorial.spec.ts; here it is just in the way.
-    await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
-    await page.goto('/')
-    await expect(page.locator('[data-board-shell]')).toBeVisible()
-}
 
 const chooseDifficulty = async (page: Page, label: RegExp, n: number) => {
     await page.getByRole('button', { name: label }).click()

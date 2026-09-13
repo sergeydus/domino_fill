@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { openBoard } from './openBoard'
 
 /**
  * The keyboard half of the placement verb (spec P1-1), in a real browser.
@@ -11,12 +12,6 @@ import { test, expect, type Page } from '@playwright/test'
  * P1-8 will take on focus *structure* (roving tabindex, roles, announcements). This is the
  * state machine and its visible consequences.
  */
-
-const openBoard = async (page: Page) => {
-    await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
-    await page.goto('/')
-    await expect(page.locator('[data-board-shell]')).toBeVisible()
-}
 
 const grid = (page: Page) => page.locator('.board-grid')
 const focusRing = (page: Page) => page.locator('[data-focus]')

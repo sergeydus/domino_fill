@@ -1,4 +1,5 @@
 import { test, expect, type Page, type CDPSession } from '@playwright/test'
+import { openBoard } from './openBoard'
 
 /**
  * The touch half of the placement verb (spec P1-1), in a genuinely touch-enabled context.
@@ -20,12 +21,6 @@ import { test, expect, type Page, type CDPSession } from '@playwright/test'
  * settled here and still need verification on a real device**. The spec records the same
  * caveat.
  */
-
-const openBoard = async (page: Page) => {
-    await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
-    await page.goto('/')
-    await expect(page.locator('[data-board-shell]')).toBeVisible()
-}
 
 const occupied = async (page: Page) => {
     const pieces = await page.locator('[data-piece]').evaluateAll(
@@ -228,6 +223,22 @@ test('a tap places exactly one domino, never two', async ({ page }) => {
 
     await expect(page.locator('[data-piece="one"]')).toHaveCount(1)
 })
+
+/*
+ * There is deliberately no test here for capture being lost *mid-drag*.
+ *
+ * It cannot be produced in Chromium. Measured: releasing the implicit touch capture from
+ * the cell that owns it genuinely takes effect -- `hasPointerCapture` goes false and the
+ * following `pointermove` retargets to the cell under the finger -- but no
+ * `lostpointercapture` is ever dispatched for it, at the cell, the grid or the document.
+ * The event does fire on the normal path, after `pointerup`, which the capture-retention
+ * test above pins.
+ *
+ * The handler's behaviour is therefore covered in tests/hover.test.tsx, where the event can
+ * be dispatched directly. What *this* file contributes is the evidence that wiring it costs
+ * nothing on the normal paths: every tap, drag and cancel test here runs with
+ * `onLostPointerCapture` live.
+ */
 
 test('a cancelled touch places nothing', async ({ page }) => {
     const { i, j } = await freeRun(page, 1)

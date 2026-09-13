@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { instrument, waitForReady } from './openBoard'
 
 /**
  * The tutorial's escape hatch, at phone size (spec P1-9, carried in from P0-9a).
@@ -19,9 +20,13 @@ const horizontalOverflow = (page: Page) =>
     })
 
 test.beforeEach(async ({ page }) => {
-    // A fresh context has no `hasSeenTutorial`, so the tutorial shows on first paint.
+    // A fresh context has no `hasSeenTutorial`, so the tutorial shows on first paint --
+    // but only once the board has loaded, since the modal renders inside `DominoClient`
+    // below its `no board` guard. Waiting on the board first means a startup failure is
+    // reported as a startup failure rather than as a missing overlay.
+    await instrument(page)
     await page.goto('/')
-    await expect(overlay(page)).toBeVisible()
+    await waitForReady(page, overlay(page), 'The tutorial')
 })
 
 test('the tutorial is shown to a first-time player', async ({ page }) => {

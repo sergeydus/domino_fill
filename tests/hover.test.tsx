@@ -192,6 +192,46 @@ describe('ClientBoard event wiring', () => {
         expect(other.hoveredCell).toEqual([5, 5])
     })
 
+    it('lostpointercapture abandons an in-flight drag', () => {
+        /*
+         * Capture going away before the release, with no `pointercancel` to follow. Without
+         * this the drag stays armed and the eventual release places a domino the player has
+         * had no feedback about.
+         *
+         * Tested here rather than in e2e/touch.spec.ts because the event cannot be produced
+         * in Chromium: releasing an implicit touch capture takes effect but dispatches no
+         * `lostpointercapture` anywhere. Measured.
+         */
+        const s = session()
+        const view = renderBoard(s)
+
+        fireEvent.pointerDown(cell(view, 2, 2), { clientX: 0, clientY: 0 })
+        expect(s.gesture).not.toBeNull()
+
+        fireEvent.lostPointerCapture(view.grid)
+        expect(s.gesture).toBeNull()
+
+        fireEvent.pointerUp(cell(view, 3, 2), { clientX: 0, clientY: 0 })
+        expect(s.board.flat().every(c => c === null)).toBe(true)
+    })
+
+    it('lostpointercapture leaves a pending offer alone', () => {
+        // On the normal path it arrives *after* `pointerup` -- measured -- by which time an
+        // ambiguous tap has already turned the gesture into a pending offer. Discarding
+        // that would dismiss the candidates the tap had just put on screen.
+        const s = session()
+        const view = renderBoard(s)
+        const target = cell(view, 2, 2)
+
+        fireEvent.pointerDown(target, { clientX: 0, clientY: 0 })
+        fireEvent.pointerUp(target, { clientX: 0, clientY: 0 })
+        expect(s.pendingAnchor).toEqual([2, 2])
+
+        fireEvent.lostPointerCapture(view.grid)
+        expect(s.pendingAnchor).toEqual([2, 2])
+        expect(s.candidateCells).toHaveLength(4)
+    })
+
     it('has no click handler at all', () => {
         // Mobile synthesises a compatibility `click` after `pointerup`; a click handler
         // alongside the pointer ones would run the verb twice and place two dominoes.

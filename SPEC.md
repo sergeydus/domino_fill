@@ -233,6 +233,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | p | `layout.tsx:17` | Metadata is still `"Create Next App"`. |
 | q | `globals.css:15` | A dark-mode block darkens `body` while every game surface is hard-coded light grey. |
 | r | ~~`DominoClient.tsx:33`~~ | **✅ Fixed in P1-1.** `onContextMenu` was bound to the whole wrapper, so right-clicking the difficulty slider or the level arrows rotated the piece too, and Android fired it on long-press. The handler is gone with the orientation mode it toggled. |
+| t | `DominoClient.tsx:19` | **The only startup path has no failure path.** `getCurrentActiveBoard().then(...)` has no `.catch`: the board arrives from a `"use server"` action called in `useEffect`, so one rejected POST — a dropped mobile connection, a server restart — leaves the app showing `no board` forever, with no error, no retry and nothing in the console. Found while diagnosing the E2E flake; it is **not** that flake's cause (the action was observed succeeding in every captured failure), but it is the reason a transient failure there is unrecoverable rather than a blink. Fix with the rest of D10-c, which removes the round-trip entirely by SSR-ing the board as a prop; until then any retry belongs next to that work, not bolted on. |
 | s | repo-wide | No tests, no runner, no CI. `motion/react` animates everywhere with no `prefers-reduced-motion` handling. |
 
 ### 1.11 Content
@@ -500,13 +501,13 @@ Next-level control. No mode is entered that Escape cannot leave. (P1-8 covers fo
 roving tabindex, roles — not this state machine.)
 
 > **Two clauses of this paragraph are settled in row 13; the completion-focus clause is deferred to
-> P1-4 (row 15), and P1-1 is therefore not complete without it.** Moving focus to the Next-level
-> control requires a control that can hold focus, and the level arrows are `motion.div`s with an
-> `onClick` — there is nothing focusable to move to. Making them real buttons belongs to P1-8
-> (row 19); the completion transition that would trigger the move belongs to P1-4 (row 15). Row 13
-> implements the rest: focus stays on the anchor after placing, follows a removal to the pair's
-> anchor, and Escape leaves the one mode there is. **Row 15 must close this, and row 19 must not
-> assume it already is.**
+> P1-4 (row 15), and P1-1 is therefore not complete without it.** There is nothing focusable to move
+> to today: the level arrows are `motion.div`s with an `onClick`. **Row 15 closes this with the
+> completion card's own Next button** — a real `<button>` introduced and focused by the completion
+> feedback itself, which is where the transition happens. It does not wait on row 19: converting the
+> separate level arrows is P1-8's job and independent of this. Row 13 implements the rest of the
+> paragraph — focus stays on the anchor after placing, follows a removal to the pair's anchor, and
+> Escape leaves the one mode there is.
 >
 > **Space/Enter is the anchor key and nothing else.** Row 13 delegated it to the pointer's `tap()`,
 > which made it place immediately on a one-direction cell and *remove* on an occupied one —
@@ -562,14 +563,24 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 >    The spec bullet's two options are therefore **three**: release and hit-test, cache the rect, or
 >    *keep capture and hit-test*, which is what ships. The third keeps the bullet's "zero coordinate
 >    arithmetic" property and is strictly more robust than the first.
-> 3. **`lostpointercapture` is deliberately not wired to cancellation**, contrary to the bullet
->    above -- but not for the reason row 13 first gave. That claim (capture is released in
->    `pointerdown`, so it fires immediately and would kill every drag on its first frame) is
->    **false**, and was recorded before it was measured. Measured: with the capture left alone,
->    `lostpointercapture` fires *after* `pointerup`, once the gesture is already resolved. Handling
->    it would therefore duplicate `pointerup` or undo a placement just made. `pointercancel` is the
->    event that carries the meaning the bullet intended. The ordering is asserted in
->    `e2e/touch.spec.ts`, so the rationale stays tied to evidence.
+> 3. **`lostpointercapture` *is* wired to `cancelDrag`, and row 13's reason for omitting it was
+>    false.** That reason (capture is released in `pointerdown`, so the event fires immediately and
+>    would kill every drag on its first frame) was recorded before it was measured, and rests on the
+>    release that finding 2 shows never happened. Measured: with the capture left alone,
+>    `lostpointercapture` fires *after* `pointerup`. Arriving there costs nothing, because
+>    `cancelDrag` discards only a `drag` and by then a placement has cleared the gesture or an
+>    ambiguous tap has turned it into a pending offer. What it buys is capture lost *before* the
+>    release, with no `pointercancel` to follow, which would otherwise leave a drag armed with no
+>    event left to close it. The after-`pointerup` ordering is asserted in `e2e/touch.spec.ts`.
+>
+>    **That mid-drag case cannot be exercised in Chromium.** Measured: releasing the implicit touch
+>    capture from the cell that owns it genuinely takes effect -- `hasPointerCapture` goes false and
+>    the next `pointermove` retargets to the cell under the finger -- but **no `lostpointercapture`
+>    is dispatched for it**, at the cell, the grid or the document. Chromium also queues the event
+>    until immediately before the next pointer event, so a release with nothing in flight fires
+>    nothing at all. The handler's contract is therefore pinned in `tests/hover.test.tsx`, where the
+>    event can be dispatched directly, and the touch suite contributes the evidence that wiring it
+>    costs nothing on the normal paths.
 > 4. **`-webkit-touch-callout` cannot be verified in Chromium at all.** Blink does not implement it,
 >    so it computes to the empty string, and the CSSOM drops the declaration from `cssText` even
 >    though the built stylesheet ships `board-grid{touch-action:pinch-zoom;-webkit-touch-callout:none}`.
@@ -583,6 +594,31 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 >    `click` targets the *release* cell, which is occupied by the domino just placed -- so a second
 >    handler running the verb would **remove** it. A domino still present after the click has
 >    arrived is the evidence.
+>
+> **The intermittent E2E startup failure, diagnosed.** A run would occasionally fail with the page
+> stuck on `no board` and nothing else to go on. Three hypotheses were wrong before the evidence
+> arrived: it is not a slow server (measured: eight concurrent requests to a freshly started
+> production server returned in 27ms), not a slow or failing Server Action (measured: in every
+> captured failure the action had never been called at all), and not app code throwing (no page
+> error, no rejection).
+>
+> The cause is **socket exhaustion on the test machine**. Measured: one full run leaves ~2500
+> sockets to the test port in `TIME_WAIT`, and consecutive runs accumulate them; under that
+> pressure Chromium fails a request at the transport layer with `ERR_NO_BUFFER_SPACE`. When the
+> request it kills is a JS chunk, the bundle never arrives, **React never hydrates**, the
+> `useEffect` that loads the board never runs, and the page sits at `no board` — with no error in
+> the page, because a `<script>` that never loads fires nothing the page can see and leaves
+> `readyState` at `complete`. Captured verbatim:
+> `FAILED GET /_next/static/chunks/18a5a133fb68ca26.js :: net::ERR_NO_BUFFER_SPACE`.
+>
+> Hardened in `e2e/openBoard.ts`: every startup wait reports hydration state, body text, the
+> action's fetches, the script tags present and the request-level failures, so this class of
+> failure names itself instead of presenting as a missing element. A load killed by socket
+> exhaustion is reloaded once — gated on having actually observed such an error, and announced on
+> the console when it happens, so a genuinely broken page still fails on the first attempt with its
+> diagnostics intact. The levers if it persists are fewer Playwright workers or a pause between
+> runs; the structural fix is D10-c, which by SSR-ing the board removes both the round-trip and the
+> "nothing renders until hydration" property that makes this failure total.
 >
 > Touch is exercised in a real touch context (a mobile device descriptor: `hasTouch`, `isMobile`,
 > coarse pointer), not a phone-sized desktop viewport, and input is dispatched through CDP

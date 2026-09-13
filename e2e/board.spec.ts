@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { instrument, waitForReady } from './openBoard'
 
 /**
  * Where a click on the board lands (spec P0-4 / D4).
@@ -16,7 +17,12 @@ const overlay = (page: Page) => page.locator('div.fixed.inset-0')
 
 /** Dismiss the tutorial so the real board is reachable. */
 const openBoard = async (page: Page) => {
+    await instrument(page)
     await page.goto('/')
+    // Skip lives inside the tutorial, which renders only once the board has loaded, so
+    // waiting on it waits on the same startup as every other spec -- and unlike
+    // `[data-board-shell]` it is unambiguous while two boards are mounted.
+    await waitForReady(page, page.getByRole('button', { name: /skip/i }), 'The tutorial')
     const skip = page.getByRole('button', { name: /skip/i })
     await skip.scrollIntoViewIfNeeded()
     await skip.click()
