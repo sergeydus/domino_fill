@@ -270,15 +270,13 @@ test.describe('safe-area insets', () => {
         expect(content).toContain('viewport-fit=cover')
     })
 
-    test('an inset shrinks the board rather than being ignored', async ({ page }) => {
+    test('a horizontal inset alone shrinks the board', async ({ page }) => {
+        // 390x844 is width-bound, so left/right is the axis that can bite here.
         await openBoard(page)
         await chooseDifficulty(page, /hard/i, 8)
         const before = (await box(page, '[data-cell="0,0"]')).width
 
-        await applyInsets(page, {
-            '--safe-top': '47px', '--safe-bottom': '34px',
-            '--safe-left': '32px', '--safe-right': '32px',
-        })
+        await applyInsets(page, { '--safe-left': '32px', '--safe-right': '32px' })
         await expect
             .poll(async () => (await box(page, '[data-cell="0,0"]')).width)
             .toBeLessThan(before)
@@ -311,5 +309,56 @@ test.describe('safe-area insets', () => {
         await page.waitForTimeout(400)
 
         expect((await box(page, '[data-cell="0,0"]')).width).toBe(before)
+    })
+})
+
+test.describe('safe-area insets, vertical', () => {
+    // A separate viewport because the axis under test has to be the binding one: at
+    // 390x844 the width binds, so a top/bottom inset changes nothing there and a test
+    // that applied all four at once would have passed with vertical handling deleted.
+    // Verified: removing only the top/bottom subtraction passed all four of the tests
+    // above. 1280x800 is height-bound for an 8x8 board.
+    test.use({ viewport: { width: 1280, height: 800 } })
+
+    const TOP = 47
+    const BOTTOM = 34
+
+    test('a vertical inset alone shrinks the board', async ({ page }) => {
+        await openBoard(page)
+        await chooseDifficulty(page, /hard/i, 8)
+        const before = (await box(page, '[data-cell="0,0"]')).height
+
+        await page.evaluate(([top, bottom]) => {
+            document.documentElement.style.setProperty('--safe-top', `${top}px`)
+            document.documentElement.style.setProperty('--safe-bottom', `${bottom}px`)
+        }, [TOP, BOTTOM])
+
+        await expect
+            .poll(async () => (await box(page, '[data-cell="0,0"]')).height)
+            .toBeLessThan(before)
+    })
+
+    test('a vertical inset costs exactly as much as a shorter window', async ({ page }) => {
+        // The strong form: budgeted, not merely "smaller". An inset of n px has to cost
+        // the same as n px of missing viewport -- which is a claim about the arithmetic,
+        // not about the style that produced it.
+        await openBoard(page)
+        await chooseDifficulty(page, /hard/i, 8)
+        await page.evaluate(([top, bottom]) => {
+            document.documentElement.style.setProperty('--safe-top', `${top}px`)
+            document.documentElement.style.setProperty('--safe-bottom', `${bottom}px`)
+        }, [TOP, BOTTOM])
+        await page.waitForTimeout(400)
+        const withInset = (await box(page, '[data-cell="0,0"]')).height
+
+        await page.setViewportSize({ width: 1280, height: 800 - TOP - BOTTOM })
+        await page.evaluate(() => {
+            document.documentElement.style.removeProperty('--safe-top')
+            document.documentElement.style.removeProperty('--safe-bottom')
+        })
+        await page.waitForTimeout(400)
+        const shorterWindow = (await box(page, '[data-cell="0,0"]')).height
+
+        expect(withInset).toBe(shorterWindow)
     })
 })
