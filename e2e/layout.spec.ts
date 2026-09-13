@@ -287,13 +287,21 @@ test.describe('safe-area insets', () => {
         await chooseDifficulty(page, /hard/i, 8)
         await applyInsets(page, { '--safe-left': '32px', '--safe-right': '32px' })
 
+        /*
+         * Polled on the *right* edge, which is the last thing to settle. The padding
+         * applies the moment the variable changes, so the left edge is already in place
+         * while the board is still the old width -- polling on the left alone passed
+         * early and then read a right edge 62px over the limit. Intermittent, and mine,
+         * not the layout's.
+         */
+        const right = 390 - 32 - PAGE_MARGIN_PX + 1
         await expect.poll(async () => {
             const shell = await box(page, '[data-board-shell]')
-            return Math.round(shell.x)
-        }).toBeGreaterThanOrEqual(32 + PAGE_MARGIN_PX - 1)
+            return Math.round(shell.x + shell.width)
+        }).toBeLessThanOrEqual(right)
 
         const shell = await box(page, '[data-board-shell]')
-        expect(shell.x + shell.width).toBeLessThanOrEqual(390 - 32 - PAGE_MARGIN_PX + 1)
+        expect(shell.x).toBeGreaterThanOrEqual(32 + PAGE_MARGIN_PX - 1)
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
     })
 
