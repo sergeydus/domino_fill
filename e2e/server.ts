@@ -1,23 +1,17 @@
-import { spawn, execFileSync, type ChildProcess } from 'node:child_process'
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import net from 'node:net'
 import path from 'node:path'
 
 /**
  * Explicit server lifecycle for the browser tests.
  *
- * Playwright's managed `webServer` was reported hanging at "Terminating the WebServer" on
- * Windows/Node 25: it launches the command through a shell, and killing that shell can
- * leave the actual `next start` process alive, so teardown waits forever on a port that
- * never frees. It is not reproducible everywhere, which is precisely why it should not be
- * load-bearing -- rows that follow depend on this harness terminating.
+ * Playwright's managed `webServer` hung at "Terminating the WebServer" on Windows: it runs
+ * the command through a shell, so killing that shell can leave the real `next start` alive
+ * and teardown waits on a port that never frees. We own the lifecycle instead.
  *
- * So we own the lifecycle instead:
- *  - spawn Node directly on Next's bin, with no shell and no npx layer, so the process tree
- *    is one level deep and we hold the real pid;
- *  - refuse to start if the port is occupied, rather than silently testing whatever happens
- *    to be listening;
- *  - tear down with `taskkill /T /F` on Windows and a process-group kill elsewhere, then
- *    wait for the port to actually free before returning.
+ * Everything here is written on the assumption that teardown WILL fail somewhere, someday:
+ * no failure is swallowed, every wait is bounded, and the child's own output is surfaced
+ * when something goes wrong. A harness that other work depends on has to say why it failed.
  */
 
 export const PORT = 3100
@@ -25,6 +19,16 @@ export const BASE_URL = `http://127.0.0.1:${PORT}`
 
 const ROOT = path.resolve(__dirname, '..')
 const NEXT_BIN = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next')
+
+type ExitInfo = { code: number | null, signal: NodeJS.Signals | null }
+
+type Managed = {
+    child: ChildProcess
+    /** Resolves when the child exits; never rejects. */
+    exited: Promise<ExitInfo>
+    hasExited: () => boolean
+    output: () => string
+}
 
 const isPortFree = (port: number) => new Promise<boolean>((resolve) => {
     const socket = net.createConnection({ port, host: '127.0.0.1' })
@@ -38,7 +42,7 @@ const isPortFree = (port: number) => new Promise<boolean>((resolve) => {
 const waitFor = async (predicate: () => Promise<boolean>, timeoutMs: number, label: string) => {
     const deadline = Date.now() + timeoutMs
     while (Date.now() < deadline) {
-        if (await predicate()) return
+        if (await predicate()) return true
         await new Promise(r => setTimeout(r, 250))
     }
     throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}`)
@@ -53,22 +57,118 @@ const responds = async () => {
     }
 }
 
-/** Kill the whole tree and wait for the port to free, so a later run starts clean. */
-const killTree = async (child: ChildProcess) => {
-    const pid = child.pid
-    if (!pid) return
+/** Wait for the child to exit, or report that it did not within the budget. */
+const awaitExit = (m: Managed, timeoutMs: number) => Promise.race([
+    m.exited.then(() => true),
+    new Promise<boolean>(r => setTimeout(() => r(false), timeoutMs)),
+])
 
+/** Non-throwing variant: returns whether the condition held within the budget. */
+const settle = async (predicate: () => Promise<boolean>, timeoutMs: number) => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+        if (await predicate()) return true
+        await new Promise(r => setTimeout(r, 250))
+    }
+    return false
+}
+
+/** Which pids currently hold the port, for diagnostics when something lingers. */
+const portHolders = (): string[] => {
+    try {
+        const res = process.platform === 'win32'
+            ? spawnSync('netstat', ['-ano'], { encoding: 'utf8' })
+            : spawnSync('lsof', ['-ti', `tcp:${PORT}`], { encoding: 'utf8' })
+        const lines = (res.stdout ?? '').split(/\r?\n/)
+        if (process.platform !== 'win32') return lines.map(l => l.trim()).filter(Boolean)
+        return [...new Set(lines
+            .filter(l => new RegExp(`:${PORT}\\s`).test(l) && /LISTENING/i.test(l))
+            .map(l => l.trim().split(/\s+/).pop()!)
+            .filter(Boolean))]
+    } catch {
+        return []
+    }
+}
+
+/** Kill the whole tree, surfacing any failure. */
+const killTree = (pid: number) => {
     if (process.platform === 'win32') {
-        try {
-            execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
-        } catch {
-            // Already gone.
+        const res = spawnSync('taskkill', ['/pid', String(pid), '/T', '/F'], { encoding: 'utf8' })
+        if (res.error || res.status !== 0) {
+            console.error(
+                `[e2e] taskkill /pid ${pid} /T /F failed: status=${res.status} ` +
+                `error=${res.error?.message ?? 'none'}\n` +
+                `  stdout: ${(res.stdout ?? '').trim()}\n` +
+                `  stderr: ${(res.stderr ?? '').trim()}`
+            )
         }
     } else {
-        try { process.kill(-pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch { } }
+        try {
+            process.kill(-pid, 'SIGKILL')
+        } catch (err) {
+            console.error(`[e2e] group kill of ${-pid} failed: ${(err as Error).message}`)
+            try { process.kill(pid, 'SIGKILL') } catch { /* already gone */ }
+        }
+    }
+}
+
+const describe = (m: Managed) => {
+    const out = m.output().trim()
+    return out ? `\n--- server output ---\n${out}\n---------------------` : ' (no output captured)'
+}
+
+const start = (): Managed => {
+    const child = spawn(process.execPath, [NEXT_BIN, 'start', '--port', String(PORT)], {
+        cwd: ROOT,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32', // own process group, for the group kill
+        windowsHide: true,
+    })
+
+    let buffer = ''
+    const collect = (chunk: Buffer) => { buffer += chunk.toString() }
+    child.stdout?.on('data', collect)
+    child.stderr?.on('data', collect)
+
+    let done = false
+    const exited = new Promise<ExitInfo>((resolve) => {
+        child.once('exit', (code, signal) => { done = true; resolve({ code, signal }) })
+        child.once('error', (err) => { done = true; buffer += `\nspawn error: ${err.message}`; resolve({ code: null, signal: null }) })
+    })
+
+    return { child, exited, hasExited: () => done, output: () => buffer }
+}
+
+const terminate = async (m: Managed) => {
+    const pid = m.child.pid
+
+    // Never signal a pid we no longer own: on Windows the number is recycled, and killing a
+    // tree by a reused pid would take down an unrelated process.
+    if (!m.hasExited() && pid) {
+        m.child.kill()
+
+        if (!await awaitExit(m, 5_000) && !m.hasExited()) {
+            killTree(pid)
+            if (!await awaitExit(m, 10_000)) {
+                // The process outliving termination IS fatal: the next run cannot start.
+                throw new Error(`Server process ${pid} did not exit after termination.${describe(m)}`)
+            }
+        }
     }
 
-    await waitFor(() => isPortFree(PORT), 15_000, `port ${PORT} to free`)
+    // The process is gone. Releasing the port is normally immediate, but a lingering socket
+    // is NOT worth failing a green run over -- and if it really is stuck, the next run's
+    // start guard refuses with a precise message rather than testing an unknown server.
+    if (await settle(() => isPortFree(PORT), 20_000)) return
+
+    if (pid && process.platform === 'win32') killTree(pid) // in case something detached
+    if (await settle(() => isPortFree(PORT), 5_000)) return
+
+    console.warn(
+        `[e2e] server process exited but port ${PORT} is still bound by ` +
+        `pid(s) ${portHolders().join(', ') || 'unknown'}. The test run itself succeeded; ` +
+        `the next run will refuse to start until the port frees.${describe(m)}`
+    )
 }
 
 export const startServer = async () => {
@@ -79,25 +179,38 @@ export const startServer = async () => {
         )
     }
 
-    // Build first, synchronously. Chaining this into the server command is what created the
-    // nested shell that teardown then could not reliably kill.
-    execFileSync(process.execPath, [NEXT_BIN, 'build'], { cwd: ROOT, stdio: 'ignore' })
+    // Build first, synchronously, with output surfaced on failure. `stdio: 'ignore'` here
+    // turns a broken build into an unexplained timeout further down.
+    const build = spawnSync(process.execPath, [NEXT_BIN, 'build'], { cwd: ROOT, encoding: 'utf8' })
+    if (build.status !== 0) {
+        throw new Error(
+            `next build failed (status ${build.status}).\n` +
+            `${build.stdout ?? ''}\n${build.stderr ?? ''}`
+        )
+    }
 
-    const child = spawn(process.execPath, [NEXT_BIN, 'start', '--port', String(PORT)], {
-        cwd: ROOT,
-        stdio: 'ignore',
-        detached: process.platform !== 'win32', // own process group, for the group kill
-        windowsHide: true,
+    const m = start()
+
+    // Race readiness against the child dying. Without this, a bind failure leaves us polling
+    // the port until timeout -- and if anything else grabs it in the meantime, we would
+    // happily run the whole suite against an unrelated server.
+    const died = m.exited.then((info) => {
+        throw new Error(
+            `Server exited before becoming ready (code=${info.code}, signal=${info.signal}).` +
+            describe(m)
+        )
     })
-
-    child.on('error', (err) => { throw err })
+    died.catch(() => { /* handled below; prevents an unhandled rejection if readiness wins */ })
 
     try {
-        await waitFor(responds, 120_000, `${BASE_URL} to respond`)
+        await Promise.race([
+            waitFor(responds, 120_000, `${BASE_URL} to respond`),
+            died,
+        ])
     } catch (err) {
-        await killTree(child)
+        await terminate(m).catch(e => console.error(`[e2e] cleanup after failed start: ${e.message}`))
         throw err
     }
 
-    return async () => { await killTree(child) }
+    return async () => { await terminate(m) }
 }
