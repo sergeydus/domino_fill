@@ -17,10 +17,10 @@ const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore:cu
     }
     return (
         <div className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center">
-            <motion.div style={{ opacity: boardsStore.selectedPiece == 1 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceOne} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}  >
+            <motion.div style={{ opacity: boardsStore.selectedPiece == 1 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceOne} data-select-piece="1" className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}  >
                 <DominoPieceOne boardsStore={currentBoard} />
             </motion.div>
-            <motion.div style={{ opacity: boardsStore.selectedPiece == 2 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceTwo} className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}>
+            <motion.div style={{ opacity: boardsStore.selectedPiece == 2 ? 1 : 0.5, scale: 1 }} onClick={onClickPieceTwo} data-select-piece="2" className='cursor-pointer p-2' whileHover={{ scale: 1.1 }}>
                 <DominoPieceTwo boardsStore={currentBoard} />
             </motion.div>
         </div >

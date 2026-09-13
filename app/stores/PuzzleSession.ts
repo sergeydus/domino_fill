@@ -159,13 +159,29 @@ export class PuzzleSession {
         return null
     }
 
-    setPieceOnBoard() {
+    /**
+     * The cell the pointer is currently over, or null when it is outside the board.
+     *
+     * Interim: this is the same coordinate arithmetic `highlightedPair` already does.
+     * P1-2 replaces both with the browser's own hit-testing via `data-cell`.
+     */
+    get hoveredCell(): [number, number] | null {
+        if (!this.hoverPoint) return null
+        const size = this.squareSize
+        const [x, y] = this.hoverPoint
+        const i = Math.floor(y / size)
+        const j = Math.floor(x / size)
+        return this.inBounds(i, j) ? [i, j] : null
+    }
+
+    /** Returns whether a piece was placed. */
+    setPieceOnBoard(): boolean {
         const selectedPiece = this.rootStore.boardsStore.selectedPiece
         const highlighted = this.highlightedPair
-        if (!highlighted || !selectedPiece) return
+        if (!highlighted || !selectedPiece) return false
 
         const [[i, j], [i2, j2]] = highlighted
-        if (this.board[i][j] != null) return
+        if (this.board[i][j] != null) return false
 
         if (selectedPiece == 1) {
             if (i > i2) { this.board[i2][j2] = 1; this.board[i][j] = 0 }
@@ -174,6 +190,29 @@ export class PuzzleSession {
             if (j > j2) { this.board[i2][j2] = 0; this.board[i][j] = 2 }
             else { this.board[i][j] = 0; this.board[i2][j2] = 2 }
         }
+        return true
+    }
+
+    /**
+     * One click on the board, routed by what is under the pointer: an occupied cell
+     * removes its domino, an empty one places the selected piece.
+     *
+     * Removal used to live on the piece overlay's own click handler (spec D4). That
+     * overlay is 16px taller than its cell and shifted up, so its hit region reached 12px
+     * into the *empty cell above* -- clicking there deleted the domino a player was
+     * trying to build on top of. The overlay is now inert and the decision is made here,
+     * from a single cell index, so a piece can never claim a click outside its own cell.
+     *
+     * Returns whether the board changed; callers use it for feedback and undo (P1-3/P1-4).
+     */
+    activateHoveredCell(): boolean {
+        const cell = this.hoveredCell
+        if (!cell) return false
+        const [i, j] = cell
+        // Occupied -- a domino half or a rock -- means this click is a removal attempt,
+        // never a placement. Rocks resolve to no pair, so clicking one does nothing.
+        if (this.board[i][j] !== null) return this.removePiece(i, j)
+        return this.setPieceOnBoard()
     }
 
     private inBounds(i: number, j: number) {

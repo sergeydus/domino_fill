@@ -311,6 +311,13 @@ wraps `<html>` for no benefit and hands the document element to a client render.
 (`Pieces.tsx:31`), removal handled on the cells instead; and `fill="none"` rather than
 `"transparent"` on the decorative outline rects.
 
+> **Measured during implementation:** of the three, only *removal handled on the cells* is
+> load-bearing for D4. Once the overlay's own click handler is gone, restoring
+> `pointer-events: auto` does not bring the defect back -- the click bubbles to the grid and is
+> routed by cell index regardless. The other two remain required, as defence in depth and as a
+> precondition for P1-2's cell-level handlers, but the E2E suite asserts them as properties
+> rather than through behaviour, because no behaviour distinguishes them today.
+
 **P0-5. Stable `CurrentBoardStore` instances, keyed by `puzzleId`.** A `Map` keyed by the opaque
 **`puzzleId`** defined below — *not* by `difficulty:level`, and not by a board hash —
 **populated eagerly in `setBoards`** (an action) and cleared there, with `currentBoard` a pure read. Populating lazily inside the computed is the trap: with an
@@ -456,7 +463,12 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
   target browser, drop drag on that browser and keep tap plus pinch. Never trade away pinch.
 
 **P1-2. Hit-test from the cell, not from arithmetic.** Put the handler on `BoardSquare` (or delegate
-via `closest('[data-cell]')`). The cell index then comes from the browser's own hit-testing —
+via `closest('[data-cell]')`).
+
+> **Landed early (row 10).** The `data-cell="i,j"` attribute itself, plus `data-piece`/`data-at`
+> on the overlay and `data-select-piece` on the tray, were added in row 10 so the browser tests
+> could address cells and pieces at all. Only the *markers* moved early -- the handler and the
+> coordinate arithmetic it replaces are still P1-2's work, unchanged. The cell index then comes from the browser's own hit-testing —
 zero coordinate math, correct at any zoom, DPR, or fractional cell size, and no `ResizeObserver`
 that can disagree with layout. The only rect read is of the one small cell you're provably over.
 This is *robustness*, not a zoom fix — the current math is already self-consistent (see §0).
@@ -593,7 +605,7 @@ whole of P0 into one oversized set.)
 | 7 | **P0-8** hover state onto `CurrentBoardStore`; clear on leave | unit |
 | 8 | **P0-9a** tutorial: rule text, skip button, `fixed inset-0`, sizing | unit + manual |
 | 9 | **P1-9** Playwright harness + `test:e2e` script (incl. the tutorial check below) | — |
-| 10 | **P0-4** piece-overlay hit regions | E2E |
+| 10 | **P0-4** piece-overlay hit regions (+ `data-cell`/`data-piece` test hooks, see P1-2 note) | E2E |
 | 11 | **P0-3** responsive layout: gutter, `min-*: 0`, `clamp()` font, shell formula | E2E (geometry/alignment/overflow) |
 | 12 | **P1-2** move hit-testing onto the cells | E2E |
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E |

@@ -57,7 +57,7 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
         return {}
     }, [i, j, size])
     return (
-        <div className="relative" onClick={onClick} key={i} style={{ ...style, ...cornerStyle }}>
+        <div className="relative" data-cell={`${i},${j}`} onClick={onClick} key={i} style={{ ...style, ...cornerStyle }}>
             {/* {isHighlighted && <div className="absolute top-0 left-0 right-0 bottom-0 z-1 bg-white opacity-70 pointer-events-none"></div>} */}
             {/* <div>{`i:${i},j:${j}`}({currentBoard.board[i][j]})</div> */}
         </div>)

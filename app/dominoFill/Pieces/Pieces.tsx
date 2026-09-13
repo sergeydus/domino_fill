@@ -19,39 +19,40 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
             if (board[i][j] === -1) rocks.push([i, j])
         }
     }
-    const onclick = (i: number, j: number) => {
-        // console.log('remove click1')
-        return (e: React.MouseEvent) => {
-            // console.log('remove click2', { i, j });
-            boardsStore.removePiece(i, j)
-            e.stopPropagation()
-        }
-    }
-
-    return <div className="absolute z-20">
+    /*
+     * The overlay is purely decorative and takes no pointer events (spec P0-4 / D4).
+     *
+     * Each piece's SVG is 16px taller than its cell and shifted up by 16px, so its box
+     * overhangs the cell above it by 12px. While this layer was interactive, that overhang
+     * hit-tested -- `fill="transparent"` is a paint value, not `none` -- and its handler
+     * removed the domino. Clicking the bottom strip of an empty cell therefore deleted the
+     * piece below it instead of placing one.
+     *
+     * Removal now happens on the cell underneath, in `PuzzleSession.activateHoveredCell`,
+     * where the cell index decides what the click means.
+     */
+    return <div className="absolute z-20 pointer-events-none">
         {/* <AnimatePresence> */}
         {ones.map(([i, j]) =>
-            <motion.div key={`one_${i},${j}`} className="absolute cursor-pointer"
+            <motion.div key={`one_${i},${j}`} className="absolute" data-piece="one" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
-                <DominoPieceOne onClick={onclick(i, j)}
+                <DominoPieceOne
                     boardsStore={boardsStore}
-                    // style={{ top: `${i * size}px`, left: `${j * size}px` }}
-                    className="absolute z-30 cursor-pointer"
+                    className="absolute z-30"
                 />
             </motion.div>
         )}
         {twos.map(([i, j]) =>
-            <motion.div key={`two_${i},${j}`} className="absolute cursor-pointer"
+            <motion.div key={`two_${i},${j}`} className="absolute" data-piece="two" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
-                <DominoPieceTwo onClick={onclick(i, j)}
+                <DominoPieceTwo
                     boardsStore={boardsStore}
                     key={`${i},${j}`}
-
                 />
             </motion.div>
         )}
         {rocks.map(([i, j]) =>
-            <div key={`${i},${j}`} className="absolute"
+            <div key={`${i},${j}`} className="absolute" data-piece="rock" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }}>
                 <Rock boardsStore={boardsStore}
                     key={`rock_${i},${j}`}
