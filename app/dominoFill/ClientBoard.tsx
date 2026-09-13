@@ -6,7 +6,7 @@ import Hover from "./Hover";
 import Pieces from "./Pieces/Pieces";
 import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
-import { GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
+import { CellHover, GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
 
 type Props = {
     boardsStore: PuzzleSession
@@ -47,11 +47,36 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         ['--grid-border' as keyof CSSProperties]: `${BORDER_SIDE_PX}px`,
     } as CSSProperties
 
+    /*
+     * Which cell the pointer is over, asked of the browser rather than worked out (P1-2).
+     *
+     * `closest('[data-cell]')` from the event target means the index comes from the same
+     * hit-test that decided where the click landed -- no dividing a coordinate by the
+     * store's idea of the cell size, and nothing that can disagree with the layout at a
+     * fractional cell size or a stale measurement. The overlays above the cells are
+     * `pointer-events: none`, so the target is the cell itself.
+     *
+     * The one rect read is of that single cell, and only to say which half of it the
+     * pointer is in -- which way the domino points, never which cell it is in.
+     */
+    const readHover = (e: React.MouseEvent<HTMLDivElement>): CellHover | null => {
+        const cell = (e.target as Element | null)?.closest?.('[data-cell]')
+        if (!cell) return null
+
+        const [i, j] = (cell.getAttribute('data-cell') ?? '').split(',').map(Number)
+        if (!Number.isInteger(i) || !Number.isInteger(j)) return null
+
+        const rect = cell.getBoundingClientRect()
+        // A zero rect means there is no layout to read -- jsdom, or a hidden board. The
+        // cell is still known; only the half is not, so treat the pointer as centred
+        // rather than discarding a hover the browser is certain about.
+        const fx = rect.width > 0 ? (e.clientX - rect.left) / rect.width : 0.5
+        const fy = rect.height > 0 ? (e.clientY - rect.top) / rect.height : 0.5
+        return { i, j, fx, fy }
+    }
+
     const onmousemove = (e: React.MouseEvent<HTMLDivElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left; //x position within the element.
-        const y = e.clientY - rect.top;  //y position within the element.
-        boardsStore.setHoverPoint([x, y])
+        boardsStore.setHover(readHover(e))
     }
     // Without this the highlight stays frozen wherever the pointer left the grid.
     const onmouseleave = () => boardsStore.clearHover()

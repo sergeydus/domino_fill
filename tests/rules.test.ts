@@ -29,8 +29,9 @@ const makeBoard = (over: Partial<StoredPuzzle> = {}) =>
 
 /** Point a session's hover at cell (i,j); `fx`/`fy` are fractions within the cell. */
 const hover = (s: PuzzleSession, i: number, j: number, fx = 0.5, fy = 0.5) => {
-    const c = s.squareSize // derived, so sizing changes cannot silently shift these points
-    s.setHoverPoint([j * c + c * fx, i * c + c * fy])
+    // No coordinates any more: the browser resolves the cell, so the store is told the
+    // cell directly (spec P1-2). These points can no longer drift with the cell size.
+    s.setHover({ i, j, fx, fy })
 }
 
 beforeEach(() => {
@@ -126,7 +127,7 @@ describe('setPieceOnBoard', () => {
 
     it('rejects a placement with no hover', () => {
         const b = makeBoard()
-        b.setHoverPoint(null)
+        b.setHover(null)
         b.setPieceOnBoard()
         expect(b.board.flat().every(c => c === null)).toBe(true)
     })

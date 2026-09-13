@@ -123,9 +123,8 @@ describe('source immutability', () => {
         )!
         expect(cell).toBeTruthy()
 
-        const size = session.squareSize
         root.boardsStore.setSelectedPiece(1)
-        session.setHoverPoint([cell[1] * size + size / 2, cell[0] * size + size * 0.9])
+        session.setHover({ i: cell[0], j: cell[1], fx: 0.5, fy: 0.9 })
         session.setPieceOnBoard()
         session.setCompleted(true)
 

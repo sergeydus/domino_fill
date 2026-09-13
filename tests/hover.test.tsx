@@ -10,10 +10,11 @@ import ClientBoard from '@/app/dominoFill/ClientBoard'
 
 /**
  * P0-8: hover belongs to the board being hovered, not to a global slot.
+ * P1-2: the cell comes from the browser's hit-test, not from coordinate arithmetic.
  *
  * Two boards can be mounted at once -- the tutorial renders its own 2x2 over the live
- * board -- and a shared slot means the tutorial's pointer drives a phantom highlight on the
- * board behind it, each interpreting the same coordinates through its own squareSize.
+ * board -- and a shared slot means the tutorial's pointer drives a phantom highlight on
+ * the board behind it.
  */
 
 let root: RootStore
@@ -25,41 +26,53 @@ const session = (n = 6, id = 'hover-test') => new PuzzleSession(definitionFrom({
     boardVerticalNumbers: Array(n).fill(3).join(','),
 }), root)
 
+const centre = (i: number, j: number) => ({ i, j, fx: 0.5, fy: 0.5 })
+const lowerHalf = (i: number, j: number) => ({ i, j, fx: 0.5, fy: 0.9 })
+
 beforeEach(() => { root = new RootStore() })
 afterEach(cleanup)
 
 describe('hover is owned by the session', () => {
     it('starts empty and highlights nothing', () => {
         const s = session()
-        expect(s.hoverPoint).toBeNull()
+        expect(s.hover).toBeNull()
         expect(s.highlightedPair).toBeNull()
     })
 
     it('highlights the pair under the pointer', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
-        const c = s.squareSize
-        s.setHoverPoint([2 * c + c / 2, 2 * c + c * 0.9])
+        s.setHover(lowerHalf(2, 2))
 
         expect(s.highlightedPair).toEqual([[2, 2], [3, 2]])
     })
 
+    it('the half of the cell decides which way the domino points', () => {
+        const s = session()
+        runInAction(() => { root.boardsStore.setSelectedPiece(1) })
+
+        s.setHover({ i: 2, j: 2, fx: 0.5, fy: 0.9 })
+        expect(s.highlightedPair).toEqual([[2, 2], [3, 2]])
+
+        s.setHover({ i: 2, j: 2, fx: 0.5, fy: 0.1 })
+        expect(s.highlightedPair).toEqual([[2, 2], [1, 2]])
+    })
+
     it('clearHover drops the highlight', () => {
         const s = session()
-        const c = s.squareSize
-        s.setHoverPoint([2 * c + c / 2, 2 * c + c * 0.9])
-        expect(s.highlightedPair).not.toBeNull()
+        s.setHover(lowerHalf(2, 2))
+        expect(s.hover).not.toBeNull()
 
         s.clearHover()
-        expect(s.hoverPoint).toBeNull()
+        expect(s.hover).toBeNull()
         expect(s.highlightedPair).toBeNull()
     })
 
     it('reset also clears the hover', () => {
         const s = session()
-        s.setHoverPoint([10, 10])
+        s.setHover(centre(1, 1))
         runInAction(() => { s.reset() })
-        expect(s.hoverPoint).toBeNull()
+        expect(s.hover).toBeNull()
     })
 })
 
@@ -69,24 +82,22 @@ describe('two mounted boards do not share hover', () => {
         const tutorial = session(2, 'tutorial')
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
 
-        // A point inside the small tutorial board. Under a shared global slot the 6x6
-        // board would read the same coordinates through its own squareSize and light up.
-        tutorial.setHoverPoint([tutorial.squareSize / 2, tutorial.squareSize * 0.9])
+        tutorial.setHover(lowerHalf(0, 0))
 
         expect(tutorial.highlightedPair).not.toBeNull()
-        expect(main.hoverPoint).toBeNull()
+        expect(main.hover).toBeNull()
         expect(main.highlightedPair).toBeNull()
     })
 
     it('clearing one board does not clear the other', () => {
         const a = session(6, 'a')
         const b = session(6, 'b')
-        a.setHoverPoint([10, 10])
-        b.setHoverPoint([20, 20])
+        a.setHover(centre(1, 1))
+        b.setHover(centre(2, 2))
 
         a.clearHover()
-        expect(a.hoverPoint).toBeNull()
-        expect(b.hoverPoint).toEqual([20, 20])
+        expect(a.hover).toBeNull()
+        expect(b.hoveredCell).toEqual([2, 2])
     })
 
     it('the global SizeStore no longer carries hover state', () => {
@@ -102,43 +113,93 @@ describe('ClientBoard pointer handling', () => {
                 <ClientBoard boardsStore={s} />
             </StoreContext.Provider>
         )
-        // The grid is the element carrying the move/leave handlers.
         const grid = view.container.querySelector('.relative') as HTMLElement
         expect(grid).toBeTruthy()
         return { ...view, grid }
     }
 
-    it('records the pointer position on move', () => {
+    const cell = (view: { container: HTMLElement }, i: number, j: number) =>
+        view.container.querySelector(`[data-cell="${i},${j}"]`) as HTMLElement
+
+    /**
+     * Give one cell a real rect. jsdom has no layout, so every `getBoundingClientRect()`
+     * is zeros; the handler still resolves the cell from the hit-test, and only the
+     * half-of-the-cell fraction needs a box.
+     */
+    const withRect = (el: HTMLElement, rect: Partial<DOMRect>) => {
+        el.getBoundingClientRect = () => ({
+            x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0,
+            toJSON: () => ({}), ...rect,
+        }) as DOMRect
+    }
+
+    it('takes the cell from the event target, not from coordinates', () => {
+        const s = session()
+        const view = renderBoard(s)
+
+        // Dispatched at the cell itself: this is what the browser's hit-test produces,
+        // and the index is read back off the element rather than computed.
+        fireEvent.mouseMove(cell(view, 4, 3), { clientX: 0, clientY: 0 })
+        expect(s.hoveredCell).toEqual([4, 3])
+    })
+
+    it('reads the half of the cell from that one cell rect', () => {
+        const s = session()
+        const view = renderBoard(s)
+        runInAction(() => { root.boardsStore.setSelectedPiece(1) })
+
+        const target = cell(view, 2, 2)
+        withRect(target, { left: 100, top: 200, width: 40, height: 40 })
+
+        // 36px down a 40px cell: the lower half, so the domino points down.
+        fireEvent.mouseMove(target, { clientX: 120, clientY: 236 })
+        expect(s.highlightedPair).toEqual([[2, 2], [3, 2]])
+
+        // 4px down: the upper half, so it points up instead.
+        fireEvent.mouseMove(target, { clientX: 120, clientY: 204 })
+        expect(s.highlightedPair).toEqual([[2, 2], [1, 2]])
+    })
+
+    it('treats a cell with no layout as hovered at its centre', () => {
+        // jsdom reports a zero rect. The cell is still known for certain -- only the half
+        // is not -- so the hover survives rather than being discarded.
+        const s = session()
+        const view = renderBoard(s)
+
+        fireEvent.mouseMove(cell(view, 1, 1), { clientX: 0, clientY: 0 })
+        expect(s.hover).toEqual({ i: 1, j: 1, fx: 0.5, fy: 0.5 })
+    })
+
+    it('ignores a move that is not over any cell', () => {
         const s = session()
         const { grid } = renderBoard(s)
 
-        // jsdom reports a zero rect, so clientX/clientY land directly in board coordinates.
-        fireEvent.mouseMove(grid, { clientX: 150, clientY: 220 })
-        expect(s.hoverPoint).toEqual([150, 220])
+        fireEvent.mouseMove(grid, { clientX: 5, clientY: 5 })
+        expect(s.hover).toBeNull()
     })
 
     it('clears the hover when the pointer leaves the grid', () => {
         const s = session()
-        const { grid } = renderBoard(s)
+        const view = renderBoard(s)
 
-        fireEvent.mouseMove(grid, { clientX: 150, clientY: 220 })
-        expect(s.hoverPoint).not.toBeNull()
+        fireEvent.mouseMove(cell(view, 2, 2), { clientX: 0, clientY: 0 })
+        expect(s.hover).not.toBeNull()
 
-        fireEvent.mouseLeave(grid)
-        expect(s.hoverPoint).toBeNull()
+        fireEvent.mouseLeave(view.grid)
+        expect(s.hover).toBeNull()
         expect(s.highlightedPair).toBeNull()
     })
 
     it('leaving one board does not disturb another session', () => {
         const shown = session(6, 'shown')
         const other = session(6, 'other')
-        other.setHoverPoint([5, 5])
+        other.setHover(centre(5, 5))
 
-        const { grid } = renderBoard(shown)
-        fireEvent.mouseMove(grid, { clientX: 40, clientY: 40 })
-        fireEvent.mouseLeave(grid)
+        const view = renderBoard(shown)
+        fireEvent.mouseMove(cell(view, 0, 0), { clientX: 0, clientY: 0 })
+        fireEvent.mouseLeave(view.grid)
 
-        expect(shown.hoverPoint).toBeNull()
-        expect(other.hoverPoint).toEqual([5, 5])
+        expect(shown.hover).toBeNull()
+        expect(other.hoveredCell).toEqual([5, 5])
     })
 })

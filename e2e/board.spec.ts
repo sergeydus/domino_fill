@@ -181,3 +181,165 @@ test('the piece tray is still selectable', async ({ page }) => {
     await page.mouse.click(cell.x + cell.width * 0.75, cell.y + cell.height / 2)
     await expect(page.locator(`[data-piece="two"][data-at="${i},${j + 1}"]`)).toBeVisible()
 })
+
+/**
+ * P1-2: the cell index comes from the browser's hit-test, not from arithmetic.
+ *
+ * The old code divided a pointer offset by the store's `squareSize`. That was
+ * self-consistent -- spec §0 overturned the claim that zoom broke it -- but it depended on
+ * the store and the layout agreeing about the cell size. These tests break that agreement
+ * deliberately and check that clicks still land where they are aimed.
+ */
+test.describe('hit-testing does not depend on the store agreeing with the layout', () => {
+    test('a click lands in the cell it is over, under a transform', async ({ page }) => {
+        const { i, j } = await freeColumnRun(page, 1)
+
+        // A scale the store knows nothing about: every cell is now 60% of the size the
+        // store thinks it is, so any offset-divided-by-squareSize would resolve to a cell
+        // well away from the pointer. The browser's own hit-test is unaffected.
+        await page.evaluate(() => {
+            const shell = document.querySelector('[data-board-shell]') as HTMLElement
+            shell.style.transformOrigin = 'top left'
+            shell.style.transform = 'scale(0.6)'
+        })
+
+        const cell = await cellBox(page, i, j)
+        await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+    })
+
+    test('a click lands in the cell it is over, when cells are not uniform', async ({ page }) => {
+        // `above: 2` guarantees the cell is at least two rows below the row we distort.
+        const { i, j } = await freeColumnRun(page, 2)
+
+        // Cells the store believes are all one size, laid out at two different sizes. The
+        // old arithmetic assumed uniformity -- one `squareSize` for the whole grid -- so
+        // every row below the distorted one resolved short. Nothing about the browser's
+        // hit-test cares.
+        //
+        // (A *translation* would not discriminate here, and the test that tried it has
+        // been removed: the old code measured the pointer against the grid's own rect,
+        // which moves with the grid, so both approaches survive it.)
+        await page.evaluate(() => {
+            const first = document.querySelector('[data-cell="0,0"]') as HTMLElement
+            // Comfortably more than two cells taller: a distortion smaller than one cell
+            // still rounds to the same row under the old arithmetic and proves nothing.
+            const tall = first.getBoundingClientRect().height * 3
+            for (const el of document.querySelectorAll('[data-cell^="0,"]')) {
+                (el as HTMLElement).style.height = `${tall}px`
+            }
+        })
+
+        const cell = await cellBox(page, i, j)
+        await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+    })
+
+    test('every free cell resolves to itself', async ({ page }) => {
+        // A sweep rather than a sample: an off-by-one in the mapping would show up at the
+        // board's edges first, and only at the edges.
+        const n = Math.sqrt(await boardSize(page))
+        const taken = await occupied(page)
+
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                if (taken.has(`${i},${j}`)) continue
+                const cell = await cellBox(page, i, j)
+                await page.mouse.move(cell.x + cell.width / 2, cell.y + cell.height / 2)
+
+                // The highlight is drawn over the pair the pointer resolves to, so its
+                // top-left corner names the cell the board thinks is under the pointer.
+                const resolved = await page.evaluate(() => {
+                    const hover = document.querySelector('.z-10.pointer-events-none') as HTMLElement
+                    if (!hover) return null
+                    const grid = document.querySelector('[data-cell="0,0"]')!.parentElement!
+                    const h = hover.getBoundingClientRect()
+                    const g = grid.getBoundingClientRect()
+                    const cell = document.querySelector('[data-cell="0,0"]')!.getBoundingClientRect()
+                    return {
+                        i: Math.round((h.top - g.top) / cell.height),
+                        j: Math.round((h.left - g.left) / cell.width),
+                    }
+                })
+
+                if (resolved === null) continue // no legal placement from this cell
+                // The highlight covers the pair, so its origin is this cell or the
+                // neighbour above/left of it.
+                expect(Math.abs(resolved.i - i) + Math.abs(resolved.j - j), `cell ${i},${j}`)
+                    .toBeLessThanOrEqual(1)
+            }
+        }
+    })
+})
+
+test('the piece appears where the pointer was, not merely where the store says', async ({ page }) => {
+    /*
+     * Every other test here reads the cell index and the piece index from the same
+     * `data-*` labels, so a labelling error is invisible to them: transposing `data-cell`
+     * to `j,i` leaves the whole suite green while pieces land in the wrong place on
+     * screen. Verified -- that mutation passed all nine.
+     *
+     * This one crosses from labels to pixels. It needs a cell off the diagonal, or a
+     * transposition maps it to itself and proves nothing again.
+     */
+    const n = Math.sqrt(await boardSize(page))
+    const taken = await occupied(page)
+    let target: { i: number, j: number } | null = null
+    for (let i = 0; i + 1 < n && !target; i++) {
+        for (let j = 0; j < n && !target; j++) {
+            if (i !== j && !taken.has(`${i},${j}`) && !taken.has(`${i + 1},${j}`)) target = { i, j }
+        }
+    }
+    if (!target) throw new Error('no free off-diagonal cell; the fixture board changed')
+    const { i, j } = target
+
+    const cell = await cellBox(page, i, j)
+    await page.mouse.click(cell.x + cell.width / 2, cell.y + cell.height * 0.75)
+
+    await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+
+    /*
+     * Both boxes read in the same frame, and polled.
+     *
+     * Polled because pieces animate in from an offset, and a mid-flight reading is ~32px
+     * from where it lands. In the same frame because the first version measured the cell
+     * before the click and the piece after: under parallel load the board had not finished
+     * settling between the two, and the comparison was across layouts, which showed up as
+     * a sub-pixel failure that would not reproduce in isolation.
+     */
+    /*
+     * Measured only once the entry animation is at rest, and both boxes in the same frame.
+     *
+     * Pieces animate in from an offset with a slight rotation, so a mid-flight reading is
+     * ~32px from where the piece lands, and the tail of it leaves the box a pixel or so
+     * out -- which failed about one run in four while passing in isolation. Waiting for
+     * the transform to settle removes the noise instead of widening the tolerance until
+     * the noise fits. An earlier version also measured the cell before the click and the
+     * piece after, comparing across two layouts.
+     */
+    const atRest = (t: string) => t === 'none' || t === 'matrix(1, 0, 0, 1, 0, 0)'
+
+    const offsets = async () => page.evaluate(([row, col]) => {
+        const cellEl = document.querySelector(`[data-cell="${row},${col}"]`)
+        const pieceEl = document.querySelector(`[data-piece="one"][data-at="${row},${col}"]`)
+        if (!cellEl || !pieceEl) return null
+        const c = cellEl.getBoundingClientRect()
+        const p = pieceEl.getBoundingClientRect()
+        return {
+            transform: getComputedStyle(pieceEl).transform,
+            left: Math.abs(p.left - c.left),
+            top: p.top - c.top,
+            coversCell: p.bottom - c.bottom,
+        }
+    }, [i, j])
+
+    await expect.poll(async () => atRest((await offsets())?.transform ?? '')).toBe(true)
+
+    const o = (await offsets())!
+    // The upright piece is drawn from this cell's top-left corner and is two cells tall.
+    expect(o.left, 'piece left vs cell left').toBeLessThanOrEqual(1)
+    expect(o.top, 'piece top vs cell top').toBeLessThanOrEqual(1)
+    expect(o.coversCell, 'piece covers the cell').toBeGreaterThanOrEqual(0)
+})

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
-import { PuzzleSession } from '@/app/stores/PuzzleSession'
+import { CellHover, PuzzleSession } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 
 /**
@@ -32,16 +32,14 @@ const session = (rocks: [number, number][] = []) => {
     }), root)
 }
 
-/** Centre of cell (i,j), in board coordinates. */
-const centre = (s: PuzzleSession, i: number, j: number): [number, number] =>
-    [j * s.squareSize + s.squareSize / 2, i * s.squareSize + s.squareSize / 2]
+/** Centre of cell (i,j). */
+const centre = (i: number, j: number): CellHover => ({ i, j, fx: 0.5, fy: 0.5 })
 
-/** A point in the lower half of cell (i,j): placement then prefers the cell below. */
-const lowerHalf = (s: PuzzleSession, i: number, j: number): [number, number] =>
-    [j * s.squareSize + s.squareSize / 2, i * s.squareSize + s.squareSize * 0.9]
+/** The lower half of cell (i,j): placement then prefers the cell below. */
+const lowerHalf = (i: number, j: number): CellHover => ({ i, j, fx: 0.5, fy: 0.9 })
 
-const clickAt = (s: PuzzleSession, point: [number, number]) => {
-    s.setHoverPoint(point)
+const clickAt = (s: PuzzleSession, hover: CellHover | null) => {
+    s.setHover(hover)
     return runInAction(() => s.activateHoveredCell())
 }
 
@@ -52,35 +50,48 @@ describe('hoveredCell', () => {
         expect(session().hoveredCell).toBeNull()
     })
 
-    it('resolves a point to the cell containing it', () => {
+    it('reports the cell the browser resolved', () => {
         const s = session()
-        s.setHoverPoint(centre(s, 3, 2))
+        s.setHover(centre(3, 2))
         expect(s.hoveredCell).toEqual([3, 2])
     })
 
-    it('resolves the first and last cells at their extremes', () => {
+    it('reports the first and last cells', () => {
         const s = session()
-        const c = s.squareSize
 
-        s.setHoverPoint([0, 0])
+        s.setHover(centre(0, 0))
         expect(s.hoveredCell).toEqual([0, 0])
 
-        s.setHoverPoint([N * c - 1, N * c - 1])
+        s.setHover(centre(N - 1, N - 1))
         expect(s.hoveredCell).toEqual([N - 1, N - 1])
     })
 
-    it('is null outside the grid', () => {
+    it('refuses an index that is not a cell of this board', () => {
+        // The index arrives from a DOM attribute, so the store validates it rather than
+        // trusting the caller: a stale node, or the wrong board's markup, is not a hover.
         const s = session()
-        const c = s.squareSize
 
-        s.setHoverPoint([-1, 10])
+        s.setHover(centre(-1, 0))
         expect(s.hoveredCell).toBeNull()
 
-        s.setHoverPoint([N * c + 1, 10])
+        s.setHover(centre(0, N))
         expect(s.hoveredCell).toBeNull()
 
-        s.setHoverPoint([10, N * c + 1])
+        s.setHover(centre(N, 0))
         expect(s.hoveredCell).toBeNull()
+
+        s.setHover({ i: 1.5, j: 0, fx: 0.5, fy: 0.5 })
+        expect(s.hoveredCell).toBeNull()
+    })
+
+    it('does not depend on the cell size at all', () => {
+        // The point of P1-2: resizing the board cannot move the hit-test, because there
+        // is no second calculation to fall out of step with the layout.
+        const s = session()
+        s.setHover(centre(3, 2))
+        s.setAvailableBox({ width: 200, height: 200 })
+
+        expect(s.hoveredCell).toEqual([3, 2])
     })
 })
 
@@ -89,7 +100,7 @@ describe('a click on an empty cell places', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
 
-        expect(clickAt(s, lowerHalf(s, 2, 2))).toBe(true)
+        expect(clickAt(s, lowerHalf(2, 2))).toBe(true)
         expect(s.board[2][2]).toBe(1)
         expect(s.board[3][2]).toBe(0)
     })
@@ -99,7 +110,7 @@ describe('a click on an empty cell places', () => {
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
         const before = JSON.stringify(s.board)
 
-        expect(clickAt(s, [-5, -5])).toBe(false)
+        expect(clickAt(s, centre(-5, -5))).toBe(false)
         expect(JSON.stringify(s.board)).toBe(before)
     })
 })
@@ -108,9 +119,9 @@ describe('a click on an occupied cell removes, and never places', () => {
     it('removes the domino from the half carrying the pips', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
-        clickAt(s, lowerHalf(s, 2, 2))
+        clickAt(s, lowerHalf(2, 2))
 
-        expect(clickAt(s, centre(s, 2, 2))).toBe(true)
+        expect(clickAt(s, centre(2, 2))).toBe(true)
         expect(s.board[2][2]).toBeNull()
         expect(s.board[3][2]).toBeNull()
     })
@@ -118,11 +129,11 @@ describe('a click on an occupied cell removes, and never places', () => {
     it('removes the domino from its other half too', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
-        clickAt(s, lowerHalf(s, 2, 2))
+        clickAt(s, lowerHalf(2, 2))
 
         // (3,2) holds the 0. Clicking it must remove the whole domino, not attempt a
         // placement -- an occupied cell is a removal target whatever its value.
-        expect(clickAt(s, centre(s, 3, 2))).toBe(true)
+        expect(clickAt(s, centre(3, 2))).toBe(true)
         expect(s.board[2][2]).toBeNull()
         expect(s.board[3][2]).toBeNull()
     })
@@ -131,7 +142,7 @@ describe('a click on an occupied cell removes, and never places', () => {
         const s = session([[1, 1]])
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
 
-        expect(clickAt(s, centre(s, 1, 1))).toBe(false)
+        expect(clickAt(s, centre(1, 1))).toBe(false)
         expect(s.board[1][1]).toBe(-1)
     })
 
@@ -145,7 +156,7 @@ describe('a click on an occupied cell removes, and never places', () => {
         s.board[2][3] = 2
         const before = JSON.stringify(s.board)
 
-        expect(clickAt(s, centre(s, 2, 2))).toBe(false)
+        expect(clickAt(s, centre(2, 2))).toBe(false)
         expect(JSON.stringify(s.board)).toBe(before)
     })
 })
@@ -155,10 +166,10 @@ describe('setPieceOnBoard reports whether it placed', () => {
         const s = session()
         runInAction(() => { root.boardsStore.setSelectedPiece(1) })
 
-        s.setHoverPoint(lowerHalf(s, 4, 4))
+        s.setHover(lowerHalf(4, 4))
         expect(runInAction(() => s.setPieceOnBoard())).toBe(true)
 
-        s.setHoverPoint(null)
+        s.setHover(null)
         expect(runInAction(() => s.setPieceOnBoard())).toBe(false)
     })
 })

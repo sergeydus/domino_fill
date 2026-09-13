@@ -509,10 +509,33 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 **P1-2. Hit-test from the cell, not from arithmetic.** Put the handler on `BoardSquare` (or delegate
 via `closest('[data-cell]')`).
 
-> **Landed early (row 10).** The `data-cell="i,j"` attribute itself, plus `data-piece`/`data-at`
-> on the overlay and `data-select-piece` on the tray, were added in row 10 so the browser tests
-> could address cells and pieces at all. Only the *markers* moved early -- the handler and the
-> coordinate arithmetic it replaces are still P1-2's work, unchanged. The cell index then comes from the browser's own hit-testing —
+> **Markers landed early in row 10; implemented in row 12.** `data-cell="i,j"`, plus
+> `data-piece`/`data-at` on the overlay and `data-select-piece` on the tray, were added in row 10
+> so the browser tests could address cells and pieces at all.
+>
+> The store now holds a `CellHover` -- a cell index plus `fx`/`fy`, fractions of that one cell --
+> instead of a pixel offset into the grid. `ClientBoard` resolves the cell with
+> `closest('[data-cell]')` from the event target, and reads exactly one rect, that cell's, purely
+> to decide which half of it the pointer is in. `squareSize` no longer takes part in hit-testing
+> at all.
+>
+> Two clarifications measured while implementing:
+>
+> - **"No `ResizeObserver` that can disagree with layout" is not what changed.** P0-3's sizing
+>   still uses one, and still must. What changed is that hit-testing no longer consults it: a
+>   stale or wrong measurement now makes the board the wrong *size*, which is visible, rather
+>   than putting clicks in the wrong *cell*, which is not.
+> - **A translation does not discriminate between the two approaches.** The old code measured the
+>   pointer against the grid's own rect, which moves with the grid, so it survives
+>   `translate(...)` unchanged. The browser tests use a `scale()` and a non-uniform row instead --
+>   and the distortion has to exceed one cell, or the old arithmetic rounds to the same row and
+>   the test proves nothing.
+>
+> One gap found and closed while mutation-testing: every test in the suite read the cell index and
+> the piece index from the same `data-*` labels, so transposing `data-cell` to `j,i` left all nine
+> green while pieces rendered in the wrong place on screen. There is now one test that crosses
+> from labels to pixels -- the placed piece must overlap the box of the cell that was clicked --
+> using an off-diagonal cell, since a transposition maps the diagonal to itself. The cell index then comes from the browser's own hit-testing —
 zero coordinate math, correct at any zoom, DPR, or fractional cell size, and no `ResizeObserver`
 that can disagree with layout. The only rect read is of the one small cell you're provably over.
 This is *robustness*, not a zoom fix — the current math is already self-consistent (see §0).
@@ -651,7 +674,7 @@ whole of P0 into one oversized set.)
 | 9 | **P1-9** Playwright harness + `test:e2e` script (incl. the tutorial check below) | — |
 | 10 | **P0-4** piece-overlay hit regions (+ `data-cell`/`data-piece` test hooks, see P1-2 note) | E2E |
 | 11 | **P0-3** responsive layout: gutter, `min-*: 0`, cell-derived font, shell formula, both-axis budget | E2E (geometry/alignment/overflow) |
-| 12 | **P1-2** move hit-testing onto the cells | E2E |
+| 12 | **P1-2** move hit-testing onto the cells (`CellHover`, `closest('[data-cell]')`) | E2E |
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E |
 | 14 | **P1-3** undo + reset | unit (undo tests land here) |
 | 15 | **P1-4** completion feedback | E2E |

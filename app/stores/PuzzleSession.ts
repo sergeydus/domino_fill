@@ -44,6 +44,30 @@ export const LABEL_FONT_FRACTION = 0.5
 export const MIN_CELL_PX = 38
 
 /**
+ * Where the pointer is, as a cell plus a position inside it (spec P1-2).
+ *
+ * The cell index comes from the browser's own hit-testing -- the pointer's target, via
+ * `data-cell` -- rather than from dividing a coordinate by the store's idea of the cell
+ * size. `fx`/`fy` are fractions of that one cell, 0 at its left/top edge and 1 at its
+ * right/bottom, and only ever decide *which way* a domino points.
+ *
+ * The arithmetic this replaces was self-consistent (spec §0 overturned the claim that zoom
+ * broke it) but it depended on the store and the layout agreeing about the cell size. They
+ * agree today because the cells are laid out at exactly `squareSize`. This makes that
+ * agreement stop being load-bearing: fractional cells, a stale measurement, or any future
+ * CSS-driven sizing cannot put the hit-test and the layout out of step, because there is
+ * no second calculation to disagree with.
+ */
+export type CellHover = {
+    i: number
+    j: number
+    /** 0..1 across the cell, left to right. */
+    fx: number
+    /** 0..1 down the cell, top to bottom. */
+    fy: number
+}
+
+/**
  * The mutable half of a puzzle: one player's progress on one `PuzzleDefinition`.
  *
  * Sessions are long-lived and stable — `LevelStore` keeps one per `puzzleId` so that
@@ -57,15 +81,14 @@ export class PuzzleSession {
     board: (number | null)[][]
     completed: boolean = false
     /**
-     * Pointer position within this board's grid, in CSS px, or null when the pointer is
-     * not over it.
+     * The cell the pointer is over and where inside it, or null when it is not over this
+     * board at all.
      *
      * Per-session rather than global: two boards can be mounted at once (the tutorial
      * renders its own 2x2 over the live board), and a shared slot means the tutorial's
-     * pointer drives a phantom highlight on the board behind it -- each interpreting the
-     * same coordinates through its own squareSize.
+     * pointer drives a phantom highlight on the board behind it.
      */
-    hoverPoint: [number, number] | null = null
+    hover: CellHover | null = null
     /**
      * Ceiling on the shell size this board may occupy, in CSS px, on both axes.
      * The tutorial renders inside a modal and must not claim the full board width.
@@ -94,20 +117,22 @@ export class PuzzleSession {
 
     get puzzleId() { return this.definition.puzzleId }
 
-    setHoverPoint(point: [number, number] | null) {
-        this.hoverPoint = point
+    setHover(hover: CellHover | null) {
+        // Guard here rather than at the call site: an index that is not a cell of this
+        // board is no hover at all, however it was arrived at.
+        this.hover = hover && this.inBounds(hover.i, hover.j) ? hover : null
     }
 
     /** Called when the pointer leaves this board; without it the highlight sticks. */
     clearHover() {
-        this.hoverPoint = null
+        this.hover = null
     }
 
     /** Discard all progress and start this puzzle again from its definition. */
     reset() {
         this.board = cloneInitialBoard(this.definition)
         this.completed = false
-        this.hoverPoint = null
+        this.hover = null
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -208,56 +233,46 @@ export class PuzzleSession {
 
     /** The pair of cells the currently selected piece would occupy, or null. */
     get highlightedPair(): [[number, number], [number, number]] | null {
-        const hoverCords = this.hoverPoint
-        if (!hoverCords) return null
+        const hover = this.hover
+        if (!hover) return null
         const selectedPiece = this.rootStore.boardsStore.selectedPiece
         if (!selectedPiece) return null
 
-        const size = this.squareSize
-        const [x, y] = hoverCords
-        const i = Math.floor(y / size)
-        const j = Math.floor(x / size)
+        const { i, j, fx, fy } = hover
         const boardSize = this.board.length
+        if (!this.inBounds(i, j) || this.board[i][j] != null) return null
 
-        if ((i < 0 || j < 0) || (i >= boardSize || j >= boardSize) || this.board[i][j] != null) {
-            return null
-        }
+        // The half of the cell the pointer is in picks which neighbour to prefer; the
+        // other one is the fallback when that neighbour is taken or off the board.
         if (selectedPiece == 1) {
-            const isAboveHalf = y % size > (size / 2)
-            if (isAboveHalf) {
-                if (i + 1 < boardSize && this.board[i + 1][j] == null) return [[i, j], [i + 1, j]]
-                if (i - 1 >= 0 && this.board[i - 1][j] == null) return [[i, j], [i - 1, j]]
-            } else {
-                if (i - 1 >= 0 && this.board[i - 1][j] == null) return [[i, j], [i - 1, j]]
-                if (i + 1 < boardSize && this.board[i + 1][j] == null) return [[i, j], [i + 1, j]]
+            const prefersBelow = fy > 0.5
+            const order = prefersBelow ? [i + 1, i - 1] : [i - 1, i + 1]
+            for (const other of order) {
+                if (other >= 0 && other < boardSize && this.board[other][j] == null) {
+                    return [[i, j], [other, j]]
+                }
             }
         }
         if (selectedPiece == 2) {
-            const isLeftHalf = x % size > (size / 2)
-            if (isLeftHalf) {
-                if (j + 1 < boardSize && this.board[i][j + 1] == null) return [[i, j], [i, j + 1]]
-                if (j - 1 >= 0 && this.board[i][j - 1] == null) return [[i, j], [i, j - 1]]
-            } else {
-                if (j - 1 >= 0 && this.board[i][j - 1] == null) return [[i, j], [i, j - 1]]
-                if (j + 1 < boardSize && this.board[i][j + 1] == null) return [[i, j], [i, j + 1]]
+            const prefersRight = fx > 0.5
+            const order = prefersRight ? [j + 1, j - 1] : [j - 1, j + 1]
+            for (const other of order) {
+                if (other >= 0 && other < boardSize && this.board[i][other] == null) {
+                    return [[i, j], [i, other]]
+                }
             }
         }
         return null
     }
 
     /**
-     * The cell the pointer is currently over, or null when it is outside the board.
+     * The cell the pointer is currently over, or null.
      *
-     * Interim: this is the same coordinate arithmetic `highlightedPair` already does.
-     * P1-2 replaces both with the browser's own hit-testing via `data-cell`.
+     * No arithmetic left: the browser decided which cell this is when it hit-tested the
+     * pointer, and `setHover` has already rejected anything out of bounds.
      */
     get hoveredCell(): [number, number] | null {
-        if (!this.hoverPoint) return null
-        const size = this.squareSize
-        const [x, y] = this.hoverPoint
-        const i = Math.floor(y / size)
-        const j = Math.floor(x / size)
-        return this.inBounds(i, j) ? [i, j] : null
+        return this.hover ? [this.hover.i, this.hover.j] : null
     }
 
     /** Returns whether a piece was placed. */
