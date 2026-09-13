@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test'
-import { shouldRetryStartup, type NetworkFailure } from './startupRetry'
+import { shouldRetryStartup, type NetworkFailure, type ResourceType } from './startupRetry'
 
 /**
  * Open the page with the board ready, and explain itself when it is not.
@@ -62,28 +62,46 @@ const INSTRUMENT = () => {
  * Stored structured, not pre-formatted: `shouldRetryStartup` reasons about which request
  * failed and how, rather than grepping a sentence.
  */
-const NETWORK = new WeakMap<Page, NetworkFailure[]>()
+type Recording = { failures: NetworkFailure[], attempt: number }
+
+const NETWORK = new WeakMap<Page, Recording>()
+
+const failuresOf = (page: Page) => NETWORK.get(page)?.failures ?? []
 
 const describeFailures = (failures: readonly NetworkFailure[]) => failures
-    .map(f => f.kind === 'failed'
-        ? `FAILED ${f.method} ${f.url} :: ${f.error}`
-        : `HTTP ${f.status} ${f.method} ${f.url}`)
+    .map(f => `[attempt ${f.attempt}] ` + (f.kind === 'failed'
+        ? `FAILED ${f.method} ${f.url} (${f.resourceType}) :: ${f.error}`
+        : `HTTP ${f.status} ${f.method} ${f.url} (${f.resourceType})`))
     .join(' | ')
 
 /** Install the diagnostics. Call before `goto`; harmless if the page then loads fine. */
 export const instrument = async (page: Page) => {
-    const log: NetworkFailure[] = []
-    NETWORK.set(page, log)
+    // The listeners close over this object for the life of the page, so the attempt counter
+    // has to live *inside* it. An earlier version replaced the whole array before a reload
+    // and left the listeners writing to the orphaned one, which silently dropped every
+    // failure from the retried attempt -- the exact attempt whose diagnostics matter most.
+    const recording: Recording = { failures: [], attempt: 0 }
+    NETWORK.set(page, recording)
+
     // The analytics beacon 404s against a self-hosted `next start` and has nothing to do
     // with the app booting, so it is never recorded as a failure at all.
     const ours = (url: string) => !url.includes('/_vercel/')
+    const common = (r: { url(): string, method(): string, resourceType(): string }) => ({
+        url: r.url(),
+        method: r.method(),
+        resourceType: r.resourceType() as ResourceType,
+        attempt: recording.attempt,
+    })
+
     page.on('requestfailed', r => {
         if (!ours(r.url())) return
-        log.push({ kind: 'failed', url: r.url(), method: r.method(), error: r.failure()?.errorText ?? 'unknown' })
+        recording.failures.push({
+            kind: 'failed', ...common(r), error: r.failure()?.errorText ?? 'unknown',
+        })
     })
     page.on('response', r => {
         if (r.status() >= 400 && ours(r.url())) {
-            log.push({ kind: 'http', url: r.url(), method: r.request().method(), status: r.status() })
+            recording.failures.push({ kind: 'http', ...common(r.request()), status: r.status() })
         }
     })
     await page.addInitScript(INSTRUMENT)
@@ -128,7 +146,7 @@ export const waitForReady = async (
         return
     } catch (err) {
         const decide = async (reloadsUsed: number) => shouldRetryStartup({
-            failures: NETWORK.get(page) ?? [],
+            failures: failuresOf(page),
             hydrated: (await collectDiagnostics(page)).hydrated,
             reloadsUsed,
         })
@@ -137,7 +155,10 @@ export const waitForReady = async (
         if (!decision.retry) throw await describeFailure(page, err, what, timeout, decision.reason)
 
         console.warn(`[e2e] ${what} did not load: ${decision.reason}.`)
-        NETWORK.set(page, [])
+        // Mark the new attempt rather than clearing: the decision below considers only the
+        // current attempt's failures, while the diagnostics keep both.
+        const recording = NETWORK.get(page)
+        if (recording) recording.attempt += 1
         await page.waitForTimeout(1_000)
         await page.reload()
         try {
@@ -154,7 +175,7 @@ const describeFailure = async (
     page: Page, err: unknown, what: string, timeout: number, verdict: string,
 ) => {
     const d = await collectDiagnostics(page)
-    const network = NETWORK.get(page) ?? []
+    const network = failuresOf(page)
     // Whether the bundle's script tags are even present. A chunk that never arrived leaves
     // the tag in the markup and the page unhydrated, which is otherwise invisible.
     const scripts = await page.evaluate(() =>
