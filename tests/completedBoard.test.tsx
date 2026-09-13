@@ -13,9 +13,13 @@ import GameControls from '@/app/dominoFill/GameControls'
  * The soft-lock escape hatch, against a board that is genuinely solved (spec P1-3, D10-h).
  *
  * The point of D10-h is not that Reset is clickable — it is that Reset stays reachable
- * *while the board refuses input*. A completed board sets `pointerEvents: 'none'` on its
- * shell, and the completion reaction only ever sets `completed` true, so before this row
- * winning was terminal: no restart, no undo, nothing but a page reload.
+ * *while the board refuses input*. A completed board is made `inert`, and the completion
+ * reaction only ever sets `completed` true, so before row 14 winning was terminal: no
+ * restart, no undo, nothing but a page reload.
+ *
+ * `inert` rather than `pointerEvents: none` since P1-4. The distinction is load-bearing and
+ * is asserted as such below: `pointer-events` stops the mouse alone, leaving a won board's
+ * cells tabbable and announced.
  *
  * A browser test would be the better home for this, but completing a shipped puzzle needs
  * its solution, and there is no solver until P1-6. Here the board is small enough to solve
@@ -82,13 +86,15 @@ beforeEach(() => { root = new RootStore() })
 afterEach(cleanup)
 
 describe('a completed board', () => {
-    it('refuses pointer input', () => {
+    it('is made inert, not merely unclickable', () => {
         const s = solvableSession()
         const view = renderGame(s)
-        expect(view.shell.style.pointerEvents).toBe('auto')
+        expect(view.shell.hasAttribute('inert')).toBe(false)
 
         win(s)
-        expect(view.shell.style.pointerEvents).toBe('none')
+        expect(view.shell.hasAttribute('inert')).toBe(true)
+        // And specifically not the old mechanism, which left the board tabbable.
+        expect(view.shell.style.pointerEvents).not.toBe('none')
     })
 
     it('keeps the controls outside the inert subtree', () => {
@@ -107,12 +113,12 @@ describe('a completed board', () => {
         const s = solvableSession()
         const view = renderGame(s)
         win(s)
-        expect(view.shell.style.pointerEvents).toBe('none')
+        expect(view.shell.hasAttribute('inert')).toBe(true)
 
         act(() => { fireEvent.click(view.reset) })
 
         expect(s.completed).toBe(false)
-        expect(view.shell.style.pointerEvents).toBe('auto')
+        expect(view.shell.hasAttribute('inert')).toBe(false)
         // And the board is genuinely playable again, not merely un-styled.
         expect(s.board[0][0]).toBeNull()
         expect(s.legalDirections([0, 0])).toContain('down')
@@ -129,7 +135,7 @@ describe('a completed board', () => {
         act(() => { fireEvent.click(view.undo) })
 
         expect(s.completed).toBe(false)
-        expect(view.shell.style.pointerEvents).toBe('auto')
+        expect(view.shell.hasAttribute('inert')).toBe(false)
         expect(s.board[0][0]).toBeNull()
     })
 

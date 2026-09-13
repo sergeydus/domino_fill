@@ -29,9 +29,13 @@ export class LevelStore {
 
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
+        // `win.mp3`, not `winSilent.mp3` (spec P1-4). The silent file shipped alongside a
+        // real one that was never referenced, so winning made no sound at all -- which,
+        // together with the board going inert, is why the game appeared to *freeze* at the
+        // moment it should celebrate.
         let audio: HTMLAudioElement | null = null
         if (typeof Audio != 'undefined') {
-            audio = new Audio('winSilent.mp3')
+            audio = new Audio('win.mp3')
         }
         // Definitions are frozen value objects: observe the *reference*, never the
         // contents. Deep conversion would replace each frozen definition with an
@@ -114,6 +118,23 @@ export class LevelStore {
     }
 
     setLevel(level: Level) { this.level = level }
+
+    /** Whether there is a further level in this difficulty; drives the Next affordance. */
+    get hasNextLevel() {
+        return this.level < 3
+    }
+
+    /**
+     * Advance to the next level, if there is one. Returns whether it moved.
+     *
+     * The session for the level just finished is untouched: P0-5 keeps one per `puzzleId`,
+     * so coming back returns the same board with the same moves, still completed.
+     */
+    goToNextLevel(): boolean {
+        if (!this.hasNextLevel) return false
+        this.setLevel((this.level + 1) as Level)
+        return true
+    }
 
     setDifficulty(dif: Difficulty) {
         this.difficulty = dif

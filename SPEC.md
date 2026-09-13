@@ -730,6 +730,39 @@ matters because removal is instant, silent, and destructive. Bounded move stack 
 celebration and a Next/Replay affordance within 500ms, plus `aria-live`. Use `inert`, not
 `pointerEvents: none`. Play `win.mp3`, which already exists and is unused.
 
+> **Implemented in row 15.** `CompletionCard` renders on completion with `role="status"` and
+> `aria-live="polite"`, a **Next level** button and a **Play again** button. The board shell is made
+> `inert`.
+>
+> **`inert` is not a tidier `pointer-events: none`.** The old mechanism stopped the mouse and
+> nothing else: every cell of a won board stayed tabbable and stayed announced, so a keyboard or
+> screen-reader user could go on "playing" a finished board. `inert` removes the subtree from
+> hit-testing, the tab order and the accessibility tree together — asserted in `e2e/completion.spec.ts`
+> by focusing the grid inside the inert subtree and checking focus does not land.
+>
+> **P1-1's deferred completion-focus clause closes here**, not in P1-8 as row 13 first assumed. The
+> obstacle was that nothing focusable existed to move to — the level arrows are `motion.div`s with
+> an `onClick`. The card brings its own real `<button>`, so the clause needed no change to them. On
+> the last level of a difficulty there is no Next, and focus goes to Play again: the rule is "the
+> primary action", and there must always be one.
+>
+> **The win sound was `winSilent.mp3` next to an unused `win.mp3`**, so winning made no sound at
+> all. Now `win.mp3`. This has its own test because it is otherwise invisible — found by mutation,
+> where the swap back passed all 314 other tests.
+>
+> **Both of row 14's deferred obligations are closed.** `e2e/completion.spec.ts` wins a board for
+> real — read from the DOM, solved, and played move by move through the pointer verb — then checks
+> the card, the focus, the inertness, and that Reset, Play again and Undo each release the win.
+> Nothing sets `completed` directly, so a disagreement between the placement rules and the
+> completion rules fails the test rather than hiding behind a flag.
+>
+> The solver that makes this possible lives in `e2e/solve.ts` and is **test-only**: the served
+> puzzle is chosen by the server's clock, so no fixture can name its solution. It is deliberately
+> *not* P1-6's solver — that one needs a node budget, a timeout behaviour and an answer for
+> unsolvable positions, because it answers questions for the player (P1-5). This one answers one
+> question for a test, from an empty board, where a solution is known to exist. Its output is
+> checked against the rules for all 18 shipped puzzles rather than trusted.
+
 **P1-5. Honest feedback and stuck-recovery.** The #1 quit reason in a deduction puzzle is a dead end
 with twenty pieces down. Minimum: gate "green" on *line complete*, not *sum satisfied* (D10-g);
 add a non-colour token (strikethrough / outline) so the red-green channel isn't the only one; a
@@ -858,7 +891,7 @@ whole of P0 into one oversized set.)
 | 12 | **P1-2** move hit-testing onto the cells (`CellHover`, `closest('[data-cell]')`) | E2E |
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E (touch context + keyboard) |
 | 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h and D10-i's restart half | unit (undo round-trip) + E2E (controls) |
-| 15 | **P1-4** completion feedback | E2E |
+| 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject; check/hint only if the solver contract is built | unit |
 | 17 | **P1-7** persistence + day rollover | unit |
 | 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive | unit |

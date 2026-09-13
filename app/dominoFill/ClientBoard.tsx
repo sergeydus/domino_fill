@@ -148,11 +148,22 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         if (boardsStore.handleKey(e.key, modifiers)) e.preventDefault()
     }
 
+    /*
+     * `inert`, not `pointerEvents: none` (spec P1-4).
+     *
+     * They are not equivalent and the difference is the whole point: `pointer-events`
+     * stops the mouse and nothing else, so every cell of a won board stayed tabbable,
+     * focusable and announced -- a keyboard or screen-reader user could go on "playing" a
+     * board that was already finished. `inert` removes the subtree from hit-testing, from
+     * the tab order and from the accessibility tree together, and moves focus out if it is
+     * inside.
+     */
     const isDisabled = boardsStore.completed
     return (
         <div
             className="select-none"
-            style={{ ...shellStyle, pointerEvents: isDisabled ? 'none' : 'auto' }}
+            style={shellStyle}
+            inert={isDisabled}
             data-board-shell
         >
             {/* The corner where the two gutters meet; deliberately empty. */}

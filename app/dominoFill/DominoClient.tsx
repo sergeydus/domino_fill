@@ -8,6 +8,7 @@ import { useStores } from '../hooks/useStore'
 import { observer } from 'mobx-react'
 import LevelSelector from './LevelSelector'
 import GameControls from './GameControls'
+import CompletionCard from './CompletionCard'
 import Tutorial from './Tutorial'
 import { useAvailableBoardBox } from '../hooks/useAvailableBoardBox'
 
@@ -83,6 +84,11 @@ const DominoClient: React.FC = () => {
       <div data-chrome>
         <DominoPieces boardsStore={currentBoard} />
       </div>
+      {currentBoard.completed && (
+        <div data-chrome>
+          <CompletionCard session={currentBoard} levels={boardsStore} />
+        </div>
+      )}
       <div data-chrome>
         <GameControls boardsStore={currentBoard} />
       </div>
