@@ -479,6 +479,33 @@ export class PuzzleSession {
     }
 
     /**
+     * Set the focused cell as the anchor and offer its candidates. The keyboard's
+     * activation, which is deliberately *not* the pointer's tap.
+     *
+     * Space/Enter anchors and waits, even when only one direction is legal -- the spec's
+     * keyboard table gives Space/Enter exactly one meaning ("set the focused cell as the
+     * anchor") and gives removal to Delete/Backspace alone. Delegating to `tap()` made
+     * Space place immediately on a one-direction cell and *remove* on an occupied one,
+     * which is two contradictions of that table at once.
+     *
+     * A tap may commit without asking because the finger is already on the cell it means;
+     * the keyboard's arrow is the direction, so there is always a second key coming and
+     * nothing is saved by guessing.
+     *
+     * Returns whether there was anything to anchor.
+     */
+    private anchorFocused(cell: Cell): boolean {
+        const [i, j] = cell
+        // Nothing to anchor: occupied cells belong to Delete/Backspace, and a cell with no
+        // legal direction would be a mode offering nothing.
+        if (this.board[i][j] !== null) return false
+        if (this.legalDirections(cell).length === 0) return false
+
+        this.gesture = { kind: 'pending', from: cell }
+        return true
+    }
+
+    /**
      * Abandon an in-flight drag, leaving a pending anchor alone.
      *
      * This is what `pointerleave` and `pointercancel` want. A touch pointer stops existing
@@ -548,7 +575,7 @@ export class PuzzleSession {
         }
 
         if (key === ' ' || key === 'Enter') {
-            return this.tap(focused) !== 'none'
+            return this.anchorFocused(focused)
         }
 
         if (key === 'Delete' || key === 'Backspace') {
@@ -586,7 +613,8 @@ export class PuzzleSession {
      * invariant holds, which is what `removePiece`'s guard protects. Cheap insurance
      * against a future change that breaks the pairing.
      *
-     * Pure: the stored `completed` flag is written only by LevelStore's autorun.
+     * Pure: the stored `completed` flag is written only by LevelStore's reaction on this
+     * value -- a reaction rather than an autorun, so it tracks this one derived value.
      */
     get completedByRules() {
         return this.isBoardFull && this.targetsMatch

@@ -11,7 +11,7 @@ import { Cell, directionBetween, dominoFrom, neighbourOf, orderedPair } from '@/
  * What makes it one verb is that a drag, a tap and an arrow key all reduce to the same
  * pair before anything is placed. These tests exercise that reduction directly; the
  * browser-level questions (which pointer events fire, compatibility clicks, capture) are
- * in e2e/input.spec.ts, because none of them are answerable in jsdom.
+ * in e2e/touch.spec.ts, because none of them are answerable in jsdom.
  */
 
 const N = 6

@@ -132,6 +132,22 @@ test('Escape leaves the offer, and the focus stays put', async ({ page }) => {
     await expect(page.locator('[data-piece="one"]')).toHaveCount(0)
 })
 
+test('Space does not remove -- that is Delete and Backspace alone', async ({ page }) => {
+    // Space had been delegating to the pointer's tap, which removes on an occupied cell.
+    // The keyboard table gives Space exactly one job: set the anchor.
+    const { i, j } = await freeRun(page)
+    await focusTo(page, i, j)
+    await page.keyboard.press(' ')
+    await page.keyboard.press('ArrowDown')
+
+    const placed = page.locator(`[data-piece="one"][data-at="${i},${j}"]`)
+    await expect(placed).toBeVisible()
+
+    await page.keyboard.press(' ')
+    await expect(placed).toBeVisible()
+    await expect(page.locator('[data-anchor]')).toHaveCount(0)
+})
+
 test('Delete removes the domino under the focus', async ({ page }) => {
     const { i, j } = await freeRun(page)
     await focusTo(page, i, j)

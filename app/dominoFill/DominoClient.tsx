@@ -53,9 +53,11 @@ const DominoClient: React.FC = () => {
      * because the container simply grows. Swap the `min-h` for `h-svh` and it clips at
      * once. The auto margin is what makes that distinction stop mattering.
      *
-     * The `min-h-screen` wrapper that used to be here as well is gone: the page had it
-     * twice, nested, so the document was always two viewports tall and always had a
-     * scrollbar (spec D10-b).
+     * The redundant nested `min-h-screen` wrapper that used to be here is gone as simple
+     * cleanup. It was *not* making the document two viewports tall: nested `min-height`
+     * elements do not add up, and a browser probe showed two nested 800px boxes, not
+     * 1600px. The 1095px document measured at the time was content overflow (spec D10-b,
+     * recorded there as a false diagnosis).
      *
      * `data-chrome` marks everything that is not the board. `useAvailableBoardBox` sums
      * those heights and gives the board what is left, so the board is budgeted against the

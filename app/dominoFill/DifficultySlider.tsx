@@ -10,19 +10,19 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
     }
     return (
         <div className="flex flex-row bg-[#ababab] rounded gap-2 text-2xl p-2">
-            <motion.button className={`cursor-pointer p-2 rounded`}
+            <motion.button className={`cursor-pointer p-2 rounded control-surface`}
                 animate={{ backgroundColor: boardsStore.difficulty == 'easy' ? '#419dc8' : undefined }}
                 whileHover={{ backgroundColor: '#419dc8' }}
                 onClick={onClick('easy')}>
                 Easy 6x6
             </motion.button>
-            <motion.button className="cursor-pointer p-2 rounded"
+            <motion.button className="cursor-pointer p-2 rounded control-surface"
                 animate={{ backgroundColor: boardsStore.difficulty == 'normal' ? '#419dc8' : undefined }}
                 whileHover={{ backgroundColor: '#419dc8' }}
                 onClick={onClick('normal')}>
                 Medium 7x7
             </motion.button>
-            <motion.button className="cursor-pointer p-2 rounded"
+            <motion.button className="cursor-pointer p-2 rounded control-surface"
                 animate={{ backgroundColor: boardsStore.difficulty == 'hard' ? '#419dc8' : undefined }}
                 whileHover={{ backgroundColor: '#419dc8' }}
                 onClick={onClick('hard')}>

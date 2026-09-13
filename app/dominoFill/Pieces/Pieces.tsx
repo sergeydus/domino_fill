@@ -28,8 +28,8 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
      * removed the domino. Clicking the bottom strip of an empty cell therefore deleted the
      * piece below it instead of placing one.
      *
-     * Removal now happens on the cell underneath, in `PuzzleSession.activateHoveredCell`,
-     * where the cell index decides what the click means.
+     * Removal now happens on the cell underneath: the pointer handlers resolve a cell and
+     * `PuzzleSession.pointerUp` decides what the gesture on it means (P1-1).
      */
     return <div className="absolute z-20 pointer-events-none">
         {/* <AnimatePresence> */}

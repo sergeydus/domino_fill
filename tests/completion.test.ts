@@ -229,7 +229,7 @@ describe('the stored completion flag is written only by the store reaction', () 
         expect(s.completedByRules).toBe(false)
         expect(s.completed).toBe(false)
 
-        // Completing the board satisfies both halves; the autorun observes and marks it.
+        // Completing the board satisfies both halves; the reaction observes and marks it.
         runInAction(() => { s.board[0][1] = 1; s.board[1][1] = 0 })
         expect(s.completedByRules).toBe(true)
         expect(s.completed).toBe(true)

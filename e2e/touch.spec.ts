@@ -126,16 +126,84 @@ test('a touch drag places one domino, and the compat click does not undo it', as
     expect((await occupied(page)).size).toBe(before + 2)
 })
 
-test('a touch drag works across cells, which needs the implicit capture released', async ({ page }) => {
-    // Touch pointers get implicit pointer capture: every move after `pointerdown`
-    // retargets to the cell the finger started on. Capture is released on `pointerdown`
-    // and the cell is resolved with `elementFromPoint`, either of which is enough on its
-    // own -- this checks the end result rather than which of the two did the work.
+test('a touch drag works across cells, despite the implicit pointer capture', async ({ page }) => {
+    // Touch pointers get implicit pointer capture: every event after `pointerdown`
+    // retargets to the cell the finger started on. `elementFromPoint` is what resolves
+    // the cell actually under the finger, and it is the only thing that does -- see the
+    // mechanism test below.
     const { i, j } = await freeRun(page, 1)
 
     await touchDrag(cdp, await centreOf(page, i, j), await centreOf(page, i + 1, j))
 
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+})
+
+test('the implicit capture is held by the origin cell for the whole gesture', async ({ page }) => {
+    /*
+     * The measured platform fact the hit-testing is built on, asserted rather than
+     * asserted-about-in-a-comment.
+     *
+     * An earlier version of this code called `releasePointerCapture` on the grid in
+     * `pointerdown`. That is the wrong element -- capture belongs to `e.target`, the cell
+     * -- so it silently did nothing (it does not even throw; measured). The drag worked
+     * anyway, entirely because of `elementFromPoint`, which made the release look load-
+     * bearing when it was dead code.
+     *
+     * So: capture stays with the origin cell, `pointermove.target` stays the origin cell,
+     * and `elementFromPoint` disagrees with both. If a browser ever stops behaving this
+     * way this test fails, which is the signal to revisit `cellFrom`'s comment -- not a
+     * regression in the board.
+     *
+     * Leaving the capture alone is also deliberate: it keeps every event funnelled to the
+     * grid even when the finger leaves the board, so an off-board release still resolves
+     * the gesture instead of stranding it.
+     */
+    const { i, j } = await freeRun(page, 1)
+    const from = await centreOf(page, i, j)
+    const to = await centreOf(page, i + 1, j)
+
+    await page.evaluate(() => {
+        const w = window as unknown as { probe: Record<string, string | boolean | null>[] }
+        w.probe = []
+        const grid = document.querySelector('.board-grid') as HTMLElement
+        const name = (el: Element | null | undefined) => el?.closest('[data-cell]')?.getAttribute('data-cell') ?? null
+        for (const type of ['pointermove', 'pointerup', 'lostpointercapture']) {
+            grid.addEventListener(type, (e) => {
+                const pe = e as PointerEvent
+                const owner = Array.from(document.querySelectorAll('[data-cell]'))
+                    .find(c => (c as HTMLElement).hasPointerCapture(pe.pointerId))
+                w.probe.push({
+                    type,
+                    target: name(e.target as Element),
+                    capturedBy: name(owner),
+                    underPoint: name(document.elementFromPoint(pe.clientX, pe.clientY)),
+                })
+            }, true)
+        }
+    })
+
+    await touchDrag(cdp, from, to)
+
+    const probe = await page.evaluate(() => (window as unknown as {
+        probe: { type: string, target: string | null, capturedBy: string | null, underPoint: string | null }[]
+    }).probe)
+
+    const moves = probe.filter(p => p.type === 'pointermove')
+    expect(moves.length).toBeGreaterThan(0)
+    const away = moves.filter(p => p.underPoint === `${i + 1},${j}`)
+    expect(away.length, 'at least one move over the neighbour').toBeGreaterThan(0)
+
+    for (const move of away) {
+        expect(move.target, 'the event retargets to the origin cell').toBe(`${i},${j}`)
+        expect(move.capturedBy, 'the origin cell holds the capture').toBe(`${i},${j}`)
+    }
+
+    // And capture is given up only once the gesture is over, which is why
+    // `lostpointercapture` is not wired to cancellation.
+    const lost = probe.findIndex(p => p.type === 'lostpointercapture')
+    const up = probe.findIndex(p => p.type === 'pointerup')
+    expect(lost, 'lostpointercapture fires').toBeGreaterThanOrEqual(0)
+    expect(lost, 'lostpointercapture comes after pointerup, not before').toBeGreaterThan(up)
 })
 
 test('a touch tap offers candidates, and a second tap commits', async ({ page }) => {
@@ -229,6 +297,25 @@ test('the page itself stays zoomable', async ({ page }) => {
     expect(content ?? '').not.toMatch(/maximum-scale\s*=\s*1(\.0)?\b/i)
 })
 
-test('the controls opt into fast taps instead of the board policy', async ({ page }) => {
-    await expect(page.locator('.control-surface').first()).toHaveCSS('touch-action', 'manipulation')
+test('the real controls opt into fast taps instead of the board policy', async ({ page }) => {
+    /*
+     * Asserted on the controls by what they *do*, not by the marker class.
+     *
+     * The previous version matched `.control-surface` and took the first hit, which was
+     * the piece legend -- no longer interactive at all since P1-1 made the tray a legend.
+     * It passed while the difficulty buttons and the level arrows, the only things on the
+     * page a player actually taps, had no policy at all.
+     */
+    const controls = [
+        page.getByRole('button', { name: /easy/i }),
+        page.getByRole('button', { name: /medium/i }),
+        page.getByRole('button', { name: /hard/i }),
+        page.locator('[data-level="next"]'),
+        page.locator('[data-level="previous"]'),
+    ]
+
+    for (const control of controls) {
+        await expect(control).toHaveCount(1)
+        await expect(control).toHaveCSS('touch-action', 'manipulation')
+    }
 })

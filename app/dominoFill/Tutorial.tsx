@@ -37,8 +37,9 @@ const Tutorial = () => {
 
     return (
         // `fixed inset-0`, not `absolute w-full h-full`: with no positioned ancestor the
-        // latter resolves against the initial containing block and covers only the first
-        // viewport, while the page is currently two viewports tall.
+        // latter resolves against the initial containing block, which is the viewport-sized
+        // box -- so it fails to cover a page that has scrolled or overflowed. `fixed` is
+        // anchored to the viewport itself and cannot come apart from it.
         <div className="fixed inset-0 z-[999] backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
             <div className="bg-white rounded-2xl text-black w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
                 <h2 className="text-3xl font-bold mb-2">How to play</h2>

@@ -15,7 +15,7 @@ import ClientBoard from '@/app/dominoFill/ClientBoard'
  * jsdom has no layout and no real hit-testing -- `fireEvent` dispatches at whichever node
  * the test names -- so what it can check is that each event reaches the right method with
  * the right cell. Whether the browser fires those events at all, and what it does about
- * compatibility clicks and pointer capture, is e2e/input.spec.ts's job.
+ * compatibility clicks and pointer capture, is e2e/touch.spec.ts's job.
  */
 
 let root: RootStore

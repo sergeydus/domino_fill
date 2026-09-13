@@ -197,8 +197,9 @@ wrong on their first board and will not know why.
 Compounding: the modal has **no skip, no close, no escape** (`:39` disables the only button until
 the 2×2 board is solved); the 2×2 gate tests the asymmetric pip rule the text never taught; it
 teaches neither removal nor rocks, and the very next screen has eight of them; `absolute w-full
-h-full` with no positioned ancestor resolves against the initial containing block, covering only
-the first viewport of a two-viewport page (D10-b); and the board falls through `squareSize`'s
+h-full` with no positioned ancestor resolves against the initial containing block rather than the
+scrolled viewport, so it fails to cover an overflowing page (**not** a "two-viewport page" — that
+diagnosis is false; see D10-b); and the board falls through `squareSize`'s
 `default: 96`, making it 384px + gutters inside a 324px modal on a phone.
 **If any of that prevents solving the 2×2, the game cannot be played at all.**
 
@@ -470,7 +471,11 @@ Platform mechanics that must be specified or it will not work:
   `pointerup`; you will place two dominoes per tap.
 - `touch-action` on the grid must be **static, in CSS** — changing it from JS does not affect an
   in-flight gesture. See the pinch-zoom policy below for which value: **`pinch-zoom`, not `none`**.
-  `touch-action: manipulation` on the tray and difficulty buttons.
+  `touch-action: manipulation` on the difficulty buttons and the level arrows -- i.e. on whatever is
+  actually tappable. **Not** the piece tray: P1-1 makes it a legend, so it takes no input at all and
+  a policy there covers nothing. (Row 13 put the class on the legend alone and asserted it with a
+  `.first()` selector, which passed while every real control had no policy; corrected in the
+  follow-up, and the test now names the controls by role.)
 - `-webkit-touch-callout: none` — `select-none` sets `user-select` only; iOS still shows the
   long-press magnifier mid-drag.
 - Never `preventDefault()` in `onTouchMove` — React attaches it passively; the answer is
@@ -483,7 +488,7 @@ the drag model maps onto the keyboard exactly — an anchor plus a direction:
 | Key | Action |
 |---|---|
 | Arrows (no anchor) | Move the focused cell |
-| Space / Enter | Set the focused cell as the anchor |
+| Space / Enter | Set the focused cell as the anchor — **always**; never a placement or a removal |
 | Arrows (anchor set) | Choose the neighbour → commits orientation and places |
 | Escape | Clear the anchor |
 | Delete / Backspace | Remove the domino occupying the focused cell |
@@ -493,6 +498,23 @@ Focus must stay predictable across every transition: after placing, focus stays 
 after removing or undoing, focus moves to the affected anchor; on completion it moves to the
 Next-level control. No mode is entered that Escape cannot leave. (P1-8 covers focus *structure* —
 roving tabindex, roles — not this state machine.)
+
+> **Two clauses of this paragraph are settled in row 13; the completion-focus clause is deferred to
+> P1-4 (row 15), and P1-1 is therefore not complete without it.** Moving focus to the Next-level
+> control requires a control that can hold focus, and the level arrows are `motion.div`s with an
+> `onClick` — there is nothing focusable to move to. Making them real buttons belongs to P1-8
+> (row 19); the completion transition that would trigger the move belongs to P1-4 (row 15). Row 13
+> implements the rest: focus stays on the anchor after placing, follows a removal to the pair's
+> anchor, and Escape leaves the one mode there is. **Row 15 must close this, and row 19 must not
+> assume it already is.**
+>
+> **Space/Enter is the anchor key and nothing else.** Row 13 delegated it to the pointer's `tap()`,
+> which made it place immediately on a one-direction cell and *remove* on an occupied one —
+> contradicting this table twice. The pointer may commit without asking, because the finger is
+> already on the cell it means; the keyboard's direction is always a second key, so guessing buys
+> nothing and reintroduces exactly the "sometimes it does X" ambiguity P1-1 exists to delete.
+> Corrected in the row-13 follow-up: activation and tap are separate paths, and a unit test pins
+> the difference so neither drifts onto the other.
 
 **Pinch-zoom vs `touch-action`.** These genuinely conflict: `touch-action: none` on the grid kills
 pinch *over the board*, which is the one place a low-vision player most needs it, while P2-2
@@ -514,7 +536,7 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 > direction before anything is placed. `selectedPiece` is deleted, the tray is a legend, and
 > `onContextMenu` is gone with it (D10-r).
 >
-> Five platform findings, each measured rather than assumed:
+> Platform findings, each measured rather than assumed:
 >
 > 1. **`pointerleave` fires after every touch `pointerup`.** A touch pointer stops existing when the
 >    finger lifts, and the browser then fires `pointerout` and `pointerleave` all the way up the
@@ -523,20 +545,41 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
 >    produced `pointerdown, pointerup, pointerout, pointerleave×8, touchend, click`. `pointerleave`
 >    and `pointercancel` now abandon only an in-flight *drag*; a pending offer is dismissed by
 >    Escape, by a tap elsewhere, or by the board losing focus.
-> 2. **`lostpointercapture` is deliberately not wired to cancellation**, contrary to the bullet
->    above. Capture is released in `pointerdown` on purpose, which *is* what fires
->    `lostpointercapture` -- handling it as a cancellation would kill every touch drag on the frame
->    it began. `pointercancel` is the event that carries the meaning the bullet intended.
-> 3. **`-webkit-touch-callout` cannot be verified in Chromium at all.** Blink does not implement it,
+> 2. **The implicit capture is left in place, and the bullet's `releasePointerCapture` route was
+>    never actually taken.** Row 13 shipped `e.currentTarget.releasePointerCapture(...)` in
+>    `pointerdown` believing it followed the bullet above. It did not: `currentTarget` is the grid,
+>    while the implicit capture belongs to `e.target`, the cell. Measured -- the call does not even
+>    throw, it silently no-ops, so the `try/catch` around it never fired and the dead code looked
+>    load-bearing for a whole review cycle. The drag worked entirely because of `elementFromPoint`.
+>
+>    Corrected in the row-13 follow-up by **removing** the failed release rather than fixing it,
+>    because keeping the capture is measurably better: it funnels every event to the grid even when
+>    the finger leaves the board, so an off-board release still resolves the gesture. Measured --
+>    a drag ending outside the board still delivered `pointerup` to the grid (`target=2,2`,
+>    `elementFromPoint=none`), which clears the gesture; with capture genuinely released, that
+>    `pointerup` retargets to whatever is under the finger and the grid never hears it.
+>
+>    The spec bullet's two options are therefore **three**: release and hit-test, cache the rect, or
+>    *keep capture and hit-test*, which is what ships. The third keeps the bullet's "zero coordinate
+>    arithmetic" property and is strictly more robust than the first.
+> 3. **`lostpointercapture` is deliberately not wired to cancellation**, contrary to the bullet
+>    above -- but not for the reason row 13 first gave. That claim (capture is released in
+>    `pointerdown`, so it fires immediately and would kill every drag on its first frame) is
+>    **false**, and was recorded before it was measured. Measured: with the capture left alone,
+>    `lostpointercapture` fires *after* `pointerup`, once the gesture is already resolved. Handling
+>    it would therefore duplicate `pointerup` or undo a placement just made. `pointercancel` is the
+>    event that carries the meaning the bullet intended. The ordering is asserted in
+>    `e2e/touch.spec.ts`, so the rationale stays tied to evidence.
+> 4. **`-webkit-touch-callout` cannot be verified in Chromium at all.** Blink does not implement it,
 >    so it computes to the empty string, and the CSSOM drops the declaration from `cssText` even
 >    though the built stylesheet ships `board-grid{touch-action:pinch-zoom;-webkit-touch-callout:none}`.
 >    The test fetches the stylesheet as text and asserts the declaration is in the shipped bytes.
 >    Whether it suppresses the long-press magnifier **needs a real iOS device**.
-> 4. **`touch-action: pinch-zoom` computes correctly in Chromium** and is asserted both as a value
+> 5. **`touch-action: pinch-zoom` computes correctly in Chromium** and is asserted both as a value
 >    and as *not* an inline style, which is the "static, in CSS" half of the policy. Chromium's
 >    emulation is not WebKit: **real iOS Safari still needs checking**, and the fallback if it
 >    proves unreliable is unchanged -- drop drag there, keep tap and pinch.
-> 5. **Compatibility clicks are covered by a sharper test than "two dominoes".** The synthesised
+> 6. **Compatibility clicks are covered by a sharper test than "two dominoes".** The synthesised
 >    `click` targets the *release* cell, which is occupied by the domino just placed -- so a second
 >    handler running the verb would **remove** it. A domino still present after the click has
 >    arrived is the evidence.

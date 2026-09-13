@@ -132,14 +132,57 @@ describe('Space or Enter sets the anchor, then an arrow places', () => {
         expect(s.focusedCell).toEqual([2, 2])
     })
 
-    it('Space on a cell with one legal direction places immediately', () => {
+    it('anchors even when only one direction is legal, rather than placing outright', () => {
+        // Space/Enter has exactly one meaning in the spec's keyboard table: set the
+        // anchor. The pointer's tap may commit without asking, because the finger is
+        // already on the cell it means; the keyboard's direction is a second key either
+        // way, so there is nothing to save by guessing -- and a Space that sometimes
+        // places and sometimes does not is the mode P1-1 exists to delete.
         const s = session([[1, 0]])
         focusAt(s, [0, 0])
-        press(s, ' ')
+        expect(press(s, ' ')).toBe(true)
 
+        expect(s.pendingAnchor).toEqual([0, 0])
+        expect(s.candidateCells).toEqual([[0, 1]])
+        expect(s.board.flat().every(c => c === null || c === -1)).toBe(true)
+
+        // ...and the arrow that follows is what places.
+        press(s, 'ArrowRight')
         expect(s.board[0][0]).toBe(0)
         expect(s.board[0][1]).toBe(2)
+    })
+
+    it('is unhandled on a cell with no legal direction, rather than entering a dead mode', () => {
+        // Boxed in on all four sides: there is nothing to anchor, and an anchor offering
+        // no candidates would be a mode with nothing in it.
+        const s = session([[1, 2], [3, 2], [2, 1], [2, 3]])
+        focusAt(s, [2, 2])
+
+        expect(press(s, ' ')).toBe(false)
         expect(s.pendingAnchor).toBeNull()
+    })
+
+    it('does not remove: that is Delete and Backspace alone', () => {
+        // Delegating Space to the pointer's tap made it remove on an occupied cell, which
+        // contradicts the keyboard table twice over -- Space is the anchor key, and
+        // removal has its own keys.
+        for (const key of [' ', 'Enter']) {
+            const s = session()
+            runInAction(() => { s.placeToward([2, 2], 'down') })
+            focusAt(s, [2, 2])
+
+            expect(press(s, key), key).toBe(false)
+            expect(s.board[2][2], key).toBe(1)
+            expect(s.board[3][2], key).toBe(0)
+            expect(s.pendingAnchor, key).toBeNull()
+        }
+    })
+
+    it('is unhandled on a rock', () => {
+        const s = session([[2, 2]])
+        focusAt(s, [2, 2])
+        expect(press(s, ' ')).toBe(false)
+        expect(s.board[2][2]).toBe(-1)
     })
 
     it('a refused direction keeps the anchor instead of choosing another', () => {
@@ -232,6 +275,24 @@ describe('Delete and Backspace remove', () => {
 })
 
 describe('the keyboard and the pointer are the same verb', () => {
+    it('but Space anchors where a tap commits, on a one-direction cell', () => {
+        // The one place the two deliberately differ, pinned so neither drifts onto the
+        // other's behaviour unnoticed.
+        const byKeyboard = session([[1, 0]])
+        focusAt(byKeyboard, [0, 0])
+        press(byKeyboard, ' ')
+        expect(byKeyboard.pendingAnchor).toEqual([0, 0])
+        expect(byKeyboard.board[0][1]).toBeNull()
+
+        const byPointer = session([[1, 0]])
+        runInAction(() => {
+            byPointer.pointerDown([0, 0])
+            byPointer.pointerUp([0, 0])
+        })
+        expect(byPointer.pendingAnchor).toBeNull()
+        expect(byPointer.board[0][1]).toBe(2)
+    })
+
     it('reach the same board state', () => {
         const byKeyboard = session()
         focusAt(byKeyboard, [2, 2])

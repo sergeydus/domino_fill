@@ -52,12 +52,19 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     /*
      * Which cell a pointer event is over, asked of the browser rather than worked out.
      *
-     * `elementFromPoint` first, then the event target. Touch pointers get *implicit
-     * pointer capture*: every `pointermove` after `pointerdown` retargets to the element
-     * the gesture started on, so `e.target` during a touch drag names the cell the finger
-     * left, not the one it is over. Capture is released in `pointerdown` below, and
-     * `elementFromPoint` is asked directly, which is correct whether or not any given
-     * browser honoured that release.
+     * `elementFromPoint` first, then the event target, and the order matters: touch
+     * pointers get *implicit pointer capture*, so every event after `pointerdown`
+     * retargets to the cell the gesture started on. Measured, dragging 2,2 -> 3,2:
+     * `pointermove.target` stayed `2,2` while `elementFromPoint` returned `3,2`, and
+     * capture stayed on the cell for the whole gesture. `elementFromPoint` is therefore
+     * the only thing that makes a touch drag work at all; `e.target` is the fallback for
+     * environments with no hit-testing (jsdom).
+     *
+     * The capture is deliberately left in place. It keeps every event funnelled to the
+     * grid even when the finger wanders off the board -- measured: a drag ending outside
+     * still delivered `pointerup` to the grid, which resolves to no cell and clears the
+     * gesture. Released, that release would have gone to whatever is under the finger and
+     * the grid would never have heard it.
      *
      * The overlays above the cells are `pointer-events: none`, so both routes resolve to
      * the cell itself. No rect is read and no coordinate is divided: there is no
@@ -85,9 +92,6 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * the other reason not to mix the two families.
      */
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        // Release the implicit capture touch pointers get, so moves retarget to the cell
-        // under the finger. Wrapped because a pointer that has already gone can throw.
-        try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* already released */ }
         const cell = cellFrom(e)
         boardsStore.setHover(cell)
         if (cell) boardsStore.pointerDown(cell)
@@ -105,9 +109,11 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * `pointercancel` is the one to handle: the browser took the gesture away (a scroll
      * or zoom claimed it, the touch was interrupted), and no `pointerup` is coming.
      *
-     * `lostpointercapture` is deliberately *not* wired to cancellation. We release capture
-     * ourselves in `pointerdown`, so it fires immediately on every touch gesture -- wiring
-     * it here would cancel every drag on the frame it began.
+     * `lostpointercapture` is deliberately *not* wired to cancellation, but not for the
+     * reason an earlier draft gave. Measured: with the implicit capture left alone it
+     * fires *after* `pointerup`, once the gesture is already resolved -- so handling it
+     * would either duplicate `pointerup` or cancel a placement that had just been made.
+     * `pointercancel` is the event that carries the meaning here.
      */
     const onPointerCancel = () => boardsStore.cancelDrag()
 
