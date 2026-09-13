@@ -3,6 +3,20 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /*
+   * Safe-area insets, as plain variables (spec P0-3).
+   *
+   * Indirected through variables rather than used as `env()` at each site for two
+   * reasons: `env()` cannot be read back from script, so the layout budget has no way to
+   * subtract it; and a variable can be overridden, which is the only way to exercise this
+   * at all -- Chromium has no way to emulate a device's insets, so the browser tests drive
+   * these directly. On a device with no inset every one of them resolves to 0px.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 @theme inline {

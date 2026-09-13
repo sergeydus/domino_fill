@@ -18,7 +18,7 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
         }
     }
     return <div className="flex flex-row">
-        <motion.div onClick={onPreviousLevelClick} className="rotate-180 cursor-pointer" initial={{ scale: 1 }} whileHover={{ scale: 1.2 }} style={{ filter: hasPreviousLevel ? 'unset' : 'grayscale(100%)' }}>
+        <motion.div onClick={onPreviousLevelClick} data-level="previous" className="rotate-180 cursor-pointer" initial={{ scale: 1 }} whileHover={{ scale: 1.2 }} style={{ filter: hasPreviousLevel ? 'unset' : 'grayscale(100%)' }}>
             <svg
                 width="64"
                 height="64"
@@ -47,7 +47,7 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
             </svg>
 
         </motion.div>
-        <motion.div onClick={onNextLevelClick} className="cursor-pointer" initial={{ scale: 1 }} whileHover={{ scale: 1.2 }} style={{ filter: hasNextLevel ? 'unset' : 'grayscale(100%)' }}>
+        <motion.div onClick={onNextLevelClick} data-level="next" className="cursor-pointer" initial={{ scale: 1 }} whileHover={{ scale: 1.2 }} style={{ filter: hasNextLevel ? 'unset' : 'grayscale(100%)' }}>
             <svg
                 width="64"
                 height="64"

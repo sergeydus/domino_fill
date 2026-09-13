@@ -62,7 +62,14 @@ const DominoClient: React.FC = () => {
       ref={setColumn}
       onContextMenu={onRightClick}
       className='m-auto flex flex-col gap-4 items-center justify-center'
-      style={{ padding: PAGE_MARGIN_PX }}
+      style={{
+        // The page margin plus whatever the device's safe area asks for, so the board is
+        // never laid out under a notch or a home indicator.
+        paddingTop: `calc(${PAGE_MARGIN_PX}px + var(--safe-top))`,
+        paddingRight: `calc(${PAGE_MARGIN_PX}px + var(--safe-right))`,
+        paddingBottom: `calc(${PAGE_MARGIN_PX}px + var(--safe-bottom))`,
+        paddingLeft: `calc(${PAGE_MARGIN_PX}px + var(--safe-left))`,
+      }}
     >
       <div data-chrome>
         <DifficultySlider boardsStore={boardsStore} />

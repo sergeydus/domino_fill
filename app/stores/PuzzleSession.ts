@@ -20,8 +20,16 @@ export const GRID_BORDER_PX = 8
  */
 export const GUTTER_FRACTION = 0.7
 
-/** Label font size as a fraction of a cell. Was a constant `text-6xl` (60px). */
-export const LABEL_FONT_FRACTION = 0.55
+/**
+ * Label font size as a fraction of a cell. Was a constant `text-6xl` (60px).
+ *
+ * 0.5, not 0.55. A font's *content area* -- ascent plus descent -- is taller than its em
+ * box: measured at 21px in Geist it occupies 27px. `line-height: 1` shrinks the line box
+ * but not the glyphs, so the text overflowed the 26px gutter it was declared to fit while
+ * every box measurement said it fitted. The gutter has to hold `font * ~1.3`, so the
+ * fraction has to stay below `GUTTER_FRACTION / 1.3` = 0.538.
+ */
+export const LABEL_FONT_FRACTION = 0.5
 
 /**
  * Cell floor, in CSS px, below which the board stops shrinking to fit the viewport

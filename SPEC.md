@@ -213,7 +213,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | # | Location | Defect |
 |---|---|---|
 | a | `app/page.tsx:4`, `app/dominoFill/page.tsx:4` | Both `JSON.stringify` an **un-awaited Promise** — the build log prints `boards {}`. Dead server work producing nothing, plus a `console.log`. |
-| b | ~~`page.tsx:8` + `DominoClient.tsx:32`~~ | **✅ Fixed in P0-3.** The same `min-h-screen` wrapper was nested twice, so the page was two viewports tall and always had a scrollbar. One wrapper now, and `svh` rather than `vh`. |
+| b | `page.tsx:8` + `DominoClient.tsx:32` | **❌ Diagnosis false; cleanup done in P0-3.** The claim was that nesting `min-h-screen` made the page two viewports tall and guaranteed a scrollbar. It does not: `min-height: 100vh` on a child of a `min-height: 100vh` parent resolves against the *viewport*, not the parent, so both are one viewport. Measured in Chromium at 1280×800: outer 800px, inner 800px, not 1600. The 1095px document that prompted this was ordinary content overflow. The redundant wrapper was removed anyway as cleanup, and `vh` became `svh` for the mobile URL bar — but nothing about the duplication was a defect. |
 | c | `DominoClient.tsx:16` | The board is fetched by a Server Action from a `useEffect`, so first paint costs an RPC round-trip for a static JSON import, and the game SSRs **nothing** (`:30` renders `no board`). Pass it as a prop from the server component. |
 | d | `Boards.ts:1` + `:54` | A `"use server"` module may only export async functions, yet it `export default`s a class — dragging the whole generator into a server-action bundle. |
 | d2 | ~~`CurrentBoardStore.ts:19,34`~~ | **✅ Fixed in P0-6.** `correctHorizontalValues` summed a **column** and `correctVerticalValues` a **row**. Now `currentColumnSums`/`currentRowSums`, with `definition.columnTargets`/`rowTargets`. The inverted names survive only in `StoredPuzzle` and the JSON file, for data compatibility, and are mapped in `definitionFrom`. |
@@ -327,6 +327,26 @@ wraps `<html>` for no benefit and hands the document element to a client render.
 > Sizing is measured from the page (`useAvailableBoardBox`) rather than from `innerWidth`, which
 > also retires `SizeStore`'s clobbering unthrottled `window.onresize` (D10-l). `SizeStore` remains
 > only as the pre-measurement fallback.
+>
+> **Corrected in the row-11 follow-up, after review:**
+>
+> 4. **The label font was 0.55 cell and overflowed; it is 0.5 now.** A font's content area --
+>    ascent plus descent -- is roughly 1.3x its em box, and `line-height: 1` shrinks the line box
+>    without shrinking the glyphs. Measured at 360×640: a 21px label needed 27px of height inside
+>    a 26px gutter. The gutter must hold `font * ~1.3`, so the fraction has to stay under
+>    `GUTTER_FRACTION / 1.3` = 0.538. The test that was meant to catch this measured the label
+>    *element*, whose size is set by inline style, so it only restated the style and passed;
+>    `scrollWidth`/`scrollHeight` against `clientWidth`/`clientHeight` is what measures the text.
+>    The gutter's two-digit claim is now verified by driving every label to the widest value the
+>    game can produce (13), rather than by the ≈0.61-cell model above -- and by sweeping all nine
+>    shipped difficulty/level combinations, since the two-digit targets (10, 11, 13) appear on
+>    only two of them and the served content rotates daily.
+> 5. **Safe-area insets are implemented, with a stated limit.** `viewportFit: 'cover'` (without
+>    which `env(safe-area-inset-*)` is always zero), `--safe-*` variables, insets subtracted from
+>    the measured budget and kept clear by the page padding. The indirection through variables is
+>    deliberate: `env()` cannot be read from script, and Chromium cannot emulate a device's safe
+>    area, so the browser tests drive the variables. **They exercise the plumbing, not any real
+>    device's values** -- nothing in this suite proves what an actual iPhone reports.
 
 **P0-4. Fix the piece-overlay hit regions (D4).** `pointer-events: none` on the `Pieces` layer
 (`Pieces.tsx:31`), removal handled on the cells instead; and `fill="none"` rather than

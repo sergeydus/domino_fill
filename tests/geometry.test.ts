@@ -150,14 +150,26 @@ describe('derived label geometry', () => {
         expect(small.labelFontSize).toBeLessThan(small.squareSize)
     })
 
-    it('leaves room for the widest label the game can produce', () => {
-        // Sums reach 13. At 0.55 cell a two-digit label is about 0.61 cell wide, which
-        // has to fit the 0.7-cell gutter. Validated against the widest label, not "8".
+    it('leaves room for a glyph, not just for an em box', () => {
+        // A font's content area -- ascent plus descent -- runs to about 1.3x its em box,
+        // and `line-height: 1` shrinks the line box without shrinking the glyphs. Measured
+        // at 360x640 before this was fixed: a 21px label needed 27px inside a 26px gutter.
         const s = make(8, { width: 360 - 16, height: 640 })
-        const twoDigitWidth = s.labelFontSize * 2 * 0.55
 
-        expect(twoDigitWidth).toBeLessThanOrEqual(s.gutterSize)
+        expect(s.labelFontSize * 1.3).toBeLessThanOrEqual(s.gutterSize)
     })
+
+    it('keeps the font fraction below what the gutter can hold', () => {
+        // The constraint the number above has to satisfy, stated once rather than
+        // rediscovered per viewport.
+        expect(LABEL_FONT_FRACTION * 1.3).toBeLessThanOrEqual(GUTTER_FRACTION)
+    })
+
+    // Whether the widest label the game actually produces fits is a question about glyph
+    // metrics, which only a browser can answer: e2e/layout.spec.ts drives every label to
+    // "13" and checks scrollWidth/scrollHeight against the box. The arithmetic here cannot
+    // stand in for that -- the version of it that tried used a 0.61-cell model and agreed
+    // with a layout that was overflowing.
 })
 
 describe('the measured box, and the fallback before it arrives', () => {

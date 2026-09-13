@@ -44,6 +44,31 @@ export const useAvailableBoardBox = (
         let frame = 0
         let last: Box | null = null
 
+        /*
+         * Safe-area insets, resolved to pixels.
+         *
+         * `env(safe-area-inset-*)` cannot be read from script, and `getPropertyValue`
+         * hands back the unresolved `env(...)` text. Applying them as padding to a probe
+         * and reading the computed padding is what turns them into numbers. The probe is
+         * `fixed` and zero-sized, so it lays nothing out and affects no measurement.
+         */
+        const probe = document.createElement('div')
+        probe.setAttribute('aria-hidden', 'true')
+        probe.style.cssText =
+            'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+            'padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left)'
+        document.body.appendChild(probe)
+
+        const insets = () => {
+            const cs = getComputedStyle(probe)
+            return {
+                top: parseFloat(cs.paddingTop) || 0,
+                right: parseFloat(cs.paddingRight) || 0,
+                bottom: parseFloat(cs.paddingBottom) || 0,
+                left: parseFloat(cs.paddingLeft) || 0,
+            }
+        }
+
         const read = (): Box => {
             let used = 0
             for (const item of el.querySelectorAll<HTMLElement>('[data-chrome]')) {
@@ -64,9 +89,12 @@ export const useAvailableBoardBox = (
             // `documentElement.clientWidth` excludes the scrollbar; `innerWidth` does not,
             // and budgeting from a width the page does not have is how the board ends up
             // one scrollbar too wide.
+            const safe = insets()
             return {
-                width: Math.max(0, document.documentElement.clientWidth - margin * 2),
-                height: Math.max(0, window.innerHeight - used - margin * 2),
+                width: Math.max(0, document.documentElement.clientWidth
+                    - margin * 2 - safe.left - safe.right),
+                height: Math.max(0, window.innerHeight
+                    - used - margin * 2 - safe.top - safe.bottom),
             }
         }
 
@@ -88,6 +116,9 @@ export const useAvailableBoardBox = (
 
         const observer = new ResizeObserver(schedule)
         observer.observe(el)
+        // Border-box, so a change in the probe's padding -- i.e. in the safe-area insets,
+        // on an orientation change -- re-measures on its own.
+        observer.observe(probe, { box: 'border-box' })
         for (const item of el.querySelectorAll<HTMLElement>('[data-chrome]')) observer.observe(item)
 
         window.addEventListener('resize', schedule)
@@ -97,6 +128,7 @@ export const useAvailableBoardBox = (
 
         return () => {
             if (frame) cancelAnimationFrame(frame)
+            probe.remove()
             observer.disconnect()
             window.removeEventListener('resize', schedule)
             window.visualViewport?.removeEventListener('resize', schedule)

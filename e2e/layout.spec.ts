@@ -34,10 +34,13 @@ const DIFFICULTIES = [
 ]
 
 const openBoard = async (page: Page) => {
+    // Suppressed before the first paint rather than dismissed afterwards. Clicking Skip
+    // works only on the first visit, and probing for the button races the first render --
+    // when it lost, the tutorial's own 2x2 board was still mounted and every
+    // `[data-board-shell]` query matched two elements. The tutorial's own behaviour is
+    // covered in e2e/tutorial.spec.ts; here it is just in the way.
+    await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
     await page.goto('/')
-    const skip = page.getByRole('button', { name: /skip/i })
-    await skip.scrollIntoViewIfNeeded()
-    await skip.click()
     await expect(page.locator('[data-board-shell]')).toBeVisible()
 }
 
@@ -81,6 +84,32 @@ const columnAlignment = (page: Page) => page.evaluate(() => {
         centre(document.querySelector(`[data-cell="0,${j}"]`)!))
     return { labels, cells }
 })
+
+/**
+ * The worst text overflow across every label, per element, in CSS px.
+ *
+ * Compared element by element: row labels are gutter-wide and cell-tall, column labels the
+ * other way round, so a min/max taken across the two axes together compares boxes that
+ * were never meant to match and means nothing.
+ */
+const labelOverflow = (page: Page, text?: string) => page.evaluate((forced) => {
+    let x = 0, y = 0
+    for (const el of document.querySelectorAll('[data-col-label],[data-row-label]')) {
+        const e = el as HTMLElement
+        if (forced) e.textContent = forced
+        x = Math.max(x, e.scrollWidth - e.clientWidth)
+        y = Math.max(y, e.scrollHeight - e.clientHeight)
+    }
+    return { x, y }
+}, text)
+
+/** Move to a level by clicking the next arrow, from level 1. */
+const goToLevel = async (page: Page, level: number) => {
+    for (let k = 1; k < level; k++) await page.locator('[data-level="next"]').click()
+}
+
+/** The two-digit targets the shipped content actually contains are 10, 11 and 13. */
+const WIDEST_LABEL = '13'
 
 for (const vp of VIEWPORTS) {
     test.describe(vp.name, () => {
@@ -145,17 +174,16 @@ for (const vp of VIEWPORTS) {
                     expect(shell.y).toBeGreaterThanOrEqual(-1)
                 })
 
-                test('the labels fit their gutter', async ({ page }) => {
-                    const label = await box(page, '[data-row-label]')
-                    const cell = await box(page, '[data-cell="0,0"]')
-                    const fontSize = await page.locator('[data-row-label]').first()
-                        .evaluate(el => parseFloat(getComputedStyle(el).fontSize))
-
-                    // The defect: a constant `text-6xl` (60px) glyph rendered inside a
-                    // 39px box at phone size, overflowing into its neighbours.
-                    expect(fontSize).toBeLessThan(cell.height)
-                    expect(label.width).toBeLessThan(cell.width)
-                    expect(label.height).toBeCloseTo(cell.height, 0)
+                test('no label text overflows its box', async ({ page }) => {
+                    // The *text*, not the box. An earlier version of this test compared
+                    // the label element against the cell and the font size against the
+                    // cell height, and passed while the glyphs were overflowing: the
+                    // element is sized by inline style, so measuring it only restates the
+                    // style. `scrollWidth/scrollHeight` is what the content actually
+                    // needs. It caught a real 1px overflow -- a font's content area is
+                    // ~1.3x its em box, so `line-height: 1` shrinks the line box without
+                    // shrinking the glyphs.
+                    expect(await labelOverflow(page)).toEqual({ x: 0, y: 0 })
                 })
             })
         }
@@ -164,6 +192,28 @@ for (const vp of VIEWPORTS) {
             await openBoard(page)
             const cell = await box(page, '[data-cell="0,0"]')
             expect(Math.abs(cell.width - cell.height)).toBeLessThanOrEqual(1)
+        })
+
+        test('the widest label the game can produce still fits', async ({ page }) => {
+            await openBoard(page)
+            await chooseDifficulty(page, /hard/i, 8)
+
+            // Driven rather than found: the shipped content rotates daily, so whether a
+            // two-digit target is on screen depends on the date. Sums reach 13, and 13 is
+            // what the 0.7-cell gutter has to hold.
+            expect(await labelOverflow(page, WIDEST_LABEL)).toEqual({ x: 0, y: 0 })
+        })
+
+        test('no label overflows on any shipped level', async ({ page }) => {
+            await openBoard(page)
+            for (const d of DIFFICULTIES) {
+                await chooseDifficulty(page, d.label, d.n)
+                for (let level = 1; level <= 3; level++) {
+                    await goToLevel(page, level)
+                    expect(await labelOverflow(page), `${d.name} level ${level}`)
+                        .toEqual({ x: 0, y: 0 })
+                }
+            }
         })
 
         test('the layout settles at once and does not creep', async ({ page }) => {
@@ -195,5 +245,71 @@ test.describe('the phone cell-size criterion', () => {
         // the arithmetic through -- 44px is unreachable at 360 wide, because eight cells
         // alone would be 352px before any gutter or border exists.
         expect(cell.width).toBeGreaterThanOrEqual(38)
+    })
+})
+
+test.describe('safe-area insets', () => {
+    test.use({ viewport: { width: 390, height: 844 } })
+
+    /*
+     * Chromium cannot emulate a device's safe area, so these drive the `--safe-*`
+     * variables the page reads. That is a test of the plumbing -- that the insets are
+     * subtracted from the budget and kept clear by the padding -- not of any device's
+     * actual values. Stated plainly because the distinction matters: nothing here proves
+     * how a real iPhone reports its notch.
+     */
+    const applyInsets = (page: Page, insets: Record<string, string>) => page.evaluate((i) => {
+        for (const [name, value] of Object.entries(i)) {
+            document.documentElement.style.setProperty(name, value)
+        }
+    }, insets)
+
+    test('the page asks for the whole screen, which is what makes env() non-zero', async ({ page }) => {
+        await openBoard(page)
+        const content = await page.locator('meta[name="viewport"]').getAttribute('content')
+        expect(content).toContain('viewport-fit=cover')
+    })
+
+    test('an inset shrinks the board rather than being ignored', async ({ page }) => {
+        await openBoard(page)
+        await chooseDifficulty(page, /hard/i, 8)
+        const before = (await box(page, '[data-cell="0,0"]')).width
+
+        await applyInsets(page, {
+            '--safe-top': '47px', '--safe-bottom': '34px',
+            '--safe-left': '32px', '--safe-right': '32px',
+        })
+        await expect
+            .poll(async () => (await box(page, '[data-cell="0,0"]')).width)
+            .toBeLessThan(before)
+    })
+
+    test('the shell stays clear of the inset area', async ({ page }) => {
+        await openBoard(page)
+        await chooseDifficulty(page, /hard/i, 8)
+        await applyInsets(page, { '--safe-left': '32px', '--safe-right': '32px' })
+
+        await expect.poll(async () => {
+            const shell = await box(page, '[data-board-shell]')
+            return Math.round(shell.x)
+        }).toBeGreaterThanOrEqual(32 + PAGE_MARGIN_PX - 1)
+
+        const shell = await box(page, '[data-board-shell]')
+        expect(shell.x + shell.width).toBeLessThanOrEqual(390 - 32 - PAGE_MARGIN_PX + 1)
+        expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
+    })
+
+    test('no inset means no change', async ({ page }) => {
+        await openBoard(page)
+        await chooseDifficulty(page, /hard/i, 8)
+        const before = (await box(page, '[data-cell="0,0"]')).width
+
+        await applyInsets(page, {
+            '--safe-top': '0px', '--safe-bottom': '0px',
+            '--safe-left': '0px', '--safe-right': '0px',
+        })
+        await page.waitForTimeout(400)
+
+        expect((await box(page, '[data-cell="0,0"]')).width).toBe(before)
     })
 })
