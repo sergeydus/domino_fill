@@ -155,15 +155,23 @@ export const waitForReady = async (
         if (!decision.retry) throw await describeFailure(page, err, what, timeout, decision.reason)
 
         console.warn(`[e2e] ${what} did not load: ${decision.reason}.`)
-        // Mark the new attempt rather than clearing: the decision below considers only the
-        // current attempt's failures, while the diagnostics keep both.
+
+        // Pause first, then mark the new attempt, then reload -- in that order.
+        //
+        // The pause is there to let the failing condition drain, and requests from the
+        // first load can still fail during it. Incrementing before the pause would label
+        // those stragglers as attempt 1, which is the one thing the marker exists to get
+        // right. Nothing is cleared: both attempts are kept, and the marker is what tells
+        // them apart in the report.
+        await page.waitForTimeout(1_000)
         const recording = NETWORK.get(page)
         if (recording) recording.attempt += 1
-        await page.waitForTimeout(1_000)
         await page.reload()
         try {
             await expect(locator).toBeVisible({ timeout })
         } catch (retryErr) {
+            // Refuses, because one reload is the budget. Called for the reason string, so
+            // the report says why no further retry was taken rather than going silent.
             const after = await decide(1)
             throw await describeFailure(
                 page, retryErr, `${what} (after one reload)`, timeout, after.reason)
