@@ -156,18 +156,20 @@ const terminate = async (m: Managed) => {
         }
     }
 
-    // The process is gone. Releasing the port is normally immediate, but a lingering socket
-    // is NOT worth failing a green run over -- and if it really is stuck, the next run's
-    // start guard refuses with a precise message rather than testing an unknown server.
+    // The process we owned is gone. If the port is STILL accepting connections, that is not
+    // slow cleanup -- `isPortFree` connects, and a socket in TIME_WAIT refuses connections --
+    // so something else is actively listening. That means an orphan we failed to kill, and
+    // it must fail the run: leaving it alive would silently poison the next one.
+    //
+    // Note there is deliberately no tree-kill here. Escalation happens above, while we still
+    // own the parent; signalling a pid after its process has exited is the reused-pid hazard
+    // this function is written to avoid, and a dead parent cannot be walked for children.
     if (await settle(() => isPortFree(PORT), 20_000)) return
 
-    if (pid && process.platform === 'win32') killTree(pid) // in case something detached
-    if (await settle(() => isPortFree(PORT), 5_000)) return
-
-    console.warn(
-        `[e2e] server process exited but port ${PORT} is still bound by ` +
-        `pid(s) ${portHolders().join(', ') || 'unknown'}. The test run itself succeeded; ` +
-        `the next run will refuse to start until the port frees.${describe(m)}`
+    throw new Error(
+        `Server process ${pid} exited, but port ${PORT} is still accepting connections -- ` +
+        `an orphaned listener survived teardown. Holder pid(s): ` +
+        `${portHolders().join(', ') || 'unknown'}.${describe(m)}`
     )
 }
 
