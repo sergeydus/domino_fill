@@ -316,7 +316,10 @@ wraps `<html>` for no benefit and hands the document element to a client render.
 > `pointer-events: auto` does not bring the defect back -- the click bubbles to the grid and is
 > routed by cell index regardless. The other two remain required, as defence in depth and as a
 > precondition for P1-2's cell-level handlers, but the E2E suite asserts them as properties
-> rather than through behaviour, because no behaviour distinguishes them today.
+> rather than through board-state behaviour, because no *board-state* difference distinguishes
+> them today. Other observable behaviour does differ: the pieces layer is a sibling of the
+> cells, not their ancestor, so an interactive overlay swallows the click before `BoardSquare`'s
+> own handler (today, the placement sound) ever runs.
 
 **P0-5. Stable `CurrentBoardStore` instances, keyed by `puzzleId`.** A `Map` keyed by the opaque
 **`puzzleId`** defined below — *not* by `difficulty:level`, and not by a board hash —

@@ -132,25 +132,41 @@ test('clicking just above a domino places a piece there', async ({ page }) => {
 
 test('the piece overlay does not take pointer events', async ({ page }) => {
     // Defence in depth, and stated as such: with the overlay's own click handler gone,
-    // restoring `pointer-events: auto` here does NOT bring D4 back -- measured. The
-    // behavioural tests above stay green either way, so this asserts the property
-    // directly. It matters for what comes next: P1-2 moves hit-testing onto the cells,
-    // and a layer that takes pointer events would sit on top of every one of them.
+    // restoring `pointer-events: auto` here does NOT change the resulting board state --
+    // measured. The behavioural tests above stay green either way, so this asserts the
+    // property directly. Other behaviour does differ: this layer is a sibling of the
+    // cells, so an interactive overlay swallows the click before `BoardSquare`'s own
+    // handler runs. And it matters for what comes next: P1-2 moves hit-testing onto the
+    // cells, and a layer that takes pointer events would sit on top of every one of them.
     const layer = page.locator('div.absolute.z-20').first()
     await expect(layer).toHaveCSS('pointer-events', 'none')
 })
 
-test('the decorative outline rects are unpainted', async ({ page }) => {
-    const { i, j } = await freeColumnRun(page)
+test('every decorative outline rect is fill="none", on all three shapes', async ({ page }) => {
+    // `fill="transparent"` is rgba(0,0,0,0): a paint value that still hit-tests under
+    // `visiblePainted`. `none` is the only value that paints nothing at all, so the
+    // assertion is on that exact string -- "not transparent" would pass for `red`, and
+    // for the attribute having been dropped entirely.
+    const { i, j } = await freeColumnRun(page, 1)
     await placeUpright(page, i, j)
 
-    // `fill="none"` rather than `"transparent"`: the latter is rgba(0,0,0,0), which still
-    // hit-tests under `visiblePainted`. Belt and braces with the inert layer above -- the
-    // same components are also rendered in the piece tray, outside that layer.
-    const fills = await page.locator(`[data-piece="one"][data-at="${i},${j}"] rect[stroke="black"]`)
-        .evaluateAll(els => els.map(el => el.getAttribute('fill')))
-    expect(fills.length).toBeGreaterThan(0)
-    expect(fills).not.toContain('transparent')
+    await page.locator('[data-select-piece="2"]').click()
+    const flat = await freeColumnRun(page, 1)
+    const flatCell = await cellBox(page, flat.i, flat.j)
+    await page.mouse.click(flatCell.x + flatCell.width * 0.75, flatCell.y + flatCell.height / 2)
+    await expect(page.locator('[data-piece="two"]').first()).toBeVisible()
+
+    // All three shapes must be on the board, or the loop below proves nothing about the
+    // ones that are missing. Rocks come from the fixture board.
+    for (const kind of ['one', 'two', 'rock'] as const) {
+        const pieces = page.locator(`[data-piece="${kind}"]`)
+        expect(await pieces.count(), `no ${kind} on the board to check`).toBeGreaterThan(0)
+
+        const rects = page.locator(`[data-piece="${kind}"] rect[data-outline]`)
+        const fills = await rects.evaluateAll(els => els.map(el => el.getAttribute('fill')))
+        expect(fills.length, `${kind} has no marked outline rect`).toBeGreaterThan(0)
+        expect(fills, `${kind} outline fills`).toEqual(fills.map(() => 'none'))
+    }
 })
 
 test('the piece tray is still selectable', async ({ page }) => {
