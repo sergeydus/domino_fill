@@ -142,7 +142,10 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * the page and Space still does whatever it would otherwise do.
      */
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        if (boardsStore.handleKey(e.key, { ctrl: e.ctrlKey, meta: e.metaKey })) e.preventDefault()
+        // All four modifiers, not just the two that pick the shortcut: dropping `shift`
+        // makes Ctrl+Shift+Z -- the redo chord -- indistinguishable from undo.
+        const modifiers = { ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, alt: e.altKey }
+        if (boardsStore.handleKey(e.key, modifiers)) e.preventDefault()
     }
 
     const isDisabled = boardsStore.completed

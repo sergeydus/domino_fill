@@ -112,6 +112,24 @@ test('Ctrl+Z undoes through the board handler', async ({ page }) => {
     await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toHaveCount(0)
 })
 
+test('Ctrl+Shift+Z is not undo, because there is no redo', async ({ page }) => {
+    // The redo chord on every platform that has one. Consuming it as a second undo would
+    // take away another move just as the player asked for one back.
+    const { i, j } = await placeOne(page)
+    const placed = page.locator(`[data-piece="one"][data-at="${i},${j}"]`)
+    await page.locator('.board-grid').focus()
+
+    await page.keyboard.press('Control+Shift+z')
+    await expect(placed).toBeVisible()
+
+    await page.keyboard.press('Alt+Control+z')
+    await expect(placed).toBeVisible()
+
+    // ...and the unmodified chord still works, so the guard did not disable undo outright.
+    await page.keyboard.press('Control+z')
+    await expect(placed).toHaveCount(0)
+})
+
 test('the controls are reachable by keyboard, unlike the level arrows', async ({ page }) => {
     // Real `<button>` elements. The level arrows beside them are `motion.div`s with an
     // `onClick`, which is why P1-1's completion-focus clause had to be deferred; new
@@ -124,15 +142,19 @@ test('the controls are reachable by keyboard, unlike the level arrows', async ({
     await expect(undo(page)).toBeDisabled()
 })
 
-test('a completed board can still be reset, so winning is not a soft-lock', async ({ page }) => {
-    // D10-h: `completed` sets `pointerEvents: none` on the board and nothing ever cleared
-    // it. The controls sit outside the board, so they stay usable either way -- asserted
-    // here rather than assumed, because it is the property that makes Reset an escape
-    // hatch rather than another way to get stuck.
-    await expect(reset(page)).toBeEnabled()
-    const shell = page.locator('[data-board-shell]')
-    await expect(shell).toBeVisible()
-
-    await reset(page).click()
-    await expect(reset(page)).toBeEnabled()
-})
+/*
+ * There is deliberately no browser test here for resetting a *completed* board.
+ *
+ * An earlier version claimed one and did not have it: it never completed the board, never
+ * observed `completed`, and never asserted the shell was disabled -- it clicked an enabled
+ * Reset on an ordinary board and called that a soft-lock test. Vacuous, and worse than
+ * nothing, because it read as coverage.
+ *
+ * Completing a board here needs a solution to a shipped puzzle, which is a solver the
+ * project does not have until P1-6. The contract -- shell inert, Reset outside it and
+ * still enabled, clicking it clears completion and restores interaction -- is pinned in
+ * tests/completedBoard.test.tsx against a genuinely completed session.
+ *
+ * **Deferred to row 15 (P1-4).** That row builds the completion path and its own Next
+ * control, so a browser test that actually wins a game belongs with it.
+ */

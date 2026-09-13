@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
-import { PuzzleSession } from '@/app/stores/PuzzleSession'
+import { PuzzleSession, type Modifiers } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { Cell } from '@/app/stores/placement'
 
@@ -275,7 +275,7 @@ describe('Delete and Backspace remove', () => {
 })
 
 describe('Ctrl/Cmd+Z undoes (P1-3)', () => {
-    const press2 = (s: PuzzleSession, key: string, mods: { ctrl?: boolean, meta?: boolean }) =>
+    const press2 = (s: PuzzleSession, key: string, mods: Modifiers) =>
         runInAction(() => s.handleKey(key, mods))
 
     for (const mods of [{ ctrl: true }, { meta: true }]) {
@@ -289,11 +289,50 @@ describe('Ctrl/Cmd+Z undoes (P1-3)', () => {
         })
     }
 
-    it('works with the shift key held, which is what Ctrl+Shift+Z sends', () => {
+    it('Ctrl/Cmd+Shift+Z is redo elsewhere, and is refused here', () => {
+        /*
+         * There is no redo on this board, on purpose. Consuming the redo chord as another
+         * undo would be actively wrong: the player asking to put a move back would lose a
+         * second one instead.
+         *
+         * The earlier version of this test passed an uppercase `'Z'` and called it "the
+         * shift key held". That is not a model of the modifier at all -- key case depends
+         * on Caps Lock and on platform chord handling -- so it passed against a handler
+         * that never saw `shift`.
+         */
+        for (const mods of [{ ctrl: true, shift: true }, { meta: true, shift: true }]) {
+            const s = session()
+            runInAction(() => { s.placeToward([2, 2], 'down') })
+
+            expect(press2(s, 'z', mods), JSON.stringify(mods)).toBe(false)
+            expect(s.board[2][2], JSON.stringify(mods)).toBe(1)
+            expect(s.board[3][2], JSON.stringify(mods)).toBe(0)
+        }
+    })
+
+    it('Alt+Ctrl/Cmd+Z belongs to the OS, not to the board', () => {
+        for (const mods of [{ ctrl: true, alt: true }, { meta: true, alt: true }]) {
+            const s = session()
+            runInAction(() => { s.placeToward([2, 2], 'down') })
+
+            expect(press2(s, 'z', mods), JSON.stringify(mods)).toBe(false)
+            expect(s.board[2][2], JSON.stringify(mods)).toBe(1)
+        }
+    })
+
+    it('an uppercase Z with no shift flag still undoes, since Caps Lock is not a chord', () => {
+        // The case of the character is not the signal; the modifier flags are.
         const s = session()
         runInAction(() => { s.placeToward([2, 2], 'down') })
         expect(press2(s, 'Z', { ctrl: true })).toBe(true)
         expect(s.board[2][2]).toBeNull()
+    })
+
+    it('Alt alone is left to the browser', () => {
+        const s = session()
+        focusAt(s, [2, 2])
+        expect(press2(s, 'ArrowDown', { alt: true })).toBe(false)
+        expect(s.focusedCell).toEqual([2, 2])
     })
 
     it('is unhandled with nothing to undo, leaving the key to the browser', () => {

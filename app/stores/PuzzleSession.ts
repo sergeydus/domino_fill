@@ -70,9 +70,14 @@ export type PlacementOutcome = 'placed' | 'removed' | 'candidates' | 'cleared' |
  * Cap on the move stack (spec P1-3: "bounded move stack").
  *
  * Bounded because a session lives as long as the page and is never discarded -- LevelStore
- * keeps one per puzzle -- so an unbounded stack is a leak that grows with play. 60 is well
- * past the longest possible game: an 8x8 board holds 32 dominoes, so even placing and
- * removing every one of them twice stays inside it.
+ * keeps one per puzzle, and P0-5 requires that -- so an unbounded stack grows for as long
+ * as someone keeps playing.
+ *
+ * 60 is a memory-and-usefulness choice, **not** coverage of a longest possible game: there
+ * is no such thing, because a piece can be placed and removed indefinitely. For scale, the
+ * largest shipped board has 58 playable cells (8x8 with 6 rocks) = 29 dominoes, so filling
+ * it once and clearing it again is already 58 recorded moves. What the cap buys is that the
+ * recent past is always undoable; a player who wants to go further back has Reset.
  */
 export const MAX_UNDO = 60
 
@@ -92,6 +97,15 @@ export type Move = {
     before: readonly [number | null, number | null]
     anchor: Cell
 }
+
+/**
+ * Keyboard modifiers, as the board needs to see them.
+ *
+ * All four, not just the two that select a shortcut: `shift` and `alt` are what separate
+ * undo from redo and from the OS's own chords, so a handler that drops them cannot tell
+ * `Ctrl+Z` from `Ctrl+Shift+Z`.
+ */
+export type Modifiers = { ctrl?: boolean, meta?: boolean, shift?: boolean, alt?: boolean }
 
 export type Gesture =
     | { kind: 'drag', from: Cell }
@@ -599,20 +613,34 @@ export class PuzzleSession {
      * Returns whether the key was handled, so the caller knows whether to `preventDefault`
      * -- arrows must still scroll the page when the board did not use them.
      */
-    handleKey(key: string, modifiers: { ctrl?: boolean, meta?: boolean } = {}): boolean {
+    handleKey(key: string, modifiers: Modifiers = {}): boolean {
         const arrow: Record<string, Direction> = {
             ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
         }
 
-        // Ctrl+Z and Cmd+Z, checked before anything else so no other rule can claim them.
-        // Unhandled when there is nothing to undo, which leaves the keystroke to the
-        // browser rather than swallowing it to no effect.
-        if ((modifiers.ctrl || modifiers.meta) && key.toLowerCase() === 'z') {
+        const commandKey = !!(modifiers.ctrl || modifiers.meta)
+
+        /*
+         * Ctrl+Z and Cmd+Z, checked before anything else so no other rule can claim them.
+         *
+         * Shift and Alt must be *absent*, not merely ignored. `Ctrl/Cmd+Shift+Z` is the
+         * conventional redo chord on every platform that has one, and this board has no
+         * redo on purpose -- consuming it as another undo would be actively wrong, undoing
+         * a second move when the player asked to put one back. Alt+Ctrl+Z belongs to the
+         * OS and the browser. Both are left alone.
+         *
+         * Note the uppercase `Z` a shifted press produces is *not* a usable signal here:
+         * key case depends on Caps Lock and on the platform's own chord handling, so the
+         * modifier flags are the only sound test.
+         */
+        if (commandKey && !modifiers.shift && !modifiers.alt && key.toLowerCase() === 'z') {
+            // Unhandled when there is nothing to undo, which leaves the keystroke to the
+            // browser rather than swallowing it to no effect.
             return this.undo()
         }
-        // Any other modified key belongs to the browser: Ctrl+R reloads, Cmd+Left goes
+        // Every other modified chord belongs to the browser: Ctrl+R reloads, Cmd+Left goes
         // back. Claiming them because the unmodified key is an arrow would be a bug.
-        if (modifiers.ctrl || modifiers.meta) return false
+        if (commandKey || modifiers.alt) return false
 
         if (key === 'Escape') {
             if (!this.gesture) return false

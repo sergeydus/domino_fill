@@ -258,6 +258,34 @@ describe('ClientBoard event wiring', () => {
         expect(fireEvent.keyDown(grid, { key: 'q' })).toBe(true)
     })
 
+    it('forwards all four modifiers, not just the two that pick the shortcut', () => {
+        /*
+         * The component's half of the undo contract. `PuzzleSession` can only refuse
+         * Ctrl+Shift+Z -- the redo chord -- if it is told that shift was down; a handler
+         * that forwards `ctrl` and `meta` alone makes the two chords identical before the
+         * store ever sees them.
+         *
+         * Asserted through the DOM rather than on the store, because the defect lives in
+         * the event-to-store translation, which is precisely what a store-level test
+         * cannot reach.
+         */
+        const s = session()
+        const { grid } = renderBoard(s)
+        runInAction(() => { s.placeToward([2, 2], 'down') })
+
+        // Redo chord: refused, and left to the browser.
+        expect(fireEvent.keyDown(grid, { key: 'z', ctrlKey: true, shiftKey: true })).toBe(true)
+        expect(s.board[2][2]).toBe(1)
+
+        // Alt chord: likewise.
+        expect(fireEvent.keyDown(grid, { key: 'z', ctrlKey: true, altKey: true })).toBe(true)
+        expect(s.board[2][2]).toBe(1)
+
+        // Plain undo still works, so the guard did not simply disable the shortcut.
+        expect(fireEvent.keyDown(grid, { key: 'z', ctrlKey: true })).toBe(false)
+        expect(s.board[2][2]).toBeNull()
+    })
+
     it('is focusable, so the keyboard can reach it', () => {
         const s = session()
         const { grid } = renderBoard(s)
