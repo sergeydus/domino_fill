@@ -618,29 +618,44 @@ export class PuzzleSession {
             ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
         }
 
-        const commandKey = !!(modifiers.ctrl || modifiers.meta)
+        const ctrl = !!modifiers.ctrl
+        const meta = !!modifiers.meta
+        const shift = !!modifiers.shift
+        const alt = !!modifiers.alt
 
         /*
-         * Ctrl+Z and Cmd+Z, checked before anything else so no other rule can claim them.
+         * Undo is exactly one of Ctrl or Meta, with neither Shift nor Alt, on `z`.
+         *
+         * `ctrl !== meta` rather than `ctrl || meta`: holding both is a third chord, not a
+         * louder version of either, and belongs to whatever else wants it.
          *
          * Shift and Alt must be *absent*, not merely ignored. `Ctrl/Cmd+Shift+Z` is the
          * conventional redo chord on every platform that has one, and this board has no
-         * redo on purpose -- consuming it as another undo would be actively wrong, undoing
-         * a second move when the player asked to put one back. Alt+Ctrl+Z belongs to the
-         * OS and the browser. Both are left alone.
+         * redo on purpose -- consuming it as another undo would be actively wrong, taking a
+         * second move away just as the player asked for one back. Alt+Ctrl+Z belongs to the
+         * OS.
          *
          * Note the uppercase `Z` a shifted press produces is *not* a usable signal here:
          * key case depends on Caps Lock and on the platform's own chord handling, so the
          * modifier flags are the only sound test.
          */
-        if (commandKey && !modifiers.shift && !modifiers.alt && key.toLowerCase() === 'z') {
+        const undoChord = ctrl !== meta && !shift && !alt && key.toLowerCase() === 'z'
+        if (undoChord) {
             // Unhandled when there is nothing to undo, which leaves the keystroke to the
             // browser rather than swallowing it to no effect.
             return this.undo()
         }
-        // Every other modified chord belongs to the browser: Ctrl+R reloads, Cmd+Left goes
-        // back. Claiming them because the unmodified key is an arrow would be a bug.
-        if (commandKey || modifiers.alt) return false
+
+        /*
+         * Every other modified chord belongs to the browser, **Shift included**.
+         *
+         * Shift was previously missing from this guard, so Shift+Arrow still moved the
+         * focus, Shift+Space still anchored and Shift+Backspace still removed a domino --
+         * contradicting this very comment. Shift+Space scrolls a page up and Shift+Arrow
+         * extends a selection; a board that quietly eats them is a board that has taken
+         * keys it never claimed.
+         */
+        if (ctrl || meta || shift || alt) return false
 
         if (key === 'Escape') {
             if (!this.gesture) return false

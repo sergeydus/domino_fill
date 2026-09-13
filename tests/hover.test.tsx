@@ -286,6 +286,22 @@ describe('ClientBoard event wiring', () => {
         expect(s.board[2][2]).toBeNull()
     })
 
+    it('leaves Shift-modified board keys to the page', () => {
+        // The DOM boundary for the same rule: Shift+Arrow must reach the page (where it
+        // extends a selection) rather than being consumed and prevented by the board.
+        const s = session()
+        const { grid } = renderBoard(s)
+        runInAction(() => { s.setFocusedCell([2, 2]) })
+
+        // fireEvent returns false when preventDefault was called, so `true` means the
+        // board declined the key.
+        expect(fireEvent.keyDown(grid, { key: 'ArrowDown', shiftKey: true })).toBe(true)
+        expect(s.focusedCell).toEqual([2, 2])
+
+        expect(fireEvent.keyDown(grid, { key: ' ', shiftKey: true })).toBe(true)
+        expect(s.pendingAnchor).toBeNull()
+    })
+
     it('is focusable, so the keyboard can reach it', () => {
         const s = session()
         const { grid } = renderBoard(s)

@@ -328,6 +328,15 @@ describe('Ctrl/Cmd+Z undoes (P1-3)', () => {
         expect(s.board[2][2]).toBeNull()
     })
 
+    it('Ctrl+Meta+Z is a third chord, not a louder undo', () => {
+        const s = session()
+        runInAction(() => { s.placeToward([2, 2], 'down') })
+
+        expect(press2(s, 'z', { ctrl: true, meta: true })).toBe(false)
+        expect(s.board[2][2]).toBe(1)
+        expect(s.board[3][2]).toBe(0)
+    })
+
     it('Alt alone is left to the browser', () => {
         const s = session()
         focusAt(s, [2, 2])
@@ -358,6 +367,57 @@ describe('Ctrl/Cmd+Z undoes (P1-3)', () => {
         expect(press2(s, 'r', { ctrl: true })).toBe(false)
         // ...and the focus did not move.
         expect(s.focusedCell).toEqual([2, 2])
+    })
+})
+
+describe('Shift belongs to the browser too', () => {
+    /*
+     * Shift was missing from the general modifier guard, so every board key still fired
+     * while it was held. Shift+Space scrolls a page up and Shift+Arrow extends a selection;
+     * a board that quietly eats them has taken keys it never claimed -- and Shift+Backspace
+     * silently destroying a domino is the worst of the three.
+     */
+    const shiftPress = (s: PuzzleSession, key: string) =>
+        runInAction(() => s.handleKey(key, { shift: true }))
+
+    it('Shift+Arrow does not move the focus', () => {
+        const s = session()
+        focusAt(s, [2, 2])
+
+        expect(shiftPress(s, 'ArrowDown')).toBe(false)
+        expect(s.focusedCell).toEqual([2, 2])
+    })
+
+    it('Shift+Space and Shift+Enter do not anchor', () => {
+        for (const key of [' ', 'Enter']) {
+            const s = session()
+            focusAt(s, [2, 2])
+
+            expect(shiftPress(s, key), key).toBe(false)
+            expect(s.pendingAnchor, key).toBeNull()
+        }
+    })
+
+    it('Shift+Backspace and Shift+Delete do not remove', () => {
+        for (const key of ['Backspace', 'Delete']) {
+            const s = session()
+            runInAction(() => { s.placeToward([2, 2], 'down') })
+            focusAt(s, [2, 2])
+
+            expect(shiftPress(s, key), key).toBe(false)
+            expect(s.board[2][2], key).toBe(1)
+            expect(s.board[3][2], key).toBe(0)
+        }
+    })
+
+    it('Shift+Escape does not clear a pending anchor', () => {
+        const s = session()
+        focusAt(s, [2, 2])
+        runInAction(() => { s.handleKey(' ') })
+        expect(s.pendingAnchor).toEqual([2, 2])
+
+        expect(shiftPress(s, 'Escape')).toBe(false)
+        expect(s.pendingAnchor).toEqual([2, 2])
     })
 })
 
