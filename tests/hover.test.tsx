@@ -203,3 +203,50 @@ describe('ClientBoard pointer handling', () => {
         expect(other.hoveredCell).toEqual([5, 5])
     })
 })
+
+describe('a click resolves its own cell', () => {
+    const renderBoard = (s: PuzzleSession) => render(
+        <StoreContext.Provider value={root}>
+            <ClientBoard boardsStore={s} />
+        </StoreContext.Provider>
+    )
+    const cell = (view: { container: HTMLElement }, i: number, j: number) =>
+        view.container.querySelector(`[data-cell="${i},${j}"]`) as HTMLElement
+
+    it('places without any preceding pointer move', () => {
+        // The click used to act on whatever the last move had stored, so a click with no
+        // move before it placed nothing at all.
+        const s = session()
+        const view = renderBoard(s)
+        runInAction(() => { root.boardsStore.setSelectedPiece(1) })
+
+        fireEvent.click(cell(view, 2, 3), { clientX: 0, clientY: 0 })
+
+        expect(s.board[2][3]).not.toBeNull()
+    })
+
+    it('acts on the clicked cell, not on a stale hover', () => {
+        const s = session()
+        const view = renderBoard(s)
+        runInAction(() => { root.boardsStore.setSelectedPiece(1) })
+
+        s.setHover({ i: 0, j: 0, fx: 0.5, fy: 0.9 })
+        fireEvent.click(cell(view, 4, 4), { clientX: 0, clientY: 0 })
+
+        expect(s.hoveredCell).toEqual([4, 4])
+        expect(s.board[4][4]).not.toBeNull()
+        expect(s.board[0][0]).toBeNull()
+        expect(s.board[1][0]).toBeNull()
+    })
+
+    it('still does nothing when the click is not over a cell', () => {
+        const s = session()
+        const view = renderBoard(s)
+        runInAction(() => { root.boardsStore.setSelectedPiece(1) })
+        const grid = view.container.querySelector('.relative') as HTMLElement
+
+        fireEvent.click(grid, { clientX: 0, clientY: 0 })
+
+        expect(s.board.flat().every(c => c === null)).toBe(true)
+    })
+})

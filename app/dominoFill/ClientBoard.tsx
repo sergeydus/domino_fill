@@ -80,9 +80,19 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     }
     // Without this the highlight stays frozen wherever the pointer left the grid.
     const onmouseleave = () => boardsStore.clearHover()
-    // Place or remove, decided from the cell under the pointer. Removal used to be the
-    // piece overlay's own handler, whose hit region overhung the cell above it (D4).
-    const onclick = () => {
+    /*
+     * Place or remove, decided from the cell under the pointer. Removal used to be the
+     * piece overlay's own handler, whose hit region overhung the cell above it (D4).
+     *
+     * The click resolves its own cell rather than acting on whatever the last move left
+     * behind. Reading the stored hover looked equivalent -- a mouse click is always
+     * preceded by a move over the same cell -- but it made the click depend on a move
+     * having happened at all: a click dispatched straight at a cell placed nothing, and a
+     * stale hover would have made a click act on the previous cell. Nothing about a click
+     * needs the pointer's history; the event says where it landed.
+     */
+    const onclick = (e: React.MouseEvent<HTMLDivElement>) => {
+        boardsStore.setHover(readHover(e))
         boardsStore.activateHoveredCell()
     }
 

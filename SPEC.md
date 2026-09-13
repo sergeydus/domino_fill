@@ -507,7 +507,12 @@ an earlier draft proposed exactly that and contradicted itself. The policy:
   target browser, drop drag on that browser and keep tap plus pinch. Never trade away pinch.
 
 **P1-2. Hit-test from the cell, not from arithmetic.** Put the handler on `BoardSquare` (or delegate
-via `closest('[data-cell]')`).
+via `closest('[data-cell]')`). The cell index then comes from the browser's own hit-testing — **no
+grid-to-cell index arithmetic**, correct at any zoom, DPR, or fractional cell size. The only rect
+read is of the one small cell you're provably over, and only to say which half of it the pointer is
+in; `fx`/`fy` are cell-relative fractions, so there is arithmetic here, just none that can name the
+wrong cell. This is *robustness*, not a zoom fix — the current math is already self-consistent
+(see §0).
 
 > **Markers landed early in row 10; implemented in row 12.** `data-cell="i,j"`, plus
 > `data-piece`/`data-at` on the overlay and `data-select-piece` on the tray, were added in row 10
@@ -521,10 +526,10 @@ via `closest('[data-cell]')`).
 >
 > Two clarifications measured while implementing:
 >
-> - **"No `ResizeObserver` that can disagree with layout" is not what changed.** P0-3's sizing
->   still uses one, and still must. What changed is that hit-testing no longer consults it: a
->   stale or wrong measurement now makes the board the wrong *size*, which is visible, rather
->   than putting clicks in the wrong *cell*, which is not.
+> - **The `ResizeObserver` has not gone away, and cannot.** P0-3's sizing still uses one. What
+>   changed is its blast radius: it now affects **visible sizing only**. A stale or wrong
+>   measurement makes the board the wrong *size*, which anyone can see, instead of putting clicks
+>   in the wrong *cell*, which nobody can.
 > - **A translation does not discriminate between the two approaches.** The old code measured the
 >   pointer against the grid's own rect, which moves with the grid, so it survives
 >   `translate(...)` unchanged. The browser tests use a `scale()` and a non-uniform row instead --
@@ -535,10 +540,13 @@ via `closest('[data-cell]')`).
 > the piece index from the same `data-*` labels, so transposing `data-cell` to `j,i` left all nine
 > green while pieces rendered in the wrong place on screen. There is now one test that crosses
 > from labels to pixels -- the placed piece must overlap the box of the cell that was clicked --
-> using an off-diagonal cell, since a transposition maps the diagonal to itself. The cell index then comes from the browser's own hit-testing —
-zero coordinate math, correct at any zoom, DPR, or fractional cell size, and no `ResizeObserver`
-that can disagree with layout. The only rect read is of the one small cell you're provably over.
-This is *robustness*, not a zoom fix — the current math is already self-consistent (see §0).
+> using an off-diagonal cell, since a transposition maps the diagonal to itself.
+>
+> **Corrected after review:** the click handler ignored its own event and activated whatever the
+> last pointer move had stored. Every mouse click is preceded by a move over the same cell, so it
+> looked equivalent -- but it made clicking depend on the pointer's history: a click dispatched
+> straight at a cell placed nothing, and a stale hover would have made a click act on the previous
+> cell. The click now resolves its own cell from its own event.
 
 **P1-3. Reset and undo.** Reset is ~5 lines and is the escape hatch for every other bug here; there
 is no restart anywhere in the UI today (D10-i), so a mis-solve requires reloading the page. Undo

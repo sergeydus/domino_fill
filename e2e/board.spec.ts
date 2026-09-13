@@ -343,3 +343,40 @@ test('the piece appears where the pointer was, not merely where the store says',
     expect(o.top, 'piece top vs cell top').toBeLessThanOrEqual(1)
     expect(o.coversCell, 'piece covers the cell').toBeGreaterThanOrEqual(0)
 })
+
+test.describe('a click does not depend on the pointer having moved first', () => {
+    test('a click dispatched straight at a cell places there', async ({ page }) => {
+        // `dispatchEvent` sends the click without moving the mouse, which is what exposed
+        // this: the handler read the hover the last move had stored, so with no move
+        // there was nothing to act on and the click placed nothing.
+        const { i, j } = await freeColumnRun(page, 1)
+
+        await page.locator(`[data-cell="${i},${j}"]`).dispatchEvent('click')
+
+        await expect(page.locator(`[data-piece="one"]`)).toHaveCount(1)
+    })
+
+    test('the clicked cell wins over a stale hover', async ({ page }) => {
+        const a = await freeColumnRun(page, 1)
+
+        // Hover one cell, then click a different one without moving the pointer to it.
+        const boxA = await cellBox(page, a.i, a.j)
+        await page.mouse.move(boxA.x + boxA.width / 2, boxA.y + boxA.height / 2)
+
+        const taken = await occupied(page)
+        const n = Math.sqrt(await boardSize(page))
+        let b: { i: number, j: number } | null = null
+        for (let i = 0; i + 1 < n && !b; i++) {
+            for (let j = 0; j < n && !b; j++) {
+                const far = Math.abs(i - a.i) + Math.abs(j - a.j) > 2
+                if (far && !taken.has(`${i},${j}`) && !taken.has(`${i + 1},${j}`)) b = { i, j }
+            }
+        }
+        if (!b) throw new Error('no second free cell far from the first')
+
+        await page.locator(`[data-cell="${b.i},${b.j}"]`).dispatchEvent('click')
+
+        await expect(page.locator(`[data-piece="one"][data-at="${b.i},${b.j}"]`)).toBeVisible()
+        await expect(page.locator(`[data-piece="one"][data-at="${a.i},${a.j}"]`)).toHaveCount(0)
+    })
+})
