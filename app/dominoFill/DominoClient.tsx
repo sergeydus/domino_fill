@@ -7,6 +7,7 @@ import DominoPieces from './Pieces/DominoPieces'
 import { useStores } from '../hooks/useStore'
 import { observer } from 'mobx-react'
 import LevelSelector from './LevelSelector'
+import GameControls from './GameControls'
 import Tutorial from './Tutorial'
 import { useAvailableBoardBox } from '../hooks/useAvailableBoardBox'
 
@@ -81,6 +82,9 @@ const DominoClient: React.FC = () => {
       <ClientBoard boardsStore={currentBoard} />
       <div data-chrome>
         <DominoPieces boardsStore={currentBoard} />
+      </div>
+      <div data-chrome>
+        <GameControls boardsStore={currentBoard} />
       </div>
       <div data-chrome>
         <LevelSelector boardsStore={boardsStore} />

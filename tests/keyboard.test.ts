@@ -274,6 +274,54 @@ describe('Delete and Backspace remove', () => {
     })
 })
 
+describe('Ctrl/Cmd+Z undoes (P1-3)', () => {
+    const press2 = (s: PuzzleSession, key: string, mods: { ctrl?: boolean, meta?: boolean }) =>
+        runInAction(() => s.handleKey(key, mods))
+
+    for (const mods of [{ ctrl: true }, { meta: true }]) {
+        it(`${mods.ctrl ? 'Ctrl' : 'Cmd'}+Z reverses the last move`, () => {
+            const s = session()
+            runInAction(() => { s.placeToward([2, 2], 'down') })
+
+            expect(press2(s, 'z', mods)).toBe(true)
+            expect(s.board[2][2]).toBeNull()
+            expect(s.board[3][2]).toBeNull()
+        })
+    }
+
+    it('works with the shift key held, which is what Ctrl+Shift+Z sends', () => {
+        const s = session()
+        runInAction(() => { s.placeToward([2, 2], 'down') })
+        expect(press2(s, 'Z', { ctrl: true })).toBe(true)
+        expect(s.board[2][2]).toBeNull()
+    })
+
+    it('is unhandled with nothing to undo, leaving the key to the browser', () => {
+        const s = session()
+        expect(press2(s, 'z', { ctrl: true })).toBe(false)
+    })
+
+    it('a bare z is not undo', () => {
+        const s = session()
+        runInAction(() => { s.placeToward([2, 2], 'down') })
+
+        expect(press(s, 'z')).toBe(false)
+        expect(s.board[2][2]).toBe(1)
+    })
+
+    it('other modified keys are left to the browser', () => {
+        // Ctrl+R reloads and Cmd+Left goes back. Claiming them because the unmodified key
+        // is one the board uses would break the page around it.
+        const s = session()
+        focusAt(s, [2, 2])
+
+        expect(press2(s, 'ArrowLeft', { meta: true })).toBe(false)
+        expect(press2(s, 'r', { ctrl: true })).toBe(false)
+        // ...and the focus did not move.
+        expect(s.focusedCell).toEqual([2, 2])
+    })
+})
+
 describe('the keyboard and the pointer are the same verb', () => {
     it('but Space anchors where a tap commits, on a one-direction cell', () => {
         // The one place the two deliberately differ, pinned so neither drifts onto the

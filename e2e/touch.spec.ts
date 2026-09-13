@@ -323,6 +323,8 @@ test('the real controls opt into fast taps instead of the board policy', async (
         page.getByRole('button', { name: /hard/i }),
         page.locator('[data-level="next"]'),
         page.locator('[data-level="previous"]'),
+        page.locator('[data-undo]'),
+        page.locator('[data-reset]'),
     ]
 
     for (const control of controls) {

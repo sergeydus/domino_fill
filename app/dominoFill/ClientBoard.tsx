@@ -142,7 +142,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * the page and Space still does whatever it would otherwise do.
      */
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        if (boardsStore.handleKey(e.key)) e.preventDefault()
+        if (boardsStore.handleKey(e.key, { ctrl: e.ctrlKey, meta: e.metaKey })) e.preventDefault()
     }
 
     const isDisabled = boardsStore.completed

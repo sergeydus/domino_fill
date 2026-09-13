@@ -221,8 +221,8 @@ positioning bug, but do not expect a spelling change to fix anything.
 | e | `BoardsStore.ts:34` | `audio?.play()` has no `.catch` → unhandled rejection whenever autoplay policy blocks it. `public/win.mp3` exists and is unused; the file that plays is `winSilent.mp3`. |
 | f | `BoardSquare.tsx:42` | `snap.mp3` plays on **every** square click, including rejected placements — the feedback lies. Also allocates a new `Audio` per click. |
 | g | `VerticalNumbers.tsx:13-18`, `HorizontalNumbers.tsx:12-17` | State is encoded by colour **only** (`#4bce4b` / `#ff0000`) — a WCAG 1.4.1 failure. And green fires on *sum satisfied*, not *line correct*, so a line goes green with empty cells still in it. Default `#ababab` on `#e8e7e7` is ~1.8:1, failing 1.4.3. |
-| h | `ClientBoard.tsx:57` | A completed board sets `pointerEvents: 'none'` and `completed` is never reset anywhere — with no restart affordance (D10-i), a completed board is a permanent soft-lock. |
-| i | `BoardsStore.ts:45` | The difficulty reaction changes level but never resets board state, and never runs on initial load. No restart affordance exists anywhere in the UI. |
+| h | ~~`ClientBoard.tsx:57`~~ | **✅ Fixed in P1-3.** A completed board sets `pointerEvents: 'none'` and the completion reaction only ever sets `completed` *true*, so with no restart affordance a completed board was a permanent soft-lock. Reset clears the flag, `undo` recomputes it from the rules, and both controls sit outside the board so neither is disabled by it. |
+| i | `BoardsStore.ts:45` | **◐ Half fixed in P1-3.** A restart affordance now exists: `GameControls` renders Undo and Reset. The other half stands — the difficulty reaction changes level but never resets board state, and never runs on initial load. |
 | j | `dominoBoard.ts:137,147` + `Boards.ts:38` | **The generator's output format no longer matches the parser.** It builds `boardCode` by bare concatenation and slices it per character, but the runtime compares against a **comma-joined** string (commit `7ef3094`). Single-char slicing also silently corrupts any sum ≥ 10 — and shipped boards contain `10`, `11`, `13`. Any board `DominoBoard` produces today is uncompletable. `allow0Lines`' `code.includes('0')` test is broken for the same reason. |
 | k0 | `Tutorial.tsx:27` | `absolute w-full h-full` with no positioned ancestor covers only the first viewport. (`z-999` itself is valid — see D9.) |
 | k | ~~`useLocalhost.ts:4`~~ | **✅ Fixed in P0-1.** Read `localStorage` during render (latent SSR crash); misnamed; and wrote `JSON.stringify(value)` while `BoardsStore.ts:29` read `=== 'true'` on the same key. Replaced by `app/hooks/useLocalStorage.ts`; the duplicate encoding is gone with the dead field. |
@@ -686,6 +686,38 @@ cell index and nothing else. This is *robustness*, not a zoom fix — the curren
 is no restart anywhere in the UI today (D10-i), so a mis-solve requires reloading the page. Undo
 matters because removal is instant, silent, and destructive. Bounded move stack + `Ctrl/Cmd+Z`.
 
+> **Implemented in row 14.** The stack lives on `PuzzleSession` as `Move[]`, bounded at
+> `MAX_UNDO = 60` — sessions are never discarded, so an unbounded stack grows with play; 60 is well
+> past the 32 dominoes an 8x8 board can hold.
+>
+> A move records the cells it touched and **their prior contents**, not "a placement" or "a
+> removal". Undoing is then one operation rather than two inverses that can disagree, and undoing a
+> removal gives back *the same domino* instead of a re-derived one — which matters because a cell's
+> value encodes which half of which orientation it is, so a plausible-but-wrong restoration only
+> surfaces later, when `pairAt` can no longer resolve the piece. Every board write goes through
+> `placeToward` or `removePiece`, and both record, so there is no path that mutates and forgets.
+>
+> **No redo, deliberately.** Undo pops and never pushes. A redo stack has to answer what happens
+> when you undo, place something else, then redo, and every answer is a rule the player must learn.
+>
+> **Undo recomputes `completed`** (D10-h). The completion reaction only ever sets that flag *true*,
+> and it disables pointer input — so undoing a winning move would otherwise leave the board flagged
+> solved and refusing input, a soft-lock reached by the action meant to escape one. Reset clears it
+> outright, along with the stack: those moves describe a board that no longer exists, and undoing
+> into a freshly cleared grid would write dominoes back onto it.
+>
+> **Undo gets a button as well as the shortcut, which the spec did not ask for.** `Ctrl/Cmd+Z` is
+> the only affordance named above, but this game is built phone-first (P0-3) and a phone has no
+> Ctrl key: a keyboard-only undo is no undo at all for most of the people playing, while "removal is
+> instant, silent and destructive" is just as true under a finger. Both controls are real
+> `<button>`s — the level arrows beside them are `motion.div`s with an `onClick`, which is exactly
+> why P1-1's completion-focus clause had to be deferred, and new controls should not add to that
+> pile.
+>
+> **Not done: Reset does not confirm.** A single mis-tap discards the whole board, and the stack is
+> cleared so it cannot be undone. This follows the spec's "~5 lines" framing rather than inventing a
+> confirmation flow, but it is a real way to lose work and should be revisited in P2.
+
 **P1-4. Completion feedback.** Winning currently sets `pointerEvents: none` and plays a file named
 `winSilent.mp3` — the game appears to *freeze* at the moment it should celebrate. Needs a visible
 celebration and a Next/Replay affordance within 500ms, plus `aria-live`. Use `inert`, not
@@ -818,7 +850,7 @@ whole of P0 into one oversized set.)
 | 11 | **P0-3** responsive layout: gutter, `min-*: 0`, cell-derived font, shell formula, both-axis budget | E2E (geometry/alignment/overflow) |
 | 12 | **P1-2** move hit-testing onto the cells (`CellHover`, `closest('[data-cell]')`) | E2E |
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E (touch context + keyboard) |
-| 14 | **P1-3** undo + reset | unit (undo tests land here) |
+| 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h, half of D10-i | unit (undo round-trip) + E2E (controls) |
 | 15 | **P1-4** completion feedback | E2E |
 | 16 | **P1-5** honest feedback; shake on reject; check/hint only if the solver contract is built | unit |
 | 17 | **P1-7** persistence + day rollover | unit |

@@ -66,6 +66,33 @@ export type PlacementOutcome = 'placed' | 'removed' | 'candidates' | 'cleared' |
  * the same shape because they are the same verb at different stages: an anchor, awaiting
  * a direction.
  */
+/**
+ * Cap on the move stack (spec P1-3: "bounded move stack").
+ *
+ * Bounded because a session lives as long as the page and is never discarded -- LevelStore
+ * keeps one per puzzle -- so an unbounded stack is a leak that grows with play. 60 is well
+ * past the longest possible game: an 8x8 board holds 32 dominoes, so even placing and
+ * removing every one of them twice stays inside it.
+ */
+export const MAX_UNDO = 60
+
+/**
+ * One reversible mutation: the cells it touched, and what was in them beforehand.
+ *
+ * Recorded as *prior contents* rather than as "a placement" or "a removal", so undoing is
+ * one operation instead of two inverses that could disagree. A placement's `before` is two
+ * nulls; a removal's is the domino's two values. Nothing else can produce a move, because
+ * the only two methods that write to the board are the ones that record here.
+ *
+ * `anchor` is where the focus goes afterwards -- the spec's rule that after removing or
+ * undoing, focus lands on the affected anchor.
+ */
+export type Move = {
+    cells: readonly [Cell, Cell]
+    before: readonly [number | null, number | null]
+    anchor: Cell
+}
+
 export type Gesture =
     | { kind: 'drag', from: Cell }
     | { kind: 'pending', from: Cell }
@@ -116,6 +143,15 @@ export class PuzzleSession {
     /** The cell the keyboard is on. Null until the board is first used from a keyboard. */
     focusedCell: Cell | null = null
 
+    /**
+     * Completed moves, oldest first. Bounded at `MAX_UNDO`; the oldest is dropped.
+     *
+     * Undo pops from the end and does not push, so there is no redo -- deliberately. A redo
+     * stack has to answer what happens when you undo, place something else, then redo,
+     * and every answer is a rule the player has to learn. Undo alone needs no explanation.
+     */
+    moves: Move[] = []
+
     constructor(definition: PuzzleDefinition, rootStore: RootStore) {
         this.definition = definition
         this.rootStore = rootStore
@@ -142,6 +178,10 @@ export class PuzzleSession {
         this.completed = false
         this.hover = null
         this.gesture = null
+        // The stack described moves against a board that no longer exists; undoing into it
+        // would write dominoes back onto a freshly cleared grid.
+        this.moves = []
+        this.focusedCell = null
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -334,8 +374,28 @@ export class PuzzleSession {
     placeToward(anchor: Cell, direction: Direction): boolean {
         if (!this.canPlace(anchor, direction)) return false
         const { cells, values } = dominoFrom(anchor, direction)
+        // `canPlace` has already established both cells are empty, so the prior contents
+        // are two nulls -- but they are read rather than assumed, so the record stays
+        // correct if that precondition is ever relaxed.
+        this.record({
+            cells,
+            before: [this.board[cells[0][0]][cells[0][1]], this.board[cells[1][0]][cells[1][1]]],
+            anchor,
+        })
         cells.forEach(([i, j], index) => { this.board[i][j] = values[index] })
         return true
+    }
+
+    /**
+     * Push a move, dropping the oldest once the stack is full.
+     *
+     * Every board write goes through here, which is what makes undo total: there is no
+     * path that mutates the board and forgets to record it, because `placeToward` and
+     * `removePiece` are the only two writers and both call this.
+     */
+    private record(move: Move) {
+        this.moves.push(move)
+        if (this.moves.length > MAX_UNDO) this.moves.shift()
     }
 
     /**
@@ -539,10 +599,20 @@ export class PuzzleSession {
      * Returns whether the key was handled, so the caller knows whether to `preventDefault`
      * -- arrows must still scroll the page when the board did not use them.
      */
-    handleKey(key: string): boolean {
+    handleKey(key: string, modifiers: { ctrl?: boolean, meta?: boolean } = {}): boolean {
         const arrow: Record<string, Direction> = {
             ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
         }
+
+        // Ctrl+Z and Cmd+Z, checked before anything else so no other rule can claim them.
+        // Unhandled when there is nothing to undo, which leaves the keystroke to the
+        // browser rather than swallowing it to no effect.
+        if ((modifiers.ctrl || modifiers.meta) && key.toLowerCase() === 'z') {
+            return this.undo()
+        }
+        // Any other modified key belongs to the browser: Ctrl+R reloads, Cmd+Left goes
+        // back. Claiming them because the unmodified key is an arrow would be a bug.
+        if (modifiers.ctrl || modifiers.meta) return false
 
         if (key === 'Escape') {
             if (!this.gesture) return false
@@ -599,8 +669,43 @@ export class PuzzleSession {
         if (!pair) return false // rejected: nothing is mutated
 
         const [[ai, aj], [bi, bj]] = pair
+        this.record({
+            cells: [[ai, aj], [bi, bj]],
+            before: [this.board[ai][aj], this.board[bi][bj]],
+            anchor: [ai, aj],
+        })
         this.board[ai][aj] = null
         this.board[bi][bj] = null
+        return true
+    }
+
+    /** Whether there is anything to undo. Drives the button's disabled state. */
+    get canUndo() {
+        return this.moves.length > 0
+    }
+
+    /**
+     * Reverse the last move. Returns whether anything was undone.
+     *
+     * Writing back the recorded prior contents restores both cells exactly, which is what
+     * makes undoing a removal give back *the same domino* rather than a re-derived one --
+     * the distinction matters because a cell's value encodes which half of which
+     * orientation it was.
+     *
+     * `completed` is recomputed rather than left alone. The completion reaction only ever
+     * sets it true, so undoing a winning move would otherwise leave the board flagged as
+     * solved -- and since `completed` disables pointer input, that is a soft-lock (D10-h)
+     * reached by the very action meant to escape one.
+     */
+    undo(): boolean {
+        const move = this.moves.pop()
+        if (!move) return false
+
+        move.cells.forEach(([i, j], index) => { this.board[i][j] = move.before[index] })
+        this.completed = this.completedByRules
+        this.focusedCell = move.anchor
+        // A gesture in flight was aimed at a board that no longer looks like this.
+        this.gesture = null
         return true
     }
 
