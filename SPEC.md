@@ -219,8 +219,8 @@ positioning bug, but do not expect a spelling change to fix anything.
 | d | `Boards.ts:1` + `:54` | A `"use server"` module may only export async functions, yet it `export default`s a class — dragging the whole generator into a server-action bundle. |
 | d2 | ~~`CurrentBoardStore.ts:19,34`~~ | **✅ Fixed in P0-6.** `correctHorizontalValues` summed a **column** and `correctVerticalValues` a **row**. Now `currentColumnSums`/`currentRowSums`, with `definition.columnTargets`/`rowTargets`. The inverted names survive only in `StoredPuzzle` and the JSON file, for data compatibility, and are mapped in `definitionFrom`. |
 | e | `BoardsStore.ts:34` | `audio?.play()` has no `.catch` → unhandled rejection whenever autoplay policy blocks it. `public/win.mp3` exists and is unused; the file that plays is `winSilent.mp3`. |
-| f | `BoardSquare.tsx:42` | `snap.mp3` plays on **every** square click, including rejected placements — the feedback lies. Also allocates a new `Audio` per click. |
-| g | `VerticalNumbers.tsx:13-18`, `HorizontalNumbers.tsx:12-17` | State is encoded by colour **only** (`#4bce4b` / `#ff0000`) — a WCAG 1.4.1 failure. And green fires on *sum satisfied*, not *line correct*, so a line goes green with empty cells still in it. Default `#ababab` on `#e8e7e7` is ~1.8:1, failing 1.4.3. |
+| f | ~~`BoardSquare.tsx:42`~~ | **✅ Fixed in P1-5.** `snap.mp3` played on **every** square click, including rejected placements, so the sound meaning "that worked" also meant "that did not". It also allocated a new `Audio` per click. Sound now follows the *outcome*, from `feedback.ts`, with one reused element per sound; the square's click handler is gone. |
+| g | ~~`VerticalNumbers.tsx:13-18`, `HorizontalNumbers.tsx:12-17`~~ | **✅ Fixed in P1-5.** All three parts: state now carries a shape as well as a colour (strikethrough / ring), `satisfied` requires the line to be *full* and not merely summed, and the palette is measured at ≥4.5:1. The contrast was worse than stated here — neutral `#ababab` measured 1.86:1 and the green `#4bce4b` **1.66:1**, i.e. the state colour was the least legible thing on screen. |
 | h | ~~`ClientBoard.tsx:57`~~ | **✅ Fixed in P1-3.** A completed board sets `pointerEvents: 'none'` and the completion reaction only ever sets `completed` *true*, so with no restart affordance a completed board was a permanent soft-lock. Reset clears the flag, `undo` recomputes it from the rules, and both controls sit outside the board so neither is disabled by it. |
 | i | `BoardsStore.ts:45` | **✅ Restart fixed in P1-3**; the remainder reframed. `GameControls` renders Undo and Reset, so a mis-solve no longer needs a page reload. The original wording also faulted the difficulty reaction for "never resetting board state" — that is **no longer a defect but a requirement**: P0-5 makes sessions stable per `puzzleId` precisely so switching difficulty or level and coming back returns the same board with the same moves, and `tests/sessions.test.ts` enforces it. What genuinely remains is narrower and belongs to **P1-7**: initial selection does not choose the first *unsolved* puzzle once persisted completion state is hydrated, because there is no persisted state yet. |
 | j | `dominoBoard.ts:137,147` + `Boards.ts:38` | **The generator's output format no longer matches the parser.** It builds `boardCode` by bare concatenation and slices it per character, but the runtime compares against a **comma-joined** string (commit `7ef3094`). Single-char slicing also silently corrupts any sum ≥ 10 — and shipped boards contain `10`, `11`, `13`. Any board `DominoBoard` produces today is uncompletable. `allow0Lines`' `code.includes('0')` test is broken for the same reason. |
@@ -824,6 +824,46 @@ below.
 Also: `navigator.vibrate(10)` on place, 25 on win — on mobile the hardware mute switch kills the
 entire audio channel, so haptics *are* the feel budget.
 
+> **Implemented in row 16, except Check and Hint — which are deferred, not cut.**
+>
+> **Line state is honest now (D10-g).** `satisfied` requires the sum to match *and* the line to be
+> full. A column summing to its target with cells still empty — 1+0+2+0 reaches 3 with half the
+> column unplayed — is `neutral`, where it used to go green and tell the player they had finished a
+> line they had not.
+>
+> **Colour is no longer the only channel.** Satisfied is struck through, like crossing a clue off a
+> list; over is ringed. Both are legible in greyscale, and the ring is an `outline` rather than a
+> border precisely because outlines take no layout space — a border would reopen the gutter overflow
+> row 11 closed (P0-3). Screen readers get an `aria-label` saying "complete" or "over target",
+> since neither strikethrough nor colour reaches them.
+>
+> **The contrast was worse than this spec recorded.** Measured against the `#e8e7e7` board:
+> neutral `#ababab` is **1.86:1** and the old green `#4bce4b` is **1.66:1** — the state colour, the
+> thing the player is meant to read, was the least legible element on screen. The new palette is
+> measured, not chosen by eye: neutral `#5f5f5f` 5.17:1, satisfied `#15661a` 5.77:1, over `#a10000`
+> 6.76:1. A unit test recomputes all three, and asserts the *old* palette would fail it.
+>
+> **A refused move now says so.** `PuzzleSession` records `lastOutcome` and an `outcomeTick`, and
+> the view shakes the grid on a refusal. A counter rather than a flag, because two refusals in a row
+> are two events — a view watching the outcome alone would sit still through the second, which is
+> exactly when a player is jabbing at the board wondering what is wrong. The keyboard goes through
+> the same signal, so a refused arrow key shakes as a refused drag does. A release over *no cell* is
+> the pointer leaving the board, not a refusal, and is deliberately silent.
+>
+> **The sound stopped lying (D10-f).** `snap.mp3` played on every square click including the ones
+> that placed nothing, so the sound meaning "that worked" also meant "that did not" — worse than
+> silence, because the player learns to distrust it. Sound now follows the outcome, and one `Audio`
+> element per sound is reused instead of one allocated per click. Haptics: 10ms on a placement,
+> 25ms on a refusal and on a win.
+>
+> **Check and hint are deferred to P1-6 (row 18), where the solver is built.** Not cut: the feature
+> is wanted. But the caveat above is the whole reason — they need a solver with a defined contract,
+> a node budget and a timeout behaviour, and the only solver in the repository is `e2e/solve.ts`,
+> which is test-only by construction: no budget worth the name, no answer for an unsolvable
+> position, and written for an *empty* board where a solution is known to exist. Promoting it would
+> be exactly the "cheap because boards are single-solution" mistake this section warns against.
+> Row 18 builds the real one; check and hint land on top of it there.
+
 **P1-6. Content (promoted from P2 — for a daily puzzle this is the product, not infrastructure).**
 Move `DominoBoard` into `scripts/generate-boards.ts`. **Fix the output contract first** (D10-j) —
 emit comma-joined sums and repair `allow0Lines`, or the generator ships uncompletable boards.
@@ -934,9 +974,9 @@ whole of P0 into one oversized set.)
 | 13 | **P1-1** unified verb: pointer drag, tap, keyboard — **with P0-9b** | E2E (touch context + keyboard) |
 | 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h and D10-i's restart half | unit (undo round-trip) + E2E (controls) |
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
-| 16 | **P1-5** honest feedback; shake on reject; check/hint only if the solver contract is built | unit |
+| 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
 | 17 | **P1-7** persistence + day rollover | unit |
-| 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive | unit |
+| 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive — **plus P1-5's check/hint**, which waited for this solver | unit |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |
 | 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |
 

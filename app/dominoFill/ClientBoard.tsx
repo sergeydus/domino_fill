@@ -1,6 +1,7 @@
 "use client"
-import React, { CSSProperties } from "react";
+import React, { CSSProperties, useEffect, useRef } from "react";
 import BoardSquare from "./BoardSquare";
+import { motion, useAnimationControls } from "motion/react";
 import { observer } from "mobx-react";
 import Hover from "./Hover";
 import Selection from "./Selection";
@@ -9,6 +10,7 @@ import VerticalNumbers from "./VerticalNumbers";
 import HorizontalNumbers from "./HorizontalNumbers";
 import { GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
 import { Cell } from "../stores/placement";
+import { feedbackFor } from "./feedback";
 
 type Props = {
     boardsStore: PuzzleSession
@@ -158,6 +160,47 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * the tab order and from the accessibility tree together, and moves focus out if it is
      * inside.
      */
+    /*
+     * One place where every outcome becomes feedback (spec P1-5, D10-f).
+     *
+     * Driven from the session's `outcomeTick` rather than from the pointer handler, so the
+     * keyboard is treated identically: a refused arrow key shakes the board exactly as a
+     * refused drag does. The counter matters -- two refusals in a row are two events, and
+     * watching `lastOutcome` alone would miss the second.
+     *
+     * The shake is a `key` bump on a wrapper rather than an imperative animation: React
+     * remounts it, motion replays the entry, and no animation state has to be cleaned up
+     * or cancelled if a second refusal arrives mid-shake.
+     */
+    const tick = boardsStore.outcomeTick
+    const rejections = boardsStore.rejectionTick
+    const lastHandled = useRef(0)
+    const lastShaken = useRef(0)
+    const shake = useAnimationControls()
+
+    useEffect(() => {
+        if (tick === lastHandled.current) return
+        lastHandled.current = tick
+        feedbackFor(boardsStore.lastOutcome)
+    }, [tick, boardsStore])
+
+    /*
+     * The shake, driven imperatively rather than by remounting.
+     *
+     * An earlier version bumped a `key` to replay the animation, which remounts the grid --
+     * and the grid is the focusable element. Measured: the first successful move changed the
+     * key, React remounted, focus was lost, `onBlur` fired `cancelGesture`, and a keyboard
+     * player's pending anchor vanished before the arrow that would have used it. Controls
+     * replay the same animation without touching the tree.
+     *
+     * `rejectionTick` counts refusals only and starts at zero, so nothing plays on load.
+     */
+    useEffect(() => {
+        if (rejections === lastShaken.current) return
+        lastShaken.current = rejections
+        void shake.start({ x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.28 } })
+    }, [rejections, shake])
+
     const isDisabled = boardsStore.completed
     return (
         <div
@@ -174,7 +217,9 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                 {/* `cursor-pointer` lives here now: it used to be on the piece overlay,
                     which no longer takes pointer events and so no longer sets a cursor. */}
                 {/* `board-grid` carries the static touch policy; see globals.css. */}
-                <div
+                <motion.div
+                    animate={shake}
+                    data-rejected={rejections > 0 ? rejections : undefined}
                     onPointerDown={onPointerDown}
                     onPointerMove={onPointerMove}
                     onPointerUp={onPointerUp}
@@ -198,7 +243,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                         const j = index % size
                         return (<BoardSquare key={`${i}_${j}`} i={i} j={j} boardsStore={boardsStore} />)
                     })}
-                </div>
+                </motion.div>
             </div>
         </div>
     )

@@ -38,15 +38,14 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
     //     // boardsStore.setHoveredSquare(null)
     // }, [boardsStore])
     const style = useMemo(() => ({ ...squareStyle, backgroundColor: color }), [color, squareStyle])
-    const onClick = () => {
-        try {
-            // console.log('clicked', { i, j })
-            const audio = new Audio('snap.mp3');
-            audio.play();
-        } catch (e) {
-            console.log('error', e)
-        }
-    }
+    /*
+     * No click handler any more (spec D10-f).
+     *
+     * This used to play `snap.mp3` on every square click -- including clicks that placed
+     * nothing -- so the sound that means "that worked" also meant "that did not". It also
+     * built a new `Audio` per click. Sound now follows the *outcome*, in feedback.ts,
+     * driven from the session so the keyboard is treated identically.
+     */
     // const isHighlighted = boardsStore.highlightedSquares?.some(([i, j]) => i === row && j === col) ?? false
     // if is in corner, round the corner
     const cornerStyle = useMemo(() => {
@@ -57,7 +56,7 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
         return {}
     }, [i, j, size])
     return (
-        <div className="relative" data-cell={`${i},${j}`} onClick={onClick} key={i} style={{ ...style, ...cornerStyle }}>
+        <div className="relative" data-cell={`${i},${j}`} key={i} style={{ ...style, ...cornerStyle }}>
             {/* {isHighlighted && <div className="absolute top-0 left-0 right-0 bottom-0 z-1 bg-white opacity-70 pointer-events-none"></div>} */}
             {/* <div>{`i:${i},j:${j}`}({currentBoard.board[i][j]})</div> */}
         </div>)

@@ -4,6 +4,7 @@ import { BoardsResponse } from "../dominoFill/Boards"
 import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
+import { winFeedback } from "../dominoFill/feedback"
 
 type Difficulty = 'easy' | 'normal' | 'hard'
 type Level = 1 | 2 | 3
@@ -74,6 +75,10 @@ export class LevelStore {
                 if (!session) return
                 session.setCompleted(true)
                 audio?.play()
+                // Haptics are not decoration: the hardware mute switch silences the whole
+                // audio channel on iOS, so for many players this is the only feel budget
+                // there is (spec P1-5).
+                winFeedback()
             },
         )
     }

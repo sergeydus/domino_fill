@@ -1,6 +1,7 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
+import { labelPresentation, labelDescription, LABEL_COLORS } from "./lineLabel"
 
 /**
  * The row labels, down the left of the board (spec P0-3).
@@ -20,26 +21,27 @@ const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore
     const size = boardsStore.squareSize
     const gutter = boardsStore.gutterSize
     const split = boardsStore.definition.rowTargets.split(',')
-    const currentSums = boardsStore.currentRowSums
+    const states = boardsStore.rowStates
     return <div
         className="flex flex-col min-w-0 min-h-0 leading-none tabular-nums"
         style={{ paddingTop: 'var(--grid-border)', fontSize: 'var(--label-font)' }}
     >
         {split.map((el: string, index: number) => {
-            let color = '#ababab'
-            if (currentSums[index] == Number(el)) {
-                color = '#4bce4b'
-            }
-            else if (currentSums[index] > Number(el)) {
-                color = '#ff0000'
-            }
+            const presentation = labelPresentation(states[index])
             return (
                 <motion.div className="flex items-center justify-center min-w-0 min-h-0"
-                    initial={{ color: '#ababab' }}
-                    animate={{ color: color }}
+                    initial={{ color: LABEL_COLORS.neutral }}
+                    animate={{ color: presentation.color }}
                     key={index}
                     data-row-label={index}
-                    style={{ width: `${gutter}px`, height: `${size}px` }}
+                    data-line-state={presentation.token}
+                    aria-label={labelDescription(el, states[index])}
+                    style={{
+                        ...{ width: `${gutter}px`, height: `${size}px` },
+                        textDecoration: presentation.textDecoration,
+                        outline: presentation.outline,
+                        borderRadius: '4px',
+                    }}
                 >{el}
                 </motion.div>
             )

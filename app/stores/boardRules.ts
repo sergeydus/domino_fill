@@ -62,6 +62,48 @@ export const rowSums = (board: Board, size: number): number[] => {
     return sums
 }
 
+/**
+ * Is every non-rock cell of this column filled?
+ *
+ * The distinction P1-5 turns on (D10-g). A column's *sum* can equal its target while cells
+ * in it are still empty -- 1+0+2+0 reaches 3 with half the column unplayed -- so a line
+ * that goes green on the sum alone tells the player they are finished when they are not.
+ */
+export const columnComplete = (board: Board, size: number, j: number): boolean => {
+    for (let i = 0; i < size; i++) {
+        const cell = board[i]?.[j]
+        if (cell === null || cell === undefined) return false
+    }
+    return true
+}
+
+/** Is every non-rock cell of this row filled? See `columnComplete`. */
+export const rowComplete = (board: Board, size: number, i: number): boolean => {
+    const row = board[i]
+    if (!row) return false
+    for (let j = 0; j < size; j++) {
+        const cell = row[j]
+        if (cell === null || cell === undefined) return false
+    }
+    return true
+}
+
+/**
+ * What a line's label should say about itself.
+ *
+ * `satisfied` requires the sum to match **and** the line to be full; `over` is a sum past
+ * its target, which is unrecoverable without removing something and is worth saying
+ * immediately. Everything else is `neutral` -- including a sum that happens to match with
+ * gaps left, which is the case the old rule mistook for success.
+ */
+export type LineState = 'neutral' | 'satisfied' | 'over'
+
+export const lineState = (sum: number, target: number, complete: boolean): LineState => {
+    if (sum > target) return 'over'
+    if (sum === target && complete) return 'satisfied'
+    return 'neutral'
+}
+
 /** Do both target axes match exactly? Strict equality; no coercion. */
 export const targetsMatch = (board: Board, definition: PuzzleDefinition): boolean => {
     const size = definition.size

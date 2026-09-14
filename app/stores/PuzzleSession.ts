@@ -2,7 +2,10 @@
 import { makeAutoObservable } from "mobx"
 import { RootStore } from "./RootStore"
 import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
-import { columnSums, rowSums, isBoardFull, targetsMatch } from "./boardRules"
+import {
+    columnSums, rowSums, isBoardFull, targetsMatch, columnComplete, rowComplete, lineState,
+    type LineState,
+} from "./boardRules"
 import {
     Cell, DIRECTIONS, Direction, directionBetween, dominoFrom, neighbourOf, orderedPair, sameCell,
 } from "./placement"
@@ -154,6 +157,38 @@ export class PuzzleSession {
     /** The gesture in progress, if any. See `Gesture`. */
     gesture: Gesture | null = null
 
+    /**
+     * The last thing an input actually did, and a counter that changes every time.
+     *
+     * The counter is what the view watches: two rejections in a row are two events, but
+     * `lastOutcome` alone would not change between them and nothing would fire the second
+     * time. Feedback is driven from here rather than from the pointer handler so that the
+     * keyboard gets exactly the same treatment -- a rejected arrow key should shake the
+     * board just as a rejected drag does.
+     */
+    lastOutcome: PlacementOutcome = 'none'
+    outcomeTick = 0
+
+    /**
+     * How many moves the board has refused. Starts at zero, and zero means *none yet*.
+     *
+     * Separate from `outcomeTick` because the view needs to distinguish "the last thing
+     * that happened was a refusal" from "a refusal just happened". `lastOutcome` starts as
+     * `'none'`, which is the honest initial value -- nothing has happened -- but a view
+     * reading it as "rejected" shakes the board on load. Measured: it did, arriving
+     * mid-animation at `translateX(-5.64px)`, which knocked every column label out of
+     * alignment with its column by about 5px.
+     */
+    rejectionTick = 0
+
+    /** Record what just happened, so the view can respond to it once. */
+    private signal(outcome: PlacementOutcome): PlacementOutcome {
+        this.lastOutcome = outcome
+        this.outcomeTick++
+        if (outcome === 'none') this.rejectionTick++
+        return outcome
+    }
+
     /** The cell the keyboard is on. Null until the board is first used from a keyboard. */
     focusedCell: Cell | null = null
 
@@ -211,6 +246,28 @@ export class PuzzleSession {
     /** Every non-rock cell covered, on a well-formed board. Pure; no side effects. */
     get isBoardFull() {
         return isBoardFull(this.board, this.definition.size)
+    }
+
+    /**
+     * What each column's label should say about itself (spec P1-5, D10-g).
+     *
+     * Green fired on *sum satisfied* before this, so a line turned green with empty cells
+     * still in it -- 1+0+2+0 reaches 3 with half the column unplayed -- telling the player
+     * they had finished a line they had not. `satisfied` now needs the line full as well.
+     */
+    get columnStates(): LineState[] {
+        const targets = this.definition.columnTargets.split(',').map(Number)
+        return this.currentColumnSums.map((sum, j) => lineState(
+            sum, targets[j], columnComplete(this.board, this.definition.size, j),
+        ))
+    }
+
+    /** What each row's label should say about itself. See `columnStates`. */
+    get rowStates(): LineState[] {
+        const targets = this.definition.rowTargets.split(',').map(Number)
+        return this.currentRowSums.map((sum, i) => lineState(
+            sum, targets[i], rowComplete(this.board, this.definition.size, i),
+        ))
     }
 
     /** Both target axes match exactly. Pure; no side effects. */
@@ -500,27 +557,29 @@ export class PuzzleSession {
                 this.placeToward(pending, direction)
                 this.gesture = null
                 this.focusedCell = pending
-                return 'placed'
+                return this.signal('placed')
             }
         }
 
         const anchor = this.gesture?.kind === 'drag' ? this.gesture.from : null
         this.gesture = null
-        if (!anchor || !cell) return pending ? 'cleared' : 'none'
+        // A release over no cell at all is the pointer leaving the board, not a refused
+        // move: it must not shake anything. Hence `silent`, which records nothing.
+        if (!anchor || !cell) return pending ? this.signal('cleared') : 'none'
 
         if (!sameCell(anchor, cell)) {
             const direction = directionBetween(anchor, cell)
             if (direction && this.canPlace(anchor, direction)) {
                 this.placeToward(anchor, direction)
                 this.focusedCell = anchor
-                return 'placed'
+                return this.signal('placed')
             }
             // Released where the domino cannot go: nothing happens, and any pending
             // anchor is dismissed.
-            return pending ? 'cleared' : 'none'
+            return this.signal(pending ? 'cleared' : 'none')
         }
 
-        return this.tap(cell)
+        return this.signal(this.tap(cell))
     }
 
     /**
@@ -676,10 +735,14 @@ export class PuzzleSession {
             if (pending) {
                 // A refused direction keeps the anchor rather than silently choosing
                 // another one, which is the whole complaint against the old rule.
-                if (!this.canPlace(pending, direction)) return true
+                if (!this.canPlace(pending, direction)) {
+                    this.signal('none')
+                    return true
+                }
                 this.placeToward(pending, direction)
                 this.gesture = null
                 this.focusedCell = pending
+                this.signal('placed')
                 return true
             }
             const next = neighbourOf(focused, direction)
@@ -688,15 +751,23 @@ export class PuzzleSession {
         }
 
         if (key === ' ' || key === 'Enter') {
-            return this.anchorFocused(focused)
+            const anchored = this.anchorFocused(focused)
+            this.signal(anchored ? 'candidates' : 'none')
+            return anchored
         }
 
         if (key === 'Delete' || key === 'Backspace') {
             const [i, j] = focused
             if (this.board[i][j] === null) return false
             const pair = this.pairAt(i, j)
-            if (!this.removePiece(i, j)) return false
+            if (!this.removePiece(i, j)) {
+                // A rock, or a half that resolves to no well-formed domino: refused, and
+                // worth saying so rather than doing nothing at all.
+                this.signal('none')
+                return false
+            }
             this.focusedCell = pair ? [pair[0][0], pair[0][1]] : focused
+            this.signal('removed')
             return true
         }
 
