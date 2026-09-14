@@ -96,10 +96,23 @@ const msUntilCelebrated = async (page: Page, threshold = 0.99) => {
         w.celebrated = null
         w.watching = true
 
-        // Armed before the release; `t0` is the browser's own timestamp for the event that
-        // wins the game, so nothing between Node and the page is inside the measurement.
-        window.addEventListener('pointerup', () => {
-            const t0 = performance.now()
+        /*
+         * Armed before the release, in the **capture** phase, and timed from the event's
+         * own `timeStamp`.
+         *
+         * Both details matter and each was got wrong once. A bubble-phase listener on
+         * `window` runs *after* React's root handler, so the application's entire response
+         * to the winning move -- placement, completion, render -- happened before `t0` was
+         * read: measured, an 800ms synchronous stall inside `onPointerUp` still reported a
+         * ~300ms celebration. Capture runs before anything in the tree.
+         *
+         * `event.timeStamp` is the browser's timestamp for when the event was *created*,
+         * on the same origin as `performance.now()`, which is earlier still than any
+         * listener could observe. Between them, the clock starts at the winning move and
+         * the number covers the whole response to it, not just the animation afterwards.
+         */
+        window.addEventListener('pointerup', (event) => {
+            const t0 = event.timeStamp
             const tick = () => {
                 const card = document.querySelector('[data-completion-card]')
                 if (card) {
@@ -121,7 +134,7 @@ const msUntilCelebrated = async (page: Page, threshold = 0.99) => {
                 else w.watching = false
             }
             requestAnimationFrame(tick)
-        }, { once: true })
+        }, { once: true, capture: true })
     }, threshold)
 
     await page.mouse.up()

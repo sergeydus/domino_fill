@@ -757,10 +757,22 @@ celebration and a Next/Replay affordance within 500ms, plus `aria-live`. Use `in
 > any elapsed time.
 >
 > The test now plays every move but the last, holds the pointer down over the releasing cell, arms a
-> one-shot in-page `pointerup` listener, and releases. **`t0` is taken inside that listener**, so the
-> measurement is the browser's own timestamp for the winning event and contains no Node round trip;
-> an earlier version started the clock in `page.evaluate`, which had to return before the release
-> could be sent.
+> one-shot in-page `pointerup` listener, and releases. The clock starts at the winning move itself,
+> which took three attempts to get honest:
+>
+> 1. The first version started it before the *whole* puzzle was played — it could not fail.
+> 2. The second set `t0` inside `page.evaluate`, which had to return to Node before Node could send
+>    the release, so a round trip sat inside the measurement.
+> 3. The third armed a **bubble-phase** listener on `window`. React handles the board's
+>    `onPointerUp` at its root *before* the event reaches `window`, so the application's entire
+>    response to the winning move — placement, completion, render — happened before `t0` was read.
+>    Measured: an 800ms synchronous stall inside `onPointerUp` still reported a ~300ms celebration.
+>
+> Now the listener is **capture-phase**, which runs before anything in the tree, and `t0` is the
+> event's own `timeStamp` — the browser's timestamp for when the event was created, on the same
+> origin as `performance.now()` and earlier than any listener can observe. The number therefore
+> covers the whole response to the winning move rather than only the animation after it. Verified:
+> the same 800ms stall now reports 1046ms and fails.
 >
 > It requires the card to be attached, **finished animating** (computed opacity ≥ 0.99) and
 > **wholly** within the viewport. Opacity matters because Playwright counts a fully transparent
