@@ -74,6 +74,27 @@ const freeColumnRun = async (page: Page, above = 1) => {
 }
 
 /**
+ * Two horizontally adjacent free cells, for placing a flat piece.
+ *
+ * Separate from `freeColumnRun` because that one guarantees a *column* run and says nothing
+ * about the cell to the right. A test that used it for a horizontal drag was relying on the
+ * served board happening to have `j+1` free as well -- which it did until the date rolled
+ * over and the day's puzzle changed, at which point the drag placed nothing and the test
+ * failed on a board that was behaving perfectly.
+ */
+const freeRowPair = async (page: Page) => {
+    const n = Math.sqrt(await boardSize(page))
+    const taken = await occupied(page)
+
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j + 1 < n; j++) {
+            if (!taken.has(`${i},${j}`) && !taken.has(`${i},${j + 1}`)) return { i, j }
+        }
+    }
+    throw new Error('no row has two adjacent free cells; the fixture board changed')
+}
+
+/**
  * The cell's box in viewport coordinates, scrolled into view first.
  *
  * `page.mouse` takes raw viewport coordinates and does not scroll, so a box measured
@@ -189,7 +210,7 @@ test('every decorative outline rect is fill="none", on all three shapes', async 
     const { i, j } = await freeColumnRun(page, 1)
     await placeUpright(page, i, j)
 
-    const flat = await freeColumnRun(page, 1)
+    const flat = await freeRowPair(page)
     await dragCells(page, [flat.i, flat.j], [flat.i, flat.j + 1])
     await expect(page.locator('[data-piece="two"]').first()).toBeVisible()
 

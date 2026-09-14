@@ -35,20 +35,90 @@ const readBoard = async (page: Page) => {
     }
 }
 
+const drag = async (page: Page, from: readonly [number, number], to: readonly [number, number]) => {
+    await page.locator(`[data-cell="${from[0]},${from[1]}"]`).hover()
+    await page.mouse.down()
+    await page.locator(`[data-cell="${to[0]},${to[1]}"]`).hover()
+    await page.mouse.up()
+}
+
 /** Play a solution through the pointer verb, exactly as a player would. */
 const playSolution = async (page: Page) => {
+    for (const { from, to } of await solutionFor(page)) await drag(page, from, to)
+}
+
+const solutionFor = async (page: Page) => {
     const { board, columnTargets, rowTargets } = await readBoard(page)
     const placements = solve(board, columnTargets, rowTargets)
     expect(placements, 'the served board is solvable').not.toBeNull()
+    return placements!
+}
 
-    for (const { from, to } of placements!) {
-        const a = page.locator(`[data-cell="${from[0]},${from[1]}"]`)
-        const b = page.locator(`[data-cell="${to[0]},${to[1]}"]`)
-        await a.hover()
-        await page.mouse.down()
-        await b.hover()
-        await page.mouse.up()
-    }
+/**
+ * Play everything except the winning move, then hold the pointer down over the cell that
+ * will complete it.
+ *
+ * This is what makes the 500ms budget measurable at all. An earlier version started its
+ * clock before the *whole* puzzle was played and then waited with a 500ms locator timeout,
+ * so the window opened only once every move was already in — it could not have failed
+ * however slow the celebration was.
+ */
+const playToTheBrink = async (page: Page) => {
+    const placements = await solutionFor(page)
+    for (const { from, to } of placements.slice(0, -1)) await drag(page, from, to)
+
+    const last = placements[placements.length - 1]
+    await page.locator(`[data-cell="${last.from[0]},${last.from[1]}"]`).hover()
+    await page.mouse.down()
+    await page.locator(`[data-cell="${last.to[0]},${last.to[1]}"]`).hover()
+    // The pointer is now down over the releasing cell; `mouse.up()` wins the game.
+}
+
+/**
+ * Release the winning move and measure, **in the page**, when the celebration is actually
+ * presented: attached, finished animating, and inside the viewport.
+ *
+ * Measured in-page with `requestAnimationFrame` rather than by polling over the wire, so
+ * the number is the browser's own and carries no round-trip jitter. Opacity is checked
+ * because Playwright counts a fully transparent element as visible — an animation that
+ * never ran, or ran for ten seconds, would satisfy `toBeVisible` the whole time.
+ */
+const msUntilCelebrated = async (page: Page, threshold = 0.99) => {
+    await page.evaluate((opacityThreshold) => {
+        const w = window as unknown as { celebrated: number | null, watching: boolean }
+        w.celebrated = null
+        w.watching = true
+        const t0 = performance.now()
+        const tick = () => {
+            const card = document.querySelector('[data-completion-card]')
+            if (card) {
+                const style = getComputedStyle(card)
+                const rect = card.getBoundingClientRect()
+                const onScreen = rect.width > 0 && rect.height > 0
+                    && rect.bottom > 0 && rect.right > 0
+                    && rect.top < window.innerHeight && rect.left < window.innerWidth
+                if (parseFloat(style.opacity) >= opacityThreshold && onScreen) {
+                    w.celebrated = performance.now() - t0
+                    w.watching = false
+                    return
+                }
+            }
+            // Keep looking well past the budget, so a slow celebration reports its real
+            // time instead of timing out with no number.
+            if (performance.now() - t0 < 5_000) requestAnimationFrame(tick)
+            else w.watching = false
+        }
+        requestAnimationFrame(tick)
+    }, threshold)
+
+    await page.mouse.up()
+
+    await expect.poll(
+        () => page.evaluate(() => !(window as unknown as { watching: boolean }).watching),
+        { timeout: 8_000 },
+    ).toBe(true)
+
+    return page.evaluate(() => (window as unknown as { celebrated: number | null }).celebrated)
 }
 
 const card = (page: Page) => page.locator('[data-completion-card]')
@@ -57,15 +127,27 @@ test.beforeEach(async ({ page }) => { await openBoard(page) })
 
 test('solving the board raises the completion card', async ({ page }) => {
     await expect(card(page)).toHaveCount(0)
-
-    const started = Date.now()
     await playSolution(page)
 
-    // P1-4 asks for the celebration within 500ms of the win. The last placement is what
-    // wins, so the clock starts at the moment the card could first appear.
-    await expect(card(page)).toBeVisible({ timeout: 500 })
-    expect(Date.now() - started).toBeGreaterThan(0)
+    await expect(card(page)).toBeVisible()
     await expect(card(page)).toContainText(/solved/i)
+})
+
+test('the celebration is presented within P1-4s 500ms budget', async ({ page }) => {
+    /*
+     * The budget, measured from the winning move rather than from the end of the game.
+     *
+     * Three conditions together, because any one alone is satisfiable by a card nobody can
+     * see: attached, opacity finished, and inside the viewport. Measured -- the card
+     * attaches at ~13ms at opacity 0.06 and finishes at ~313ms, so `toBeVisible` alone
+     * would have accepted it 300ms before it was legible.
+     */
+    await playToTheBrink(page)
+
+    const ms = await msUntilCelebrated(page)
+
+    expect(ms, 'the celebration was never presented').not.toBeNull()
+    expect(ms!, `celebrated after ${Math.round(ms!)}ms`).toBeLessThan(500)
 })
 
 test('the card announces itself to assistive technology', async ({ page }) => {

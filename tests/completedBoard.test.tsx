@@ -65,7 +65,19 @@ const renderGame = (s: PuzzleSession) => {
 }
 
 /**
- * Solve it for real: the completion flag is then earned, not asserted.
+ * Solve the board for real, then set the flag directly.
+ *
+ * Be precise about what this does and does not establish. The board really is solved --
+ * `completedByRules` is asserted below, so these tests cannot pass against a position that
+ * is merely claimed to be finished -- but `setCompleted(true)` is called by hand rather than
+ * left to `LevelStore`'s reaction. That is deliberate: this file is about the *view*
+ * integration, and wiring a session into the store's reaction here would test the reaction
+ * instead.
+ *
+ * The genuine reaction-driven path is covered elsewhere: `tests/winSound.test.ts` drives it
+ * through the store, and `e2e/completion.spec.ts` wins a board in a browser with nothing
+ * setting the flag at all. (An earlier version of this comment said the flag was "earned,
+ * not asserted", which was simply untrue of this helper.)
  *
  * Inside `act`, because the assertions here read the rendered DOM. A MobX mutation outside
  * it updates the store and schedules the observer's re-render, but React has not flushed by

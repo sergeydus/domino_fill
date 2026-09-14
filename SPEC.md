@@ -750,6 +750,20 @@ celebration and a Next/Replay affordance within 500ms, plus `aria-live`. Use `in
 > all. Now `win.mp3`. This has its own test because it is otherwise invisible — found by mutation,
 > where the swap back passed all 314 other tests.
 >
+> **The 500ms budget is measured from the winning move**, which took a second attempt. The first
+> version started its clock before the *whole* puzzle was played and then waited with a 500ms
+> locator timeout — so the window opened only once every move was already in, and it could not have
+> failed however slow the celebration was. It also asserted `toBeGreaterThan(0)`, which is true of
+> any elapsed time.
+>
+> The test now plays every move but the last, holds the pointer down over the releasing cell, starts
+> an in-page `requestAnimationFrame` watcher, and releases. It requires the card to be attached,
+> **finished animating** (computed opacity ≥ 0.99) and inside the viewport. Opacity matters because
+> Playwright counts a fully transparent element as visible: measured, the card attaches at ~13ms at
+> opacity 0.06 and is legible at ~313ms, so `toBeVisible` alone accepted it 300ms early. Verified by
+> mutation — stretching the animation to 2s reports 1863ms and fails; an 0.8s delay reports 1047ms
+> and fails.
+>
 > **Both of row 14's deferred obligations are closed.** `e2e/completion.spec.ts` wins a board for
 > real — read from the DOM, solved, and played move by move through the pointer verb — then checks
 > the card, the focus, the inertness, and that Reset, Play again and Undo each release the win.
