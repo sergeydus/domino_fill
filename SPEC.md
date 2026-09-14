@@ -756,13 +756,29 @@ celebration and a Next/Replay affordance within 500ms, plus `aria-live`. Use `in
 > failed however slow the celebration was. It also asserted `toBeGreaterThan(0)`, which is true of
 > any elapsed time.
 >
-> The test now plays every move but the last, holds the pointer down over the releasing cell, starts
-> an in-page `requestAnimationFrame` watcher, and releases. It requires the card to be attached,
-> **finished animating** (computed opacity ≥ 0.99) and inside the viewport. Opacity matters because
-> Playwright counts a fully transparent element as visible: measured, the card attaches at ~13ms at
-> opacity 0.06 and is legible at ~313ms, so `toBeVisible` alone accepted it 300ms early. Verified by
-> mutation — stretching the animation to 2s reports 1863ms and fails; an 0.8s delay reports 1047ms
-> and fails.
+> The test now plays every move but the last, holds the pointer down over the releasing cell, arms a
+> one-shot in-page `pointerup` listener, and releases. **`t0` is taken inside that listener**, so the
+> measurement is the browser's own timestamp for the winning event and contains no Node round trip;
+> an earlier version started the clock in `page.evaluate`, which had to return before the release
+> could be sent.
+>
+> It requires the card to be attached, **finished animating** (computed opacity ≥ 0.99) and
+> **wholly** within the viewport. Opacity matters because Playwright counts a fully transparent
+> element as visible: measured, the card attaches at ~13ms at opacity 0.06 and is legible at ~313ms,
+> so `toBeVisible` alone accepted it 300ms early. Full containment matters for a reason found by
+> applying it: at 360×640 the card sat at top 532 / bottom 652 of a 640px viewport — 90% visible,
+> **with its buttons clipped**, on exactly the device most people play on. Any-intersection would
+> have called that presented.
+>
+> That clipping is fixed rather than tolerated: the card scrolls itself into view with
+> `block: 'nearest'` on mount, and focus then uses `preventScroll` so it does not undo it. Focusing
+> alone was not enough, because it scrolls the *button* into view and leaves the rest of the card
+> where it was.
+>
+> Verified by mutation — stretching the animation to 2s reports 1858ms and fails; an 0.8s delay
+> reports 1047ms and fails; translating the card until only a thin edge shows fails; and removing
+> the `scrollIntoView` fails at 360×640, which is what makes that fix load-bearing rather than
+> decorative.
 >
 > **Both of row 14's deferred obligations are closed.** `e2e/completion.spec.ts` wins a board for
 > real — read from the DOM, solved, and played move by move through the pointer verb — then checks

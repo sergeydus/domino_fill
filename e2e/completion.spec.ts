@@ -76,39 +76,52 @@ const playToTheBrink = async (page: Page) => {
 
 /**
  * Release the winning move and measure, **in the page**, when the celebration is actually
- * presented: attached, finished animating, and inside the viewport.
+ * presented: attached, finished animating, and wholly inside the viewport.
  *
- * Measured in-page with `requestAnimationFrame` rather than by polling over the wire, so
- * the number is the browser's own and carries no round-trip jitter. Opacity is checked
- * because Playwright counts a fully transparent element as visible — an animation that
- * never ran, or ran for ten seconds, would satisfy `toBeVisible` the whole time.
+ * The clock starts inside a one-shot `pointerup` listener, not when `page.evaluate` returns.
+ * An earlier version set `t0` in the evaluate, which then had to return to Node before Node
+ * could send the release -- so the measurement silently included a round trip. Conservative,
+ * but it made the reported number not quite the thing being claimed, and on a loaded machine
+ * it could fail a celebration that was in fact prompt.
+ *
+ * Opacity is checked because Playwright counts a fully transparent element as visible, so an
+ * animation that never ran would satisfy `toBeVisible` throughout. Containment is *full*,
+ * not any one-pixel intersection: a card hanging off the bottom of the screen has not been
+ * presented, and at 360x640 that was really happening before the card learned to scroll
+ * itself into view.
  */
 const msUntilCelebrated = async (page: Page, threshold = 0.99) => {
     await page.evaluate((opacityThreshold) => {
         const w = window as unknown as { celebrated: number | null, watching: boolean }
         w.celebrated = null
         w.watching = true
-        const t0 = performance.now()
-        const tick = () => {
-            const card = document.querySelector('[data-completion-card]')
-            if (card) {
-                const style = getComputedStyle(card)
-                const rect = card.getBoundingClientRect()
-                const onScreen = rect.width > 0 && rect.height > 0
-                    && rect.bottom > 0 && rect.right > 0
-                    && rect.top < window.innerHeight && rect.left < window.innerWidth
-                if (parseFloat(style.opacity) >= opacityThreshold && onScreen) {
-                    w.celebrated = performance.now() - t0
-                    w.watching = false
-                    return
+
+        // Armed before the release; `t0` is the browser's own timestamp for the event that
+        // wins the game, so nothing between Node and the page is inside the measurement.
+        window.addEventListener('pointerup', () => {
+            const t0 = performance.now()
+            const tick = () => {
+                const card = document.querySelector('[data-completion-card]')
+                if (card) {
+                    const style = getComputedStyle(card)
+                    const rect = card.getBoundingClientRect()
+                    const contained = rect.width > 0 && rect.height > 0
+                        && rect.top >= 0 && rect.left >= 0
+                        && rect.bottom <= window.innerHeight
+                        && rect.right <= window.innerWidth
+                    if (parseFloat(style.opacity) >= opacityThreshold && contained) {
+                        w.celebrated = performance.now() - t0
+                        w.watching = false
+                        return
+                    }
                 }
+                // Keep looking well past the budget, so a slow celebration reports its real
+                // time instead of timing out with no number.
+                if (performance.now() - t0 < 5_000) requestAnimationFrame(tick)
+                else w.watching = false
             }
-            // Keep looking well past the budget, so a slow celebration reports its real
-            // time instead of timing out with no number.
-            if (performance.now() - t0 < 5_000) requestAnimationFrame(tick)
-            else w.watching = false
-        }
-        requestAnimationFrame(tick)
+            requestAnimationFrame(tick)
+        }, { once: true })
     }, threshold)
 
     await page.mouse.up()
@@ -138,9 +151,11 @@ test('the celebration is presented within P1-4s 500ms budget', async ({ page }) 
      * The budget, measured from the winning move rather than from the end of the game.
      *
      * Three conditions together, because any one alone is satisfiable by a card nobody can
-     * see: attached, opacity finished, and inside the viewport. Measured -- the card
-     * attaches at ~13ms at opacity 0.06 and finishes at ~313ms, so `toBeVisible` alone
-     * would have accepted it 300ms before it was legible.
+     * see: attached, opacity finished, and *wholly* within the viewport. Measured -- the
+     * card attaches at ~13ms at opacity 0.06 and finishes at ~313ms, so `toBeVisible` alone
+     * would have accepted it 300ms before it was legible; and at 360x640 it sat at
+     * top 532 / bottom 652 of a 640px viewport, 90% visible with its buttons clipped, which
+     * a one-pixel-intersection test would have called presented.
      */
     await playToTheBrink(page)
 

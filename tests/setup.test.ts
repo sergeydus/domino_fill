@@ -12,4 +12,13 @@ describe('test setup', () => {
         const audio = new Audio('snap.mp3')
         await expect(audio.play()).resolves.toBeUndefined()
     })
+
+    it('supplies scrollIntoView, which jsdom does not implement at all', () => {
+        // Not merely noisy like `play()` -- absent, so calling it throws. `CompletionCard`
+        // calls it on mount for a measured reason, so the environment gains the method
+        // rather than the component losing the call.
+        const el = document.createElement('div')
+        expect(typeof el.scrollIntoView).toBe('function')
+        expect(() => el.scrollIntoView({ block: 'nearest' })).not.toThrow()
+    })
 })

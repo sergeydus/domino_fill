@@ -33,19 +33,28 @@ type Props = {
 }
 
 const CompletionCard: React.FC<Props> = ({ session, levels }) => {
+    const cardRef = useRef<HTMLDivElement | null>(null)
     const nextRef = useRef<HTMLButtonElement | null>(null)
     const replayRef = useRef<HTMLButtonElement | null>(null)
 
     /*
-     * Move focus to the card's primary action as soon as it appears.
+     * Bring the whole card into view, then move focus to its primary action.
      *
      * The card only mounts once the board is solved, so mounting *is* the completion
      * transition and no flag-watching is needed. Next when there is a next level, Replay
      * when there is not: the rule is "the primary action", and on the last level of a
      * difficulty there is no next one to offer.
+     *
+     * The scroll is not redundant with the focus. Focusing scrolls the *button* into view,
+     * which leaves the rest of the card wherever it was -- measured at 360x640, where the
+     * card landed at top 532 / bottom 652 in a 640px viewport, so its lower edge and part
+     * of the buttons sat below the fold on exactly the device most people play on.
+     * `block: 'nearest'` scrolls the minimum needed, and `preventScroll` stops the focus
+     * from undoing it.
      */
     useEffect(() => {
-        (nextRef.current ?? replayRef.current)?.focus()
+        cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        (nextRef.current ?? replayRef.current)?.focus({ preventScroll: true })
     }, [])
 
     const onNext = () => {
@@ -56,6 +65,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
 
     return (
         <motion.div
+            ref={cardRef}
             data-completion-card
             role="status"
             aria-live="polite"
