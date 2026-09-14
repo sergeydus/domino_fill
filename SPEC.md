@@ -856,6 +856,25 @@ entire audio channel, so haptics *are* the feel budget.
 > element per sound is reused instead of one allocated per click. Haptics: 10ms on a placement,
 > 25ms on a refusal and on a win.
 >
+> **A removal sounds like a placement, deliberately.** `feedbackFor('removed')` routes to the same
+> acceptance feedback, which reads at first glance like the defect above coming back. It is not:
+> `snap.mp3` here means "the board did what you asked", which is true of taking a piece back and
+> was never true of the refused clicks that used to play it. Answering a removal with silence would
+> make it feel like precisely the missed tap this section exists to distinguish. The function is
+> named `acceptedFeedback` rather than `placedFeedback` so the routing and the name agree, and the
+> decision is pinned by a test so it cannot be "tidied" into silence without someone choosing to.
+>
+> **Feedback is per puzzle, not per component.** `ClientBoard` is never remounted when the player
+> changes level or difficulty — `DominoClient` renders it with no `key` — so its prop becomes a
+> different `PuzzleSession` while the refs tracking "has anything happened since I last looked"
+> survive. Sessions are cached and keep their own counters, so comparing bare numbers across that
+> switch compares one puzzle's history against another's. Measured before the fix: placing a domino
+> on level 1 and switching to an untouched level 2 fired a rejection buzz on a board that had never
+> refused anything, and a shake in flight carried onto the next puzzle through the shared animation
+> controls. Each watcher now remembers *which session* it was counting, adopts a new session's
+> counters without producing feedback, and stops any shake still running. Adoption is not muting:
+> the next thing the new board does is felt normally, which is itself asserted.
+>
 > **Check and hint are deferred to P1-6 (row 18), where the solver is built.** Not cut: the feature
 > is wanted. But the caveat above is the whole reason — they need a solver with a defined contract,
 > a node budget and a timeout behaviour, and the only solver in the repository is `e2e/solve.ts`,

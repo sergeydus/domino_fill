@@ -16,6 +16,9 @@ type Props = {
     boardsStore: PuzzleSession
 };
 
+/** How far a feedback watcher had counted, and on which puzzle it was counting. */
+type Seen = { session: PuzzleSession, count: number }
+
 /** Half the grid's border: the offset the labels must clear to line up with their tracks. */
 const BORDER_SIDE_PX = GRID_BORDER_PX / 2
 
@@ -168,19 +171,30 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * refused drag does. The counter matters -- two refusals in a row are two events, and
      * watching `lastOutcome` alone would miss the second.
      *
-     * The shake is a `key` bump on a wrapper rather than an imperative animation: React
-     * remounts it, motion replays the entry, and no animation state has to be cleaned up
-     * or cancelled if a second refusal arrives mid-shake.
+     * Both watchers remember *which session* they were counting, not just how far they had
+     * counted. This component is never remounted when the player changes level or
+     * difficulty -- `DominoClient` renders it with no `key` -- so the prop becomes a
+     * different `PuzzleSession` underneath a component whose refs survive. Sessions are
+     * cached and keep their own counters, so comparing a bare number across that switch
+     * compares one puzzle's history against another's. Measured before this was fixed:
+     * placing a domino on level 1 and then switching to an untouched level 2 fired a
+     * rejection buzz on a board that had never refused anything.
+     *
+     * Arriving at a new session therefore *adopts* its counters and produces nothing. That
+     * is deliberately not the same as muting: only the one stale comparison is skipped, and
+     * the very next thing the new board does is felt normally.
      */
     const tick = boardsStore.outcomeTick
     const rejections = boardsStore.rejectionTick
-    const lastHandled = useRef(0)
-    const lastShaken = useRef(0)
+    /** Initialised from the session in hand, so mounting is never itself an event. */
+    const lastHandled = useRef<Seen>({ session: boardsStore, count: tick })
+    const lastShaken = useRef<Seen>({ session: boardsStore, count: rejections })
     const shake = useAnimationControls()
 
     useEffect(() => {
-        if (tick === lastHandled.current) return
-        lastHandled.current = tick
+        const seen = lastHandled.current
+        lastHandled.current = { session: boardsStore, count: tick }
+        if (seen.session !== boardsStore || seen.count === tick) return
         feedbackFor(boardsStore.lastOutcome)
     }, [tick, boardsStore])
 
@@ -196,10 +210,19 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * `rejectionTick` counts refusals only and starts at zero, so nothing plays on load.
      */
     useEffect(() => {
-        if (rejections === lastShaken.current) return
-        lastShaken.current = rejections
+        const seen = lastShaken.current
+        lastShaken.current = { session: boardsStore, count: rejections }
+        if (seen.session !== boardsStore) {
+            // The controls are shared across sessions because the element is. A shake still
+            // running when the player switches would otherwise finish on a board that never
+            // earned it, so it is stopped and the offset cleared.
+            shake.stop()
+            void shake.set({ x: 0 })
+            return
+        }
+        if (seen.count === rejections) return
         void shake.start({ x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.28 } })
-    }, [rejections, shake])
+    }, [rejections, boardsStore, shake])
 
     const isDisabled = boardsStore.completed
     return (

@@ -16,6 +16,14 @@ import type { PlacementOutcome } from "../stores/PuzzleSession"
  * audio channel, so for a large share of players vibration is the whole feel budget.
  */
 
+/**
+ * Vibration durations, in milliseconds, named so the contract is readable and testable
+ * rather than scattered as literals. P1-5 fixes 10 on a move and 25 on a win.
+ */
+export const ACCEPTED_MS = 10
+export const REJECTED_MS = 25
+export const WIN_MS = 25
+
 /** One element per sound, created on first use. Never one per click. */
 const cache = new Map<string, HTMLAudioElement>()
 
@@ -52,20 +60,34 @@ export const vibrate = (ms: number) => {
     try { navigator.vibrate(ms) } catch { /* not worth failing a move over */ }
 }
 
-/** A placement landed: the one case `snap.mp3` was ever supposed to mean. */
-export const placedFeedback = () => {
+/**
+ * The board accepted the move: a piece went down, or a piece came up.
+ *
+ * Named for acceptance rather than placement because it covers both, and that is a
+ * deliberate decision rather than an oversight in the routing below. A removal is a real
+ * action that changed the board; answering it with silence would leave it feeling exactly
+ * like the missed tap that D10-f is about. `snap.mp3` here means "the board did what you
+ * asked", which is true of a removal and was never true of the refused clicks that used to
+ * play it.
+ */
+export const acceptedFeedback = () => {
     play('snap.mp3')
-    vibrate(10)
+    vibrate(ACCEPTED_MS)
 }
 
-/** The board refused a move. No sound — the shake is the message. */
+/**
+ * The board refused a move. No sound — the shake is the message.
+ *
+ * Deliberately longer than an acceptance: a correction should not feel like a confirmation,
+ * and haptics are the only channel here, so the duration is carrying the whole distinction.
+ */
 export const rejectedFeedback = () => {
-    vibrate(25)
+    vibrate(REJECTED_MS)
 }
 
-/** Winning. Louder haptics than a placement, per P1-5. */
+/** Winning. Longer haptics than a placement, per P1-5. */
 export const winFeedback = () => {
-    vibrate(25)
+    vibrate(WIN_MS)
 }
 
 /**
@@ -76,6 +98,6 @@ export const winFeedback = () => {
  * correction buzz.
  */
 export const feedbackFor = (outcome: PlacementOutcome) => {
-    if (outcome === 'placed' || outcome === 'removed') placedFeedback()
+    if (outcome === 'placed' || outcome === 'removed') acceptedFeedback()
     else if (outcome === 'none') rejectedFeedback()
 }

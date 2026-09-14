@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
+import { playSolution } from './play'
 
 /**
  * Honest feedback in a real browser (spec P1-5, D10-f and D10-g).
@@ -48,6 +49,24 @@ const occupiedNeighbourDrag = async (page: Page) => {
     return { i, j }
 }
 
+/**
+ * A free cell in the top row with a free cell beneath it.
+ *
+ * The keyboard can walk to it along row 0 without caring what it crosses -- focus moves over
+ * rocks -- and once anchored there, Up aims off the board and is refused by a rule that
+ * cannot depend on the day's puzzle. (An earlier version of this test assumed `0,0` itself;
+ * probed, it is a rock on the board the date currently selects, so Space was refused before
+ * any anchor existed.)
+ */
+const topRowAnchor = async (page: Page) => {
+    const n = Math.sqrt(await page.locator('[data-cell]').count())
+    const taken = await occupied(page)
+    for (let j = 0; j < n; j++) {
+        if (!taken.has(`0,${j}`) && !taken.has(`1,${j}`)) return j
+    }
+    throw new Error('the served board has no free cell in row 0 with a free cell below it')
+}
+
 test.beforeEach(async ({ page }) => { await openBoard(page) })
 
 test('every label starts neutral and says so in the DOM', async ({ page }) => {
@@ -94,24 +113,35 @@ test('label state reaches the screen as contrast, not just as colour', async ({ 
 })
 
 test('a satisfied line is struck through, so colour is not the only channel', async ({ page }) => {
-    // Find a line that is genuinely finished, by finishing one: the first column whose
-    // target the board can complete is not knowable without a solver, so this drives the
-    // state directly through the DOM contract instead -- any label reporting `satisfied`
-    // must carry the shape.
-    const labels = page.locator('[data-col-label], [data-row-label]')
-    const marked = await labels.evaluateAll(els => els.map(el => ({
-        state: el.getAttribute('data-line-state'),
-        decoration: getComputedStyle(el).textDecorationLine,
-        outline: getComputedStyle(el).outlineStyle,
-    })))
+    /*
+     * This used to walk the labels and assert *inside* `if (state === 'satisfied')`, which
+     * meant it asserted nothing at all unless the served puzzle happened to start with a
+     * finished line -- a test that quietly does not run rather than one that passes.
+     *
+     * A satisfied line is now produced rather than hoped for: solving the board finishes
+     * every line by definition. The solver is the test fixture from e2e/solve.ts, not a
+     * player-facing one (see the note there).
+     */
+    await playSolution(page)
 
-    for (const { state, decoration, outline } of marked) {
-        if (state === 'satisfied') expect(decoration).toContain('line-through')
-        if (state === 'over') expect(outline).not.toBe('none')
-        if (state === 'neutral') {
-            expect(decoration).not.toContain('line-through')
-            expect(outline).toBe('none')
-        }
+    const satisfied = page.locator('[data-line-state="satisfied"]')
+    const n = await satisfied.count()
+    // A solved board has every line complete, so this is the whole label set, not a subset.
+    expect(n, 'solving the board satisfies every line').toBeGreaterThan(0)
+
+    for (let k = 0; k < n; k++) {
+        const label = satisfied.nth(k)
+        await expect(label).toHaveCSS('text-decoration-line', 'line-through')
+        // The shape is not the only extra channel: a screen reader reaches neither colour
+        // nor strikethrough, so the state is in the accessible name too.
+        await expect(label).toHaveAttribute('aria-label', /complete/i)
+    }
+
+    // And a neutral label carries neither shape, so the channels actually distinguish.
+    const neutral = page.locator('[data-line-state="neutral"]')
+    for (let k = 0; k < await neutral.count(); k++) {
+        await expect(neutral.nth(k)).not.toHaveCSS('text-decoration-line', 'line-through')
+        await expect(neutral.nth(k)).toHaveCSS('outline-style', 'none')
     }
 })
 
@@ -165,12 +195,34 @@ test('the board is still at rest on load, and does not shake at nothing', async 
 })
 
 test('a refused move visibly moves the board', async ({ page }) => {
-    // D10-f's other half: a rejected placement did nothing at all -- no sound, no movement,
-    // no message -- so a refused move and a missed tap looked identical.
+    /*
+     * D10-f's other half: a rejected placement did nothing at all -- no sound, no movement,
+     * no message -- so a refused move and a missed tap looked identical.
+     *
+     * The earlier version of this test only read `data-rejected`, which comes straight from
+     * the session's counter: deleting the animation call entirely would have left it green.
+     * It now watches the grid's real transform across frames, so what is asserted is that
+     * the board *moved*.
+     */
     const { i, j } = await occupiedNeighbourDrag(page)
     const grid = page.locator('.board-grid')
 
     await expect(grid).not.toHaveAttribute('data-rejected', /.+/)
+
+    // Sample the painted transform every frame, starting before the refusal.
+    await page.evaluate(() => {
+        const el = document.querySelector('.board-grid')!
+        const w = window as unknown as { frames: string[], watching: boolean }
+        w.frames = []
+        w.watching = true
+        const started = performance.now()
+        const sample = () => {
+            w.frames.push(getComputedStyle(el).transform)
+            if (performance.now() - started < 1500) requestAnimationFrame(sample)
+            else w.watching = false
+        }
+        requestAnimationFrame(sample)
+    })
 
     // Drag onto the half just placed: legal target, occupied cell, refused.
     await page.locator(`[data-cell="${i},${j}"]`).hover()
@@ -179,26 +231,56 @@ test('a refused move visibly moves the board', async ({ page }) => {
     await page.mouse.up()
 
     await expect(grid).toHaveAttribute('data-rejected', /\d+/)
+
+    await expect.poll(
+        () => page.evaluate(() => (window as unknown as { watching: boolean }).watching),
+        { timeout: 5_000 }
+    ).toBe(false)
+
+    const frames: string[] = await page.evaluate(() => (window as unknown as { frames: string[] }).frames)
+    const still = (t: string) => t === 'none' || t === 'matrix(1, 0, 0, 1, 0, 0)'
+
+    expect(frames.some(t => !still(t)), `the grid never moved; sampled ${frames.length} frames`).toBe(true)
+    // And it comes back: a shake that parks the board off-centre is a layout bug, which is
+    // exactly what the at-rest regression was.
+    expect(still(frames[frames.length - 1]), `ended at ${frames[frames.length - 1]}`).toBe(true)
 })
 
 test('a refusal does not steal focus from the board', async ({ page }) => {
     /*
-     * The other half of the same regression. The shake was first done by bumping a `key`,
+     * The other half of the at-rest regression. The shake was first done by bumping a `key`,
      * which remounts the grid -- and the grid is the focusable element, so the remount blew
      * focus away, `onBlur` cancelled the gesture, and a keyboard player's pending anchor
      * disappeared before the arrow that would have used it.
+     *
+     * The earlier version of this test never performed a refusal at all: it made a
+     * successful placement, focused the grid itself, and then checked that the grid was
+     * focused. The refusal below is deterministic and needs no knowledge of the served
+     * board -- anchoring on the top-left cell and pressing Up aims off the board, which the
+     * rules refuse while deliberately keeping the anchor.
      */
+    const j = await topRowAnchor(page)
     const grid = page.locator('.board-grid')
     await grid.focus()
+
+    // Entering the board is itself the first keypress; it lands on [0,0].
     await page.keyboard.press('ArrowDown')
-    await expect(page.locator('[data-focus]')).toHaveCount(1)
+    for (let step = 0; step < j; step++) await page.keyboard.press('ArrowRight')
+    await expect(page.locator(`[data-focus="0,${j}"]`)).toHaveCount(1)
 
-    // Force a refusal with the keyboard: anchor, then aim at a cell that cannot take it.
-    const { i, j } = await occupiedNeighbourDrag(page)
-    await page.locator(`[data-cell="${i},${j}"]`).click()   // removes it again
-    await grid.focus()
+    await page.keyboard.press(' ')
+    await expect(page.locator(`[data-anchor="0,${j}"]`)).toHaveCount(1)
 
+    const candidatesBefore = await page.locator('[data-candidate]').count()
+    expect(candidatesBefore, 'the anchor offered somewhere to go').toBeGreaterThan(0)
+
+    await page.keyboard.press('ArrowUp')   // off the top edge: refused
+
+    await expect(grid).toHaveAttribute('data-rejected', /\d+/)
+    // Focus, the anchor and the offer all survive the shake.
     await expect(grid).toBeFocused()
+    await expect(page.locator(`[data-anchor="0,${j}"]`)).toHaveCount(1)
+    expect(await page.locator('[data-candidate]').count()).toBe(candidatesBefore)
 })
 
 test('the board squares no longer take clicks of their own', async ({ page }) => {

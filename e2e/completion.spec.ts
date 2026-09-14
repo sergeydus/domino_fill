@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
-import { solve } from './solve'
+import { drag, playSolution, solutionFor } from './play'
 
 /**
  * Winning, in a real browser (spec P1-4), and the two obligations row 14 deferred here.
@@ -13,46 +13,6 @@ import { solve } from './solve'
  * The board is whichever one the day's date selects, so the solution cannot be a fixture;
  * see e2e/solve.ts for why the solver is here and why it is not P1-6's.
  */
-
-/** Read the board's rocks and targets out of the rendered DOM. */
-const readBoard = async (page: Page) => {
-    const size = Math.sqrt(await page.locator('[data-cell]').count())
-    const rocks = new Set(await page.locator('[data-piece="rock"]').evaluateAll(
-        els => els.map(el => el.getAttribute('data-at')!)
-    ))
-    const board = Array.from({ length: size }, (_, i) =>
-        Array.from({ length: size }, (_, j) => (rocks.has(`${i},${j}`) ? -1 : null))
-    )
-
-    const numbers = (selector: string) => page.locator(selector).evaluateAll(
-        els => els.map(el => Number(el.textContent!.trim()))
-    )
-    return {
-        size,
-        board,
-        columnTargets: await numbers('[data-col-label]'),
-        rowTargets: await numbers('[data-row-label]'),
-    }
-}
-
-const drag = async (page: Page, from: readonly [number, number], to: readonly [number, number]) => {
-    await page.locator(`[data-cell="${from[0]},${from[1]}"]`).hover()
-    await page.mouse.down()
-    await page.locator(`[data-cell="${to[0]},${to[1]}"]`).hover()
-    await page.mouse.up()
-}
-
-/** Play a solution through the pointer verb, exactly as a player would. */
-const playSolution = async (page: Page) => {
-    for (const { from, to } of await solutionFor(page)) await drag(page, from, to)
-}
-
-const solutionFor = async (page: Page) => {
-    const { board, columnTargets, rowTargets } = await readBoard(page)
-    const placements = solve(board, columnTargets, rowTargets)
-    expect(placements, 'the served board is solvable').not.toBeNull()
-    return placements!
-}
 
 /**
  * Play everything except the winning move, then hold the pointer down over the cell that
