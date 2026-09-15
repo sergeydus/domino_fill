@@ -4,85 +4,77 @@ import { CELL_VALUES, isBoardFull, targetsMatch, wellFormed } from "./boardRules
 /**
  * Saved progress (spec P1-7).
  *
- * Everything here is pure except `readDocument`/`writeDocument`, which are the only two
- * functions that touch storage. That split is the point: the rules about what is valid,
- * what is stale and what survives a rollover are all testable without a browser, and the
- * part that can throw is three lines long.
+ * Everything here is pure except the functions below the storage divider. That split is the
+ * point: the rules about what is valid and what is stale are testable without a browser, and
+ * the parts that can throw are a few lines each.
  *
- * **One document, not one key per puzzle.** A day is nine puzzles, and a board is 64 cells
- * of `null` or a small integer, so the whole thing is a few kilobytes — small enough that
- * reading and rewriting all of it costs nothing and buys a great deal: migration and pruning
- * happen in one place, and there is no way to half-write a day. Keying *within* the
- * document by `puzzleId` is what P1-7 asks for; spreading those keys across the storage
- * namespace is not.
+ * **One key per puzzle, not one document.** This is a reversal of the first design, and the
+ * reason is other tabs. A single document has to be read, modified and written back, and two
+ * tabs can interleave those three steps: both read the same document, both write, and the
+ * second erases the first's work — on a puzzle *neither of them was editing*. `setItem` is
+ * atomic; the read-modify-write around it is not, and the HTML standard is explicit that
+ * authors may not assume any locking between agent clusters. Giving each puzzle its own key
+ * means writing one puzzle never rewrites another, so that whole class of loss stops existing
+ * rather than merely being narrowed. Two tabs playing *the same* puzzle still resolve
+ * last-write-wins, which no storage layout can decide.
  *
- * An earlier version of this note called that an "atomic read-modify-write". It is not, and
- * the distinction matters with two tabs open: `setItem` is atomic, but read-then-modify-then-
- * write is three steps with a window between them. What makes the design safe is not atomicity
- * but restraint — `LevelStore.persist` re-reads storage on every write and rewrites only the
- * puzzles *that store itself* changed, so a tab never carries its stale copy of someone else's
- * puzzle back over the top. Two tabs on the *same* puzzle still resolve last-write-wins; see
- * the multi-tab note in SPEC for why that is left as it is.
- *
- * **Storage is hostile.** It can be absent, blocked (Safari private mode, embedded
- * webviews, a `localStorage` that exists on Node >= 22 but whose `getItem` is not a
- * function), full, or hold whatever a previous version — or a curious player with a
- * devtools console — left behind. Every access is wrapped, and every value read back is
- * treated as untrusted input rather than as the type it claims to be.
+ * **Storage is hostile.** It can be absent, blocked (Safari private mode, embedded webviews,
+ * a `localStorage` that exists on Node >= 22 but whose `getItem` is not a function), full, or
+ * hold whatever a previous version — or a curious player with a devtools console — left
+ * behind. Every access is wrapped, and every value read back is treated as untrusted input
+ * rather than as the type it claims to be.
  */
 
-/** Bump only for a shape change; `migrate` decides what an old document becomes. */
-export const SCHEMA_VERSION = 1
+/** Bump for any shape change; `migrateLegacy` brings the previous version forward. */
+export const SCHEMA_VERSION = 2
 
-/** Versioned in the key as well as in the body, so a rollback cannot read forward data. */
-export const STORAGE_KEY = `dominoFill.progress.v${SCHEMA_VERSION}`
+/** Versioned in the key, so a rollback cannot read forward data. */
+export const KEY_PREFIX = `dominoFill.progress.v${SCHEMA_VERSION}.`
 
-/** How long an untouched puzzle's progress is kept. See `prune`. */
+/** The v1 single-document key, read once and retired. See `migrateLegacy`. */
+export const LEGACY_KEY = 'dominoFill.progress.v1'
+
+/** How long an untouched puzzle's progress is kept. See `isExpired`. */
 export const RETENTION_DAYS = 14
+
+const DAY_MS = 86_400_000
 
 export type PuzzleProgress = {
     /**
      * The definition this board was played against. A puzzle whose content changed under a
-     * reused id is a different puzzle, and its saved board would be nonsense against the
-     * new one — so this is checked before any restore.
+     * reused id is a different puzzle, and its saved board would be nonsense against the new
+     * one — so this is checked before any restore.
      */
     definitionHash: string
     board: (number | null)[][]
     completed: boolean
-    /** Local day of the last write, `YYYY-MM-DD`. Drives retention, not identity. */
-    savedOn: string
+    /**
+     * When this puzzle last moved, as epoch milliseconds.
+     *
+     * An absolute instant, deliberately, where v1 stored a local day string. Retention then
+     * cannot be confused by the calendar: a player who flies west across the date line, or
+     * who corrects their timezone, changes what today is *called* without changing how old
+     * anything is. v1 compared day strings and dropped every record dated later than the new
+     * local day, so travelling west deleted that day's progress outright — and the rollover
+     * check exists precisely to notice a backward date change, so the two features combined
+     * to destroy data.
+     */
+    savedAt: number
 }
-
-export type ProgressDocument = {
-    version: number
-    puzzles: Record<string, PuzzleProgress>
-}
-
-export const emptyDocument = (): ProgressDocument => ({ version: SCHEMA_VERSION, puzzles: {} })
 
 /**
  * The local day, as `YYYY-MM-DD`.
  *
- * Local rather than UTC on purpose: `getCurrentActiveBoard` selects the day's puzzle from
- * local date parts, so "today" here has to mean the same thing it means there. A UTC day
- * would roll over mid-evening for a player west of Greenwich and hand them tomorrow's
- * puzzle while their own calendar still said today.
+ * Local rather than UTC on purpose: it is what the player's own calendar says, and it decides
+ * which day's puzzle they are served. A UTC day would roll over mid-evening for a player west
+ * of Greenwich and hand them tomorrow's puzzle while their own calendar still said today.
+ *
+ * Retention no longer uses this — see `savedAt` — but rollover detection and puzzle selection
+ * both do, and they have to agree on the rule.
  */
 export const dayKey = (date: Date): string => {
     const pad = (n: number) => String(n).padStart(2, '0')
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
-/** Whole days from `from` to `to`, by local calendar date, ignoring clock time. */
-export const daysBetween = (from: string, to: string): number => {
-    const parse = (key: string) => {
-        const parts = key.split('-').map(Number)
-        if (parts.length !== 3 || parts.some(n => !Number.isInteger(n))) return NaN
-        return Date.UTC(parts[0], parts[1] - 1, parts[2])
-    }
-    const [a, b] = [parse(from), parse(to)]
-    if (Number.isNaN(a) || Number.isNaN(b)) return Number.POSITIVE_INFINITY
-    return Math.round((b - a) / 86_400_000)
 }
 
 const isBoard = (value: unknown): value is (number | null)[][] => {
@@ -102,63 +94,44 @@ const isProgress = (value: unknown): value is PuzzleProgress => {
     const record = value as Record<string, unknown>
     return typeof record.definitionHash === 'string'
         && typeof record.completed === 'boolean'
-        && typeof record.savedOn === 'string'
+        && typeof record.savedAt === 'number'
+        && Number.isFinite(record.savedAt)
         && isBoard(record.board)
 }
 
-/**
- * Bring an older document forward, or refuse it.
- *
- * There is exactly one version so far, so this is deliberately a stub with a shape rather
- * than a chain of transforms — but it is the named place a future version goes, and
- * "discard" is a real answer here, not a fallthrough: a document from a *newer* version was
- * written by code that knew something this build does not, and guessing at it is worse than
- * starting over.
- */
-const migrate = (candidate: Record<string, unknown>): { puzzles: unknown } | null => {
-    if (candidate.version === SCHEMA_VERSION) return { puzzles: candidate.puzzles }
-    return null
-}
-
-/**
- * Parse whatever was in storage into a document, discarding anything that is not one.
- *
- * Entry by entry rather than all-or-nothing: one corrupt puzzle should cost that puzzle's
- * progress, not the other eight. Returning an empty document for unparseable input means a
- * player with damaged storage starts fresh instead of seeing an error they cannot act on.
- */
-export const parseDocument = (raw: string | null): ProgressDocument => {
-    if (raw === null) return emptyDocument()
-    let parsed: unknown
+/** Parse one stored record, or null for anything that is not one. */
+export const parseRecord = (raw: string | null): PuzzleProgress | null => {
+    if (raw === null) return null
     try {
-        parsed = JSON.parse(raw)
+        const parsed: unknown = JSON.parse(raw)
+        return isProgress(parsed) ? parsed : null
     } catch {
-        return emptyDocument()
+        return null
     }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return emptyDocument()
-
-    const migrated = migrate(parsed as Record<string, unknown>)
-    if (!migrated) return emptyDocument()
-    if (typeof migrated.puzzles !== 'object' || migrated.puzzles === null) return emptyDocument()
-
-    const puzzles: Record<string, PuzzleProgress> = {}
-    for (const [puzzleId, record] of Object.entries(migrated.puzzles as Record<string, unknown>)) {
-        if (isProgress(record)) puzzles[puzzleId] = record
-    }
-    return { version: SCHEMA_VERSION, puzzles }
 }
 
 /**
- * The saved progress for a definition, if it is still the same puzzle.
+ * Has this record aged out?
  *
- * Returns null on a hash mismatch — that is the invalidation P1-7 asks for, and it happens
- * here rather than at the call site so there is no path that restores without checking.
+ * Strictly one-directional: only a record genuinely *older* than the window goes. A stamp in
+ * the future — a device whose clock is wrong, or a player who has just flown east — is kept.
+ * That trades a few kilobytes sitting around longer than intended against deleting a board
+ * somebody was in the middle of, and the board is worth more than the space.
+ */
+export const isExpired = (savedAt: number, now: number, retentionDays = RETENTION_DAYS) =>
+    now - savedAt > retentionDays * DAY_MS
+
+/**
+ * The saved progress for a definition, if it is still the same puzzle *and* a board the rules
+ * could have produced.
+ *
+ * Every refusal below is a state that would otherwise be restored and then reasoned about as
+ * though it were legitimate.
  */
 export const progressFor = (
-    document: ProgressDocument,
+    record: PuzzleProgress | null | undefined,
     definition: PuzzleDefinition,
 ): PuzzleProgress | null => {
-    const record = document.puzzles[definition.puzzleId]
     if (!record || record.definitionHash !== definition.definitionHash) return null
     // A board of the wrong size cannot belong to this definition whatever the hash says.
     if (record.board.length !== definition.size) return null
@@ -173,7 +146,7 @@ export const progressFor = (
      * Shape is not enough. A record can have the right size and the right rocks and still
      * describe a board no sequence of moves could reach: a `1` with nothing beneath it, or a
      * `0` claimed by two dominoes at once. Restoring one puts the game into a state its own
-     * rules disagree with, and every later judgement -- sums, completion, removal -- is then
+     * rules disagree with, and every later judgement — sums, completion, removal — is then
      * being made about a position that cannot exist.
      */
     if (!wellFormed(record.board, definition.size)) return null
@@ -182,7 +155,7 @@ export const progressFor = (
      * And `completed` is checked rather than believed, because it is the one field that can
      * take the game away from the player. A completed board is made `inert`: no pointer, no
      * keyboard, no focus. A record claiming `completed: true` over an unfinished board would
-     * restore a puzzle that cannot be played and cannot be finished -- the soft-lock P1-3
+     * restore a puzzle that cannot be played and cannot be finished — the soft-lock P1-3
      * exists to prevent, reintroduced through storage.
      */
     if (record.completed && !(isBoardFull(record.board, definition.size)
@@ -192,71 +165,153 @@ export const progressFor = (
     return record
 }
 
-/** Replace one puzzle's record, leaving the rest of the document alone. */
-export const withProgress = (
-    document: ProgressDocument,
-    puzzleId: string,
-    progress: PuzzleProgress,
-): ProgressDocument => ({
-    version: SCHEMA_VERSION,
-    puzzles: { ...document.puzzles, [puzzleId]: progress },
-})
+/* ----------------------------------------------------------------- storage */
 
 /**
- * Drop progress nobody is coming back for (the retention half of day rollover).
+ * `localStorage`, or null when there is not a usable one.
  *
- * Deliberately *not* "delete everything that is not today's puzzle". The day's board is
- * chosen by cycling through the data file, so a puzzle reappears on a later date with the
- * same id and the same content — it is genuinely the same puzzle, and a player who half
- * solved it should find their work where they left it. What actually needs bounding is
- * unbounded growth, so the rule is age: a record untouched for `RETENTION_DAYS` goes.
- *
- * A record stamped in the future is dropped too. That is not paranoia about clocks for its
- * own sake — a device whose date was wrong and then corrected would otherwise carry a
- * record that can never age out.
+ * The check is on the *method*, not on the object: recent Node defines a `localStorage`
+ * global whose members are all undefined, so `typeof localStorage !== 'undefined'` passes and
+ * the first call throws. `app/hooks/useLocalStorage.ts` records the same lesson.
  */
-export const prune = (
-    document: ProgressDocument,
-    today: string,
-    retentionDays = RETENTION_DAYS,
-): ProgressDocument => {
-    const puzzles: Record<string, PuzzleProgress> = {}
-    for (const [puzzleId, record] of Object.entries(document.puzzles)) {
-        const age = daysBetween(record.savedOn, today)
-        if (age >= 0 && age <= retentionDays) puzzles[puzzleId] = record
-    }
-    return { version: SCHEMA_VERSION, puzzles }
-}
-
-/**
- * Read the document from storage.
- *
- * Never called during render. `localStorage` exists as a global on recent Node while its
- * methods do not, so the guard is a feature check on the call itself rather than on the
- * object — the same lesson `useLocalStorage` records.
- */
-export const readDocument = (): ProgressDocument => {
+const store = (): Storage | null => {
     try {
-        if (typeof window === 'undefined' || typeof window.localStorage?.getItem !== 'function') {
-            return emptyDocument()
-        }
-        return parseDocument(window.localStorage.getItem(STORAGE_KEY))
+        if (typeof window === 'undefined') return null
+        const candidate = window.localStorage
+        return typeof candidate?.getItem === 'function' ? candidate : null
     } catch {
-        return emptyDocument()
+        return null
     }
 }
 
-/** Write the document back. Returns whether it was actually stored. */
-export const writeDocument = (document: ProgressDocument): boolean => {
+const keyFor = (puzzleId: string) => `${KEY_PREFIX}${puzzleId}`
+
+/** Every puzzle id currently held in storage. */
+const savedIds = (storage: Storage): string[] => {
+    const ids: string[] = []
+    for (let index = 0; index < storage.length; index++) {
+        const key = storage.key(index)
+        if (key?.startsWith(KEY_PREFIX)) ids.push(key.slice(KEY_PREFIX.length))
+    }
+    return ids
+}
+
+/** Read one puzzle's saved progress. */
+export const readProgress = (puzzleId: string): PuzzleProgress | null => {
+    const storage = store()
+    if (!storage) return null
     try {
-        if (typeof window === 'undefined' || typeof window.localStorage?.setItem !== 'function') {
-            return false
-        }
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(document))
+        return parseRecord(storage.getItem(keyFor(puzzleId)))
+    } catch {
+        return null
+    }
+}
+
+/**
+ * Write one puzzle's progress. Returns whether it was actually stored.
+ *
+ * One key, one `setItem`, and nothing else read or rewritten — which is exactly what makes a
+ * concurrent write by another tab, to another puzzle, harmless.
+ */
+export const writeProgress = (puzzleId: string, progress: PuzzleProgress): boolean => {
+    const storage = store()
+    if (!storage) return false
+    try {
+        storage.setItem(keyFor(puzzleId), JSON.stringify(progress))
         return true
     } catch {
         // Quota exceeded, or storage blocked. The game keeps its in-memory state; losing the
         // save is not a reason to lose the move.
         return false
+    }
+}
+
+/** Everything saved, by puzzle id, skipping anything unreadable. */
+export const readAllProgress = (): Record<string, PuzzleProgress> => {
+    const storage = store()
+    if (!storage) return {}
+    const all: Record<string, PuzzleProgress> = {}
+    try {
+        for (const puzzleId of savedIds(storage)) {
+            const record = parseRecord(storage.getItem(keyFor(puzzleId)))
+            // One corrupt puzzle costs that puzzle, not the other eight.
+            if (record) all[puzzleId] = record
+        }
+    } catch {
+        return all
+    }
+    return all
+}
+
+/** Drop what has aged out. Returns the ids removed, for tests and for logging. */
+export const pruneStorage = (now: number, retentionDays = RETENTION_DAYS): string[] => {
+    const storage = store()
+    if (!storage) return []
+    const removed: string[] = []
+    try {
+        for (const puzzleId of savedIds(storage)) {
+            const record = parseRecord(storage.getItem(keyFor(puzzleId)))
+            // Unreadable records go too: they are not progress and never will be.
+            if (record && !isExpired(record.savedAt, now, retentionDays)) continue
+            storage.removeItem(keyFor(puzzleId))
+            removed.push(puzzleId)
+        }
+    } catch {
+        return removed
+    }
+    return removed
+}
+
+/** Local midnight of a `YYYY-MM-DD` string, or null if it is not one. */
+const midnightOf = (savedOn: unknown): number | null => {
+    if (typeof savedOn !== 'string') return null
+    const parts = savedOn.split('-').map(Number)
+    if (parts.length !== 3 || parts.some(n => !Number.isInteger(n))) return null
+    const [year, month, day] = parts
+    const at = new Date(year, month - 1, day)
+    return Number.isNaN(at.getTime()) ? null : at.getTime()
+}
+
+/**
+ * Bring a v1 document forward, once.
+ *
+ * v1 kept every puzzle in one document under `dominoFill.progress.v1`, stamped with a local
+ * day string — the two things v2 exists to fix. Each entry is rewritten under its own key
+ * with an absolute `savedAt` taken from local midnight of the stored day: the earliest
+ * instant that day could have been, so a migrated record ages out no later than it would
+ * have done before, and never sooner.
+ *
+ * Returns how many records were carried over. The old key is removed either way, so this
+ * cannot run twice and a document that yields nothing is retired rather than re-examined on
+ * every load.
+ */
+export const migrateLegacy = (): number => {
+    const storage = store()
+    if (!storage) return 0
+    try {
+        const raw = storage.getItem(LEGACY_KEY)
+        if (raw === null) return 0
+        storage.removeItem(LEGACY_KEY)
+
+        const parsed: unknown = JSON.parse(raw)
+        if (typeof parsed !== 'object' || parsed === null) return 0
+        const document = parsed as { version?: unknown, puzzles?: unknown }
+        if (document.version !== 1) return 0
+        if (typeof document.puzzles !== 'object' || document.puzzles === null) return 0
+
+        let carried = 0
+        for (const [puzzleId, value] of Object.entries(document.puzzles as Record<string, unknown>)) {
+            if (typeof value !== 'object' || value === null) continue
+            const legacy = { ...value as Record<string, unknown> }
+            const savedAt = midnightOf(legacy.savedOn)
+            if (savedAt === null) continue
+            delete legacy.savedOn
+            const candidate = { ...legacy, savedAt }
+            if (!isProgress(candidate)) continue
+            if (writeProgress(puzzleId, candidate)) carried++
+        }
+        return carried
+    } catch {
+        return 0
     }
 }

@@ -6,15 +6,14 @@ import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
 import { winFeedback } from "../dominoFill/feedback"
 import {
-    ProgressDocument, PuzzleProgress, SCHEMA_VERSION, dayKey, emptyDocument, progressFor,
-    prune, readDocument, writeDocument,
+    PuzzleProgress, migrateLegacy, progressFor, pruneStorage, readAllProgress, writeProgress,
 } from "./progressStorage"
 
 type Difficulty = 'easy' | 'normal' | 'hard'
 type Level = 1 | 2 | 3
 
-/** A session's saved state before it is stamped with a day. See `persist`. */
-type SessionSnapshot = Omit<PuzzleProgress, 'savedOn'>
+/** A session's saved state before it is stamped with a time. See `persist`. */
+type SessionSnapshot = Omit<PuzzleProgress, 'savedAt'>
 
 /** Whether two saved forms of a puzzle say the same thing. */
 const sameProgress = (a: SessionSnapshot, b: SessionSnapshot) =>
@@ -43,13 +42,12 @@ export class LevelStore {
     sessions = new Map<string, PuzzleSession>()
 
     /**
-     * Saved progress as last read or written (spec P1-7).
+     * Saved progress as read at load (spec P1-7).
      *
-     * Held so a write does not have to re-read storage, and so records for puzzles that are
-     * not currently served survive a save -- they belong to a player who may come back to
-     * them, and only `prune` may drop one.
+     * Only ever used to restore sessions. Writes go straight to the puzzle's own key, so this
+     * is never written back as a whole and cannot go stale in a way that costs anything.
      */
-    document: ProgressDocument = emptyDocument()
+    saved: Record<string, PuzzleProgress> = {}
 
     /** Disposer for the persistence reaction; also the flag for "already started". */
     disposePersist: (() => void) | null = null
@@ -84,9 +82,9 @@ export class LevelStore {
             hardBoards: observable.ref,
             sessions: observable.shallow,
             // Plain data on its way to and from JSON, and a disposer. Neither is state the
-            // view derives from, and making the document observable would deep-convert every
+            // view derives from, and making the records observable would deep-convert every
             // saved board into a proxy for no reader's benefit.
-            document: false,
+            saved: false,
             disposePersist: false,
         })
 
@@ -140,15 +138,14 @@ export class LevelStore {
          * window in which the empty board is the live one. Doing it in this order means a
          * restored session is never observed empty.
          */
-        const loaded = readDocument()
-        this.document = prune(loaded, dayKey(new Date()))
+        // A v1 document, if this browser still has one, becomes v2 records before anything
+        // reads them. Retention then runs at load rather than waiting for the next move --
+        // otherwise it never runs at all for the player who has stopped playing, which is
+        // exactly whose data is sitting there.
+        migrateLegacy()
+        pruneStorage(Date.now())
+        this.saved = readAllProgress()
         this.reconcileSessions(definitions)
-        // Written back at once when anything aged out. Retention that only takes effect
-        // after the player's next move is retention that never runs for the player who
-        // stops playing -- which is precisely whose data is sitting there.
-        if (Object.keys(this.document.puzzles).length !== Object.keys(loaded.puzzles).length) {
-            writeDocument(this.document)
-        }
 
         /*
          * Land on the first unsolved puzzle (D10-i's remaining half).
@@ -220,17 +217,17 @@ export class LevelStore {
      * Two decisions worth stating, because both look like extra work until the alternative is
      * spelled out.
      *
-     * **Merged, not replaced.** Today's nine are not every puzzle that exists -- the data file
-     * cycles -- so replacing the document would delete a half-finished board belonging to a
-     * day that is not being served right now. `prune` is the only thing allowed to drop a
-     * record.
+     * **Only what changed, and only what is served.** Today's nine are not every puzzle that
+     * exists -- the data file cycles -- and a record for a day that is not being served right
+     * now still belongs to a player who may come back to it. Retention is the only thing
+     * allowed to drop one.
      *
-     * **Merged into what storage holds now**, re-read on every write rather than into the copy
-     * this store loaded. Two tabs are ordinary -- a phone restoring a session, a desktop with
-     * the game pinned -- and each would otherwise hold a document from its own load and write
-     * it back whole, so the second to save would quietly undo the first tab's work on every
-     * *other* puzzle. Re-reading narrows the window to the read-modify-write itself; see the
-     * multi-tab note in SPEC for what that does and does not guarantee.
+     * **One key per puzzle, so a write touches nothing else.** Two tabs are ordinary -- a
+     * phone restoring a session, a desktop with the game pinned -- and with a single shared
+     * document each would read it, change its own puzzle, and write the whole thing back,
+     * losing whatever the other had saved in between. Writing only the puzzle's own key
+     * removes that entirely rather than narrowing it: there is no read-modify-write across
+     * puzzles left to interleave.
      *
      * **`savedOn` is stamped only on a record that actually changed.** It means "when this
      * puzzle last moved", not "when the app was last open". Restamping everything on every
@@ -239,25 +236,15 @@ export class LevelStore {
      * growth the window exists to stop.
      */
     persist(snapshot: Record<string, SessionSnapshot>) {
-        const today = dayKey(new Date())
-        // Storage as it is *now*, not as this store last saw it: another tab may have saved
-        // since, and its work has to survive this write.
-        const puzzles = { ...readDocument().puzzles }
-
-        let wrote = false
+        const savedAt = Date.now()
         for (const [puzzleId, next] of Object.entries(snapshot)) {
             const mine = this.lastSaved[puzzleId]
             // Unchanged here since this store last looked, so whatever storage holds for it
             // belongs to someone else and is left exactly as it is.
             if (mine && sameProgress(mine, next)) continue
-            puzzles[puzzleId] = { ...next, savedOn: today }
-            wrote = true
+            writeProgress(puzzleId, { ...next, savedAt })
         }
-
         this.lastSaved = snapshot
-        if (!wrote) return
-        this.document = { version: SCHEMA_VERSION, puzzles }
-        writeDocument(this.document)
     }
 
     /**
@@ -316,7 +303,7 @@ export class LevelStore {
             // A saved board, but only if it is still a board of *this* puzzle. `progressFor`
             // owns that judgement -- hash, size and rock positions -- so there is no path
             // that restores without it.
-            const saved = progressFor(this.document, definition)
+            const saved = progressFor(this.saved[definition.puzzleId], definition)
             if (saved) session.restore(saved)
             this.sessions.set(definition.puzzleId, session)
         }

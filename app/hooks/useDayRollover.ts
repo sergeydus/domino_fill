@@ -54,12 +54,20 @@ export const useDayRollover = (onRollover: () => void | Promise<void>) => {
          * `inFlight` is what that early write was really reaching for: the refetch is slow
          * enough that a poll, a reveal and a focus can all arrive during it, and one midnight
          * should cost one request.
+         *
+         * The callback is invoked *inside* the chain, not as an argument to `Promise.resolve`.
+         * The difference only shows for a synchronous callback that throws -- which the
+         * signature permits -- and then it is total: the exception escapes before any promise
+         * exists, so `.finally` never runs, `inFlight` stays true, and rollover is wedged for
+         * the life of the tab. Deferring the call turns that throw into a rejection, which is
+         * already handled as "try again next time".
          */
         const check = () => {
             const today = dayKey(new Date())
             if (today === seen || inFlight) return
             inFlight = true
-            Promise.resolve(callback.current())
+            Promise.resolve()
+                .then(() => callback.current())
                 .then(() => { seen = today })
                 .catch(() => { /* leave `seen` behind, so the next trigger retries */ })
                 .finally(() => { inFlight = false })

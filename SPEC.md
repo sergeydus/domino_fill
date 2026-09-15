@@ -933,25 +933,32 @@ boards unless the Map is populated first.
 > reader would use. It belongs with whatever first needs it (stats, or the archive in P1-6),
 > where the questions have answers. `{board, completed}` is what row 17 saves.
 >
-> **The shape.** One document under `dominoFill.progress.v1`, keyed inside by `puzzleId`,
-> each record carrying its `definitionHash`. One document rather than a key per puzzle: a day
-> is nine boards of at most 64 small cells, so an atomic read-modify-write is cheap, and
-> migration and pruning then happen in one place with no way to half-write a day. The version
-> is in the key *and* in the body, so a rollback cannot read forward data and a forward
-> document is refused rather than guessed at.
+> **The shape: one key per puzzle**, `dominoFill.progress.v2.<puzzleId>`, each record carrying
+> its `definitionHash` and an absolute `savedAt`. This is a reversal of the first design, which
+> kept a single document, and the reason is other tabs — see the multi-tab note below. The
+> version is in the key, so a rollback cannot read forward data; `migrateLegacy` carries a v1
+> document across once and retires the old key whether or not anything in it survived.
 >
-> **A saved board is not trusted because it is saved.** `progressFor` checks the hash, the
-> size, and that the rocks are where the definition says — storage survives upgrades and is
-> editable from a console, and restoring a record that disagrees would put the board into a
-> state the rules cannot produce. Corrupt entries are dropped one at a time, so one bad
-> puzzle costs that puzzle rather than the other eight.
+> **A saved board is not trusted because it is saved.** Storage outlives upgrades and is
+> editable from a console, so `progressFor` refuses anything that is not a position the rules
+> could have produced. It checks the `definitionHash`, the size, and that the rocks sit where
+> the definition says; that every cell holds a rock or one of the three pip values, so a
+> planted `99` cannot be restored and counted into a line sum; that every placed half belongs
+> to **exactly one** well-formed domino, which rejects both an orphan half and a `0` claimed by
+> two dominoes at once; and that a `completed: true` record really is a full board matching its
+> targets — otherwise a hand-edited flag would restore an `inert` puzzle that can be neither
+> played nor finished, which is P1-3's soft-lock coming back in through storage. Corrupt
+> records are dropped one at a time, so one bad puzzle costs that puzzle rather than the other
+> eight.
 >
-> **Retention is by age, not by "is it today's".** The data file cycles, so a puzzle returns
-> on a later date with the same id and content — it really is the same puzzle, and
-> half-finished work on it should still be there. What needs bounding is growth, so a record
-> untouched for 14 days goes, and `savedOn` means "when this puzzle last moved" rather than
-> "when the app was last open" — restamping everything on every write would make the window
-> unreachable for anyone who plays daily.
+> **Retention measures age, not the calendar.** A record untouched for 14 days goes, and
+> `savedAt` means "when this puzzle last moved" rather than "when the app was last open" —
+> restamping on every write would put the window out of reach of anyone who plays daily. It is
+> an absolute instant rather than a local day string, and that matters more than it sounds:
+> the first version compared day strings and dropped anything dated *later* than today, so a
+> player flying west across the date line had that day's progress deleted — by the rollover
+> check, which exists precisely to notice a backward date change. Ageing is now one-directional:
+> a future stamp is kept, trading a few kilobytes against somebody's half-finished board.
 >
 > **Day rollover.** The board was fetched once in a mount effect and never again, so a tab
 > left open overnight served yesterday's puzzle indefinitely — the ordinary case for a daily
@@ -967,15 +974,19 @@ boards unless the Map is populated first.
 > puzzle under the player actually changed, so a refetch of the same day never moves someone
 > mid-board.
 >
-> **Two tabs: scoped, not solved.** Each store re-reads storage on every write and rewrites
-> only the puzzles it changed itself, so a second tab cannot carry its stale copy of another
-> tab's puzzle back over the top — which it previously did, wiping the other tab's work on all
-> eight puzzles it was not playing. Two tabs playing *the same* puzzle still resolve
-> last-write-wins, and that is left deliberately: resolving it needs either a lock, which
-> `localStorage` does not offer, or a merge rule for two divergent boards, and there is no
-> honest merge of "these two dominoes were placed in different places". The earlier claim that
-> this was an "atomic read-modify-write" was simply wrong — `setItem` is atomic, the
-> read-modify-write around it is not — and is corrected in the source.
+> **Two tabs.** A single shared document could not be made safe by care alone. Writing only
+> locally-changed records fixed the *sequential* case — a tab writing back a stale snapshot —
+> but not the interleaved one: two tabs read the same document, both write it whole, and the
+> second erases the first, on a puzzle neither was editing. `setItem` is atomic; the
+> read-modify-write around it is not, and the HTML standard is explicit that authors must not
+> assume locking between agent clusters. So the layout changed instead: one key per puzzle
+> means a save never rewrites another puzzle, and that class of loss stops existing rather than
+> being narrowed. A lock (Web Locks) or a transactional store (IndexedDB) would be the other
+> route, and both are heavier than a problem that a key naming scheme removes outright.
+>
+> Two tabs playing *the same* puzzle still resolve last-write-wins, deliberately: there is no
+> honest merge of "these two dominoes were placed in different places", and the alternative is
+> asking a player which of their own boards to throw away.
 >
 > **Rollover still swaps an unfinished board, and row 17 does not fix it.** The policy above
 > says never silently swap the board under an active player and keep the old one reachable from

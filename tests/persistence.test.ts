@@ -4,7 +4,9 @@ import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
 import type { BoardsResponse } from '@/app/dominoFill/Boards'
 import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
-import { STORAGE_KEY, SCHEMA_VERSION, dayKey, parseDocument } from '@/app/stores/progressStorage'
+import {
+    KEY_PREFIX, LEGACY_KEY, RETENTION_DAYS, readAllProgress, readProgress,
+} from '@/app/stores/progressStorage'
 
 /**
  * Progress survives a reload (spec P1-7), and the store is what makes it so.
@@ -77,7 +79,7 @@ const response = (suffix = ''): BoardsResponse => ({
     hardBoards: [puzzle(`hard-1${suffix}`), puzzle(`hard-2${suffix}`), puzzle(`hard-3${suffix}`)],
 })
 
-const stored = () => parseDocument(window.localStorage.getItem(STORAGE_KEY))
+const stored = () => ({ puzzles: readAllProgress() })
 
 /** A second store over the same storage: this is what a reload actually is. */
 const reload = (boards: BoardsResponse = response()) => {
@@ -301,18 +303,21 @@ describe('a saved board is not trusted just because it is saved', () => {
     })
 
     it('survives corrupt storage by starting that puzzle fresh', () => {
-        window.localStorage.setItem(STORAGE_KEY, '{not json at all')
+        window.localStorage.setItem(`${KEY_PREFIX}easy-1`, '{not json at all')
         const store = reload()
         expect(store.currentBoard).not.toBeNull()
         expect(store.currentBoard!.board[1][1]).toBeNull()
     })
 
-    it('survives a document from a version this build does not know', () => {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            version: SCHEMA_VERSION + 99,
-            puzzles: { 'easy-1': { definitionHash: 'x', board: [[1]], completed: true, savedOn: '2026-09-15' } },
+    it('ignores a record left by a version with a different shape', () => {
+        // The key carries the schema version, so a v1 document is not even looked at here --
+        // `migrateLegacy` owns that. Anything under this version's prefix that does not parse
+        // as a v2 record is simply not progress.
+        window.localStorage.setItem(`${KEY_PREFIX}easy-1`, JSON.stringify({
+            definitionHash: 'x', board: [[1]], completed: true, savedOn: '2026-09-15',
         }))
         expect(reload().currentBoard!.completed).toBe(false)
+        expect(reload().currentBoard!.board[1][1]).toBeNull()
     })
 
     it('keeps playing when storage refuses to be written', () => {
@@ -410,9 +415,10 @@ describe('a long-lived tab does not accumulate', () => {
         expect(stored().puzzles['easy-1']).toBeDefined()
 
         // Age that record out, then serve a different day and play on it.
-        const aged = stored()
-        aged.puzzles['easy-1'].savedOn = '2020-01-01'
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(aged))
+        const aged = readProgress('easy-1')!
+        window.localStorage.setItem(`${KEY_PREFIX}easy-1`, JSON.stringify({
+            ...aged, savedAt: Date.now() - (RETENTION_DAYS + 1) * 86_400_000,
+        }))
 
         rollTo(root.boardsStore, 1)
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
@@ -500,12 +506,120 @@ describe('two tabs', () => {
     })
 })
 
-describe('the save is stamped with the local day', () => {
-    it('records today, so retention has something to measure', () => {
+describe('two tabs writing at the same time', () => {
+    /*
+     * The case the previous tests could not reach. They interleaved *stores* but not the
+     * read-modify-write inside a single save, so they showed only that a stale snapshot was
+     * not written back. With one shared document the real hazard is finer: both tabs read the
+     * same document, both write it whole, and the second erases the first -- on a puzzle
+     * neither of them was editing.
+     *
+     * Per-puzzle keys remove that by construction, and the way to demonstrate it is to force
+     * the interleaving rather than to hope for it.
+     */
+    it('an interleaved write does not erase what the other tab saved', () => {
+        const tabA = root.boardsStore
+        runInAction(() => { tabA.setBoards(response()) })
+        const tabB = reload()
+
+        // Both tabs observe storage as it is now...
+        const seenByA = readAllProgress()
+        const seenByB = readAllProgress()
+        expect(seenByA).toEqual(seenByB)
+
+        // ...then both save, A first.
+        runInAction(() => { tabA.currentBoard!.placeToward([1, 1], 'down') })
+        runInAction(() => { tabB.setLevel(2) })
+        runInAction(() => { tabB.currentBoard!.placeToward([2, 2], 'right') })
+
+        expect(readProgress('easy-1')!.board[1][1], 'tab A survived tab B').toBe(1)
+        expect(readProgress('easy-2')!.board[2][2], 'tab B saved its own').toBe(0)
+    })
+
+    it('a tab writes only its own puzzle key, touching no other', () => {
+        // The structural guarantee behind the test above: if a save never names another
+        // puzzle's key, no interleaving can lose it.
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+
+        const written: string[] = []
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation((key: string) => { written.push(key) })
+
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+
+        expect(written).toEqual([`${KEY_PREFIX}easy-1`])
+        setItem.mockRestore()
+    })
+})
+
+describe('a v1 document is carried forward', () => {
+    /*
+     * v1 kept one document stamped with a local day string. Both are what v2 replaces, so the
+     * migration is a real one rather than a discard: a player mid-puzzle when they picked up
+     * the new build should not lose the board.
+     */
+    const legacyDocument = (savedOn: string) => JSON.stringify({
+        version: 1,
+        puzzles: {
+            'easy-1': {
+                definitionHash: root.boardsStore.sessions.get('easy-1')?.definition.definitionHash
+                    ?? '',
+                board: (() => {
+                    const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+                    board[0][0] = -1
+                    board[1][1] = 1
+                    board[2][1] = 0
+                    return board
+                })(),
+                completed: false,
+                savedOn,
+            },
+        },
+    })
+
+    it('restores a board saved by the previous version', () => {
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+        const hash = root.boardsStore.sessions.get('easy-1')!.definition.definitionHash
+        window.localStorage.clear()
+        window.localStorage.setItem(LEGACY_KEY, legacyDocument('2026-09-15').replace('""', `"${hash}"`))
+
+        const store = reload()
+
+        expect(store.sessions.get('easy-1')!.board[1][1]).toBe(1)
+    })
+
+    it('retires the old key so the migration cannot run twice', () => {
+        window.localStorage.setItem(LEGACY_KEY, legacyDocument('2026-09-15'))
+        reload()
+        expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull()
+    })
+
+    it('retires the old key even when it holds nothing usable', () => {
+        // Otherwise a damaged document is re-examined on every single load, forever.
+        window.localStorage.setItem(LEGACY_KEY, '{not a document')
+        reload()
+        expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull()
+    })
+
+    it('dates a migrated record from local midnight, so it ages no sooner than before', () => {
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+        const hash = root.boardsStore.sessions.get('easy-1')!.definition.definitionHash
+        window.localStorage.clear()
+        window.localStorage.setItem(LEGACY_KEY, legacyDocument('2026-09-15').replace('""', `"${hash}"`))
+
+        reload()
+
+        expect(readProgress('easy-1')!.savedAt).toBe(new Date(2026, 8, 15).getTime())
+    })
+})
+
+describe('the save is stamped with an absolute instant', () => {
+    it('records now, so retention has something to measure', () => {
+        const before = Date.now()
         runInAction(() => { root.boardsStore.setBoards(response()) })
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
 
-        expect(stored().puzzles['easy-1'].savedOn).toBe(dayKey(new Date()))
+        expect(readProgress('easy-1')!.savedAt).toBeGreaterThanOrEqual(before)
     })
 
     it('leaves the stamp alone on a puzzle that did not change', () => {
@@ -521,28 +635,45 @@ describe('the save is stamped with the local day', () => {
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
 
         // Age level 2's record by hand, then reload and move on level 1 only.
-        const aged = stored()
-        aged.puzzles['easy-2'].savedOn = '2026-09-01'
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(aged))
+        const aged = readProgress('easy-2')!
+        const long_ago = Date.now() - 3 * 86_400_000
+        window.localStorage.setItem(`${KEY_PREFIX}easy-2`, JSON.stringify({ ...aged, savedAt: long_ago }))
 
+        const before = Date.now()
         const store = reload()
         runInAction(() => { store.currentBoard!.placeToward([2, 2], 'right') })
 
-        expect(stored().puzzles['easy-2'].savedOn, 'untouched puzzle').toBe('2026-09-01')
-        expect(stored().puzzles['easy-1'].savedOn, 'the one that moved').toBe(dayKey(new Date()))
+        expect(readProgress('easy-2')!.savedAt, 'untouched puzzle').toBe(long_ago)
+        expect(readProgress('easy-1')!.savedAt, 'the one that moved').toBeGreaterThanOrEqual(before)
     })
 
     it('drops records older than the retention window when the store loads', () => {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            version: SCHEMA_VERSION,
-            puzzles: {
-                ancient: {
-                    definitionHash: 'x', board: [[null]], completed: true, savedOn: '2000-01-01',
-                },
-            },
+        window.localStorage.setItem(`${KEY_PREFIX}ancient`, JSON.stringify({
+            definitionHash: 'x',
+            board: [[null]],
+            completed: false,
+            savedAt: Date.now() - (RETENTION_DAYS + 1) * 86_400_000,
         }))
 
         reload()
-        expect(stored().puzzles.ancient).toBeUndefined()
+        expect(readProgress('ancient')).toBeNull()
+    })
+
+    it('keeps a record saved in the future rather than deleting it', () => {
+        /*
+         * The westward-travel case, end to end. A player who flies across the date line has
+         * records stamped later than their new clock; under v1 these were dated "tomorrow"
+         * and the rollover -- which deliberately notices a backward date change -- deleted
+         * them. Demonstrated before the fix: the record came back null.
+         */
+        window.localStorage.setItem(`${KEY_PREFIX}tomorrow`, JSON.stringify({
+            definitionHash: 'x',
+            board: [[null]],
+            completed: false,
+            savedAt: Date.now() + 86_400_000,
+        }))
+
+        reload()
+        expect(readProgress('tomorrow'), 'deleted by travelling west').not.toBeNull()
     })
 })

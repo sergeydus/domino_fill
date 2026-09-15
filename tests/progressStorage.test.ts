@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
-    SCHEMA_VERSION, STORAGE_KEY, RETENTION_DAYS,
-    emptyDocument, dayKey, daysBetween, parseDocument, progressFor, withProgress, prune,
-    type ProgressDocument, type PuzzleProgress,
+    KEY_PREFIX, SCHEMA_VERSION, RETENTION_DAYS,
+    dayKey, isExpired, parseRecord, progressFor,
+    type PuzzleProgress,
 } from '@/app/stores/progressStorage'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 
@@ -35,55 +35,75 @@ const playedBoard = (): (number | null)[][] => {
     return board
 }
 
+const AT = Date.UTC(2026, 8, 15, 12)
+
 const record = (over: Partial<PuzzleProgress> = {}): PuzzleProgress => ({
     definitionHash: definition('p').definitionHash,
     board: playedBoard(),
     completed: false,
-    savedOn: '2026-09-15',
+    savedAt: AT,
     ...over,
 })
 
-const document = (puzzles: Record<string, PuzzleProgress>): ProgressDocument =>
-    ({ version: SCHEMA_VERSION, puzzles })
+const days = (n: number) => n * 86_400_000
 
-describe('the storage key', () => {
-    it('carries the schema version, so a rollback cannot read forward data', () => {
-        // Both halves matter: the key stops an older build from *finding* the document, and
-        // the version inside stops a newer one being misread if it does.
-        expect(STORAGE_KEY).toContain(`v${SCHEMA_VERSION}`)
-        expect(emptyDocument().version).toBe(SCHEMA_VERSION)
+describe('the storage keys', () => {
+    it('carry the schema version, so a rollback cannot read forward data', () => {
+        expect(KEY_PREFIX).toContain(`v${SCHEMA_VERSION}`)
+    })
+
+    it('are one per puzzle, which is what makes a write touch nothing else', () => {
+        // The reason for the shape: with a shared document, two tabs read it, each change
+        // their own puzzle, and the second write erases the first -- on a puzzle neither was
+        // editing. A per-puzzle key has no cross-puzzle read-modify-write to interleave.
+        expect(KEY_PREFIX.endsWith('.')).toBe(true)
     })
 })
 
-describe('days are local, and counted by calendar date', () => {
+describe('the local day, which selection and rollover both use', () => {
     it('formats the local day, not the UTC one', () => {
         // 23:30 local on the 15th is the 15th, whatever UTC says about it. The day's puzzle
-        // is chosen from local date parts, so this has to agree with that.
+        // is chosen from this, so it has to mean the player's calendar.
         expect(dayKey(new Date(2026, 8, 15, 23, 30))).toBe('2026-09-15')
         expect(dayKey(new Date(2026, 0, 5, 0, 1))).toBe('2026-01-05')
     })
+})
 
-    it('counts whole days regardless of the time of day', () => {
-        expect(daysBetween('2026-09-15', '2026-09-16')).toBe(1)
-        expect(daysBetween('2026-09-15', '2026-09-15')).toBe(0)
-        expect(daysBetween('2026-09-16', '2026-09-15')).toBe(-1)
+describe('retention measures age, not the calendar', () => {
+    /*
+     * v1 compared local day strings and dropped anything dated *later* than today. Combined
+     * with rollover -- which deliberately notices a backward date change -- that destroyed
+     * progress: fly west across the date line, the local date goes back a day, and the board
+     * saved "tomorrow" was deleted. An absolute instant has no such failure mode, because
+     * renaming today does not change how old anything is.
+     */
+    const now = AT
+
+    it('keeps a record saved moments ago', () => {
+        expect(isExpired(now - 1_000, now)).toBe(false)
     })
 
-    it('crosses a month and a year boundary without arithmetic of its own', () => {
-        expect(daysBetween('2026-01-31', '2026-02-01')).toBe(1)
-        expect(daysBetween('2025-12-31', '2026-01-01')).toBe(1)
-        // A leap day is the case a naive month-length table gets wrong.
-        expect(daysBetween('2028-02-28', '2028-03-01')).toBe(2)
+    it('keeps a record at the last moment of the window, and drops it just past', () => {
+        expect(isExpired(now - days(RETENTION_DAYS), now), 'exactly at the window').toBe(false)
+        expect(isExpired(now - days(RETENTION_DAYS) - 1, now), 'a millisecond past').toBe(true)
     })
 
-    it('treats an unreadable stamp as infinitely old rather than as today', () => {
-        // Failing the other way would keep a corrupt record forever.
-        expect(daysBetween('not-a-day', '2026-09-15')).toBe(Number.POSITIVE_INFINITY)
-        expect(daysBetween('2026-09', '2026-09-15')).toBe(Number.POSITIVE_INFINITY)
+    it('keeps a record stamped in the future, rather than deleting a live board', () => {
+        // A clock that is wrong, or a player who has flown east. The cost of keeping it is a
+        // few kilobytes; the cost of dropping it is somebody's half-finished puzzle.
+        expect(isExpired(now + days(1), now)).toBe(false)
+        expect(isExpired(now + days(400), now)).toBe(false)
+    })
+
+    it('survives travelling west across the date line', () => {
+        // Saved at midday on the 16th; the traveller's clock is now midday on the 15th.
+        const savedAt = Date.UTC(2026, 8, 16, 12)
+        const afterFlying = Date.UTC(2026, 8, 15, 12)
+        expect(isExpired(savedAt, afterFlying)).toBe(false)
     })
 })
 
-describe('parsing refuses anything that is not a document', () => {
+describe('parsing refuses anything that is not a record', () => {
     it.each([
         ['nothing stored', null],
         ['not JSON', '{oh no'],
@@ -91,50 +111,31 @@ describe('parsing refuses anything that is not a document', () => {
         ['a number', '42'],
         ['null', 'null'],
         ['an array', '[]'],
-    ])('%s yields an empty document', (_label, raw) => {
-        expect(parseDocument(raw as string | null).puzzles).toEqual({})
+        ['a record with no timestamp', JSON.stringify({ definitionHash: 'x', board: [[null]], completed: false })],
+        ['a timestamp that is not a number', JSON.stringify({ definitionHash: 'x', board: [[null]], completed: false, savedAt: 'today' })],
+        ['a timestamp that is not finite', JSON.stringify({ definitionHash: 'x', board: [[null]], completed: false, savedAt: null })],
+    ])('%s yields nothing', (_label, raw) => {
+        expect(parseRecord(raw as string | null)).toBeNull()
     })
 
-    it('discards a document from a newer version instead of guessing at it', () => {
-        // It was written by code that knew something this build does not.
-        const forward = JSON.stringify({ version: SCHEMA_VERSION + 1, puzzles: { p: record() } })
-        expect(parseDocument(forward).puzzles).toEqual({})
+    it('refuses a ragged board', () => {
+        expect(parseRecord(JSON.stringify(record({ board: [[null, null], [null]] as (number | null)[][] })))).toBeNull()
     })
 
-    it('discards a document from an older version', () => {
-        const old = JSON.stringify({ version: 0, puzzles: { p: record() } })
-        expect(parseDocument(old).puzzles).toEqual({})
-    })
-
-    it('drops only the corrupt entries, not the whole day', () => {
-        // One bad puzzle should cost that puzzle, not the other eight.
-        const raw = JSON.stringify({
-            version: SCHEMA_VERSION,
-            puzzles: {
-                good: record(),
-                ragged: record({ board: [[null, null], [null]] as (number | null)[][] }),
-                notABoard: { ...record(), board: 'nope' },
-                missingFlag: { definitionHash: 'x', board: playedBoard(), savedOn: '2026-09-15' },
-                cellsNotNumbers: record({ board: [['a']] as unknown as (number | null)[][] }),
-            },
-        })
-        expect(Object.keys(parseDocument(raw).puzzles)).toEqual(['good'])
-    })
-
-    it('round-trips a document it wrote itself', () => {
-        const before = document({ p: record() })
-        expect(parseDocument(JSON.stringify(before))).toEqual(before)
+    it('round-trips a record it wrote itself', () => {
+        const before = record()
+        expect(parseRecord(JSON.stringify(before))).toEqual(before)
     })
 })
 
 describe('progress is only restored to the puzzle it came from', () => {
     it('matching id and hash restores', () => {
         const d = definition('p')
-        expect(progressFor(document({ p: record() }), d)).not.toBeNull()
+        expect(progressFor(record(), d)).not.toBeNull()
     })
 
     it('a puzzle with no saved progress restores nothing', () => {
-        expect(progressFor(document({}), definition('p'))).toBeNull()
+        expect(progressFor(null, definition('p'))).toBeNull()
     })
 
     it('content changed under a reused id is a different puzzle', () => {
@@ -144,7 +145,7 @@ describe('progress is only restored to the puzzle it came from', () => {
          * that puzzle -- it could have dominoes sitting where rocks now are.
          */
         const changed = definition('p', [[3, 3]])
-        expect(progressFor(document({ p: record() }), changed)).toBeNull()
+        expect(progressFor(record(), changed)).toBeNull()
     })
 
     it('a board of the wrong size is refused even if the hash somehow matches', () => {
@@ -153,7 +154,7 @@ describe('progress is only restored to the puzzle it came from', () => {
             definitionHash: d.definitionHash,
             board: Array.from({ length: 6 }, () => Array<number | null>(6).fill(null)),
         })
-        expect(progressFor(document({ p: wrongSize }), d)).toBeNull()
+        expect(progressFor(wrongSize, d)).toBeNull()
     })
 
     it('a board that disagrees about where the rocks are is refused', () => {
@@ -163,7 +164,7 @@ describe('progress is only restored to the puzzle it came from', () => {
         const moved = playedBoard()
         moved[0][0] = null
         moved[3][3] = -1
-        expect(progressFor(document({ p: record({ board: moved }) }), d)).toBeNull()
+        expect(progressFor(record({ board: moved }), d)).toBeNull()
     })
 })
 
@@ -186,23 +187,20 @@ describe('a restored board must be one the rules could have produced', () => {
 
     it('accepts a board that is genuinely reachable', () => {
         const legal = withBoard([[0, 1, 1], [1, 1, 0], [2, 2, 0], [2, 3, 2]])
-        expect(progressFor(document({ p: legal }), definition('p'))).not.toBeNull()
+        expect(progressFor(legal, definition('p'))).not.toBeNull()
     })
 
     it('refuses a value this game does not have', () => {
         // `99` would be restored and then counted into a line sum.
-        const raw = JSON.stringify({
-            version: SCHEMA_VERSION,
-            puzzles: { p: withBoard([[2, 2, 99]]) },
-        })
-        expect(parseDocument(raw).puzzles.p, 'a 99 is not a piece').toBeUndefined()
+        const raw = JSON.stringify(withBoard([[2, 2, 99]]))
+        expect(parseRecord(raw), 'a 99 is not a piece').toBeNull()
     })
 
     it('refuses a half with no partner', () => {
         // A `1` with nothing beneath it: half a domino, which no placement can leave behind.
-        expect(progressFor(document({ p: withBoard([[0, 1, 1]]) }), definition('p'))).toBeNull()
+        expect(progressFor(withBoard([[0, 1, 1]]), definition('p'))).toBeNull()
         // And a lone `0`, owned by nobody.
-        expect(progressFor(document({ p: withBoard([[2, 2, 0]]) }), definition('p'))).toBeNull()
+        expect(progressFor(withBoard([[2, 2, 0]]), definition('p'))).toBeNull()
     })
 
     it('refuses a square claimed by two dominoes at once', () => {
@@ -212,7 +210,7 @@ describe('a restored board must be one the rules could have produced', () => {
          * and the left half of another. Every cell is legal on its own.
          */
         const ambiguous = withBoard([[1, 1, 1], [2, 1, 0], [2, 2, 2]])
-        expect(progressFor(document({ p: ambiguous }), definition('p'))).toBeNull()
+        expect(progressFor(ambiguous, definition('p'))).toBeNull()
     })
 
     it('refuses a completed flag over a board that is not finished', () => {
@@ -224,7 +222,7 @@ describe('a restored board must be one the rules could have produced', () => {
          */
         const lying = withBoard([[0, 1, 1], [1, 1, 0]])
         lying.completed = true
-        expect(progressFor(document({ p: lying }), definition('p'))).toBeNull()
+        expect(progressFor(lying, definition('p'))).toBeNull()
     })
 
     it('accepts a completed flag over a board that really is finished', () => {
@@ -240,83 +238,8 @@ describe('a restored board must be one the rules could have produced', () => {
             definitionHash: solved.definitionHash,
             board,
             completed: true,
-            savedOn: '2026-09-15',
+            savedAt: AT,
         }
-        expect(progressFor(document({ tiny: finished }), solved)).not.toBeNull()
-    })
-})
-
-describe('writing one puzzle leaves the others alone', () => {
-    it('replaces its own entry and keeps the rest', () => {
-        const before = document({ a: record(), b: record({ completed: true }) })
-        const after = withProgress(before, 'a', record({ completed: true }))
-
-        expect(after.puzzles.a.completed).toBe(true)
-        expect(after.puzzles.b).toEqual(before.puzzles.b)
-    })
-
-    it('does not mutate the document it was given', () => {
-        // The store hands this the value it is holding; mutating in place would make a
-        // failed write indistinguishable from a successful one.
-        const before = document({ a: record() })
-        withProgress(before, 'a', record({ completed: true }))
-        expect(before.puzzles.a.completed).toBe(false)
-    })
-})
-
-describe('pruning bounds growth without throwing away live puzzles', () => {
-    it('keeps today', () => {
-        const after = prune(document({ p: record({ savedOn: '2026-09-15' }) }), '2026-09-15')
-        expect(after.puzzles.p).toBeDefined()
-    })
-
-    it('keeps a puzzle from a previous appearance in the cycle', () => {
-        /*
-         * The data file cycles, so a puzzle returns on a later date with the same id and the
-         * same content -- it really is the same puzzle, and half-finished work on it should
-         * still be there. "Delete everything that is not today's" would throw that away, so
-         * the rule is age rather than identity.
-         */
-        const after = prune(document({ p: record({ savedOn: '2026-09-13' }) }), '2026-09-15')
-        expect(after.puzzles.p).toBeDefined()
-    })
-
-    it('drops a puzzle untouched for longer than the retention window', () => {
-        const stale = record({ savedOn: '2026-08-01' })
-        const after = prune(document({ p: stale }), '2026-09-15')
-        expect(after.puzzles.p).toBeUndefined()
-    })
-
-    it('keeps the last day of the window and drops the first day past it', () => {
-        const at = (age: number) => {
-            const day = new Date(2026, 8, 15)
-            day.setDate(day.getDate() - age)
-            return dayKey(day)
-        }
-        const kept = prune(document({ p: record({ savedOn: at(RETENTION_DAYS) }) }), '2026-09-15')
-        const dropped = prune(document({ p: record({ savedOn: at(RETENTION_DAYS + 1) }) }), '2026-09-15')
-
-        expect(kept.puzzles.p, `${RETENTION_DAYS} days old`).toBeDefined()
-        expect(dropped.puzzles.p, `${RETENTION_DAYS + 1} days old`).toBeUndefined()
-    })
-
-    it('drops a record stamped in the future', () => {
-        // A device with a wrong date, later corrected, would otherwise leave a record that
-        // can never age out.
-        const after = prune(document({ p: record({ savedOn: '2027-01-01' }) }), '2026-09-15')
-        expect(after.puzzles.p).toBeUndefined()
-    })
-
-    it('drops a record with an unreadable stamp', () => {
-        const after = prune(document({ p: record({ savedOn: 'whenever' }) }), '2026-09-15')
-        expect(after.puzzles.p).toBeUndefined()
-    })
-
-    it('prunes each entry on its own merits', () => {
-        const mixed = document({
-            fresh: record({ savedOn: '2026-09-15' }),
-            stale: record({ savedOn: '2026-01-01' }),
-        })
-        expect(Object.keys(prune(mixed, '2026-09-15').puzzles)).toEqual(['fresh'])
+        expect(progressFor(finished, solved)).not.toBeNull()
     })
 })

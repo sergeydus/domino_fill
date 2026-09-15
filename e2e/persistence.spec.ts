@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard, waitForBoard } from './openBoard'
 import { drag, playSolution } from './play'
-import { STORAGE_KEY } from '../app/stores/progressStorage'
+import { KEY_PREFIX } from '../app/stores/progressStorage'
 
 /**
  * Progress survives a reload, in a real browser (spec P1-7).
@@ -10,8 +10,8 @@ import { STORAGE_KEY } from '../app/stores/progressStorage'
  * exercised against a real `localStorage` at all. Node 25 ships a `localStorage` global with
  * no working methods, which shadows jsdom's, so every unit test of persistence runs against
  * an in-memory double installed in `tests/setup.ts`. A double cannot tell us that the
- * production guards let a real browser through, that the document actually round-trips JSON,
- * or that a restored board is the one the player left. Only this can.
+ * production guards let a real browser through, that a record actually round-trips JSON, or
+ * that a restored board is the one the player left. Only this can.
  */
 
 /** Where the board holds a piece, as the DOM reports it. */
@@ -54,18 +54,23 @@ test('a move is still there after a reload', async ({ page }) => {
     expect(await pieces(page)).toEqual(before)
 })
 
-test('the save reaches real browser storage, in the versioned key', async ({ page }) => {
+test('the save reaches real browser storage, under its own versioned key', async ({ page }) => {
     // Named explicitly: a feature that silently no-ops is exactly what the broken Node
     // global would produce, and the unit tests cannot see it.
     const { i, j } = await freeRun(page)
     await drag(page, [i, j], [i + 1, j])
 
-    const raw = await page.evaluate(key => localStorage.getItem(key), STORAGE_KEY)
-    expect(raw, `nothing was written to ${STORAGE_KEY}`).not.toBeNull()
+    const keys = await page.evaluate(prefix =>
+        Object.keys(localStorage).filter(key => key.startsWith(prefix)), KEY_PREFIX)
 
-    const document = JSON.parse(raw!)
-    expect(document.version).toBe(1)
-    expect(Object.keys(document.puzzles).length).toBeGreaterThan(0)
+    expect(keys, `nothing was written under ${KEY_PREFIX}`).not.toHaveLength(0)
+    // One key per puzzle, and only the puzzle that was played.
+    expect(keys).toHaveLength(1)
+
+    const raw = await page.evaluate(key => localStorage.getItem(key), keys[0])
+    const record = JSON.parse(raw!)
+    expect(typeof record.savedAt, 'an absolute instant, not a day string').toBe('number')
+    expect(record.board).toBeDefined()
 })
 
 test('solving carries over, and the next visit starts on the next puzzle', async ({ page }) => {
@@ -122,7 +127,11 @@ test('an undo is saved too, not just a placement', async ({ page }) => {
 test('corrupt storage costs the save, not the game', async ({ page }) => {
     // Storage survives upgrades and is editable from a console; a player should get a fresh
     // board, not a blank screen.
-    await page.evaluate(key => localStorage.setItem(key, '{ not json'), STORAGE_KEY)
+    await page.evaluate(prefix => {
+        for (const key of Object.keys(localStorage)) {
+            if (key.startsWith(prefix)) localStorage.setItem(key, '{ not json')
+        }
+    }, KEY_PREFIX)
 
     await reload(page)
 
@@ -144,25 +153,30 @@ test('storage that refuses to be written does not break play', async ({ page }) 
     expect((await pieces(page)).length).toBeGreaterThan(0)
 })
 
-test('midnight refetches the day\'s puzzle', async ({ page, context }) => {
+/** Where the rocks are: a fingerprint of which puzzle is on screen. */
+const rockLayout = async (page: Page) =>
+    (await page.locator('[data-piece="rock"]').evaluateAll(
+        els => els.map(el => el.getAttribute('data-at')!)
+    )).sort().join(' ')
+
+test('midnight brings a different puzzle, not just another request', async ({ page, context }) => {
     /*
-     * The rollover trigger, driven by the browser's own clock.
+     * The rollover trigger, driven by the browser's own clock — and now assertable all the way
+     * through to the content.
      *
-     * What this can and cannot show is worth being exact about. The *served* board is chosen
-     * from the server's date, which a browser clock cannot move — so this asserts that
-     * crossing midnight makes the app go and ask again, not that different content comes
-     * back. That the answer is then applied is covered in tests/persistence.test.ts, which
-     * can serve two different days directly.
+     * An earlier version of this test could only count requests, and said so: the served board
+     * was chosen from the *server's* date, which a browser clock cannot move. Now the client
+     * sends its own local day key, so moving the browser past midnight really does change
+     * which puzzle comes back. That is the point of passing the day key, and this demonstrates
+     * it end to end rather than inferring it from a POST.
      */
-    await context.clock.install({ time: new Date('2026-09-15T23:59:30') })
+    await context.clock.install({ time: new Date('2026-09-15T12:00:00') })
     await reload(page)
+    const before = await rockLayout(page)
 
-    let refetches = 0
-    page.on('request', request => {
-        // A Server Action is a POST back to the page's own route.
-        if (request.method() === 'POST') refetches++
-    })
+    // `hh:mm:ss`. Probed the hard way: `'13:00'` is thirteen *minutes*, which never reaches
+    // midnight and leaves the test asserting nothing.
+    await context.clock.fastForward('13:00:00')
 
-    await context.clock.fastForward('02:00')   // past midnight, and past one poll interval
-    await expect.poll(() => refetches, { timeout: 10_000 }).toBeGreaterThan(0)
+    await expect.poll(() => rockLayout(page), { timeout: 10_000 }).not.toBe(before)
 })

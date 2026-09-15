@@ -10,6 +10,10 @@ import { useDayRollover, ROLLOVER_POLL_MS } from '@/app/hooks/useDayRollover'
  * serves yesterday's puzzle for as long as it stays open. For a daily game on a phone that
  * is the ordinary case: the tab is backgrounded, not closed.
  *
+ * The refetch starts a microtask after the trigger -- the callback is invoked inside the
+ * promise chain so that a synchronous throw becomes a rejection rather than escaping -- so
+ * assertions about it are made after `flushPromises`, not immediately after the event.
+ *
  * Time is moved by moving the *clock*, not by waiting. Every trigger here is checked against
  * a system time the test controls, because the thing being tested is whether the hook
  * notices a changed calendar date, and a test that waited for a real midnight would run once
@@ -56,7 +60,7 @@ afterEach(() => {
 })
 
 describe('the day change is noticed', () => {
-    it('when a backgrounded tab is brought back the next morning', () => {
+    it('when a backgrounded tab is brought back the next morning', async () => {
         // The common case by a wide margin: the phone was locked overnight.
         render(<Probe onRollover={rolled} />)
 
@@ -65,26 +69,29 @@ describe('the day change is noticed', () => {
         setNow(new Date(2026, 8, 16, 8, 30))
         setHidden(false)
         fire(window.document, 'visibilitychange')
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(1)
     })
 
-    it('when a window that was never hidden regains focus', () => {
+    it('when a window that was never hidden regains focus', async () => {
         // Switching applications does not change visibility, so a tab on a second monitor
         // can sit visible across midnight.
         render(<Probe onRollover={rolled} />)
 
         setNow(new Date(2026, 8, 16, 0, 5))
         fire(window, 'focus')
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(1)
     })
 
-    it('while the tab simply sits there, open and visible', () => {
+    it('while the tab simply sits there, open and visible', async () => {
         render(<Probe onRollover={rolled} />)
 
         setNow(new Date(2026, 8, 16, 0, 0, 30))
         act(() => { vi.advanceTimersByTime(ROLLOVER_POLL_MS) })
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(1)
     })
@@ -122,7 +129,7 @@ describe('and not noticed when nothing has changed', () => {
         expect(rolled).not.toHaveBeenCalled()
     })
 
-    it('fires once for one midnight, however many triggers arrive', () => {
+    it('fires once for one midnight, however many triggers arrive', async () => {
         /*
          * Poll, reveal and focus all fire when someone picks their phone up in the morning.
          * Three refetches for one rollover would be three round trips and three chances to
@@ -134,6 +141,7 @@ describe('and not noticed when nothing has changed', () => {
         act(() => { vi.advanceTimersByTime(ROLLOVER_POLL_MS) })
         fire(window.document, 'visibilitychange')
         fire(window, 'focus')
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(1)
     })
@@ -206,6 +214,7 @@ describe('a rollover that fails is tried again', () => {
         fire(window, 'focus')
         fire(window.document, 'visibilitychange')
         act(() => { vi.advanceTimersByTime(ROLLOVER_POLL_MS) })
+        await flushPromises()
 
         expect(slow).toHaveBeenCalledTimes(1)
 
@@ -214,6 +223,30 @@ describe('a rollover that fails is tried again', () => {
         fire(window, 'focus')
         await flushPromises()
         expect(slow, 'and no catch-up burst once it lands').toHaveBeenCalledTimes(1)
+    })
+
+    it('a synchronous throw does not wedge rollover for the life of the tab', async () => {
+        /*
+         * The hook's signature permits a synchronous callback, so it must tolerate a
+         * synchronous *throw*. Calling it as an argument to `Promise.resolve(...)` evaluates
+         * it before any promise exists, so the exception escapes the chain entirely: `finally`
+         * never runs, the in-flight flag stays raised, and no later trigger can ever start
+         * another refetch.
+         */
+        const throwsOnce = vi.fn()
+            .mockImplementationOnce(() => { throw new Error('boom') })
+            .mockImplementationOnce(() => { })
+        render(<Probe onRollover={throwsOnce} />)
+
+        setNow(new Date(2026, 8, 16, 7, 0))
+        expect(() => fire(window, 'focus')).not.toThrow()
+        await flushPromises()
+        expect(throwsOnce).toHaveBeenCalledTimes(1)
+
+        fire(window, 'focus')
+        await flushPromises()
+
+        expect(throwsOnce, 'wedged after a synchronous throw').toHaveBeenCalledTimes(2)
     })
 
     it('a synchronous callback still counts as success', async () => {
@@ -233,7 +266,7 @@ describe('a rollover that fails is tried again', () => {
 })
 
 describe('the clock is not assumed to behave', () => {
-    it('notices a day that moved backwards, as a manual correction or a flight would', () => {
+    it('notices a day that moved backwards, as a manual correction or a flight would', async () => {
         /*
          * Why the day is compared rather than a timer set for the next midnight: a timer
          * assumes the clock runs forward at one second per second, which is false across
@@ -244,22 +277,24 @@ describe('the clock is not assumed to behave', () => {
 
         setNow(new Date(2026, 8, 14, 9, 0))
         fire(window, 'focus')
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(1)
     })
 
-    it('stops listening when unmounted', () => {
+    it('stops listening when unmounted', async () => {
         const view = render(<Probe onRollover={rolled} />)
         view.unmount()
 
         setNow(new Date(2026, 8, 16, 7, 0))
         fire(window, 'focus')
         act(() => { vi.advanceTimersByTime(ROLLOVER_POLL_MS * 3) })
+        await flushPromises()
 
         expect(rolled).not.toHaveBeenCalled()
     })
 
-    it('always calls the latest callback, not the one it mounted with', () => {
+    it('always calls the latest callback, not the one it mounted with', async () => {
         // The caller passes an inline closure over `loadBoards`; holding the first one would
         // refetch through a stale store reference.
         const first = vi.fn()
@@ -269,6 +304,7 @@ describe('the clock is not assumed to behave', () => {
 
         setNow(new Date(2026, 8, 16, 7, 0))
         fire(window, 'focus')
+        await flushPromises()
 
         expect(first).not.toHaveBeenCalled()
         expect(second).toHaveBeenCalledTimes(1)
