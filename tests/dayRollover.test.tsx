@@ -16,7 +16,7 @@ import { useDayRollover, ROLLOVER_POLL_MS } from '@/app/hooks/useDayRollover'
  * a day.
  */
 
-const Probe: React.FC<{ onRollover: () => void }> = ({ onRollover }) => {
+const Probe: React.FC<{ onRollover: () => void | Promise<void> }> = ({ onRollover }) => {
     useDayRollover(onRollover)
     return null
 }
@@ -31,6 +31,15 @@ const setHidden = (hidden: boolean) => {
 const fire = (target: EventTarget, type: string) => {
     act(() => { target.dispatchEvent(new Event(type)) })
 }
+
+/**
+ * Let the rollover settle.
+ *
+ * The hook records a day as seen only once the refetch has *resolved*, so the bookkeeping is
+ * a microtask behind the event that triggered it. Firing two day-changes back to back without
+ * this asserts against a rollover that has not finished yet.
+ */
+const flushPromises = async () => { await act(async () => { await Promise.resolve() }) }
 
 let rolled: ReturnType<typeof vi.fn>
 
@@ -129,16 +138,97 @@ describe('and not noticed when nothing has changed', () => {
         expect(rolled).toHaveBeenCalledTimes(1)
     })
 
-    it('fires again on the day after that', () => {
+    it('fires again on the day after that', async () => {
         // Once per midnight, not once ever.
         render(<Probe onRollover={rolled} />)
 
         setNow(new Date(2026, 8, 16, 7, 0))
         fire(window, 'focus')
+        await flushPromises()
+
         setNow(new Date(2026, 8, 17, 7, 0))
         fire(window, 'focus')
+        await flushPromises()
 
         expect(rolled).toHaveBeenCalledTimes(2)
+    })
+})
+
+describe('a rollover that fails is tried again', () => {
+    /*
+     * Midnight is exactly when a refetch is most likely to fail: the phone has been asleep,
+     * the network is only just back. An earlier version recorded the new day *before* calling
+     * back and the caller swallowed the rejection, so a failure was filed as success and every
+     * later trigger saw the same day and did nothing -- the tab stayed on yesterday's puzzle
+     * until it was closed.
+     */
+    it('retries on the next trigger after a rejected refetch', async () => {
+        const failing = vi.fn()
+            .mockRejectedValueOnce(new Error('offline'))
+            .mockResolvedValueOnce(undefined)
+        render(<Probe onRollover={failing} />)
+
+        setNow(new Date(2026, 8, 16, 7, 0))
+        fire(window, 'focus')
+        await flushPromises()
+        expect(failing).toHaveBeenCalledTimes(1)
+
+        // Same day still: the rollover has not happened yet, so this must try again.
+        fire(window, 'focus')
+        await flushPromises()
+
+        expect(failing).toHaveBeenCalledTimes(2)
+    })
+
+    it('stops retrying once one succeeds', async () => {
+        const succeeding = vi.fn().mockResolvedValue(undefined)
+        render(<Probe onRollover={succeeding} />)
+
+        setNow(new Date(2026, 8, 16, 7, 0))
+        fire(window, 'focus')
+        await flushPromises()
+
+        fire(window, 'focus')
+        fire(window.document, 'visibilitychange')
+        await flushPromises()
+
+        expect(succeeding).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not start a second refetch while one is still in flight', async () => {
+        // The refetch is slow enough that poll, reveal and focus can all land during it, and
+        // one midnight should cost one request.
+        let release: () => void = () => { }
+        const slow = vi.fn(() => new Promise<void>(resolve => { release = resolve }))
+        render(<Probe onRollover={slow} />)
+
+        setNow(new Date(2026, 8, 16, 7, 0))
+        fire(window, 'focus')
+        fire(window.document, 'visibilitychange')
+        act(() => { vi.advanceTimersByTime(ROLLOVER_POLL_MS) })
+
+        expect(slow).toHaveBeenCalledTimes(1)
+
+        release()
+        await flushPromises()
+        fire(window, 'focus')
+        await flushPromises()
+        expect(slow, 'and no catch-up burst once it lands').toHaveBeenCalledTimes(1)
+    })
+
+    it('a synchronous callback still counts as success', async () => {
+        // The hook accepts `void` as well as a promise; a caller that does its work
+        // synchronously must not be treated as never having finished.
+        const sync = vi.fn(() => { })
+        render(<Probe onRollover={sync} />)
+
+        setNow(new Date(2026, 8, 16, 7, 0))
+        fire(window, 'focus')
+        await flushPromises()
+        fire(window, 'focus')
+        await flushPromises()
+
+        expect(sync).toHaveBeenCalledTimes(1)
     })
 })
 

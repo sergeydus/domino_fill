@@ -967,6 +967,24 @@ boards unless the Map is populated first.
 > puzzle under the player actually changed, so a refetch of the same day never moves someone
 > mid-board.
 >
+> **Two tabs: scoped, not solved.** Each store re-reads storage on every write and rewrites
+> only the puzzles it changed itself, so a second tab cannot carry its stale copy of another
+> tab's puzzle back over the top — which it previously did, wiping the other tab's work on all
+> eight puzzles it was not playing. Two tabs playing *the same* puzzle still resolve
+> last-write-wins, and that is left deliberately: resolving it needs either a lock, which
+> `localStorage` does not offer, or a merge rule for two divergent boards, and there is no
+> honest merge of "these two dominoes were placed in different places". The earlier claim that
+> this was an "atomic read-modify-write" was simply wrong — `setItem` is atomic, the
+> read-modify-write around it is not — and is corrected in the source.
+>
+> **Rollover still swaps an unfinished board, and row 17 does not fix it.** The policy above
+> says never silently swap the board under an active player and keep the old one reachable from
+> the archive. When the served ids change, `setBoards` selects the new pack and the previous
+> unfinished puzzle becomes unreachable — its *progress* is safe (the record is kept for the
+> retention window and the session is dropped only from memory), but there is no way back to
+> it. Closing this needs somewhere to go, which is the archive, which is row 18. **P1-7 is
+> therefore partial**, and this is a row-18 acceptance criterion rather than a note.
+>
 > **Note on the test environment, not on the product.** Node 25 defines its own `localStorage`
 > global that shadows jsdom's and has *no working methods* — probed: `getItem`, `setItem`,
 > `clear` and `length` are all undefined. Every unit test of persistence therefore runs against
@@ -1044,8 +1062,8 @@ whole of P0 into one oversized set.)
 | 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h and D10-i's restart half | unit (undo round-trip) + E2E (controls) |
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
-| 17 | **P1-7** persistence + day rollover — **✅ done**; closes D10-i's remainder. `elapsedMs` **cut to a later row**, there being no clock in the product to save | unit + E2E |
-| 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive — **plus P1-5's check/hint**, which waited for this solver | unit |
+| 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
+| 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive — **plus P1-5's check/hint**, which waited for this solver, **and P1-7's rollover obligation**: an unfinished board must stay reachable from the archive rather than being swapped away | unit |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |
 | 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |
 

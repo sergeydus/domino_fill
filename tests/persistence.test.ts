@@ -39,6 +39,38 @@ const puzzle = (puzzleId: string, rock: [number, number] = [0, 0]): StoredPuzzle
     } as StoredPuzzle
 }
 
+/**
+ * A 2x2 with its right-hand column rocked out: one downward domino solves it.
+ *
+ * Needed because a completed record is now *checked* rather than believed -- storage cannot
+ * hand back `completed: true` over a board that is not actually finished. The 4x4 fixture
+ * above can never be completed at all: one rock leaves fifteen cells, and fifteen is odd.
+ */
+const solvable = (puzzleId: string): StoredPuzzle => {
+    const board = Array.from({ length: 2 }, () => Array<number | null>(2).fill(null))
+    board[0][1] = -1
+    board[1][1] = -1
+    return {
+        puzzleId,
+        board,
+        boardHorizontalNumbers: '1,0',
+        boardVerticalNumbers: '1,0',
+    } as StoredPuzzle
+}
+
+/** Three solvable puzzles in the easy slot, for the tests about finishing them. */
+const solvableResponse = (): BoardsResponse => ({
+    easyBoards: [solvable('easy-1'), solvable('easy-2'), solvable('easy-3')],
+    mediumBoards: [puzzle('med-1'), puzzle('med-2'), puzzle('med-3')],
+    hardBoards: [puzzle('hard-1'), puzzle('hard-2'), puzzle('hard-3')],
+})
+
+/** Win the 2x2 for real, through the placement rules, rather than setting the flag. */
+const winIt = (store: RootStore['boardsStore']) => {
+    runInAction(() => { store.currentBoard!.placeToward([0, 0], 'down') })
+    expect(store.currentBoard!.completed, 'the fixture really is solvable').toBe(true)
+}
+
 const response = (suffix = ''): BoardsResponse => ({
     easyBoards: [puzzle(`easy-1${suffix}`), puzzle(`easy-2${suffix}`), puzzle(`easy-3${suffix}`)],
     mediumBoards: [puzzle(`med-1${suffix}`), puzzle(`med-2${suffix}`), puzzle(`med-3${suffix}`)],
@@ -87,11 +119,14 @@ describe('a board in progress comes back', () => {
     })
 
     it('restores the completion flag, not merely the pieces', () => {
-        runInAction(() => { root.boardsStore.setBoards(response()) })
-        const session = root.boardsStore.currentBoard!
-        runInAction(() => { session.setCompleted(true) })
+        // Won through the rules, not flagged: a record claiming completion over an unfinished
+        // board is refused on the way back in, so a test that fabricated one would be
+        // asserting something that can no longer be restored.
+        runInAction(() => { root.boardsStore.setBoards(solvableResponse()) })
+        winIt(root.boardsStore)
 
         expect(stored().puzzles['easy-1'].completed).toBe(true)
+        expect(reload(solvableResponse()).sessions.get('easy-1')!.completed).toBe(true)
     })
 
     it('does not restore the undo stack, and says so by clearing it', () => {
@@ -109,13 +144,16 @@ describe('a board in progress comes back', () => {
         expect(restored.undo()).toBe(false)
     })
 
-    it('an untouched puzzle is still saved, so its emptiness is a fact and not an absence', () => {
+    it('writes only the puzzles the player has actually touched', () => {
+        /*
+         * Not "every puzzle served". Eight empty boards carry no information, and writing them
+         * is what made two tabs destructive: a tab that saves all nine also saves its stale
+         * copy of the one the *other* tab is playing.
+         */
         runInAction(() => { root.boardsStore.setBoards(response()) })
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
 
-        expect(Object.keys(stored().puzzles).sort()).toEqual([
-            'easy-1', 'easy-2', 'easy-3', 'hard-1', 'hard-2', 'hard-3', 'med-1', 'med-2', 'med-3',
-        ])
+        expect(Object.keys(stored().puzzles)).toEqual(['easy-1'])
     })
 })
 
@@ -312,20 +350,20 @@ describe('the player lands on the first unsolved puzzle (D10-i)', () => {
     it('skips past puzzles solved in an earlier session', () => {
         // The remaining half of D10-i, which could not be done before there was persisted
         // completion state to read.
-        runInAction(() => { root.boardsStore.setBoards(response()) })
-        runInAction(() => { root.boardsStore.currentBoard!.setCompleted(true) })
+        runInAction(() => { root.boardsStore.setBoards(solvableResponse()) })
+        winIt(root.boardsStore)
 
-        expect(reload().level).toBe(2)
+        expect(reload(solvableResponse()).level).toBe(2)
     })
 
     it('stays on the last level when the whole difficulty is finished', () => {
         // Rather than sending the player back to a board they already solved.
-        runInAction(() => { root.boardsStore.setBoards(response()) })
+        runInAction(() => { root.boardsStore.setBoards(solvableResponse()) })
         for (const level of [1, 2, 3] as const) {
             runInAction(() => { root.boardsStore.setLevel(level) })
-            runInAction(() => { root.boardsStore.currentBoard!.setCompleted(true) })
+            winIt(root.boardsStore)
         }
-        expect(reload().level).toBe(3)
+        expect(reload(solvableResponse()).level).toBe(3)
     })
 
     it('does not move a player who is mid-board when the same day is refetched', () => {
@@ -355,6 +393,113 @@ describe('the player lands on the first unsolved puzzle (D10-i)', () => {
     })
 })
 
+describe('a long-lived tab does not accumulate', () => {
+    /*
+     * Both of these only appear over days, which is exactly how long a tab on a phone stays
+     * open. A session that outlives its puzzle used to be serialized anyway, so a record that
+     * retention had just deleted came back on the next move with today's stamp -- it could
+     * never age out. And nothing removed those sessions, so the Map grew by nine per day,
+     * without bound once P1-6 mints a unique id per day.
+     */
+    const rollTo = (store: RootStore['boardsStore'], day: number) =>
+        runInAction(() => { store.setBoards(response(`-d${day}`)) })
+
+    it('does not resurrect a record that retention has dropped', () => {
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+        expect(stored().puzzles['easy-1']).toBeDefined()
+
+        // Age that record out, then serve a different day and play on it.
+        const aged = stored()
+        aged.puzzles['easy-1'].savedOn = '2020-01-01'
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(aged))
+
+        rollTo(root.boardsStore, 1)
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+
+        expect(stored().puzzles['easy-1'], 'came back from the dead').toBeUndefined()
+    })
+
+    it('holds only the puzzles it is serving, across many rollovers', () => {
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+
+        for (let day = 1; day <= 20; day++) {
+            rollTo(root.boardsStore, day)
+            runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+        }
+
+        // Nine puzzles are served at a time, whatever the calendar has done.
+        expect(root.boardsStore.sessions.size).toBe(9)
+        expect([...root.boardsStore.sessions.keys()].every(id => id.endsWith('-d20'))).toBe(true)
+    })
+
+    it('never serializes a session whose puzzle is not being served', () => {
+        /*
+         * A second line of defence, tested directly rather than through the first. Dropping
+         * stale sessions is what normally keeps them out of the snapshot, so mutating this
+         * guard alone changed nothing -- which is not a reason to leave it unexamined, since
+         * it is what stops a session reaching the document at all.
+         */
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+        const orphan = root.boardsStore.sessions.get('easy-1')!
+        runInAction(() => { root.boardsStore.sessions.set('from-another-day', orphan) })
+
+        expect(Object.keys(root.boardsStore.progressSnapshot)).not.toContain('from-another-day')
+    })
+
+    it('keeps the saved records of days it is no longer serving', () => {
+        // Bounding the *sessions* must not bound the saves: those are the player's, and
+        // retention is the only thing allowed to drop one.
+        runInAction(() => { root.boardsStore.setBoards(response()) })
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+
+        rollTo(root.boardsStore, 1)
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+
+        expect(root.boardsStore.sessions.has('easy-1')).toBe(false)
+        expect(stored().puzzles['easy-1'], 'the save outlives the session').toBeDefined()
+    })
+})
+
+describe('two tabs', () => {
+    /*
+     * Ordinary, not exotic: a phone restoring a session and a desktop with the game pinned.
+     * Each store used to merge into the document *it* loaded, so the second to save wrote back
+     * a copy from before the first tab's work and quietly undid it.
+     *
+     * What this fixes and what it does not is worth being exact about. Re-reading storage on
+     * every write means a tab never clobbers another tab's work on a *different* puzzle. Two
+     * tabs playing the *same* puzzle still resolve last-write-wins, which no amount of merging
+     * can decide -- see the multi-tab note in SPEC.
+     */
+    it('does not undo what the other tab did to a different puzzle', () => {
+        const tabA = root.boardsStore
+        runInAction(() => { tabA.setBoards(response()) })
+        const tabB = reload()   // a second store over the same storage
+
+        runInAction(() => { tabA.currentBoard!.placeToward([1, 1], 'down') })
+
+        runInAction(() => { tabB.setLevel(2) })
+        runInAction(() => { tabB.currentBoard!.placeToward([2, 2], 'right') })
+
+        expect(stored().puzzles['easy-1'].board[1][1], 'tab A move').toBe(1)
+        expect(stored().puzzles['easy-2'].board[2][2], 'tab B move').toBe(0)
+    })
+
+    it('a tab loaded before the other tab saved still does not lose it', () => {
+        // The stale-snapshot case: B was constructed when easy-1 was empty.
+        const tabA = root.boardsStore
+        runInAction(() => { tabA.setBoards(response()) })
+        const tabB = reload()
+
+        runInAction(() => { tabA.currentBoard!.placeToward([1, 1], 'down') })
+        runInAction(() => { tabB.setLevel(3) })
+        runInAction(() => { tabB.currentBoard!.placeToward([1, 1], 'down') })
+
+        expect(stored().puzzles['easy-1'].board[1][1]).toBe(1)
+    })
+})
+
 describe('the save is stamped with the local day', () => {
     it('records today, so retention has something to measure', () => {
         runInAction(() => { root.boardsStore.setBoards(response()) })
@@ -372,8 +517,10 @@ describe('the save is stamped with the local day', () => {
          */
         runInAction(() => { root.boardsStore.setBoards(response()) })
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
+        runInAction(() => { root.boardsStore.setLevel(2) })
+        runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })
 
-        // Age level 2's record by hand, then move on level 1 only.
+        // Age level 2's record by hand, then reload and move on level 1 only.
         const aged = stored()
         aged.puzzles['easy-2'].savedOn = '2026-09-01'
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(aged))

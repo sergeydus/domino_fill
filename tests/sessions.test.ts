@@ -15,7 +15,8 @@ import sourceData from '@/app/mocks/dominoBoards.json'
  *  - a session deep-clones its board; gameplay never writes to the imported JSON
  *  - `currentBoard` is a pure Map lookup
  *  - switching away and back returns the SAME session, with moves intact
- *  - `setBoards` reconciles by puzzleId rather than clearing
+ *  - `setBoards` reconciles by puzzleId rather than clearing, and retires only the puzzles
+ *    it has stopped serving (P1-7's day rollover)
  */
 
 // Targets are deliberately non-zero so these fixtures start unsolved. (Since P0-6 an
@@ -269,14 +270,48 @@ describe('setBoards reconciles rather than clearing', () => {
         expect(store.sessions.get('e9')).toBeInstanceOf(PuzzleSession)
     })
 
-    it('leaves obsolete entries alone (expiry is a separate, intentional act)', () => {
+    it('a repeat of the same day disturbs nothing', () => {
+        /*
+         * The invariant this test has always been about: reconciling must not be a
+         * clear-and-rebuild, because a duplicate effect or a plain refetch would then wipe a
+         * board the player is in the middle of.
+         */
+        const store = root.boardsStore
+        store.setBoards(response())
+        const kept = store.sessions.get('e1')!
+        runInAction(() => { kept.board[0][0] = 1 })
+
+        store.setBoards(response())
+
+        expect(store.sessions.get('e1')).toBe(kept)
+        expect(store.sessions.get('e1')!.board[0][0]).toBe(1)
+    })
+
+    it('retires the sessions it is no longer serving, which is what rollover is', () => {
+        /*
+         * This test used to assert the opposite -- that obsolete entries were left alone --
+         * with the note that "expiry is a separate, intentional act (day rollover)". Row 17
+         * built that act, so this is it, and the deferral has been cashed rather than
+         * quietly abandoned.
+         *
+         * Keeping them was never free: the Map grew by nine every midnight in a tab that is
+         * never closed, without bound once P1-6 mints a unique id per day, and a session that
+         * outlived its puzzle could write its record back after retention had deleted it.
+         *
+         * Only the *session* is retired. It is a live view of a position, and the position
+         * itself is in storage -- see tests/persistence.test.ts, which pins that the saved
+         * records of days no longer served survive exactly this.
+         */
         const store = root.boardsStore
         store.setBoards(response())
         store.setBoards(response({
             easyBoards: [puzzle('e9'), puzzle('e8'), puzzle('e7')],
         }))
-        // e1..e3 are no longer referenced but were not silently destroyed.
-        expect(store.sessions.get('e1')).toBeInstanceOf(PuzzleSession)
+
+        expect(store.sessions.get('e1')).toBeUndefined()
+        expect(store.sessions.get('e9')).toBeInstanceOf(PuzzleSession)
+        // The medium and hard packs were served unchanged, so they are untouched.
+        expect(store.sessions.get('m1')).toBeInstanceOf(PuzzleSession)
     })
 })
 

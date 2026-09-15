@@ -26,7 +26,7 @@ export const ROLLOVER_POLL_MS = 60_000
  * false across sleep, a timezone change on a flight, and a manual clock correction. Asking
  * "what day is it now" is immune to all three.
  */
-export const useDayRollover = (onRollover: () => void) => {
+export const useDayRollover = (onRollover: () => void | Promise<void>) => {
     /*
      * The callback is read through a ref so that a caller passing an inline function does
      * not tear down and rebuild the listeners on every render.
@@ -41,14 +41,28 @@ export const useDayRollover = (onRollover: () => void) => {
 
     useEffect(() => {
         let seen = dayKey(new Date())
+        let inFlight = false
 
+        /*
+         * `seen` advances only when the refetch actually succeeded.
+         *
+         * An earlier version advanced it *before* calling back, and the caller swallowed the
+         * rejection -- so a rollover that failed (offline at 3am, which is exactly when this
+         * fires) was recorded as done, and every later trigger compared against the new day
+         * and did nothing. The comment claimed "the next trigger tries again"; it could not.
+         *
+         * `inFlight` is what that early write was really reaching for: the refetch is slow
+         * enough that a poll, a reveal and a focus can all arrive during it, and one midnight
+         * should cost one request.
+         */
         const check = () => {
             const today = dayKey(new Date())
-            if (today === seen) return
-            // Updated *before* the callback: the callback can be slow (it refetches), and a
-            // second trigger arriving meanwhile must not start a second rollover.
-            seen = today
-            callback.current()
+            if (today === seen || inFlight) return
+            inFlight = true
+            Promise.resolve(callback.current())
+                .then(() => { seen = today })
+                .catch(() => { /* leave `seen` behind, so the next trigger retries */ })
+                .finally(() => { inFlight = false })
         }
 
         const onVisible = () => { if (!window.document.hidden) check() }

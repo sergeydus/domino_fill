@@ -12,6 +12,7 @@ import CompletionCard from './CompletionCard'
 import Tutorial from './Tutorial'
 import { useAvailableBoardBox } from '../hooks/useAvailableBoardBox'
 import { useDayRollover } from '../hooks/useDayRollover'
+import { dayKey } from '../stores/progressStorage'
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
@@ -20,8 +21,16 @@ const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
   const { boardsStore } = useStores()
 
+  /*
+   * The player's own calendar day is sent to the server, not inferred there.
+   *
+   * `getCurrentActiveBoard` is a Server Action, so an unaided `new Date()` inside it is the
+   * *server's* timezone: a player in Auckland would be handed tomorrow's puzzle before their
+   * own midnight, and one in Los Angeles would still be on yesterday's through the morning --
+   * while the rollover check below, which can only be local, disagreed with both.
+   */
   const loadBoards = useCallback(async () => {
-    const boards = await getCurrentActiveBoard()
+    const boards = await getCurrentActiveBoard(dayKey(new Date()))
     boardsStore.setBoards(boards)
   }, [boardsStore])
 
@@ -36,11 +45,13 @@ const DominoClient: React.FC = () => {
    * serves yesterday's puzzle for as long as it stays open -- and for a daily game on a
    * phone, "left open overnight" is the ordinary case rather than the edge one.
    *
-   * A failed refetch is swallowed on purpose. The player is mid-game with a perfectly good
-   * board on screen; replacing it with an error because a background refresh did not reach
-   * the server would take away something that was working. The next trigger tries again.
+   * A failed refetch does not reach the screen: the player is mid-game with a perfectly good
+   * board, and replacing it with an error because a background refresh missed the server
+   * would take away something that was working. It is *returned* rather than swallowed here,
+   * so `useDayRollover` can see the failure and try again on the next trigger -- swallowing
+   * it here is what made the retry impossible.
    */
-  useDayRollover(() => { void loadBoards().catch(() => { }) })
+  useDayRollover(loadBoards)
 
   // A callback ref in state, not `useRef`: the column is not mounted on the first render
   // (the board is still loading), and a ref would leave the hook with nothing to observe.

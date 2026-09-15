@@ -1,4 +1,5 @@
 import type { PuzzleDefinition } from "./PuzzleDefinition"
+import { CELL_VALUES, isBoardFull, targetsMatch, wellFormed } from "./boardRules"
 
 /**
  * Saved progress (spec P1-7).
@@ -10,10 +11,18 @@ import type { PuzzleDefinition } from "./PuzzleDefinition"
  *
  * **One document, not one key per puzzle.** A day is nine puzzles, and a board is 64 cells
  * of `null` or a small integer, so the whole thing is a few kilobytes — small enough that
- * an atomic read-modify-write costs nothing and buys a great deal: migration and pruning
+ * reading and rewriting all of it costs nothing and buys a great deal: migration and pruning
  * happen in one place, and there is no way to half-write a day. Keying *within* the
  * document by `puzzleId` is what P1-7 asks for; spreading those keys across the storage
  * namespace is not.
+ *
+ * An earlier version of this note called that an "atomic read-modify-write". It is not, and
+ * the distinction matters with two tabs open: `setItem` is atomic, but read-then-modify-then-
+ * write is three steps with a window between them. What makes the design safe is not atomicity
+ * but restraint — `LevelStore.persist` re-reads storage on every write and rewrites only the
+ * puzzles *that store itself* changed, so a tab never carries its stale copy of someone else's
+ * puzzle back over the top. Two tabs on the *same* puzzle still resolve last-write-wins; see
+ * the multi-tab note in SPEC for why that is left as it is.
  *
  * **Storage is hostile.** It can be absent, blocked (Safari private mode, embedded
  * webviews, a `localStorage` that exists on Node >= 22 but whose `getItem` is not a
@@ -82,7 +91,10 @@ const isBoard = (value: unknown): value is (number | null)[][] => {
     return value.every(row =>
         Array.isArray(row)
         && row.length === width
-        && row.every(cell => cell === null || (typeof cell === 'number' && Number.isInteger(cell))))
+        // Not merely "an integer": the only numbers a cell can hold are a rock and the three
+        // domino-half pip values. A stored `99` would otherwise be restored and then counted
+        // into a line sum, which is a board the rules cannot produce.
+        && row.every(cell => cell === null || CELL_VALUES.includes(cell as number)))
 }
 
 const isProgress = (value: unknown): value is PuzzleProgress => {
@@ -155,7 +167,29 @@ export const progressFor = (
     // where they are has been tampered with or was written against different content.
     const rocksAgree = definition.initialBoard.every((row, i) =>
         row.every((cell, j) => (cell === -1) === (record.board[i][j] === -1)))
-    return rocksAgree ? record : null
+    if (!rocksAgree) return null
+
+    /*
+     * Shape is not enough. A record can have the right size and the right rocks and still
+     * describe a board no sequence of moves could reach: a `1` with nothing beneath it, or a
+     * `0` claimed by two dominoes at once. Restoring one puts the game into a state its own
+     * rules disagree with, and every later judgement -- sums, completion, removal -- is then
+     * being made about a position that cannot exist.
+     */
+    if (!wellFormed(record.board, definition.size)) return null
+
+    /*
+     * And `completed` is checked rather than believed, because it is the one field that can
+     * take the game away from the player. A completed board is made `inert`: no pointer, no
+     * keyboard, no focus. A record claiming `completed: true` over an unfinished board would
+     * restore a puzzle that cannot be played and cannot be finished -- the soft-lock P1-3
+     * exists to prevent, reintroduced through storage.
+     */
+    if (record.completed && !(isBoardFull(record.board, definition.size)
+        && targetsMatch(record.board, definition))) {
+        return null
+    }
+    return record
 }
 
 /** Replace one puzzle's record, leaving the rest of the document alone. */

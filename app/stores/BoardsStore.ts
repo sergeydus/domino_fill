@@ -6,8 +6,8 @@ import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
 import { winFeedback } from "../dominoFill/feedback"
 import {
-    ProgressDocument, PuzzleProgress, dayKey, emptyDocument, progressFor, prune,
-    readDocument, writeDocument,
+    ProgressDocument, PuzzleProgress, SCHEMA_VERSION, dayKey, emptyDocument, progressFor,
+    prune, readDocument, writeDocument,
 } from "./progressStorage"
 
 type Difficulty = 'easy' | 'normal' | 'hard'
@@ -16,12 +16,12 @@ type Level = 1 | 2 | 3
 /** A session's saved state before it is stamped with a day. See `persist`. */
 type SessionSnapshot = Omit<PuzzleProgress, 'savedOn'>
 
-/** Whether a saved record already says what the live session says. */
-const sameProgress = (saved: PuzzleProgress, live: SessionSnapshot) =>
-    saved.completed === live.completed
-    && saved.definitionHash === live.definitionHash
-    && saved.board.length === live.board.length
-    && saved.board.every((row, i) => row.every((cell, j) => cell === live.board[i][j]))
+/** Whether two saved forms of a puzzle say the same thing. */
+const sameProgress = (a: SessionSnapshot, b: SessionSnapshot) =>
+    a.completed === b.completed
+    && a.definitionHash === b.definitionHash
+    && a.board.length === b.board.length
+    && a.board.every((row, i) => row.every((cell, j) => cell === b.board[i][j]))
 
 export class LevelStore {
     rootStore: RootStore
@@ -53,6 +53,15 @@ export class LevelStore {
 
     /** Disposer for the persistence reaction; also the flag for "already started". */
     disposePersist: (() => void) | null = null
+
+    /**
+     * This store's own last view of each session, which is how it knows what *it* changed.
+     *
+     * Not the same question as "does storage disagree with me". Another tab may have written
+     * a puzzle since; that is its business, and writing this store's stale copy over it is
+     * precisely the bug. Only a puzzle that moved *here* is a puzzle this store may save.
+     */
+    lastSaved: Record<string, SessionSnapshot> = {}
 
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
@@ -152,6 +161,9 @@ export class LevelStore {
         if (before === null || before !== this.currentDefinition?.puzzleId) {
             this.selectFirstUnsolved()
         }
+        // The baseline for "what changed here": everything as hydrated. Without it the first
+        // save would write all nine puzzles, eight of them empty boards nobody has touched.
+        this.lastSaved = this.progressSnapshot
         this.beginPersisting()
     }
 
@@ -188,8 +200,13 @@ export class LevelStore {
      */
     get progressSnapshot(): Record<string, SessionSnapshot> {
         const snapshot: Record<string, SessionSnapshot> = {}
-        for (const [puzzleId, session] of this.sessions) {
-            snapshot[puzzleId] = {
+        // Driven by what is *served*, not by what happens to be in the Map. A session that
+        // outlived its puzzle must not write itself back into the document -- that is how a
+        // pruned record returns from the dead with a fresh timestamp.
+        for (const definition of this.servedDefinitions) {
+            const session = this.sessions.get(definition.puzzleId)
+            if (!session) continue
+            snapshot[definition.puzzleId] = {
                 definitionHash: session.definition.definitionHash,
                 ...session.snapshot,
             }
@@ -208,6 +225,13 @@ export class LevelStore {
      * day that is not being served right now. `prune` is the only thing allowed to drop a
      * record.
      *
+     * **Merged into what storage holds now**, re-read on every write rather than into the copy
+     * this store loaded. Two tabs are ordinary -- a phone restoring a session, a desktop with
+     * the game pinned -- and each would otherwise hold a document from its own load and write
+     * it back whole, so the second to save would quietly undo the first tab's work on every
+     * *other* puzzle. Re-reading narrows the window to the read-modify-write itself; see the
+     * multi-tab note in SPEC for what that does and does not guarantee.
+     *
      * **`savedOn` is stamped only on a record that actually changed.** It means "when this
      * puzzle last moved", not "when the app was last open". Restamping everything on every
      * write would make retention meaningless: a player who opens the game daily would keep
@@ -216,13 +240,23 @@ export class LevelStore {
      */
     persist(snapshot: Record<string, SessionSnapshot>) {
         const today = dayKey(new Date())
-        const puzzles = { ...this.document.puzzles }
+        // Storage as it is *now*, not as this store last saw it: another tab may have saved
+        // since, and its work has to survive this write.
+        const puzzles = { ...readDocument().puzzles }
+
+        let wrote = false
         for (const [puzzleId, next] of Object.entries(snapshot)) {
-            const previous = puzzles[puzzleId]
-            if (previous && sameProgress(previous, next)) continue
+            const mine = this.lastSaved[puzzleId]
+            // Unchanged here since this store last looked, so whatever storage holds for it
+            // belongs to someone else and is left exactly as it is.
+            if (mine && sameProgress(mine, next)) continue
             puzzles[puzzleId] = { ...next, savedOn: today }
+            wrote = true
         }
-        this.document = { version: this.document.version, puzzles }
+
+        this.lastSaved = snapshot
+        if (!wrote) return
+        this.document = { version: SCHEMA_VERSION, puzzles }
         writeDocument(this.document)
     }
 
@@ -243,10 +277,35 @@ export class LevelStore {
      * Reconcile live sessions against incoming definitions, by puzzleId.
      *
      * Deliberately NOT a clear-and-rebuild: a duplicate effect or a refetch would then wipe
-     * a player's in-progress board. Obsolete entries are left alone; expiring them is a
-     * separate, intentional act (day rollover).
+     * a player's in-progress board. Puzzles still being served keep their session and its
+     * moves; only the ones this response has stopped serving are retired, which is the
+     * "separate, intentional act" this comment used to defer to and which P1-7 now provides.
      */
+    /** Every definition served right now, across all three difficulties. */
+    get servedDefinitions(): PuzzleDefinition[] {
+        return [...this.easyBoards ?? [], ...this.mediumBoards ?? [], ...this.hardBoards ?? []]
+    }
+
     reconcileSessions(definitions: PuzzleDefinition[]) {
+        /*
+         * Sessions for puzzles that are no longer served are dropped.
+         *
+         * Two things go wrong without this, and both only show up over days rather than in a
+         * single sitting. The Map grows by nine sessions every rollover in a tab that is never
+         * closed -- unbounded once P1-6 mints a unique id per day. And because the snapshot
+         * used to walk every session, a record that retention had just deleted came *back* on
+         * the player's next move, stamped with today, so it could never age out at all.
+         *
+         * Nothing is lost by dropping them: the position is in storage, and a session is only
+         * a live view of it. Whether the player can still reach that puzzle is a separate
+         * question, and an open one -- see the rollover note in SPEC, deferred to row 18's
+         * archive.
+         */
+        const served = new Set(definitions.map(d => d.puzzleId))
+        for (const puzzleId of [...this.sessions.keys()]) {
+            if (!served.has(puzzleId)) this.sessions.delete(puzzleId)
+        }
+
         for (const definition of definitions) {
             const existing = this.sessions.get(definition.puzzleId)
             if (existing && existing.definition.definitionHash === definition.definitionHash) {

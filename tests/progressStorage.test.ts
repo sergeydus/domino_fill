@@ -167,6 +167,85 @@ describe('progress is only restored to the puzzle it came from', () => {
     })
 })
 
+describe('a restored board must be one the rules could have produced', () => {
+    /*
+     * Shape is not enough. Storage survives upgrades and is editable from a console, so a
+     * record can have the right size, the right hash and the right rocks and still describe a
+     * position no sequence of moves could reach. Restoring one leaves every later judgement --
+     * sums, completion, removal -- being made about a board that cannot exist.
+     *
+     * A vertical domino is `1` on top and `0` below; a horizontal is `0` on the left and `2`
+     * on the right. So each `0` must be claimed by exactly one partner.
+     */
+    const withBoard = (cells: Array<[number, number, number | null]>) => {
+        const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+        board[0][0] = -1
+        for (const [i, j, value] of cells) board[i][j] = value
+        return record({ board })
+    }
+
+    it('accepts a board that is genuinely reachable', () => {
+        const legal = withBoard([[0, 1, 1], [1, 1, 0], [2, 2, 0], [2, 3, 2]])
+        expect(progressFor(document({ p: legal }), definition('p'))).not.toBeNull()
+    })
+
+    it('refuses a value this game does not have', () => {
+        // `99` would be restored and then counted into a line sum.
+        const raw = JSON.stringify({
+            version: SCHEMA_VERSION,
+            puzzles: { p: withBoard([[2, 2, 99]]) },
+        })
+        expect(parseDocument(raw).puzzles.p, 'a 99 is not a piece').toBeUndefined()
+    })
+
+    it('refuses a half with no partner', () => {
+        // A `1` with nothing beneath it: half a domino, which no placement can leave behind.
+        expect(progressFor(document({ p: withBoard([[0, 1, 1]]) }), definition('p'))).toBeNull()
+        // And a lone `0`, owned by nobody.
+        expect(progressFor(document({ p: withBoard([[2, 2, 0]]) }), definition('p'))).toBeNull()
+    })
+
+    it('refuses a square claimed by two dominoes at once', () => {
+        /*
+         * The ambiguous case, and the one a dimensions-only check cannot see: a `0` with a `1`
+         * directly above it *and* a `2` directly to its right is the lower half of one domino
+         * and the left half of another. Every cell is legal on its own.
+         */
+        const ambiguous = withBoard([[1, 1, 1], [2, 1, 0], [2, 2, 2]])
+        expect(progressFor(document({ p: ambiguous }), definition('p'))).toBeNull()
+    })
+
+    it('refuses a completed flag over a board that is not finished', () => {
+        /*
+         * The one field that can take the game away. A completed board is made `inert` -- no
+         * pointer, no keyboard, no focus -- so `completed: true` over an unfinished board
+         * restores a puzzle that can neither be played nor finished: the soft-lock P1-3 exists
+         * to prevent, coming back in through storage.
+         */
+        const lying = withBoard([[0, 1, 1], [1, 1, 0]])
+        lying.completed = true
+        expect(progressFor(document({ p: lying }), definition('p'))).toBeNull()
+    })
+
+    it('accepts a completed flag over a board that really is finished', () => {
+        // A 2x2 with its right column rocked out, solved by one downward domino.
+        const board: (number | null)[][] = [[1, -1], [0, -1]]
+        const solved = definitionFrom({
+            puzzleId: 'tiny',
+            board: [[null, -1], [null, -1]],
+            boardHorizontalNumbers: '1,0',
+            boardVerticalNumbers: '1,0',
+        })
+        const finished = {
+            definitionHash: solved.definitionHash,
+            board,
+            completed: true,
+            savedOn: '2026-09-15',
+        }
+        expect(progressFor(document({ tiny: finished }), solved)).not.toBeNull()
+    })
+})
+
 describe('writing one puzzle leaves the others alone', () => {
     it('replaces its own entry and keeps the rest', () => {
         const before = document({ a: record(), b: record({ completed: true }) })
