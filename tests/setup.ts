@@ -25,6 +25,41 @@ import { beforeAll, afterAll } from 'vitest'
 const hasMediaElement = () => typeof HTMLMediaElement !== 'undefined'
 const hasElement = () => typeof Element !== 'undefined'
 
+/**
+ * A working `localStorage`, because this Node does not have one and shadows jsdom's.
+ *
+ * Probed on Node 25: `window.localStorage` is Node's own global (it warns about
+ * `--localstorage-file` on startup), `window.localStorage === globalThis.localStorage`, and
+ * **every method is undefined** -- `getItem`, `setItem`, `clear`, `length`, all of them.
+ * jsdom's implementation is there but unreachable behind it.
+ *
+ * This is the same hazard `app/hooks/useLocalStorage.ts` records, and the reason production
+ * feature-checks the *method* rather than the object. Production is therefore correct as it
+ * stands and is not touched here: what is stubbed is the broken environment, which is where
+ * a test-environment problem belongs.
+ *
+ * Installed **unconditionally, without reading the existing value**. That is not laziness
+ * about detecting the broken case: merely *touching* Node's `localStorage` getter is what
+ * makes it emit `Warning: --localstorage-file was provided without a valid path` on stderr,
+ * once per worker. A probe to decide whether a stub is needed therefore costs the very
+ * silence it was checking for -- measured at 1798 bytes of stderr across the suite, where
+ * the standing requirement is zero. `defineProperty` never invokes the getter.
+ */
+
+const inMemoryStorage = (): Storage => {
+    const entries = new Map<string, string>()
+    return {
+        get length() { return entries.size },
+        key: (index: number) => [...entries.keys()][index] ?? null,
+        getItem: (key: string) => entries.get(String(key)) ?? null,
+        setItem: (key: string, value: string) => { entries.set(String(key), String(value)) },
+        removeItem: (key: string) => { entries.delete(String(key)) },
+        clear: () => { entries.clear() },
+    } as Storage
+}
+
+let hadStorage = true
+
 let originalPlay: (() => Promise<void>) | undefined
 /** Undefined is the *expected* prior value: jsdom has no such method to save. */
 let hadScrollIntoView = false
@@ -40,6 +75,12 @@ beforeAll(() => {
     } else if (hasElement()) {
         hadScrollIntoView = true
     }
+    if (typeof window !== 'undefined') {
+        hadStorage = false
+        Object.defineProperty(window, 'localStorage', {
+            value: inMemoryStorage(), configurable: true, writable: true,
+        })
+    }
 })
 
 afterAll(() => {
@@ -47,4 +88,5 @@ afterAll(() => {
     if (hasElement() && !hadScrollIntoView) {
         delete (Element.prototype as Partial<Element>).scrollIntoView
     }
+    if (!hadStorage) delete (window as Partial<Window & typeof globalThis>).localStorage
 })

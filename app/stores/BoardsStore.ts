@@ -5,9 +5,23 @@ import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
 import { winFeedback } from "../dominoFill/feedback"
+import {
+    ProgressDocument, PuzzleProgress, dayKey, emptyDocument, progressFor, prune,
+    readDocument, writeDocument,
+} from "./progressStorage"
 
 type Difficulty = 'easy' | 'normal' | 'hard'
 type Level = 1 | 2 | 3
+
+/** A session's saved state before it is stamped with a day. See `persist`. */
+type SessionSnapshot = Omit<PuzzleProgress, 'savedOn'>
+
+/** Whether a saved record already says what the live session says. */
+const sameProgress = (saved: PuzzleProgress, live: SessionSnapshot) =>
+    saved.completed === live.completed
+    && saved.definitionHash === live.definitionHash
+    && saved.board.length === live.board.length
+    && saved.board.every((row, i) => row.every((cell, j) => cell === live.board[i][j]))
 
 export class LevelStore {
     rootStore: RootStore
@@ -27,6 +41,18 @@ export class LevelStore {
      * identity on every cache miss.
      */
     sessions = new Map<string, PuzzleSession>()
+
+    /**
+     * Saved progress as last read or written (spec P1-7).
+     *
+     * Held so a write does not have to re-read storage, and so records for puzzles that are
+     * not currently served survive a save -- they belong to a player who may come back to
+     * them, and only `prune` may drop one.
+     */
+    document: ProgressDocument = emptyDocument()
+
+    /** Disposer for the persistence reaction; also the flag for "already started". */
+    disposePersist: (() => void) | null = null
 
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
@@ -48,6 +74,11 @@ export class LevelStore {
             mediumBoards: observable.ref,
             hardBoards: observable.ref,
             sessions: observable.shallow,
+            // Plain data on its way to and from JSON, and a disposer. Neither is state the
+            // view derives from, and making the document observable would deep-convert every
+            // saved board into a proxy for no reader's benefit.
+            document: false,
+            disposePersist: false,
         })
 
         // A focused reaction, not an autorun: it tracks exactly one derived value -- the
@@ -85,14 +116,127 @@ export class LevelStore {
 
     setBoards(boards: BoardsResponse) {
         const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
+        const before = this.currentDefinition?.puzzleId ?? null
 
         this.easyBoards = build(boards.easyBoards)
         this.mediumBoards = build(boards.mediumBoards)
         this.hardBoards = build(boards.hardBoards)
 
-        this.reconcileSessions([
-            ...this.easyBoards, ...this.mediumBoards, ...this.hardBoards,
-        ])
+        const definitions = [...this.easyBoards, ...this.mediumBoards, ...this.hardBoards]
+
+        /*
+         * Saved progress is read *before* the sessions are built, which is the sequencing
+         * P1-7 warns about: `reconcileSessions` constructs a session by cloning the
+         * definition's empty board, so a session created first and hydrated afterwards has a
+         * window in which the empty board is the live one. Doing it in this order means a
+         * restored session is never observed empty.
+         */
+        const loaded = readDocument()
+        this.document = prune(loaded, dayKey(new Date()))
+        this.reconcileSessions(definitions)
+        // Written back at once when anything aged out. Retention that only takes effect
+        // after the player's next move is retention that never runs for the player who
+        // stops playing -- which is precisely whose data is sitting there.
+        if (Object.keys(this.document.puzzles).length !== Object.keys(loaded.puzzles).length) {
+            writeDocument(this.document)
+        }
+
+        /*
+         * Land on the first unsolved puzzle (D10-i's remaining half).
+         *
+         * Only when the puzzle under the player actually changed -- the first load, or a day
+         * rollover that served different content. A refetch that returns the same day must
+         * not move them, and neither must one that arrives while they are mid-board: this is
+         * a starting position, not a rule about where they are allowed to be.
+         */
+        if (before === null || before !== this.currentDefinition?.puzzleId) {
+            this.selectFirstUnsolved()
+        }
+        this.beginPersisting()
+    }
+
+    /**
+     * Start saving, once.
+     *
+     * An earlier version of this comment claimed the placement was load-bearing -- that a
+     * reaction created in the constructor would fire with `sessions` empty and flatten a real
+     * save. Mutation-tested, and it is **not** true: a `reaction` does not run its effect on
+     * creation, and `setBoards` is a MobX action, so the whole hydrate-and-reconcile runs in
+     * one batch and the effect fires afterwards with the document already loaded. Moving this
+     * call to the constructor, or above `readDocument`, breaks nothing.
+     *
+     * What actually protects the saved data is that `persist` *merges* rather than replaces,
+     * which `keeps records for puzzles this day does not serve` pins. This stays here because
+     * it is the clearest place to read -- saving begins when there is something to save -- not
+     * because the order is doing hidden work.
+     */
+    beginPersisting() {
+        if (this.disposePersist) return
+        this.disposePersist = reaction(
+            () => this.progressSnapshot,
+            (snapshot) => this.persist(snapshot),
+        )
+    }
+
+    /**
+     * Every session's saved form, as one value.
+     *
+     * A single computed rather than a reaction per session: sessions come and go on a day
+     * rollover, and a per-session subscription would have to be disposed in step with them.
+     * Nine boards of at most 64 small cells is a few kilobytes, so rebuilding the whole
+     * document on a move costs less than the bookkeeping would.
+     */
+    get progressSnapshot(): Record<string, SessionSnapshot> {
+        const snapshot: Record<string, SessionSnapshot> = {}
+        for (const [puzzleId, session] of this.sessions) {
+            snapshot[puzzleId] = {
+                definitionHash: session.definition.definitionHash,
+                ...session.snapshot,
+            }
+        }
+        return snapshot
+    }
+
+    /**
+     * Merge the live sessions into the document and write it.
+     *
+     * Two decisions worth stating, because both look like extra work until the alternative is
+     * spelled out.
+     *
+     * **Merged, not replaced.** Today's nine are not every puzzle that exists -- the data file
+     * cycles -- so replacing the document would delete a half-finished board belonging to a
+     * day that is not being served right now. `prune` is the only thing allowed to drop a
+     * record.
+     *
+     * **`savedOn` is stamped only on a record that actually changed.** It means "when this
+     * puzzle last moved", not "when the app was last open". Restamping everything on every
+     * write would make retention meaningless: a player who opens the game daily would keep
+     * every puzzle they had ever been served alive forever, which is exactly the unbounded
+     * growth the window exists to stop.
+     */
+    persist(snapshot: Record<string, SessionSnapshot>) {
+        const today = dayKey(new Date())
+        const puzzles = { ...this.document.puzzles }
+        for (const [puzzleId, next] of Object.entries(snapshot)) {
+            const previous = puzzles[puzzleId]
+            if (previous && sameProgress(previous, next)) continue
+            puzzles[puzzleId] = { ...next, savedOn: today }
+        }
+        this.document = { version: this.document.version, puzzles }
+        writeDocument(this.document)
+    }
+
+    /**
+     * Point at the first puzzle of this difficulty the player has not finished.
+     *
+     * The last one when every level is done, rather than level 1: arriving at a finished day
+     * should show where the player got to, not send them back to a board they solved.
+     */
+    selectFirstUnsolved() {
+        const definitions = this.definitionsFor(this.difficulty)
+        if (!definitions || definitions.length === 0) return
+        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        this.setLevel((index === -1 ? definitions.length : index + 1) as Level)
     }
 
     /**
@@ -102,14 +246,20 @@ export class LevelStore {
      * a player's in-progress board. Obsolete entries are left alone; expiring them is a
      * separate, intentional act (day rollover).
      */
-    private reconcileSessions(definitions: PuzzleDefinition[]) {
+    reconcileSessions(definitions: PuzzleDefinition[]) {
         for (const definition of definitions) {
             const existing = this.sessions.get(definition.puzzleId)
             if (existing && existing.definition.definitionHash === definition.definitionHash) {
                 continue // same puzzle, same content: keep the session and its moves
             }
             // New puzzle, or the content changed under a reused id: start a fresh session.
-            this.sessions.set(definition.puzzleId, new PuzzleSession(definition, this.rootStore))
+            const session = new PuzzleSession(definition, this.rootStore)
+            // A saved board, but only if it is still a board of *this* puzzle. `progressFor`
+            // owns that judgement -- hash, size and rock positions -- so there is no path
+            // that restores without it.
+            const saved = progressFor(this.document, definition)
+            if (saved) session.restore(saved)
+            this.sessions.set(definition.puzzleId, session)
         }
     }
 

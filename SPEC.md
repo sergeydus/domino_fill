@@ -222,7 +222,7 @@ positioning bug, but do not expect a spelling change to fix anything.
 | f | ~~`BoardSquare.tsx:42`~~ | **✅ Fixed in P1-5.** `snap.mp3` played on **every** square click, including rejected placements, so the sound meaning "that worked" also meant "that did not". It also allocated a new `Audio` per click. Sound now follows the *outcome*, from `feedback.ts`, with one reused element per sound; the square's click handler is gone. |
 | g | ~~`VerticalNumbers.tsx:13-18`, `HorizontalNumbers.tsx:12-17`~~ | **✅ Fixed in P1-5.** All three parts: state now carries a shape as well as a colour (strikethrough / ring), `satisfied` requires the line to be *full* and not merely summed, and the palette is measured at ≥4.5:1. The contrast was worse than stated here — neutral `#ababab` measured 1.86:1 and the green `#4bce4b` **1.66:1**, i.e. the state colour was the least legible thing on screen. |
 | h | ~~`ClientBoard.tsx:57`~~ | **✅ Fixed in P1-3.** A completed board sets `pointerEvents: 'none'` and the completion reaction only ever sets `completed` *true*, so with no restart affordance a completed board was a permanent soft-lock. Reset clears the flag, `undo` recomputes it from the rules, and both controls sit outside the board so neither is disabled by it. |
-| i | `BoardsStore.ts:45` | **✅ Restart fixed in P1-3**; the remainder reframed. `GameControls` renders Undo and Reset, so a mis-solve no longer needs a page reload. The original wording also faulted the difficulty reaction for "never resetting board state" — that is **no longer a defect but a requirement**: P0-5 makes sessions stable per `puzzleId` precisely so switching difficulty or level and coming back returns the same board with the same moves, and `tests/sessions.test.ts` enforces it. What genuinely remains is narrower and belongs to **P1-7**: initial selection does not choose the first *unsolved* puzzle once persisted completion state is hydrated, because there is no persisted state yet. |
+| i | ~~`BoardsStore.ts:45`~~ | **✅ Fully fixed: restart in P1-3, the remainder in P1-7.** `GameControls` renders Undo and Reset, so a mis-solve no longer needs a page reload. The original wording also faulted the difficulty reaction for "never resetting board state" — that is **no longer a defect but a requirement**: P0-5 makes sessions stable per `puzzleId` precisely so switching difficulty or level and coming back returns the same board with the same moves, and `tests/sessions.test.ts` enforces it. The narrower remainder — initial selection landing on the first *unsolved* puzzle — is done in P1-7, which is where the persisted completion state it needs comes from. It re-selects only when the served puzzle actually changed, so a same-day refetch never moves a player mid-board. |
 | j | `dominoBoard.ts:137,147` + `Boards.ts:38` | **The generator's output format no longer matches the parser.** It builds `boardCode` by bare concatenation and slices it per character, but the runtime compares against a **comma-joined** string (commit `7ef3094`). Single-char slicing also silently corrupts any sum ≥ 10 — and shipped boards contain `10`, `11`, `13`. Any board `DominoBoard` produces today is uncompletable. `allow0Lines`' `code.includes('0')` test is broken for the same reason. |
 | k0 | `Tutorial.tsx:27` | `absolute w-full h-full` with no positioned ancestor covers only the first viewport. (`z-999` itself is valid — see D9.) |
 | k | ~~`useLocalhost.ts:4`~~ | **✅ Fixed in P0-1.** Read `localStorage` during render (latent SSR crash); misnamed; and wrote `JSON.stringify(value)` while `BoardsStore.ts:29` read `=== 'true'` on the same key. Replaced by `app/hooks/useLocalStorage.ts`; the duplicate encoding is gone with the dead field. |
@@ -925,6 +925,56 @@ during render, wrap every access in `try/catch` — rather than reaching for sto
 Migrate or discard on version mismatch. Sequence carefully against P0-5: cloning on ingest will destroy in-progress
 boards unless the Map is populated first.
 
+> **Implemented in row 17, except `elapsedMs` — which is cut from this row, not silently
+> dropped.** There is no clock anywhere in the product: nothing counts play time, nothing
+> displays it, and nothing reads it. Persisting the field would mean inventing its semantics
+> — does it run while the tab is hidden? from the first move or from mount? does it stop at
+> completion? — with no feature to check the answers against, and then storing a number no
+> reader would use. It belongs with whatever first needs it (stats, or the archive in P1-6),
+> where the questions have answers. `{board, completed}` is what row 17 saves.
+>
+> **The shape.** One document under `dominoFill.progress.v1`, keyed inside by `puzzleId`,
+> each record carrying its `definitionHash`. One document rather than a key per puzzle: a day
+> is nine boards of at most 64 small cells, so an atomic read-modify-write is cheap, and
+> migration and pruning then happen in one place with no way to half-write a day. The version
+> is in the key *and* in the body, so a rollback cannot read forward data and a forward
+> document is refused rather than guessed at.
+>
+> **A saved board is not trusted because it is saved.** `progressFor` checks the hash, the
+> size, and that the rocks are where the definition says — storage survives upgrades and is
+> editable from a console, and restoring a record that disagrees would put the board into a
+> state the rules cannot produce. Corrupt entries are dropped one at a time, so one bad
+> puzzle costs that puzzle rather than the other eight.
+>
+> **Retention is by age, not by "is it today's".** The data file cycles, so a puzzle returns
+> on a later date with the same id and content — it really is the same puzzle, and
+> half-finished work on it should still be there. What needs bounding is growth, so a record
+> untouched for 14 days goes, and `savedOn` means "when this puzzle last moved" rather than
+> "when the app was last open" — restamping everything on every write would make the window
+> unreachable for anyone who plays daily.
+>
+> **Day rollover.** The board was fetched once in a mount effect and never again, so a tab
+> left open overnight served yesterday's puzzle indefinitely — the ordinary case for a daily
+> game on a phone, where the tab is backgrounded rather than closed. `useDayRollover` compares
+> the *local calendar day* on visibility, on focus and on a poll; a timer set for the next
+> midnight would assume the clock runs forward at one second per second, which is false across
+> sleep, a timezone change and a manual correction. A failed refetch is swallowed: the player
+> has a working board on screen, and taking it away because a background refresh missed would
+> be worse than being a day stale.
+>
+> **D10-i's remainder is closed.** Initial selection lands on the first *unsolved* puzzle,
+> which needed persisted completion before it could mean anything. It re-selects only when the
+> puzzle under the player actually changed, so a refetch of the same day never moves someone
+> mid-board.
+>
+> **Note on the test environment, not on the product.** Node 25 defines its own `localStorage`
+> global that shadows jsdom's and has *no working methods* — probed: `getItem`, `setItem`,
+> `clear` and `length` are all undefined. Every unit test of persistence therefore runs against
+> an in-memory double installed in `tests/setup.ts`, and `e2e/persistence.spec.ts` is the only
+> place the feature meets a real browser store. The production guards feature-check the method
+> rather than the object, which is exactly why this environment fails closed instead of
+> throwing.
+
 **P1-8. Accessibility.** Real `<button>`s for `LevelSelector` and `DominoPieces`; `aria-pressed` /
 `role="radiogroup"` on the difficulty slider. If `role="grid"` is used it needs `role="row"`
 children and a **roving tabindex** (container `tabIndex={0}`, focused cell `0`, rest `-1`) — 64
@@ -994,7 +1044,7 @@ whole of P0 into one oversized set.)
 | 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h and D10-i's restart half | unit (undo round-trip) + E2E (controls) |
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
-| 17 | **P1-7** persistence + day rollover | unit |
+| 17 | **P1-7** persistence + day rollover — **✅ done**; closes D10-i's remainder. `elapsedMs` **cut to a later row**, there being no clock in the product to save | unit + E2E |
 | 18 | **P1-6** generator format fix, solver rewrite, content pipeline, archive — **plus P1-5's check/hint**, which waited for this solver | unit |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |
 | 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |

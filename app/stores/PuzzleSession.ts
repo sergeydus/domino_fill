@@ -842,4 +842,50 @@ export class PuzzleSession {
     setCompleted(isCompleted: boolean) {
         this.completed = isCompleted
     }
+
+    /**
+     * What is worth saving about this session (spec P1-7).
+     *
+     * The board and the completion flag, and deliberately nothing else. Hover, focus and the
+     * gesture in progress are all properties of *this* pointer at *this* moment, and
+     * restoring them would put a highlight under a finger that is not there.
+     *
+     * `completed` is saved rather than re-derived on load even though it is a function of
+     * the board, because the two can legitimately disagree: `reset` clears the flag, and
+     * `undo` recomputes it. Saving the flag stores what the player was actually looking at.
+     */
+    get snapshot(): { board: (number | null)[][], completed: boolean } {
+        return {
+            // A plain copy, not the observable arrays: this value is handed to JSON and to
+            // a reaction, and neither should hold a live reference into the board.
+            board: this.board.map(row => [...row]),
+            completed: this.completed,
+        }
+    }
+
+    /**
+     * Put a saved board back.
+     *
+     * The caller is responsible for having checked that the record belongs to this puzzle;
+     * `progressFor` is where that happens, so there is exactly one path in.
+     *
+     * **The undo stack is not restored, and is cleared here.** It is not saved either. A
+     * `Move` records the cells a placement wrote and what was underneath them, which only
+     * means anything against the board that produced it; carrying a stack across a reload
+     * would let Undo write dominoes back onto a board that never had them. Losing history at
+     * a reload is a smaller cost than an Undo that corrupts the board, and the player keeps
+     * the thing they actually care about -- their position.
+     */
+    restore(progress: { board: (number | null)[][], completed: boolean }) {
+        // The copy is for readers, not for safety: probed, assigning a plain array to a
+        // deep-observable field makes MobX build its own, so this cannot alias the record it
+        // was given however it is written. The copy in `snapshot` above is the one that is
+        // load-bearing, and in that direction there is no MobX conversion to rely on.
+        this.board = progress.board.map(row => [...row])
+        this.completed = progress.completed
+        this.moves = []
+        this.gesture = null
+        this.hover = null
+        this.focusedCell = null
+    }
 }

@@ -21,4 +21,25 @@ describe('test setup', () => {
         expect(typeof el.scrollIntoView).toBe('function')
         expect(() => el.scrollIntoView({ block: 'nearest' })).not.toThrow()
     })
+
+    it('supplies a working localStorage, which this Node actively breaks', () => {
+        /*
+         * Node 25 defines its own `localStorage` global that shadows jsdom's and has no
+         * methods at all -- probed: `getItem`, `setItem`, `clear` and `length` are every one
+         * of them undefined. Persistence would silently do nothing, and the tests for it
+         * would pass by never storing anything.
+         */
+        expect(typeof window.localStorage.setItem).toBe('function')
+
+        window.localStorage.setItem('probe', 'value')
+        expect(window.localStorage.getItem('probe')).toBe('value')
+        expect(window.localStorage.length).toBe(1)
+
+        window.localStorage.removeItem('probe')
+        expect(window.localStorage.getItem('probe')).toBeNull()
+
+        window.localStorage.setItem('probe', 'again')
+        window.localStorage.clear()
+        expect(window.localStorage.length).toBe(0)
+    })
 })

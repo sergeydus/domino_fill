@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getCurrentActiveBoard } from './Boards'
 import DifficultySlider from './DifficultySlider'
 import ClientBoard from './ClientBoard'
@@ -11,6 +11,7 @@ import GameControls from './GameControls'
 import CompletionCard from './CompletionCard'
 import Tutorial from './Tutorial'
 import { useAvailableBoardBox } from '../hooks/useAvailableBoardBox'
+import { useDayRollover } from '../hooks/useDayRollover'
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
@@ -18,12 +19,28 @@ const PAGE_MARGIN_PX = 8
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
   const { boardsStore } = useStores()
-  useEffect(() => {
-    getCurrentActiveBoard().then((boards) => {
-      boardsStore.setBoards(boards)
-      setisLoading(false)
-    })
+
+  const loadBoards = useCallback(async () => {
+    const boards = await getCurrentActiveBoard()
+    boardsStore.setBoards(boards)
   }, [boardsStore])
+
+  useEffect(() => {
+    loadBoards().then(() => setisLoading(false))
+  }, [loadBoards])
+
+  /*
+   * The day's puzzle actually changes at midnight (spec P1-7).
+   *
+   * Without this the board is fetched once and never again, so a tab left open overnight
+   * serves yesterday's puzzle for as long as it stays open -- and for a daily game on a
+   * phone, "left open overnight" is the ordinary case rather than the edge one.
+   *
+   * A failed refetch is swallowed on purpose. The player is mid-game with a perfectly good
+   * board on screen; replacing it with an error because a background refresh did not reach
+   * the server would take away something that was working. The next trigger tries again.
+   */
+  useDayRollover(() => { void loadBoards().catch(() => { }) })
 
   // A callback ref in state, not `useRef`: the column is not mounted on the first render
   // (the board is still loading), and a ref would leave the hook with nothing to observe.
