@@ -588,6 +588,27 @@ describe('a v1 document is carried forward', () => {
         return hash
     }
 
+    /**
+     * Fail the nth write under the v2 prefix, and let the others through.
+     *
+     * The real method is captured *before* the spy is installed, and bound. An earlier
+     * version delegated through `Storage.prototype.setItem.call(this, ...)`, which throws
+     * `'setItem' called on an object that is not a valid instance of Storage` against the
+     * plain-object stub in tests/setup.ts -- so every write failed, and a test named for a
+     * partial migration was quietly exercising a total one.
+     */
+    const failOnWrite = (nth: number) => {
+        const realSetItem = window.localStorage.setItem.bind(window.localStorage)
+        let writes = 0
+        return vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation((key: string, value: string) => {
+                if (key.startsWith(KEY_PREFIX) && ++writes === nth) {
+                    throw new Error('QuotaExceededError')
+                }
+                realSetItem(key, value)
+            })
+    }
+
     /** A v1 document holding two puzzles, so a migration can fail halfway. */
     const twoPuzzleDocument = () => {
         const hash = definitionHashFor('easy-1')
@@ -640,32 +661,24 @@ describe('a v1 document is carried forward', () => {
          * Nothing can recover it afterwards: the v1 document is gone and the v2 records were
          * never written.
          */
-        const hash = twoPuzzleDocument()
-        let writes = 0
-        const setItem = vi.spyOn(window.localStorage, 'setItem')
-            .mockImplementation(function (this: Storage, key: string, value: string) {
-                // The *second* record fails, so the migration is genuinely half done.
-                if (key.startsWith(KEY_PREFIX) && ++writes === 2) throw new Error('QuotaExceededError')
-                Storage.prototype.setItem.call(this, key, value)
-            })
+        twoPuzzleDocument()
+        const setItem = failOnWrite(2)
 
         reload()
         setItem.mockRestore()
 
+        // Genuinely half done, which is the case the whole test is about.
+        expect(readProgress('easy-1'), 'the first record landed').not.toBeNull()
+        expect(readProgress('easy-2'), 'the second record did not').toBeNull()
         expect(window.localStorage.getItem(LEGACY_KEY), 'the only copy was deleted').not.toBeNull()
-        expect(hash).toBeTruthy()
     })
 
     it('finishes the job on a later load, once storage will take it', () => {
         twoPuzzleDocument()
-        let writes = 0
-        const setItem = vi.spyOn(window.localStorage, 'setItem')
-            .mockImplementation(function (this: Storage, key: string, value: string) {
-                if (key.startsWith(KEY_PREFIX) && ++writes === 2) throw new Error('QuotaExceededError')
-                Storage.prototype.setItem.call(this, key, value)
-            })
+        const setItem = failOnWrite(2)
         reload()
         setItem.mockRestore()
+        expect(readProgress('easy-2'), 'the migration really was incomplete').toBeNull()
 
         reload()
 
@@ -717,7 +730,66 @@ describe('a v1 document is carried forward', () => {
         expect(readProgress('easy-1')!.board[1][1]).toBeNull()
     })
 
-    it('dates a migrated record from local midnight, so it ages no sooner than before', () => {
+    it('does not resurrect a legacy record that is past the retention window', () => {
+        /*
+         * Retention has to be a rule about which records count, not only a matter of deleting
+         * files. The migration writes a v2 record, `pruneStorage` then deletes it for being
+         * too old -- and the records the migration handed back would put it straight back into
+         * the session, so an abandoned board from months ago reappeared on screen.
+         */
+        const hash = definitionHashFor('easy-1')
+        const longAgo = new Date(Date.now() - (RETENTION_DAYS + 30) * 86_400_000)
+        const day = `${longAgo.getFullYear()}-${String(longAgo.getMonth() + 1).padStart(2, '0')}-${String(longAgo.getDate()).padStart(2, '0')}`
+        window.localStorage.setItem(LEGACY_KEY, JSON.stringify({
+            version: 1,
+            puzzles: {
+                'easy-1': {
+                    definitionHash: hash,
+                    board: (() => {
+                        const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+                        board[0][0] = -1
+                        board[1][1] = 1
+                        board[2][1] = 0
+                        return board
+                    })(),
+                    completed: false,
+                    savedOn: day,
+                },
+            },
+        }))
+
+        const store = reload()
+
+        expect(store.sessions.get('easy-1')!.board[1][1], 'an expired board came back').toBeNull()
+        expect(readProgress('easy-1')).toBeNull()
+    })
+
+    it('does not restore an expired record even when it cannot be deleted', () => {
+        // Retention must not depend on `removeItem` succeeding: storage can refuse that too,
+        // and then the filter is the only thing standing between the player and a board they
+        // abandoned a month ago.
+        window.localStorage.setItem(`${KEY_PREFIX}easy-1`, JSON.stringify({
+            definitionHash: definitionHashFor('easy-1'),
+            board: (() => {
+                const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+                board[0][0] = -1
+                board[1][1] = 1
+                board[2][1] = 0
+                return board
+            })(),
+            completed: false,
+            savedAt: Date.now() - (RETENTION_DAYS + 30) * 86_400_000,
+        }))
+        const removeItem = vi.spyOn(window.localStorage, 'removeItem')
+            .mockImplementation(() => { throw new Error('SecurityError') })
+
+        const store = reload()
+        removeItem.mockRestore()
+
+        expect(store.sessions.get('easy-1')!.board[1][1]).toBeNull()
+    })
+
+    it('dates a migrated record from the end of its day, so it never ages sooner', () => {
         runInAction(() => { root.boardsStore.setBoards(response()) })
         const hash = root.boardsStore.sessions.get('easy-1')!.definition.definitionHash
         window.localStorage.clear()
@@ -725,7 +797,10 @@ describe('a v1 document is carried forward', () => {
 
         reload()
 
-        expect(readProgress('easy-1')!.savedAt).toBe(new Date(2026, 8, 15).getTime())
+        // The last instant of that local day, not the first: v1 recorded only the day, and
+        // the save could have been at any moment within it. Taking the end means a migrated
+        // record is never treated as older than it really was.
+        expect(readProgress('easy-1')!.savedAt).toBe(new Date(2026, 8, 15, 23, 59, 59, 999).getTime())
     })
 })
 

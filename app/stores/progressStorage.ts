@@ -267,9 +267,8 @@ export const pruneStorage = (now: number, retentionDays = RETENTION_DAYS): strin
  *
  * v1 kept every puzzle in one document under `dominoFill.progress.v1`, stamped with a local
  * day string — the two things v2 replaces. Each entry is rewritten under its own key with an
- * absolute `savedAt` taken from local midnight of the stored day: the earliest instant that
- * day could have been, so a migrated record ages out no later than it would have done, and
- * never sooner.
+ * absolute `savedAt` taken from the end of the stored day, so a migrated record is never
+ * treated as older than it was. See `endOfDay`.
  *
  * The order here is the whole of it, and an earlier version had it backwards. It deleted the
  * legacy key immediately after reading the string, then parsed, then wrote — so a storage
@@ -318,14 +317,30 @@ export const migrateLegacy = (): Record<string, PuzzleProgress> => {
     }
 }
 
-/** Local midnight of a `YYYY-MM-DD` string, or null if it is not one. */
-const midnightOf = (savedOn: unknown): number | null => {
+/**
+ * The last instant of a local `YYYY-MM-DD` day, or null if it is not one.
+ *
+ * The *end* of the day rather than the start. v1 recorded only which day a puzzle was saved
+ * on, and the save could have been at any moment within it; taking the end means a migrated
+ * record is never treated as older than it really was, so it can never age out sooner than it
+ * would have done. Erring the other way would have discarded up to a day of somebody's
+ * retention window on the basis of information v1 never stored.
+ *
+ * `new Date(y, m, d)` normalises nonsense rather than refusing it -- `2026-02-31` becomes
+ * the 3rd of March -- so the parts are checked against what came back. A date that does not
+ * survive the round trip was never a date.
+ */
+const endOfDay = (savedOn: unknown): number | null => {
     if (typeof savedOn !== 'string') return null
     const parts = savedOn.split('-').map(Number)
     if (parts.length !== 3 || parts.some(n => !Number.isInteger(n))) return null
     const [year, month, day] = parts
-    const at = new Date(year, month - 1, day)
-    return Number.isNaN(at.getTime()) ? null : at.getTime()
+    const at = new Date(year, month - 1, day, 23, 59, 59, 999)
+    if (Number.isNaN(at.getTime())) return null
+    const survived = at.getFullYear() === year
+        && at.getMonth() === month - 1
+        && at.getDate() === day
+    return survived ? at.getTime() : null
 }
 
 /**
@@ -351,7 +366,7 @@ export const legacyEntries = (raw: string): Record<string, PuzzleProgress> | nul
     for (const [puzzleId, value] of Object.entries(document.puzzles as Record<string, unknown>)) {
         if (typeof value !== 'object' || value === null) continue
         const legacy = { ...value as Record<string, unknown> }
-        const savedAt = midnightOf(legacy.savedOn)
+        const savedAt = endOfDay(legacy.savedOn)
         if (savedAt === null) continue
         delete legacy.savedOn
         const candidate = { ...legacy, savedAt }

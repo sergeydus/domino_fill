@@ -6,7 +6,8 @@ import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
 import { winFeedback } from "../dominoFill/feedback"
 import {
-    PuzzleProgress, migrateLegacy, progressFor, pruneStorage, readAllProgress, writeProgress,
+    PuzzleProgress, isExpired, migrateLegacy, progressFor, pruneStorage, readAllProgress,
+    writeProgress,
 } from "./progressStorage"
 
 type Difficulty = 'easy' | 'normal' | 'hard'
@@ -14,6 +15,19 @@ type Level = 1 | 2 | 3
 
 /** A session's saved state before it is stamped with a time. See `persist`. */
 type SessionSnapshot = Omit<PuzzleProgress, 'savedAt'>
+
+/**
+ * Only the records still inside the retention window.
+ *
+ * Retention is a rule about which saves count, not only about which files exist. Deletion can
+ * fail -- storage refuses `removeItem` in the same conditions it refuses `setItem` -- and a
+ * record can arrive from the v1 migration after the deletion pass has already run. Either way
+ * the answer has to be the same, so the filter is applied to what is about to be used rather
+ * than trusted to have happened.
+ */
+const live = (records: Record<string, PuzzleProgress>, now: number) =>
+    Object.fromEntries(
+        Object.entries(records).filter(([, record]) => !isExpired(record.savedAt, now)))
 
 /** Whether two saved forms of a puzzle say the same thing. */
 const sameProgress = (a: SessionSnapshot, b: SessionSnapshot) =>
@@ -154,10 +168,16 @@ export class LevelStore {
          * very call and holds the same thing. Reversing the spread changes nothing. It is
          * written v2-last because that is the invariant a reader should take away -- a v2
          * record is always the authority -- not because the order is doing work.
+         *
+         * `live` is what actually enforces retention. `pruneStorage` deletes, which is a
+         * best-effort physical act: it can be refused, and it runs *before* the migrated
+         * records are merged in, so without this filter an abandoned board from months ago
+         * came straight back onto the screen having just been deleted.
          */
+        const now = Date.now()
         const fromLegacy = migrateLegacy()
-        pruneStorage(Date.now())
-        this.saved = { ...fromLegacy, ...readAllProgress() }
+        pruneStorage(now)
+        this.saved = live({ ...fromLegacy, ...readAllProgress() }, now)
         this.reconcileSessions(definitions)
 
         /*

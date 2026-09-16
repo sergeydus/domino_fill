@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
     KEY_PREFIX, SCHEMA_VERSION, RETENTION_DAYS,
-    dayKey, isExpired, parseRecord, progressFor,
+    dayKey, isExpired, legacyEntries, parseRecord, progressFor,
     type PuzzleProgress,
 } from '@/app/stores/progressStorage'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
@@ -165,6 +165,67 @@ describe('progress is only restored to the puzzle it came from', () => {
         moved[0][0] = null
         moved[3][3] = -1
         expect(progressFor(record({ board: moved }), d)).toBeNull()
+    })
+})
+
+describe('reading a v1 document', () => {
+    /*
+     * Pure, so what the old format meant can be checked without a browser. The storage dance
+     * around it -- write first, delete only when everything is across -- is pinned in
+     * tests/persistence.test.ts.
+     */
+    const legacy = (savedOn: string) => JSON.stringify({
+        version: 1,
+        puzzles: {
+            p: {
+                definitionHash: definition('p').definitionHash,
+                board: playedBoard(),
+                completed: false,
+                savedOn,
+            },
+        },
+    })
+
+    it('carries a record across, stamped at the end of its day', () => {
+        // The end, not the start: v1 stored only the day, and the save could have been at any
+        // moment in it. Taking the end means the record is never treated as older than it was,
+        // so migrating cannot bring forward the moment it ages out.
+        const entries = legacyEntries(legacy('2026-09-15'))!
+        expect(entries.p.savedAt).toBe(new Date(2026, 8, 15, 23, 59, 59, 999).getTime())
+    })
+
+    it.each([
+        ['not JSON', '{oh no'],
+        ['not an object', '42'],
+        ['a version this never was', JSON.stringify({ version: 7, puzzles: {} })],
+        ['no puzzles at all', JSON.stringify({ version: 1 })],
+    ])('refuses %s', (_label, raw) => {
+        expect(legacyEntries(raw)).toBeNull()
+    })
+
+    it('skips an entry it cannot read, and keeps the rest', () => {
+        const mixed = JSON.stringify({
+            version: 1,
+            puzzles: {
+                good: JSON.parse(legacy('2026-09-15')).puzzles.p,
+                noDay: { definitionHash: 'x', board: playedBoard(), completed: false },
+                badBoard: { definitionHash: 'x', board: 'nope', completed: false, savedOn: '2026-09-15' },
+            },
+        })
+        expect(Object.keys(legacyEntries(mixed)!)).toEqual(['good'])
+    })
+
+    it('refuses a date that only exists after normalising', () => {
+        // `new Date(2026, 1, 31)` is the 3rd of March, not a failure. A stored day that does
+        // not survive the round trip was never a day.
+        expect(legacyEntries(legacy('2026-02-31'))).toEqual({})
+        expect(legacyEntries(legacy('2026-13-01'))).toEqual({})
+        expect(legacyEntries(legacy('2026-00-10'))).toEqual({})
+    })
+
+    it('accepts a real leap day', () => {
+        // The check has to reject impossible dates without rejecting awkward real ones.
+        expect(legacyEntries(legacy('2028-02-29'))!.p).toBeDefined()
     })
 })
 
