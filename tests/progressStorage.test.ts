@@ -209,7 +209,23 @@ describe('reading a v1 document', () => {
          * The bound is UTC-12, the last zone to finish any date, computed from `Date.UTC`
          * alone. These run the parse under both extremes and require one answer.
          */
-        const original = process.env.TZ
+        /*
+         * Restoring the timezone is fiddlier than it looks, and getting it wrong leaks into
+         * every later test in the same worker. Probed on this machine, starting from an
+         * unset `TZ` in Asia/Jerusalem, where local noon is 09:00Z:
+         *
+         *   process.env.TZ = original   // original is undefined
+         *     -> the string "undefined", the key still present, and Node falls back to UTC
+         *   delete process.env.TZ
+         *     -> leaves the process in whatever zone was last set. It does not go back.
+         *
+         * Neither restores anything. What does is capturing the *resolved* zone name before
+         * touching `TZ` and assigning that back -- verified to return local noon to 09:00Z.
+         */
+        const resolved = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const localNoon = () => new Date(2026, 8, 15, 12).toISOString()
+        const before = localNoon()
+
         const stampUnder = (timezone: string) => {
             process.env.TZ = timezone
             return legacyEntries(legacy('2026-09-15'))!.p.savedAt
@@ -224,8 +240,13 @@ describe('reading a v1 document', () => {
             expect(utc).toBe(farWest)
             expect(farWest).toBe(latestAnywhere(2026, 9, 15))
         } finally {
-            process.env.TZ = original
+            process.env.TZ = resolved
         }
+
+        // Asserted, not assumed: a restore that quietly failed would hand every later test in
+        // this worker a different calendar, which is exactly the kind of thing that hides a
+        // date bug rather than causing an obvious failure.
+        expect(localNoon(), 'the timezone was not restored').toBe(before)
     })
 
     it('is never earlier than the day could have ended in any zone', () => {
