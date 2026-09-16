@@ -936,8 +936,26 @@ boards unless the Map is populated first.
 > **The shape: one key per puzzle**, `dominoFill.progress.v2.<puzzleId>`, each record carrying
 > its `definitionHash` and an absolute `savedAt`. This is a reversal of the first design, which
 > kept a single document, and the reason is other tabs — see the multi-tab note below. The
-> version is in the key, so a rollback cannot read forward data; `migrateLegacy` carries a v1
-> document across once and retires the old key whether or not anything in it survived.
+> version is in the key, so a rollback cannot read forward data.
+>
+> **The v1 migration is failure-safe, which decides its order.** It parses and validates the
+> whole document *before* deleting anything, treats an existing v2 record as authoritative and
+> never writes over it, and removes the old key only once every entry that still matters is
+> safely across. A refused write leaves the document in place for the next load to finish; a
+> document that is not a v1 document at all is retired, since there is nothing in it to lose.
+> An entry already past the retention window is discarded rather than copied, and deliberately
+> does not count as a write that must succeed — otherwise a document of nothing but abandoned
+> boards could never be removed under quota pressure, while occupying the quota that was
+> refusing the writes. What the migration read is also returned, so the boards can be restored
+> in memory for the session even when storage will not accept them.
+>
+> Migrating has to invent an instant, because v1 recorded only a day. It uses the **latest
+> instant that date could have been anywhere on earth** — its end in UTC−12 — so a record is
+> never treated as older than it was and migrating can never bring an expiry forward. The
+> obvious reading, "the end of that day here", is wrong: `savedOn` carries no timezone, so it
+> reconstructs the day in the *reader's* zone, and the extremes are twenty-six hours apart.
+> The cost of the conservative bound is at most about twenty-six hours on a fourteen-day
+> window.
 >
 > **A saved board is not trusted because it is saved.** Storage outlives upgrades and is
 > editable from a console, so `progressFor` refuses anything that is not a position the rules

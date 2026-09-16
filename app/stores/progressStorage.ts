@@ -285,7 +285,7 @@ export const pruneStorage = (now: number, retentionDays = RETENTION_DAYS): strin
  * them in memory even when nothing could be written. Storage may be blocked for an entire
  * session; the player should still see their board rather than an empty one.
  */
-export const migrateLegacy = (): Record<string, PuzzleProgress> => {
+export const migrateLegacy = (now: number = Date.now()): Record<string, PuzzleProgress> => {
     const storage = store()
     if (!storage) return {}
     try {
@@ -303,6 +303,14 @@ export const migrateLegacy = (): Record<string, PuzzleProgress> => {
         const carried: Record<string, PuzzleProgress> = {}
         let allSafe = true
         for (const [puzzleId, record] of Object.entries(entries)) {
+            /*
+             * Already past the window, by the conservative bound above -- so it is expired
+             * however generously it is read. Discarding it here is deliberate, and it must not
+             * count against retiring the legacy key: otherwise a document of nothing but
+             * expired boards could never be removed under quota pressure, and would sit there
+             * consuming the very quota that was refusing the writes.
+             */
+            if (isExpired(record.savedAt, now)) continue
             // Anything already in v2 is newer by construction: it was either migrated on an
             // earlier attempt or written by play since.
             if (readProgress(puzzleId) !== null) continue
@@ -317,17 +325,32 @@ export const migrateLegacy = (): Record<string, PuzzleProgress> => {
     }
 }
 
+/** The largest offset behind UTC any zone uses (Baker Island, UTC−12). */
+const LATEST_ZONE_OFFSET_MS = 12 * 60 * 60 * 1000
+
 /**
- * The last instant of a local `YYYY-MM-DD` day, or null if it is not one.
+ * The latest instant that a `YYYY-MM-DD` day could possibly have been, anywhere; null if it
+ * is not a date.
  *
- * The *end* of the day rather than the start. v1 recorded only which day a puzzle was saved
- * on, and the save could have been at any moment within it; taking the end means a migrated
- * record is never treated as older than it really was, so it can never age out sooner than it
- * would have done. Erring the other way would have discarded up to a day of somebody's
- * retention window on the basis of information v1 never stored.
+ * v1 recorded only which day a puzzle was saved on, so migrating has to choose an instant
+ * within it. The end rather than the start, because a migrated record must never be treated
+ * as *older* than it was: erring that way would bring its expiry forward on the strength of
+ * information v1 never stored.
  *
- * `new Date(y, m, d)` normalises nonsense rather than refusing it -- `2026-02-31` becomes
- * the 3rd of March -- so the parts are checked against what came back. A date that does not
+ * And the end **in UTC−12**, not in whatever zone happens to be running the migration. This
+ * is the part that is easy to get wrong, and the first version did: `savedOn` carries no
+ * timezone, so reconstructing it locally reconstructs it in the *reader's* zone, which need
+ * not be the writer's. Measured: `2026-09-15T23:59:59.999` is `2026-09-16T11:59:59.999Z` in
+ * UTC−12 and `2026-09-15T09:59:59.999Z` in UTC+14 — twenty-six hours apart, and a player who
+ * had flown between the two would have had their retention window silently shortened. UTC−12
+ * is the last zone on earth to finish any given date, so it is the conservative bound, and it
+ * is computed from `Date.UTC` alone so the answer does not depend on where it is run.
+ *
+ * The cost is at most about twenty-six hours of extra retention on a fourteen-day window,
+ * which is the right side to be wrong on.
+ *
+ * `Date.UTC` normalises nonsense rather than refusing it — `2026-02-31` becomes the 3rd of
+ * March — so the result is checked against the parts that went in. A date that does not
  * survive the round trip was never a date.
  */
 const endOfDay = (savedOn: unknown): number | null => {
@@ -335,12 +358,14 @@ const endOfDay = (savedOn: unknown): number | null => {
     const parts = savedOn.split('-').map(Number)
     if (parts.length !== 3 || parts.some(n => !Number.isInteger(n))) return null
     const [year, month, day] = parts
-    const at = new Date(year, month - 1, day, 23, 59, 59, 999)
-    if (Number.isNaN(at.getTime())) return null
-    const survived = at.getFullYear() === year
-        && at.getMonth() === month - 1
-        && at.getDate() === day
-    return survived ? at.getTime() : null
+
+    const utcEnd = Date.UTC(year, month - 1, day, 23, 59, 59, 999)
+    if (Number.isNaN(utcEnd)) return null
+    const round = new Date(utcEnd)
+    const survived = round.getUTCFullYear() === year
+        && round.getUTCMonth() === month - 1
+        && round.getUTCDate() === day
+    return survived ? utcEnd + LATEST_ZONE_OFFSET_MS : null
 }
 
 /**

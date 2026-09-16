@@ -186,12 +186,57 @@ describe('reading a v1 document', () => {
         },
     })
 
-    it('carries a record across, stamped at the end of its day', () => {
+    /** The last instant of a date anywhere on earth: its end in UTC-12. */
+    const latestAnywhere = (y: number, m: number, d: number) =>
+        Date.UTC(y, m - 1, d, 23, 59, 59, 999) + 12 * 60 * 60 * 1000
+
+    it('carries a record across, stamped at the latest instant that day could have been', () => {
         // The end, not the start: v1 stored only the day, and the save could have been at any
         // moment in it. Taking the end means the record is never treated as older than it was,
         // so migrating cannot bring forward the moment it ages out.
         const entries = legacyEntries(legacy('2026-09-15'))!
-        expect(entries.p.savedAt).toBe(new Date(2026, 8, 15, 23, 59, 59, 999).getTime())
+        expect(entries.p.savedAt).toBe(latestAnywhere(2026, 9, 15))
+    })
+
+    it('stamps the same instant whatever timezone reads the document', () => {
+        /*
+         * `savedOn` carries no timezone, so reconstructing it in the *reader's* zone
+         * reconstructs somebody else's day. Measured across the extremes:
+         * `2026-09-15T23:59:59.999` is `2026-09-16T11:59:59.999Z` in UTC-12 and
+         * `2026-09-15T09:59:59.999Z` in UTC+14 -- twenty-six hours apart. A player who had
+         * flown between the two would have had their retention window quietly shortened.
+         *
+         * The bound is UTC-12, the last zone to finish any date, computed from `Date.UTC`
+         * alone. These run the parse under both extremes and require one answer.
+         */
+        const original = process.env.TZ
+        const stampUnder = (timezone: string) => {
+            process.env.TZ = timezone
+            return legacyEntries(legacy('2026-09-15'))!.p.savedAt
+        }
+
+        try {
+            const farWest = stampUnder('Etc/GMT+12')     // UTC-12
+            const farEast = stampUnder('Pacific/Kiritimati')   // UTC+14
+            const utc = stampUnder('UTC')
+
+            expect(farWest).toBe(farEast)
+            expect(utc).toBe(farWest)
+            expect(farWest).toBe(latestAnywhere(2026, 9, 15))
+        } finally {
+            process.env.TZ = original
+        }
+    })
+
+    it('is never earlier than the day could have ended in any zone', () => {
+        // The contract in one line: the stamp is an upper bound, so no reader can decide the
+        // record is older than it really was.
+        const stamp = legacyEntries(legacy('2026-09-15'))!.p.savedAt
+        for (const offsetHours of [-12, -5, 0, 5.5, 14]) {
+            const endThere = Date.UTC(2026, 8, 15, 23, 59, 59, 999) - offsetHours * 3_600_000
+            expect(stamp, `UTC${offsetHours >= 0 ? '+' : ''}${offsetHours}`)
+                .toBeGreaterThanOrEqual(endThere)
+        }
     })
 
     it.each([

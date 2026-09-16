@@ -789,7 +789,45 @@ describe('a v1 document is carried forward', () => {
         expect(store.sessions.get('easy-1')!.board[1][1]).toBeNull()
     })
 
-    it('dates a migrated record from the end of its day, so it never ages sooner', () => {
+    it('retires a document of expired boards even when nothing can be written', () => {
+        /*
+         * An expired entry must not need a successful v2 write before the legacy key can go.
+         * Otherwise a document holding nothing but abandoned boards is unremovable under quota
+         * pressure -- and it sits there consuming the very quota that is refusing the writes,
+         * with no path out for as long as the player keeps the browser.
+         */
+        const hash = definitionHashFor('easy-1')
+        const longAgo = new Date(Date.now() - (RETENTION_DAYS + 40) * 86_400_000)
+        const day = `${longAgo.getFullYear()}-${String(longAgo.getMonth() + 1).padStart(2, '0')}-${String(longAgo.getDate()).padStart(2, '0')}`
+        window.localStorage.setItem(LEGACY_KEY, JSON.stringify({
+            version: 1,
+            puzzles: {
+                'easy-1': {
+                    definitionHash: hash,
+                    board: (() => {
+                        const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+                        board[0][0] = -1
+                        board[1][1] = 1
+                        board[2][1] = 0
+                        return board
+                    })(),
+                    completed: false,
+                    savedOn: day,
+                },
+            },
+        }))
+
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation(() => { throw new Error('QuotaExceededError') })
+        const store = reload()
+        setItem.mockRestore()
+
+        expect(window.localStorage.getItem(LEGACY_KEY), 'the quota stayed occupied').toBeNull()
+        expect(readProgress('easy-1'), 'an expired board was copied forward').toBeNull()
+        expect(store.sessions.get('easy-1')!.board[1][1], 'an expired board was restored').toBeNull()
+    })
+
+    it('dates a migrated record from the latest instant its day could have been', () => {
         runInAction(() => { root.boardsStore.setBoards(response()) })
         const hash = root.boardsStore.sessions.get('easy-1')!.definition.definitionHash
         window.localStorage.clear()
@@ -797,10 +835,11 @@ describe('a v1 document is carried forward', () => {
 
         reload()
 
-        // The last instant of that local day, not the first: v1 recorded only the day, and
-        // the save could have been at any moment within it. Taking the end means a migrated
-        // record is never treated as older than it really was.
-        expect(readProgress('easy-1')!.savedAt).toBe(new Date(2026, 8, 15, 23, 59, 59, 999).getTime())
+        // The last instant of that date *anywhere* -- its end in UTC-12 -- not the last
+        // instant here. `savedOn` has no timezone, so reading it locally reads somebody
+        // else's day; see the timezone test in tests/progressStorage.test.ts.
+        expect(readProgress('easy-1')!.savedAt)
+            .toBe(Date.UTC(2026, 8, 15, 23, 59, 59, 999) + 12 * 60 * 60 * 1000)
     })
 })
 
@@ -815,7 +854,7 @@ describe('the save is stamped with an absolute instant', () => {
 
     it('leaves the stamp alone on a puzzle that did not change', () => {
         /*
-         * `savedOn` means "when this puzzle last moved", not "when the app was last open".
+         * `savedAt` means "when this puzzle last moved", not "when the app was last open".
          * Restamping every record on every write would make retention unreachable: someone
          * who opens the game daily would keep every puzzle ever served alive forever, which
          * is the unbounded growth the window exists to stop.

@@ -175,7 +175,7 @@ export class LevelStore {
          * came straight back onto the screen having just been deleted.
          */
         const now = Date.now()
-        const fromLegacy = migrateLegacy()
+        const fromLegacy = migrateLegacy(now)
         pruneStorage(now)
         this.saved = live({ ...fromLegacy, ...readAllProgress() }, now)
         this.reconcileSessions(definitions)
