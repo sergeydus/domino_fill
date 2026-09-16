@@ -1,4 +1,3 @@
-import type { DominoLevel } from "../dominoFill/dominoBoard";
 
 /**
  * The immutable half of a puzzle: rocks, targets, and identity.
@@ -25,6 +24,23 @@ export type PuzzleDefinition = {
      */
     readonly columnTargets: string
     readonly rowTargets: string
+}
+
+/**
+ * A puzzle as the data file stores it.
+ *
+ * The home of this type used to be the generator, which meant every consumer of a *stored*
+ * board imported the thing that *produces* boards -- and the generator has now left `app/`
+ * entirely (spec P1-6). It belongs here, next to the definition it is parsed into.
+ *
+ * The field names are the file's and are inverted: `boardHorizontalNumbers` holds the
+ * per-COLUMN sums. See the note on `columnTargets` below.
+ */
+export type DominoLevel = {
+    board: (number | null)[][]
+    boardHorizontalNumbers: string
+    boardVerticalNumbers: string
+    completed?: boolean
 }
 
 export type StoredPuzzle = DominoLevel & { puzzleId: string }
