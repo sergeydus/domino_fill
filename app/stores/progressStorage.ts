@@ -262,6 +262,62 @@ export const pruneStorage = (now: number, retentionDays = RETENTION_DAYS): strin
     return removed
 }
 
+/**
+ * Bring a v1 document forward, and say what it held.
+ *
+ * v1 kept every puzzle in one document under `dominoFill.progress.v1`, stamped with a local
+ * day string — the two things v2 replaces. Each entry is rewritten under its own key with an
+ * absolute `savedAt` taken from local midnight of the stored day: the earliest instant that
+ * day could have been, so a migrated record ages out no later than it would have done, and
+ * never sooner.
+ *
+ * The order here is the whole of it, and an earlier version had it backwards. It deleted the
+ * legacy key immediately after reading the string, then parsed, then wrote — so a storage
+ * that refused the second of several writes destroyed the only complete copy that existed.
+ * Nothing could recover it: the document was gone and the records had never landed. So:
+ *
+ * 1. parse and validate everything *before* deleting anything;
+ * 2. treat an existing v2 record as authoritative and never write over it, which is what
+ *    makes a re-run after a partial failure safe rather than destructive;
+ * 3. delete the legacy key only once every valid entry is represented in v2;
+ * 4. keep the document for a later attempt if any write failed.
+ *
+ * Returns the valid legacy records *not* already superseded by v2, so the caller can restore
+ * them in memory even when nothing could be written. Storage may be blocked for an entire
+ * session; the player should still see their board rather than an empty one.
+ */
+export const migrateLegacy = (): Record<string, PuzzleProgress> => {
+    const storage = store()
+    if (!storage) return {}
+    try {
+        const raw = storage.getItem(LEGACY_KEY)
+        if (raw === null) return {}
+
+        const entries = legacyEntries(raw)
+        if (entries === null) {
+            // Not a v1 document at all, so there is nothing to lose by retiring it — and
+            // leaving it would mean re-examining the same damaged value on every load.
+            storage.removeItem(LEGACY_KEY)
+            return {}
+        }
+
+        const carried: Record<string, PuzzleProgress> = {}
+        let allSafe = true
+        for (const [puzzleId, record] of Object.entries(entries)) {
+            // Anything already in v2 is newer by construction: it was either migrated on an
+            // earlier attempt or written by play since.
+            if (readProgress(puzzleId) !== null) continue
+            carried[puzzleId] = record
+            if (!writeProgress(puzzleId, record)) allSafe = false
+        }
+
+        if (allSafe) storage.removeItem(LEGACY_KEY)
+        return carried
+    } catch {
+        return {}
+    }
+}
+
 /** Local midnight of a `YYYY-MM-DD` string, or null if it is not one. */
 const midnightOf = (savedOn: unknown): number | null => {
     if (typeof savedOn !== 'string') return null
@@ -273,45 +329,33 @@ const midnightOf = (savedOn: unknown): number | null => {
 }
 
 /**
- * Bring a v1 document forward, once.
+ * The valid records inside a v1 document, or null if it is not one.
  *
- * v1 kept every puzzle in one document under `dominoFill.progress.v1`, stamped with a local
- * day string — the two things v2 exists to fix. Each entry is rewritten under its own key
- * with an absolute `savedAt` taken from local midnight of the stored day: the earliest
- * instant that day could have been, so a migrated record ages out no later than it would
- * have done before, and never sooner.
- *
- * Returns how many records were carried over. The old key is removed either way, so this
- * cannot run twice and a document that yields nothing is retired rather than re-examined on
- * every load.
+ * Pure, and separate from the storage dance above so that "what the old format meant" can be
+ * tested without a browser. An entry that does not survive validation is skipped rather than
+ * failing the document: one unreadable puzzle should not cost the other eight.
  */
-export const migrateLegacy = (): number => {
-    const storage = store()
-    if (!storage) return 0
+export const legacyEntries = (raw: string): Record<string, PuzzleProgress> | null => {
+    let parsed: unknown
     try {
-        const raw = storage.getItem(LEGACY_KEY)
-        if (raw === null) return 0
-        storage.removeItem(LEGACY_KEY)
-
-        const parsed: unknown = JSON.parse(raw)
-        if (typeof parsed !== 'object' || parsed === null) return 0
-        const document = parsed as { version?: unknown, puzzles?: unknown }
-        if (document.version !== 1) return 0
-        if (typeof document.puzzles !== 'object' || document.puzzles === null) return 0
-
-        let carried = 0
-        for (const [puzzleId, value] of Object.entries(document.puzzles as Record<string, unknown>)) {
-            if (typeof value !== 'object' || value === null) continue
-            const legacy = { ...value as Record<string, unknown> }
-            const savedAt = midnightOf(legacy.savedOn)
-            if (savedAt === null) continue
-            delete legacy.savedOn
-            const candidate = { ...legacy, savedAt }
-            if (!isProgress(candidate)) continue
-            if (writeProgress(puzzleId, candidate)) carried++
-        }
-        return carried
+        parsed = JSON.parse(raw)
     } catch {
-        return 0
+        return null
     }
+    if (typeof parsed !== 'object' || parsed === null) return null
+    const document = parsed as { version?: unknown, puzzles?: unknown }
+    if (document.version !== 1) return null
+    if (typeof document.puzzles !== 'object' || document.puzzles === null) return null
+
+    const entries: Record<string, PuzzleProgress> = {}
+    for (const [puzzleId, value] of Object.entries(document.puzzles as Record<string, unknown>)) {
+        if (typeof value !== 'object' || value === null) continue
+        const legacy = { ...value as Record<string, unknown> }
+        const savedAt = midnightOf(legacy.savedOn)
+        if (savedAt === null) continue
+        delete legacy.savedOn
+        const candidate = { ...legacy, savedAt }
+        if (isProgress(candidate)) entries[puzzleId] = candidate
+    }
+    return entries
 }

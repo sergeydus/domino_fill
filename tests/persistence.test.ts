@@ -14,17 +14,19 @@ import {
  * `tests/progressStorage.test.ts` pins the rules in isolation; this pins the wiring, where
  * the dangerous mistakes are of two kinds.
  *
- * **Destroying the save while trying to write it.** A `persist` that replaced the document
- * instead of merging into it would delete every record for a puzzle today does not serve,
- * and the data file cycles, so that is most of them.
+ * **Destroying the save while trying to write it.** Every version of this feature has had a
+ * variant of the same bug: a save that rewrote more than it changed, and a migration that
+ * deleted the old copy before the new one had landed. Both are cases of doing the destructive
+ * half of an operation first.
  *
  * **Trusting the record.** A restore that does not check what it read against the definition
  * can put the board into a state the rules cannot produce -- a domino where a rock now is.
  *
- * An earlier version of this comment also claimed hydrate-then-persist ordering was
- * load-bearing. Mutation-testing disproved it: reactions do not fire on creation, and
- * `setBoards` is one MobX action, so the effect cannot observe a half-hydrated store. The
- * merge above is what actually protects the data.
+ * An earlier version of this comment claimed hydrate-then-persist ordering was load-bearing.
+ * Mutation-testing disproved it: reactions do not fire on creation, and `setBoards` is one
+ * MobX action, so the effect cannot observe a half-hydrated store. What protects the data is
+ * that a save names only its own puzzle's key, and that the migration deletes nothing until
+ * everything it held is safely across.
  */
 
 let root: RootStore
@@ -577,6 +579,35 @@ describe('a v1 document is carried forward', () => {
         },
     })
 
+    /** The definition hash of a served puzzle, which a legacy record has to match. */
+    const definitionHashFor = (puzzleId: string) => {
+        const probe = new RootStore()
+        runInAction(() => { probe.boardsStore.setBoards(response()) })
+        const hash = probe.boardsStore.sessions.get(puzzleId)!.definition.definitionHash
+        window.localStorage.clear()
+        return hash
+    }
+
+    /** A v1 document holding two puzzles, so a migration can fail halfway. */
+    const twoPuzzleDocument = () => {
+        const hash = definitionHashFor('easy-1')
+        const played = () => {
+            const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+            board[0][0] = -1
+            board[1][1] = 1
+            board[2][1] = 0
+            return board
+        }
+        window.localStorage.setItem(LEGACY_KEY, JSON.stringify({
+            version: 1,
+            puzzles: {
+                'easy-1': { definitionHash: hash, board: played(), completed: false, savedOn: '2026-09-15' },
+                'easy-2': { definitionHash: hash, board: played(), completed: false, savedOn: '2026-09-15' },
+            },
+        }))
+        return hash
+    }
+
     it('restores a board saved by the previous version', () => {
         runInAction(() => { root.boardsStore.setBoards(response()) })
         const hash = root.boardsStore.sessions.get('easy-1')!.definition.definitionHash
@@ -599,6 +630,91 @@ describe('a v1 document is carried forward', () => {
         window.localStorage.setItem(LEGACY_KEY, '{not a document')
         reload()
         expect(window.localStorage.getItem(LEGACY_KEY)).toBeNull()
+    })
+
+    it('does not delete the only copy when a write fails', () => {
+        /*
+         * The migration reads one document and writes several records, and storage can refuse
+         * halfway through -- a full quota, or Safari private mode. Deleting the legacy key
+         * before those writes means a failure destroys the only complete copy that existed.
+         * Nothing can recover it afterwards: the v1 document is gone and the v2 records were
+         * never written.
+         */
+        const hash = twoPuzzleDocument()
+        let writes = 0
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                // The *second* record fails, so the migration is genuinely half done.
+                if (key.startsWith(KEY_PREFIX) && ++writes === 2) throw new Error('QuotaExceededError')
+                Storage.prototype.setItem.call(this, key, value)
+            })
+
+        reload()
+        setItem.mockRestore()
+
+        expect(window.localStorage.getItem(LEGACY_KEY), 'the only copy was deleted').not.toBeNull()
+        expect(hash).toBeTruthy()
+    })
+
+    it('finishes the job on a later load, once storage will take it', () => {
+        twoPuzzleDocument()
+        let writes = 0
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation(function (this: Storage, key: string, value: string) {
+                if (key.startsWith(KEY_PREFIX) && ++writes === 2) throw new Error('QuotaExceededError')
+                Storage.prototype.setItem.call(this, key, value)
+            })
+        reload()
+        setItem.mockRestore()
+
+        reload()
+
+        expect(readProgress('easy-1'), 'first record').not.toBeNull()
+        expect(readProgress('easy-2'), 'second record').not.toBeNull()
+        expect(window.localStorage.getItem(LEGACY_KEY), 'retired once complete').toBeNull()
+    })
+
+    it('shows the saved boards even while the migration cannot be written', () => {
+        // Storage may stay blocked for the whole session. The player should still see their
+        // board rather than an empty one that silently discards their progress.
+        twoPuzzleDocument()
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+            .mockImplementation(() => { throw new Error('QuotaExceededError') })
+
+        const store = reload()
+        setItem.mockRestore()
+
+        expect(store.sessions.get('easy-1')!.board[1][1], 'restored in memory').toBe(1)
+    })
+
+    it('never lets a v1 record overwrite newer v2 progress', () => {
+        /*
+         * Restartability has a cost if it is naive: a migration that runs again after a
+         * partial failure would put the old document back over work done since. An existing
+         * v2 record is the newer one by construction, so it wins.
+         */
+        // The hash comes from the document helper, not from a second `definitionHashFor` call:
+        // that helper clears storage, which wiped the legacy key and left this test passing
+        // without a migration ever running.
+        const hash = twoPuzzleDocument()
+        const newer = {
+            definitionHash: hash,
+            board: (() => {
+                const board = Array.from({ length: 4 }, () => Array<number | null>(4).fill(null))
+                board[0][0] = -1
+                board[2][2] = 0
+                board[2][3] = 2
+                return board
+            })(),
+            completed: false,
+            savedAt: Date.now(),
+        }
+        window.localStorage.setItem(`${KEY_PREFIX}easy-1`, JSON.stringify(newer))
+
+        reload()
+
+        expect(readProgress('easy-1')!.board[2][3], 'v2 progress was overwritten').toBe(2)
+        expect(readProgress('easy-1')!.board[1][1]).toBeNull()
     })
 
     it('dates a migrated record from local midnight, so it ages no sooner than before', () => {

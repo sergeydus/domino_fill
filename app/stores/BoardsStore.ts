@@ -138,13 +138,26 @@ export class LevelStore {
          * window in which the empty board is the live one. Doing it in this order means a
          * restored session is never observed empty.
          */
-        // A v1 document, if this browser still has one, becomes v2 records before anything
-        // reads them. Retention then runs at load rather than waiting for the next move --
-        // otherwise it never runs at all for the player who has stopped playing, which is
-        // exactly whose data is sitting there.
-        migrateLegacy()
+        /*
+         * A v1 document, if this browser still has one, becomes v2 records before anything
+         * reads them. Retention then runs at load rather than waiting for the next move --
+         * otherwise it never runs at all for the player who has stopped playing, which is
+         * exactly whose data is sitting there.
+         *
+         * The migration hands back what the old document held, and it fills the gaps in what v2
+         * actually contains. That matters when storage is refusing writes: the records could
+         * not be saved in the new format, but the boards are still the player's and should
+         * still be on screen.
+         *
+         * The two cannot disagree, and mutation-testing says so: `migrateLegacy` skips any
+         * puzzle that already has a v2 record, so a key present in both was written by this
+         * very call and holds the same thing. Reversing the spread changes nothing. It is
+         * written v2-last because that is the invariant a reader should take away -- a v2
+         * record is always the authority -- not because the order is doing work.
+         */
+        const fromLegacy = migrateLegacy()
         pruneStorage(Date.now())
-        this.saved = readAllProgress()
+        this.saved = { ...fromLegacy, ...readAllProgress() }
         this.reconcileSessions(definitions)
 
         /*
@@ -193,13 +206,13 @@ export class LevelStore {
      * A single computed rather than a reaction per session: sessions come and go on a day
      * rollover, and a per-session subscription would have to be disposed in step with them.
      * Nine boards of at most 64 small cells is a few kilobytes, so rebuilding the whole
-     * document on a move costs less than the bookkeeping would.
+     * snapshot on a move costs less than the bookkeeping would.
      */
     get progressSnapshot(): Record<string, SessionSnapshot> {
         const snapshot: Record<string, SessionSnapshot> = {}
         // Driven by what is *served*, not by what happens to be in the Map. A session that
-        // outlived its puzzle must not write itself back into the document -- that is how a
-        // pruned record returns from the dead with a fresh timestamp.
+        // outlived its puzzle must not write itself back -- that is how a pruned record
+        // returns from the dead with a fresh timestamp.
         for (const definition of this.servedDefinitions) {
             const session = this.sessions.get(definition.puzzleId)
             if (!session) continue
@@ -212,7 +225,7 @@ export class LevelStore {
     }
 
     /**
-     * Merge the live sessions into the document and write it.
+     * Save the sessions that have changed here.
      *
      * Two decisions worth stating, because both look like extra work until the alternative is
      * spelled out.
@@ -229,7 +242,7 @@ export class LevelStore {
      * removes that entirely rather than narrowing it: there is no read-modify-write across
      * puzzles left to interleave.
      *
-     * **`savedOn` is stamped only on a record that actually changed.** It means "when this
+     * **`savedAt` is stamped only on a record that actually changed.** It means "when this
      * puzzle last moved", not "when the app was last open". Restamping everything on every
      * write would make retention meaningless: a player who opens the game daily would keep
      * every puzzle they had ever been served alive forever, which is exactly the unbounded
