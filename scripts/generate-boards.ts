@@ -163,7 +163,7 @@ export type GenerateOptions = {
     allow0Lines?: boolean
     /** Injectable so a test can generate the same board twice. Defaults to `Math.random`. */
     random?: () => number
-    /** How many rock layouts to try before giving up, so a bad request cannot hang. */
+    /** How many rock layouts to try before giving up, so a valid request cannot run forever. */
     attempts?: number
 }
 
@@ -173,15 +173,64 @@ export type GeneratedBoard = DominoLevel & {
     solution: (number | null)[][]
 }
 
-const scatterRocks = (size: number, rocks: number, random: () => number): (number | null)[][] => {
+/**
+ * Reject a configuration that describes no puzzle at all.
+ *
+ * The two outcomes are kept distinct on purpose. A `RangeError` means the *request* is
+ * nonsense — nineteen rocks on a 4x4, a board two and a half cells wide — and no number of
+ * attempts could ever help. `null` means the request was sensible and the search happened to
+ * come up empty, which is ordinary and worth retrying with a different seed. Collapsing the
+ * two would let a caller quietly loop forever over a request that can never be satisfied.
+ */
+const validate = (size: number, rocks: number, attempts: number) => {
+    if (!Number.isInteger(size) || size < 1)
+        throw new RangeError(`size must be an integer >= 1, got ${size}`)
+    if (!Number.isInteger(rocks) || rocks < 0 || rocks > size * size)
+        throw new RangeError(`rocks must be an integer in 0..${size * size} for size ${size}, got ${rocks}`)
+    if (!Number.isInteger(attempts) || attempts < 0)
+        throw new RangeError(`attempts must be an integer >= 0, got ${attempts}`)
+}
+
+/**
+ * Place exactly `rocks` rocks, drawing cells without replacement.
+ *
+ * The original drew a random cell and retried when it was already a rock:
+ *
+ *     while (placed < rocks) { ...; if (board[i][j] === -1) continue; ... }
+ *
+ * which does not terminate. Two ways: `rocks > size * size` exhausts the board and then spins
+ * forever, and so does an RNG that keeps returning the same cell — a constant `random` wedges
+ * it after the first placement. `attempts` did not help, because it bounds the *outer* loop
+ * and this loop is inside it. Neither case is theoretical: both were reproduced, and a
+ * synchronous spin cannot even be caught by a test timeout — it wedges the whole worker.
+ *
+ * A partial Fisher-Yates shuffle over the flat cell list has no retry to spin on. It draws
+ * each rock from the cells not yet drawn, so it consumes exactly `rocks` random numbers and
+ * returns after exactly `rocks` steps, whatever the RNG does.
+ */
+export const scatterRocks = (
+    size: number,
+    rocks: number,
+    random: () => number,
+): (number | null)[][] => {
+    validate(size, rocks, 0)
+
+    const cells = Array.from({ length: size * size }, (_, index) => index)
+    for (let taken = 0; taken < rocks; taken++) {
+        const remaining = cells.length - taken
+        // A hostile or broken RNG (NaN, 1, -1) must still yield a cell that exists, so the
+        // draw is clamped into range rather than trusted.
+        const offset = Math.floor(random() * remaining)
+        const pick = taken + (Number.isFinite(offset) ? Math.min(Math.max(offset, 0), remaining - 1) : 0)
+        const swap = cells[taken]
+        cells[taken] = cells[pick]
+        cells[pick] = swap
+    }
+
     const board: (number | null)[][] = Array.from({ length: size }, () => Array(size).fill(null))
-    let placed = 0
-    while (placed < rocks) {
-        const i = Math.floor(random() * size)
-        const j = Math.floor(random() * size)
-        if (board[i][j] === -1) continue
-        board[i][j] = -1
-        placed++
+    for (let taken = 0; taken < rocks; taken++) {
+        const cell = cells[taken]
+        board[Math.floor(cell / size)][cell % size] = -1
     }
     return board
 }
@@ -192,7 +241,10 @@ const scatterRocks = (size: number, rocks: number, random: () => number): (numbe
  * Rock layouts are drawn at random and rejected until one yields a single-solution target
  * pair, which is the same brute-force approach as before — the search is P1-6's to replace.
  * What has changed is that the result is *correct*: the targets it emits are the ones the
- * runtime parser reads back.
+ * runtime parser reads back, and the loop now terminates for every input.
+ *
+ * Returns `null` when a valid request found no puzzle within `attempts`; throws `RangeError`
+ * when the request itself is impossible.
  */
 export const generateBoard = ({
     size = 8,
@@ -201,6 +253,8 @@ export const generateBoard = ({
     random = Math.random,
     attempts = 500,
 }: GenerateOptions = {}): GeneratedBoard | null => {
+    validate(size, rocks, attempts)
+
     for (let attempt = 0; attempt < attempts; attempt++) {
         const puzzle = scatterRocks(size, rocks, random)
         if (!rocksArePlayable(puzzle)) continue

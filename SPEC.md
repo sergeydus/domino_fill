@@ -227,9 +227,9 @@ positioning bug, but do not expect a spelling change to fix anything.
 | k0 | `Tutorial.tsx:27` | `absolute w-full h-full` with no positioned ancestor covers only the first viewport. (`z-999` itself is valid — see D9.) |
 | k | ~~`useLocalhost.ts:4`~~ | **✅ Fixed in P0-1.** Read `localStorage` during render (latent SSR crash); misnamed; and wrote `JSON.stringify(value)` while `BoardsStore.ts:29` read `=== 'true'` on the same key. Replaced by `app/hooks/useLocalStorage.ts`; the duplicate encoding is gone with the dead field. |
 | l | ~~`SizeStore.ts:12`~~ | **✅ Fixed in P0-3.** `window.onresize =` clobbered any other listener, was never removed, and was unthrottled. Resize is now owned by `useAvailableBoardBox`: `addEventListener`, coalesced to one measurement per animation frame, removed on unmount, and paired with a `ResizeObserver` and `visualViewport`. |
-| m | `SkibidiBoard.ts` | 183-line dead copy of `dominoBoard.ts`, never imported. |
+| m | `SkibidiBoard.ts` | 183-line dead copy of the old `dominoBoard.ts` (itself now deleted), never imported. Still present; scheduled for deletion in **P2-1**. |
 | n | `app/constants.ts` | Unused heterogeneous enum. |
-| o | `dominoBoard.ts:110` | `findFirstEmpty` uses `i < board[i].length`; at `i === n` this **throws**, it doesn't merely mis-bound. |
+| o | ~~`dominoBoard.ts:110`~~ | **✅ Fixed in P1-6 (row 18, stage 1).** `findFirstEmpty` used `i < board[i].length` as the *outer* loop's condition, reading the row it had not reached yet, so at `i === n` it threw rather than merely mis-bounding — it never fired only because every caller had already checked the board was not full. `dominoBoard.ts` is deleted; the replacement `firstEmpty()` in `scripts/generate-boards.ts` bounds each loop by its own axis. |
 | p | `layout.tsx:17` | Metadata is still `"Create Next App"`. |
 | q | `globals.css:15` | A dark-mode block darkens `body` while every game surface is hard-coded light grey. |
 | r | ~~`DominoClient.tsx:33`~~ | **✅ Fixed in P1-1.** `onContextMenu` was bound to the whole wrapper, so right-clicking the difficulty slider or the level arrows rotated the piece too, and Android fired it on long-press. The handler is gone with the orientation mode it toggled. |
@@ -888,6 +888,15 @@ Move `DominoBoard` into `scripts/generate-boards.ts`. **Fix the output contract 
 emit comma-joined sums and repair `allow0Lines`, or the generator ships uncompletable boards.
 Replace enumerate-every-solution with a search that **aborts on the second solution**.
 
+The generator must also **terminate for every input**, which the original did not: rocks were
+placed by drawing a cell and retrying when it was taken, so more rocks than cells — or an RNG
+that kept returning the same cell — spun forever. `attempts` did not cover this, because it
+bounds the outer loop and the spin is inside it. Placement draws without replacement instead.
+Two failure modes are kept distinct: an impossible **configuration** (`rocks > size²`, a
+fractional size, negative attempts) throws `RangeError`, because no retry could ever help; a
+valid request whose **search** came up empty returns `null`, which is worth retrying with
+another seed. This matters most at 18c, which generates thousands of boards unattended.
+
 **Pick the content strategy explicitly** — "a new puzzle every day indefinitely" with no backend
 and no runtime generation is not satisfiable by a finite JSON bundle, and the draft asserted all
 three at once. The options, in order of preference:
@@ -1092,7 +1101,7 @@ whole of P0 into one oversized set.)
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
-| 18a | **P1-6** generator contract — **✅ done**; fixes D10-j. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser | unit |
+| 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-up: rock placement draws **without replacement** so the generator terminates for every input, and an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null` | unit |
 | 18b | **P1-6** solver contract: a pure production solver with distinct results for solved / unsolvable / multiple / invalid / budget-exhausted, a deterministic node budget, partially-played boards left unmutated, uniqueness stopping at solution two | unit |
 | 18c | **P1-6** content pipeline: pre-generated fixed horizon, monthly static chunks, append-only date→puzzleId map, 12-month CI guard, generated JSON kept out of the JS import graph | unit |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
