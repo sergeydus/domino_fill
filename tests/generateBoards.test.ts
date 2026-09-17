@@ -32,6 +32,29 @@ const seeded = (seed: number) => {
     }
 }
 
+/**
+ * An RNG that refuses to be asked more than `budget` times.
+ *
+ * Every RNG in the termination tests is budgeted, and not as decoration: with a plain
+ * `() => 0` the retry-loop mutation *hangs* the run rather than failing it, and a mutation
+ * that hangs proves nothing a reviewer can read. The budget turns a wedged worker into a
+ * named failure.
+ */
+const budgeted = (budget: number, value = 0) => {
+    let calls = 0
+    const next: (() => number) & { calls: () => number } = Object.assign(
+        () => {
+            if (++calls > budget) throw new Error(`RNG exhausted after ${budget} draws`)
+            return value
+        },
+        { calls: () => 0 },
+    )
+    // A plain property, not `Object.assign(next, { get calls() {...} })`: assign copies a
+    // getter's *value* at the time of the call, which is always zero.
+    next.calls = () => calls
+    return next
+}
+
 /** Parse generator output exactly as the app does, and judge it by the app's rules. */
 const runtimeAccepts = (generated: {
     board: (number | null)[][]
@@ -232,10 +255,14 @@ describe('a generated board satisfies the runtime that has to play it', () => {
         expect(again).toEqual(first)
     })
 
-    it('gives up rather than hanging when nothing can satisfy the request', () => {
-        // An odd number of playable cells can never be tiled by dominoes.
-        const impossible = generateBoard({ size: 3, rocks: 0, random: seeded(1), attempts: 20 })
-        expect(impossible).toBeNull()
+    it('gives up rather than hanging when the search comes up empty', () => {
+        // 15 rocks on a 5x5 leaves 10 playable cells -- an even, perfectly legal request that
+        // this seed simply cannot turn into a single-solution puzzle within the budget.
+        // It used to be a 3x3 with no rocks, which is nine playable cells and so cannot be
+        // tiled at all; that is now a RangeError, and using it here conflated "no puzzle
+        // found" with "no puzzle could exist".
+        const empty = generateBoard({ size: 5, rocks: 15, random: seeded(2), attempts: 25 })
+        expect(empty).toBeNull()
     })
 })
 
@@ -317,22 +344,6 @@ describe('the generator terminates for every input', () => {
      * fail it, and a mutation that hangs proves nothing a reviewer can read.
      */
 
-    /** An RNG that refuses to be asked more than `budget` times. */
-    const budgeted = (budget: number, value = 0) => {
-        let calls = 0
-        const next: (() => number) & { calls: () => number } = Object.assign(
-            () => {
-                if (++calls > budget) throw new Error(`RNG exhausted after ${budget} draws`)
-                return value
-            },
-            { calls: () => 0 },
-        )
-        // A plain property, not `Object.assign(next, { get calls() {...} })`: assign copies a
-        // getter's *value* at the time of the call, which is always zero.
-        next.calls = () => calls
-        return next
-    }
-
     const rockCount = (board: (number | null)[][]) =>
         board.flat().filter(cell => cell === -1).length
 
@@ -375,28 +386,56 @@ describe('the generator terminates for every input', () => {
     })
 
     it.each([
-        ['more rocks than cells', { size: 2, rocks: 5 }],
-        ['a negative rock count', { size: 4, rocks: -1 }],
-        ['a fractional rock count', { size: 4, rocks: 2.5 }],
-        ['a zero-sized board', { size: 0, rocks: 0 }],
-        ['a negative size', { size: -4, rocks: 0 }],
-        ['a fractional size', { size: 2.5, rocks: 1 }],
-        ['negative attempts', { size: 4, rocks: 2, attempts: -1 }],
-        ['fractional attempts', { size: 4, rocks: 2, attempts: 1.5 }],
-    ])('throws RangeError for %s', (_label, options) => {
-        // An impossible *request* is a programming error and is reported as one. It is
-        // deliberately not `null`: `null` means "this valid request found nothing, try another
-        // seed", and a caller looping on that would loop forever on a request like these.
+        ['more rocks than cells', { size: 2, rocks: 5 }, /rocks must be an integer in 0\.\.4/],
+        ['a negative rock count', { size: 4, rocks: -1 }, /rocks must be an integer/],
+        ['a fractional rock count', { size: 4, rocks: 2.5 }, /rocks must be an integer/],
+        ['a zero-sized board', { size: 0, rocks: 0 }, /size must be an integer/],
+        ['a negative size', { size: -4, rocks: 0 }, /size must be an integer/],
+        ['a fractional size', { size: 2.5, rocks: 1 }, /size must be an integer/],
+        ['negative attempts', { size: 4, rocks: 2, attempts: -1 }, /attempts must be an integer/],
+        ['fractional attempts', { size: 4, rocks: 2, attempts: 1.5 }, /attempts must be an integer/],
+        ['an odd number of playable cells', { size: 3, rocks: 0 }, /must be even/],
+        ['an odd playable count from an odd rock count', { size: 4, rocks: 3 }, /must be even/],
+        ['a board with every cell rocked out', { size: 4, rocks: 16 }, /at least 2 playable cells/],
+        ['a board with a single playable cell', { size: 3, rocks: 8 }, /at least 2 playable cells/],
+    ])('throws RangeError for %s', (_label, options, because) => {
+        /*
+         * An impossible *request* is a programming error and is reported as one. It is
+         * deliberately not `null`: `null` means "this valid request found nothing, try another
+         * seed", and a caller looping on that would loop forever on a request like these.
+         *
+         * Each case pins *which* guard fires, not merely that something did. Asserting
+         * `RangeError` alone was not enough: mutation-testing showed that deleting the
+         * `rocks <= size * size` bound changed nothing, because `validatePlayable` caught the
+         * same three cases a moment later for a different reason and the test could not tell
+         * them apart. The single-playable-cell case is the same story in reverse -- parity
+         * would also reject one cell, so only the message distinguishes the minimum guard's
+         * boundary from an off-by-one.
+         */
         expect(() => generateBoard({ random: seeded(1), ...options })).toThrow(RangeError)
+        expect(() => generateBoard({ random: seeded(1), ...options })).toThrow(because)
+    })
+
+    it.each([
+        ['more rocks than cells', 2, 5],
+        ['a negative rock count', 4, -1],
+        ['a fractional rock count', 4, 2.5],
+        ['a zero-sized board', 0, 0],
+        ['a fractional size', 2.5, 1],
+    ])('rejects %s in the sampler too, not only in the generator', (_label, size, rocks) => {
+        // `scatterRocks` is exported and validates independently, so the bound has to be
+        // tested here as well -- through `generateBoard` the playable-cell guard shadows it.
+        expect(() => scatterRocks(size, rocks, budgeted(0))).toThrow(RangeError)
     })
 
     it('returns null, not an error, when a valid request finds nothing', () => {
         // Zero attempts is a legal request that searches nothing.
         expect(generateBoard({ size: 4, rocks: 2, attempts: 0, random: seeded(1) })).toBeNull()
 
-        // And a real search that cannot succeed: nine playable cells cannot be tiled by
-        // dominoes, so no number of attempts would help -- but the request itself is sound.
-        expect(generateBoard({ size: 3, rocks: 0, attempts: 20, random: seeded(1) })).toBeNull()
+        // And a real search that ran and found nothing. Both configurations are sound -- the
+        // distinction being drawn is between a search that failed and a request that could
+        // never succeed, and only the first is `null`.
+        expect(generateBoard({ size: 5, rocks: 15, attempts: 25, random: seeded(2) })).toBeNull()
     })
 
     it('does not consume randomness when there is nothing to search', () => {
@@ -408,5 +447,57 @@ describe('the generator terminates for every input', () => {
         // The RangeError has to come from validation, not from an exhausted RNG part-way
         // through a placement that was never going to finish.
         expect(() => generateBoard({ size: 2, rocks: 5, random: budgeted(0) })).toThrow(RangeError)
+    })
+})
+
+describe('a request that leaves no room for a puzzle', () => {
+    /*
+     * These are configuration errors, not unlucky searches, and the difference is the whole
+     * point of the two-outcome contract: a caller that retries on `null` would retry forever.
+     *
+     * The odd case is arithmetic -- a domino covers two cells -- and used to be reported as
+     * `null` after grinding through every attempt. The all-rock case is worse, because it did
+     * not fail at all: every check downstream waves it through and the generator returns a
+     * puzzle the player finds already solved.
+     */
+
+    it('rejects an odd playable count rather than searching for the impossible', () => {
+        // Nine playable cells. Verified before the fix: this returned `null`, i.e. it was
+        // reported as "try another seed" for something no seed could ever produce.
+        expect(() => generateBoard({ size: 3, rocks: 0, random: seeded(1) })).toThrow(RangeError)
+        expect(() => generateBoard({ size: 3, rocks: 0, random: seeded(1) }))
+            .toThrow(/must be even/)
+    })
+
+    it('rejects a board with every cell rocked out', () => {
+        /*
+         * Verified before the fix: this returned a complete `GeneratedBoard` --
+         * an all-rock board with targets "0,0,0,0" / "0,0,0,0" -- because `rocksArePlayable`
+         * skips rock cells and finds nothing to object to, and `firstEmpty` returns null at
+         * once so the empty tiling is counted as a solution with count 1.
+         */
+        expect(() => generateBoard({ size: 4, rocks: 16, random: seeded(1) })).toThrow(RangeError)
+        expect(() => generateBoard({ size: 4, rocks: 16, random: seeded(1) }))
+            .toThrow(/at least 2 playable cells/)
+    })
+
+    it('still accepts the smallest board that can hold one domino', () => {
+        // The guard is a floor, not an excuse to reject small boards: two playable cells is
+        // exactly one domino, and that is a legal puzzle.
+        const generated = generateBoard({ size: 2, rocks: 2, random: seeded(1) })
+        expect(generated).not.toBeNull()
+        expect(generated!.board.flat().filter(cell => cell === -1)).toHaveLength(2)
+
+        const { full, matches } = runtimeAccepts(generated!)
+        expect(full).toBe(true)
+        expect(matches).toBe(true)
+    })
+
+    it('leaves the sampler free to rock out every cell', () => {
+        // `scatterRocks` is a placement primitive, not a puzzle factory. Rocking out the whole
+        // board is a legitimate thing to ask it for -- it is only `generateBoard` that has an
+        // opinion about whether the leftovers make a puzzle.
+        const board = scatterRocks(4, 16, budgeted(16))
+        expect(board.flat().every(cell => cell === -1)).toBe(true)
     })
 })

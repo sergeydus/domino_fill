@@ -892,10 +892,26 @@ The generator must also **terminate for every input**, which the original did no
 placed by drawing a cell and retrying when it was taken, so more rocks than cells — or an RNG
 that kept returning the same cell — spun forever. `attempts` did not cover this, because it
 bounds the outer loop and the spin is inside it. Placement draws without replacement instead.
-Two failure modes are kept distinct: an impossible **configuration** (`rocks > size²`, a
-fractional size, negative attempts) throws `RangeError`, because no retry could ever help; a
-valid request whose **search** came up empty returns `null`, which is worth retrying with
-another seed. This matters most at 18c, which generates thousands of boards unattended.
+Two failure modes are kept distinct: an impossible **configuration** throws `RangeError`,
+because no retry could ever help; a valid request whose **search** came up empty returns
+`null`, which is worth retrying with another seed. This matters most at 18c, which generates
+thousands of boards unattended.
+
+The impossible set includes the rock count itself, and that boundary is easy to get wrong in
+both directions:
+
+- `rocks > size²`, a fractional or negative size, rock count or attempt count.
+- **An odd number of playable cells.** A domino covers two, so `size² - rocks` must be even.
+  A 3×3 with no rocks leaves nine and can never be tiled; reporting that as `null` invites a
+  caller to retry forever.
+- **Fewer than two playable cells.** At `rocks === size²` every downstream check waves the
+  board through — `rocksArePlayable` skips rock cells and finds nothing to object to, and
+  `firstEmpty` returns `null` at once so the empty tiling counts as one solution — and the
+  generator emits an all-rock puzzle with all-zero targets that the player finds already
+  complete without making a move.
+
+The playable-cell rule belongs to `generateBoard`, not to the placement primitive:
+`scatterRocks` is a sampler, and rocking out every cell is a legitimate thing to ask it for.
 
 **Pick the content strategy explicitly** — "a new puzzle every day indefinitely" with no backend
 and no runtime generation is not satisfiable by a finite JSON bundle, and the draft asserted all
@@ -1101,7 +1117,7 @@ whole of P0 into one oversized set.)
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
-| 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-up: rock placement draws **without replacement** so the generator terminates for every input, and an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null` | unit |
+| 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
 | 18b | **P1-6** solver contract: a pure production solver with distinct results for solved / unsolvable / multiple / invalid / budget-exhausted, a deterministic node budget, partially-played boards left unmutated, uniqueness stopping at solution two | unit |
 | 18c | **P1-6** content pipeline: pre-generated fixed horizon, monthly static chunks, append-only date→puzzleId map, 12-month CI guard, generated JSON kept out of the JS import graph | unit |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |

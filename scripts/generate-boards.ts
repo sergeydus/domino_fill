@@ -181,6 +181,11 @@ export type GeneratedBoard = DominoLevel & {
  * attempts could ever help. `null` means the request was sensible and the search happened to
  * come up empty, which is ordinary and worth retrying with a different seed. Collapsing the
  * two would let a caller quietly loop forever over a request that can never be satisfied.
+ *
+ * This function covers *placement* only, which is why it does not ask about playable cells:
+ * `scatterRocks` is a sampler and rocking out every cell is a legitimate thing to ask it for.
+ * Whether the cells left over can hold a puzzle is `generateBoard`'s question — see
+ * `validatePlayable`.
  */
 const validate = (size: number, rocks: number, attempts: number) => {
     if (!Number.isInteger(size) || size < 1)
@@ -189,6 +194,31 @@ const validate = (size: number, rocks: number, attempts: number) => {
         throw new RangeError(`rocks must be an integer in 0..${size * size} for size ${size}, got ${rocks}`)
     if (!Number.isInteger(attempts) || attempts < 0)
         throw new RangeError(`attempts must be an integer >= 0, got ${attempts}`)
+}
+
+/**
+ * Reject a rock count that leaves cells no puzzle could use.
+ *
+ * Two conditions, both of which no number of attempts could ever rescue, so both belong on
+ * the `RangeError` path rather than being reported as a search that came up empty:
+ *
+ *   - **Even.** A domino covers two cells, so an odd number of playable cells can never be
+ *     tiled. A 3x3 with no rocks has nine, and the generator used to grind through every
+ *     attempt and hand back `null` as if another seed might help.
+ *   - **At least two.** With `rocks === size * size` nothing is playable, and every check
+ *     downstream waves it through: `rocksArePlayable` skips rocks and finds nothing to
+ *     object to, `firstEmpty` returns `null` at once so `solutionsByTargets` counts the empty
+ *     tiling as one solution, and the generator emits an all-rock board with all-zero targets
+ *     that the player finds already complete without making a move.
+ */
+const validatePlayable = (size: number, rocks: number) => {
+    const playable = size * size - rocks
+    if (playable < 2)
+        throw new RangeError(
+            `a puzzle needs at least 2 playable cells, but ${rocks} rocks on a ${size}x${size} board leave ${playable}`)
+    if (playable % 2 !== 0)
+        throw new RangeError(
+            `dominoes cover two cells each, so the playable count must be even, but ${rocks} rocks on a ${size}x${size} board leave ${playable}`)
 }
 
 /**
@@ -244,7 +274,8 @@ export const scatterRocks = (
  * runtime parser reads back, and the loop now terminates for every input.
  *
  * Returns `null` when a valid request found no puzzle within `attempts`; throws `RangeError`
- * when the request itself is impossible.
+ * when the request itself is impossible — which includes leaving an odd number of playable
+ * cells, or too few to hold a single domino.
  */
 export const generateBoard = ({
     size = 8,
@@ -254,6 +285,7 @@ export const generateBoard = ({
     attempts = 500,
 }: GenerateOptions = {}): GeneratedBoard | null => {
     validate(size, rocks, attempts)
+    validatePlayable(size, rocks)
 
     for (let attempt = 0; attempt < attempts; attempt++) {
         const puzzle = scatterRocks(size, rocks, random)
