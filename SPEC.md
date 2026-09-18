@@ -914,8 +914,28 @@ a search needing N nodes succeeds at `budget: N` and is exhausted at `N - 1`; `b
 visits nothing. Node counts are reproducible because the branch order is fixed — first empty
 cell in row-major order, vertical before horizontal.
 
-The generator now asks this solver for uniqueness instead of counting every solution, and a
-candidate whose check comes back `budget-exhausted` is **discarded rather than emitted**.
+Every shipped puzzle is solved by this solver, by `tests/corpus.test.ts`, within
+`DEFAULT_NODE_BUDGET` and with an order of magnitude to spare — the most expensive is about a
+thousand nodes. Without that test the "comfortably above every shipped board" claim would rot
+silently: a puzzle needing more would start returning `budget-exhausted`, check and hint would
+go vague, and nothing would fail.
+
+**Two budgets, bounding two different searches.** The generator asks the solver for
+uniqueness instead of counting every solution, and a candidate whose check comes back
+`budget-exhausted` is **discarded rather than emitted**. But `solverBudget` bounds only the
+*uniqueness proof*. Finding candidates to put to that proof is unbounded work of its own, and
+laziness is not a bound — it helps only when an early candidate is accepted, and does nothing
+for a layout whose early candidates are all rejected, or one that cannot be tiled at all and
+so explores its whole tree while yielding nothing to be lazy about (measured on empty
+untileable boards: 5×5 1ms, 7×7 213ms, climbing). So the candidate search carries its own
+`tilingBudget`, per rock layout; when it runs out the layout is abandoned and the next attempt
+begins. A cap on completed candidates would not do, since the untileable case completes none.
+
+`attempts`, `tilingBudget` and `solverBudget` together are what make generation finite, which
+is what 18c's unattended corpus run leans on. All three are validated **eagerly**, before the
+attempt loop: `generateBoard({ attempts: 0, solverBudget: -1 })` used to return `null`,
+because the only check lived inside `solve` and the loop never called it. Whether a
+configuration error is reported must not depend on how far the search happens to get.
 
 The generator must also **terminate for every input**, which the original did not: rocks were
 placed by drawing a cell and retrying when it was taken, so more rocks than cells — or an RNG
@@ -1147,7 +1167,7 @@ whole of P0 into one oversized set.)
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
 | 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
-| 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator's exhaustive `solutionsByTargets` is replaced by it | unit |
+| 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator’s exhaustive `solutionsByTargets` is replaced by it, and the candidate search it feeds carries a **separate** `tilingBudget`; all shipped puzzles are solver-verified by `tests/corpus.test.ts` | unit |
 | 18c | **P1-6** content pipeline: pre-generated fixed horizon, monthly static chunks, append-only date→puzzleId map, 12-month CI guard, generated JSON kept out of the JS import graph | unit |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint**, built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |

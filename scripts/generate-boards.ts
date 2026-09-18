@@ -80,16 +80,40 @@ const firstEmpty = (board: (number | null)[][]): [number, number] | null => {
  * candidates.
  *
  * A generator function rather than an array, so a caller that accepts the first workable
- * candidate never pays for the rest — which is the usual case.
+ * candidate never pays for the rest — which is the usual case, but **is not a bound**.
+ *
+ * Laziness only avoids work when an early candidate is accepted. It does nothing for the two
+ * cases that actually cost: a layout whose early candidates are all rejected, and a layout
+ * that can never be tiled at all, which explores its whole tree while yielding *nothing* to
+ * be lazy about. Measured on empty untileable boards, yielding zero candidates throughout:
+ * 5x5 is 1ms, 7x7 is 213ms, and it keeps going up. So the search carries its own budget,
+ * counted the same way the solver counts — one node per visit to a search state, on entry,
+ * with the budget an exact ceiling.
+ *
+ * The return value says which way it ended. `for...of` discards it, which is fine for a
+ * caller that treats exhaustion and completion alike; drive the iterator by hand to read it.
  */
-export function* tilings(puzzle: (number | null)[][]): Generator<(number | null)[][]> {
-    const size = puzzle.length
+export type TilingOutcome = 'complete' | 'budget-exhausted'
 
-    function* recur(board: (number | null)[][]): Generator<(number | null)[][]> {
+/** How much tree one rock layout may be given before it is abandoned for another. */
+export const DEFAULT_TILING_BUDGET = 200_000
+
+export function* tilings(
+    puzzle: (number | null)[][],
+    budget: number = DEFAULT_TILING_BUDGET,
+): Generator<(number | null)[][], TilingOutcome> {
+    validateBudget('tilingBudget', budget)
+    const size = puzzle.length
+    let nodes = 0
+
+    function* recur(board: (number | null)[][]): Generator<(number | null)[][], TilingOutcome> {
+        if (nodes >= budget) return 'budget-exhausted'
+        nodes++
+
         const next = firstEmpty(board)
         if (!next) {
             yield board.map(row => [...row])
-            return
+            return 'complete'
         }
 
         const [i, j] = next
@@ -98,18 +122,20 @@ export function* tilings(puzzle: (number | null)[][]): Generator<(number | null)
             const attempt = board.map(row => [...row])
             attempt[i][j] = 1
             attempt[i + 1][j] = 0
-            yield* recur(attempt)
+            if ((yield* recur(attempt)) === 'budget-exhausted') return 'budget-exhausted'
         }
         // Horizontal: 0 on the left, 2 on the right.
         if (j + 1 < size && board[i][j + 1] === null) {
             const attempt = board.map(row => [...row])
             attempt[i][j] = 0
             attempt[i][j + 1] = 2
-            yield* recur(attempt)
+            if ((yield* recur(attempt)) === 'budget-exhausted') return 'budget-exhausted'
         }
+
+        return 'complete'
     }
 
-    yield* recur(puzzle)
+    return yield* recur(puzzle)
 }
 
 /**
@@ -172,6 +198,16 @@ export type GenerateOptions = {
      * board that might have two answers.
      */
     solverBudget?: number
+    /**
+     * The node budget the *candidate search* is given, per rock layout.
+     *
+     * Separate from `solverBudget`, and doing a different job. `solverBudget` bounds the
+     * proof that one candidate is unique; this bounds the hunt for candidates to put to that
+     * proof, which is unbounded work of its own — an untileable layout can explore an
+     * enormous tree while producing no candidates at all. When it runs out the rock layout is
+     * abandoned and the next attempt begins.
+     */
+    tilingBudget?: number
 }
 
 /** A generated puzzle, together with the solution it was built from. */
@@ -226,6 +262,19 @@ const validatePlayable = (size: number, rocks: number) => {
     if (playable % 2 !== 0)
         throw new RangeError(
             `dominoes cover two cells each, so the playable count must be even, but ${rocks} rocks on a ${size}x${size} board leave ${playable}`)
+}
+
+/**
+ * Reject a budget that is not a count.
+ *
+ * Eagerly, and from every entry point. `generateBoard({ attempts: 0, solverBudget: -1 })`
+ * used to return `null`, because the only validation happened inside `solve` and the loop
+ * that would have called it never ran. Whether a configuration error is reported should not
+ * depend on how far the search happens to get.
+ */
+const validateBudget = (name: string, value: number) => {
+    if (!Number.isInteger(value) || value < 0)
+        throw new RangeError(`${name} must be a non-negative integer, got ${value}`)
 }
 
 /**
@@ -284,6 +333,13 @@ export const scatterRocks = (
  * Candidates are keyed by their targets, because every tiling that produces the same targets
  * asks the same question, and asking it once is enough.
  *
+ * **Two budgets, bounding two different things.** `solverBudget` bounds each uniqueness
+ * proof; `tilingBudget` bounds the candidate search that feeds it. Neither subsumes the
+ * other: a rock layout can consume an unbounded amount of tree without ever producing a
+ * candidate for the solver to judge. `attempts` bounds how many rock layouts are tried, so
+ * the three together make the whole thing finite — which is what 18c's multi-year corpus
+ * will lean on.
+ *
  * Returns `null` when a valid request found no puzzle within `attempts`; throws `RangeError`
  * when the request itself is impossible — which includes leaving an odd number of playable
  * cells, or too few to hold a single domino.
@@ -295,16 +351,24 @@ export const generateBoard = ({
     random = Math.random,
     attempts = 500,
     solverBudget = DEFAULT_NODE_BUDGET,
+    tilingBudget = DEFAULT_TILING_BUDGET,
 }: GenerateOptions = {}): GeneratedBoard | null => {
     validate(size, rocks, attempts)
     validatePlayable(size, rocks)
+    // Before the loop, not inside it: with `attempts: 0` the loop never runs, and a bad
+    // budget would otherwise be reported as "found nothing" instead of as the mistake it is.
+    validateBudget('solverBudget', solverBudget)
+    validateBudget('tilingBudget', tilingBudget)
 
     for (let attempt = 0; attempt < attempts; attempt++) {
         const puzzle = scatterRocks(size, rocks, random)
         if (!rocksArePlayable(puzzle)) continue
 
         const asked = new Set<string>()
-        for (const tiling of tilings(puzzle)) {
+        // `for...of` discards the outcome deliberately: a layout whose candidate search ran
+        // out is abandoned exactly as one that ran dry is, and the next attempt begins. What
+        // must never happen is emitting on an incomplete proof, and only `solved` emits.
+        for (const tiling of tilings(puzzle, tilingBudget)) {
             // Every tiling sharing these targets has the same line sums, so the zero-line
             // question is settled by the targets and is asked before the expensive part.
             if (!allow0Lines && hasZeroLine(tiling)) continue

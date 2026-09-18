@@ -558,3 +558,167 @@ describe('a request that leaves no room for a puzzle', () => {
         expect(board.flat().every(cell => cell === -1)).toBe(true)
     })
 })
+
+describe('the candidate search is bounded too, not only the uniqueness proof', () => {
+    /*
+     * `solverBudget` bounds each uniqueness proof. It does nothing about the work of finding
+     * candidates to prove, and laziness is not a bound either -- it only helps when an early
+     * candidate is accepted. The cases that cost are a layout whose early candidates are all
+     * rejected, and one that cannot be tiled at all, which explores its whole tree while
+     * yielding nothing to be lazy about.
+     *
+     * Measured on empty untileable boards, all yielding zero candidates: 5x5 took 1ms, 7x7
+     * took 213ms, and it climbs from there. One outer attempt could therefore run
+     * effectively unbounded before advancing -- which matters most to 18c, where the corpus
+     * is generated unattended.
+     */
+
+    /** One deterministic rock layout: a constant RNG draws the same cells every attempt. */
+    const oneLayout = (over: Partial<Parameters<typeof generateBoard>[0]> = {}) =>
+        generateBoard({ size: 4, rocks: 2, attempts: 1, random: () => 0, ...over })
+
+    // Measured: this layout needs exactly 8 tiling nodes to reach its first usable candidate.
+    const LAYOUT_NEEDS = 8
+
+    it('abandons a rock layout whose candidate search runs out', () => {
+        expect(oneLayout({ tilingBudget: LAYOUT_NEEDS - 1 })).toBeNull()
+    })
+
+    it('succeeds at exactly the budget the search needs', () => {
+        const generated = oneLayout({ tilingBudget: LAYOUT_NEEDS })
+        expect(generated).not.toBeNull()
+        // And it is a real puzzle, not a half-finished one squeezed out by the boundary.
+        const { full, matches } = runtimeAccepts(generated!)
+        expect(full).toBe(true)
+        expect(matches).toBe(true)
+    })
+
+    it('changes the outcome, which is how we know the cap is doing something', () => {
+        // Removing the cap changes this from null to a board. A mutation that drops the
+        // budget fails here rather than hanging, because the fixture is tiny either way.
+        expect(oneLayout({ tilingBudget: 1 })).toBeNull()
+        expect(oneLayout()).not.toBeNull()
+    })
+
+    it('spends nothing when the budget is zero', () => {
+        expect(oneLayout({ tilingBudget: 0 })).toBeNull()
+    })
+
+    it('reports how the candidate search ended, so exhaustion is distinguishable', () => {
+        /*
+         * `for...of` throws the outcome away, which is right for `generateBoard` -- a layout
+         * that ran out is abandoned exactly as one that ran dry is. But the two must be
+         * *distinguishable*, or there is no way to test that the budget fires at all.
+         */
+        const layout: (number | null)[][] = [
+            [-1, -1, null, null],
+            [null, null, null, null],
+            [null, null, null, null],
+            [null, null, null, null],
+        ]
+        const drain = (budget?: number) => {
+            const iterator = budget === undefined ? tilings(layout) : tilings(layout, budget)
+            let yielded = 0
+            let step = iterator.next()
+            while (!step.done) { yielded++; step = iterator.next() }
+            return { outcome: step.value, yielded }
+        }
+
+        // Measured: 18 tilings, the first at 8 nodes, the whole tree walked in 75.
+        expect(drain()).toEqual({ outcome: 'complete', yielded: 18 })
+        expect(drain(75)).toEqual({ outcome: 'complete', yielded: 18 })
+        expect(drain(74).outcome).toBe('budget-exhausted')
+        expect(drain(8)).toEqual({ outcome: 'budget-exhausted', yielded: 1 })
+        expect(drain(7)).toEqual({ outcome: 'budget-exhausted', yielded: 0 })
+        expect(drain(0)).toEqual({ outcome: 'budget-exhausted', yielded: 0 })
+    })
+
+    it('reports exhaustion even when the last branch tried was the vertical one', () => {
+        /*
+         * Found by mutation-testing, and the narrowest case here. Exhaustion is propagated
+         * out of both branches; dropping it from the *vertical* one survived every fixture
+         * above, because each had a horizontal branch to fall through to, which then hit the
+         * budget itself and reported exhaustion a moment later.
+         *
+         * The escape is a node with no horizontal option at all. With the right column
+         * rocked out, every cell can only pair downwards, so a search that runs out inside
+         * the vertical branch has nothing left to fall through to -- and the unpropagated
+         * version returns `complete`, which says "I walked the whole tree and there are no
+         * tilings" about a board that has exactly one. Reporting an abandoned search as a
+         * finished one is the single worst thing this budget could do.
+         */
+        const verticalOnly: (number | null)[][] = [[null, -1], [null, -1]]
+        const drain = (budget: number) => {
+            const iterator = tilings(verticalOnly, budget)
+            let yielded = 0
+            let step = iterator.next()
+            while (!step.done) { yielded++; step = iterator.next() }
+            return { outcome: step.value, yielded }
+        }
+
+        // One node in, the budget is gone before the single tiling is reached.
+        expect(drain(1)).toEqual({ outcome: 'budget-exhausted', yielded: 0 })
+        // Two is enough, and then the answer really is "that is all of them".
+        expect(drain(2)).toEqual({ outcome: 'complete', yielded: 1 })
+    })
+
+    it('bounds an untileable layout, which yields nothing however long it runs', () => {
+        // The case a cap on *completed candidates* would miss entirely: nine playable cells
+        // can never be tiled, so no candidate is ever produced to count.
+        const odd: (number | null)[][] = Array.from({ length: 3 }, () => Array(3).fill(null))
+        const iterator = tilings(odd, 3)
+        let step = iterator.next()
+        while (!step.done) step = iterator.next()
+        expect(step.value).toBe('budget-exhausted')
+    })
+})
+
+describe('budgets are validated before anything is searched', () => {
+    /*
+     * `generateBoard({ attempts: 0, solverBudget: -1 })` used to return `null`: the only
+     * validation lived inside `solve`, and with no attempts the loop never called it. Whether
+     * a configuration error is reported should not depend on how far the search happens to
+     * get -- that is the same reasoning that made 18a separate impossible configurations from
+     * fruitless searches, applied to the budgets.
+     */
+
+    it.each([
+        ['negative', -1],
+        ['fractional', 1.5],
+        ['NaN', NaN],
+        ['infinite', Infinity],
+    ])('throws RangeError for a %s solverBudget even with no attempts', (_label, solverBudget) => {
+        expect(() => generateBoard({ size: 4, rocks: 2, attempts: 0, solverBudget }))
+            .toThrow(RangeError)
+    })
+
+    it.each([
+        ['negative', -1],
+        ['fractional', 1.5],
+        ['NaN', NaN],
+        ['infinite', Infinity],
+    ])('throws RangeError for a %s tilingBudget even with no attempts', (_label, tilingBudget) => {
+        expect(() => generateBoard({ size: 4, rocks: 2, attempts: 0, tilingBudget }))
+            .toThrow(RangeError)
+    })
+
+    it('names the budget that was wrong', () => {
+        expect(() => generateBoard({ attempts: 0, solverBudget: -1 })).toThrow(/solverBudget/)
+        expect(() => generateBoard({ attempts: 0, tilingBudget: -1 })).toThrow(/tilingBudget/)
+    })
+
+    it('still accepts a budget of zero, which is a real request', () => {
+        // Zero is a legal ceiling that searches nothing, exactly as `attempts: 0` is.
+        expect(generateBoard({ size: 4, rocks: 2, attempts: 1, solverBudget: 0, random: () => 0 }))
+            .toBeNull()
+        expect(generateBoard({ size: 4, rocks: 2, attempts: 1, tilingBudget: 0, random: () => 0 }))
+            .toBeNull()
+    })
+
+    it('validates the tiling budget at its own entry point as well', () => {
+        // `tilings` is exported and callable directly; through `generateBoard` the eager
+        // check above would shadow its own, which is the mistake 18a made with `scatterRocks`.
+        expect(() => tilings([[null, null], [null, null]], -1).next()).toThrow(RangeError)
+        expect(() => tilings([[null, null], [null, null]], 1.5).next()).toThrow(RangeError)
+    })
+})
