@@ -1,0 +1,40 @@
+# The content horizon guard (spec P1-6, row 18c).
+#
+# The corpus is a fixed horizon of pre-generated puzzles, so it runs out. Nothing about a
+# commit makes it run out -- time does -- which is why this is scheduled rather than only
+# triggered on push. A guard that ran only on push would stay green through a quiet year and
+# then fail on the first unrelated commit after the content had already expired.
+#
+# The check itself measures from the **last indexed date**, never from a count of files: a
+# hundred and twenty chunks are ten years of runway on the day they are built and none at all
+# ten years later.
+#
+# This repository has no general CI pipeline yet (spec D10-s); adding one is P2 work. This
+# workflow is deliberately narrow.
+name: corpus horizon
+
+on:
+  schedule:
+    # 06:00 UTC on the first of each month. Monthly is frequent enough for a guard whose
+    # subject changes by one month at a time, and the warning threshold is twelve.
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'public/puzzles/**'
+      - 'scripts/corpus*.ts'
+      - 'scripts/check-horizon.ts'
+      - '.github/workflows/corpus-horizon.yml'
+
+jobs:
+  horizon:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: How much content is left?
+        run: npm run corpus:horizon

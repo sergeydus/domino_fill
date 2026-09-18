@@ -967,7 +967,9 @@ and no runtime generation is not satisfiable by a finite JSON bundle, and the dr
 three at once. The options, in order of preference:
 
 1. **Pre-generate a fixed horizon (recommended): 10 years ≈ 3,650 day-entries × 9 boards.**
-   Measured from the current file (2 day-entries, 9 boards each):
+   **Chosen and implemented in 18c** — see "The pipeline" below for what it actually measured,
+   which is close to this estimate. Projection from the current file (2 day-entries, 9 boards
+   each):
 
    | encoding | per day | 1 year | 10 years | monthly chunk |
    |---|---|---|---|---|
@@ -989,6 +991,60 @@ three at once. The options, in order of preference:
 **The archive needs stable identity, which modulo rotation cannot provide.** `daysSinceEpoch % 2`
 is a rotation, not a mapping: it gives no permanent date→puzzle relation and re-serves the same
 content under different dates. Replace it with an explicit, append-only date→`puzzleId` index.
+
+### The pipeline (18c)
+
+`scripts/corpus.ts` holds the rules and is pure; `corpus-io.ts` does the filesystem;
+`build-corpus.ts`, `verify-corpus.ts` and `check-horizon.ts` are the three entry points
+(`npm run corpus:build` / `:verify` / `:horizon`). TypeScript scripts run under `tsx`, added
+as a dev dependency — Node's own type stripping needs explicit `.ts` extensions on every
+import, which would have meant rewriting app-internal imports for the benefit of a script.
+
+**Reproducible.** Every puzzle is a pure function of `(CORPUS_VERSION, CORPUS_SEED, date,
+slot)`, hashed with FNV-1a into an xorshift32 stream. Two rebuilds produce byte-identical
+chunks, so a content diff is always deliberate. The seed folds in all four parts rather than
+adding them, which is what stops `(day 2, level 3)` and `(day 3, level 2)` sharing a stream
+and repeating puzzles along a diagonal.
+
+**Append-only.** A published date is a promise — saved progress, the archive, and the
+player's memory of yesterday all point at it. The build reads the committed index and
+refuses to write if any published date has changed, disappeared, or been renamed; asking for
+fewer months than are already published extends rather than truncates. Puzzle ids are
+`v1-YYYY-MM-DD-<difficulty>-<level>`, derived from what they point at rather than from a
+position in a file — the old `v1-000-easy-1` scheme would have re-pointed every saved session
+if a day were ever inserted.
+
+**Validated before it replaces anything.** Structure, chunk hashes, slot sizes and rock
+counts, date contiguity across chunk boundaries, id uniqueness, and then **every puzzle
+through the production solver**. Only then is anything written, and it is written to
+`public/puzzles.staging` and renamed over the target, so an interrupted build cannot leave a
+manifest pointing at chunks that were never written.
+
+**Out of the JS import graph.** `public/puzzles/`, fetched as static assets, never imported.
+Chunk filenames carry a content hash (`2026-09.96fc740c71f810c0.json`) so they can be cached
+indefinitely and a changed chunk is a different URL; the manifest carries the full SHA-256 so
+a corrupted or swapped chunk is detectable rather than merely wrong.
+
+**Measured, not projected** (3,653 days, 32,877 puzzles, to 2036-08-31):
+
+| | |
+|---|---|
+| generation | 304s (5min) |
+| solver verification of all 32,877 | 1.8s |
+| on disk, minified | 12.00 MB |
+| gzip | 0.86 MB |
+| brotli | 0.71 MB |
+| largest single chunk | 104.3 KB raw, **6.2 KB brotli** |
+
+So a client fetches one month at a time and pays single-digit kilobytes for it, which is what
+the chunking is for. The repository carries the uncompressed cost, which is the deliberate
+trade: no backend, no runtime generation.
+
+**The horizon guard** (`.github/workflows/corpus-horizon.yml`) is measured from the **last
+indexed date**, never from a count of files — a count cannot distinguish ten years of runway
+from ten years of history. It is scheduled monthly rather than only run on push, because
+nothing about a commit shrinks the horizon; time does. This repository still has no general
+CI pipeline (D10-s); that remains P2.
 
 **P1-7. Persist progress.** `{board, completed, elapsedMs}` under a versioned namespace, keyed by
 the **`puzzleId`** from P0-5 — one identity across cache, persistence and archive — with the
@@ -1168,7 +1224,7 @@ whole of P0 into one oversized set.)
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
 | 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
 | 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator’s exhaustive `solutionsByTargets` is replaced by it, and the candidate search it feeds carries a **separate** `tilingBudget`; all shipped puzzles are solver-verified by `tests/corpus.test.ts` | unit |
-| 18c | **P1-6** content pipeline: pre-generated fixed horizon, monthly static chunks, append-only date→puzzleId map, 12-month CI guard, generated JSON kept out of the JS import graph | unit |
+| 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; atomic staging-then-swap; every puzzle solver-verified before anything is written; horizon guard measured from the last indexed date | unit + CI |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint**, built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |

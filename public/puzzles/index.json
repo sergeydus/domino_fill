@@ -1,0 +1,971 @@
+{
+  "version": 1,
+  "seed": 1554098974,
+  "generatedAt": "2026-09-18T17:27:06.670Z",
+  "firstDate": "2026-09-01",
+  "lastDate": "2036-08-31",
+  "days": 3653,
+  "puzzles": 32877,
+  "chunks": [
+    {
+      "month": "2026-09",
+      "file": "2026-09.96fc740c71f810c0.json",
+      "sha256": "96fc740c71f810c02b14ff98b494fc97e8ada0a262f273f453eb8ba092597156",
+      "days": 30,
+      "firstDate": "2026-09-01",
+      "lastDate": "2026-09-30"
+    },
+    {
+      "month": "2026-10",
+      "file": "2026-10.fbe5fa35ec6e61ed.json",
+      "sha256": "fbe5fa35ec6e61ed32f4711c8baa5c704d764952fd804389bae7708c4ec6cef6",
+      "days": 31,
+      "firstDate": "2026-10-01",
+      "lastDate": "2026-10-31"
+    },
+    {
+      "month": "2026-11",
+      "file": "2026-11.e3a576fc7f18facd.json",
+      "sha256": "e3a576fc7f18facd83ac3db93af0c5a6ba02bc78e70772b86abf92ceac15f77e",
+      "days": 30,
+      "firstDate": "2026-11-01",
+      "lastDate": "2026-11-30"
+    },
+    {
+      "month": "2026-12",
+      "file": "2026-12.cc8d727267f9f11d.json",
+      "sha256": "cc8d727267f9f11dbf4b14d453384e54e3160b8c190068bc09d47c76b26d273d",
+      "days": 31,
+      "firstDate": "2026-12-01",
+      "lastDate": "2026-12-31"
+    },
+    {
+      "month": "2027-01",
+      "file": "2027-01.6d3a775b111f5970.json",
+      "sha256": "6d3a775b111f5970be92ddb4aad348491e29aae12b62fa07a9354ae4f9c6bd9d",
+      "days": 31,
+      "firstDate": "2027-01-01",
+      "lastDate": "2027-01-31"
+    },
+    {
+      "month": "2027-02",
+      "file": "2027-02.cb1736e8a1bdc009.json",
+      "sha256": "cb1736e8a1bdc009733ff4857a0360af2992ec0748192a21ecc1d8696bfa9954",
+      "days": 28,
+      "firstDate": "2027-02-01",
+      "lastDate": "2027-02-28"
+    },
+    {
+      "month": "2027-03",
+      "file": "2027-03.84f0ee2990ad59da.json",
+      "sha256": "84f0ee2990ad59da1bf8094986d5b2df697bee73cf4ae142bdb22485ddf5c5db",
+      "days": 31,
+      "firstDate": "2027-03-01",
+      "lastDate": "2027-03-31"
+    },
+    {
+      "month": "2027-04",
+      "file": "2027-04.55a0c830aa37d0fa.json",
+      "sha256": "55a0c830aa37d0faf0057c645bc1f1b27217b0895c66988490918577566301cc",
+      "days": 30,
+      "firstDate": "2027-04-01",
+      "lastDate": "2027-04-30"
+    },
+    {
+      "month": "2027-05",
+      "file": "2027-05.aaf2921ef7e43cc6.json",
+      "sha256": "aaf2921ef7e43cc6d416d30376b3c6ee17ecbb4263eca6e4ca08d54c5d51406e",
+      "days": 31,
+      "firstDate": "2027-05-01",
+      "lastDate": "2027-05-31"
+    },
+    {
+      "month": "2027-06",
+      "file": "2027-06.d7c29ddacccac644.json",
+      "sha256": "d7c29ddacccac644437539b09c64b5e430160ecb14ae326fe5656fdc104ebc50",
+      "days": 30,
+      "firstDate": "2027-06-01",
+      "lastDate": "2027-06-30"
+    },
+    {
+      "month": "2027-07",
+      "file": "2027-07.64f8742ac231799b.json",
+      "sha256": "64f8742ac231799b30b1100065bb81959dfeaf1409c26998ffd5170f550bdd57",
+      "days": 31,
+      "firstDate": "2027-07-01",
+      "lastDate": "2027-07-31"
+    },
+    {
+      "month": "2027-08",
+      "file": "2027-08.d558b00400987117.json",
+      "sha256": "d558b004009871179fa665f0434cc1788c85fb6e07a72030285e6944be9e7b15",
+      "days": 31,
+      "firstDate": "2027-08-01",
+      "lastDate": "2027-08-31"
+    },
+    {
+      "month": "2027-09",
+      "file": "2027-09.bdff3294557837a3.json",
+      "sha256": "bdff3294557837a3ae33ccb033ace9dc391a873d27ffb356e6da0b04426e7c45",
+      "days": 30,
+      "firstDate": "2027-09-01",
+      "lastDate": "2027-09-30"
+    },
+    {
+      "month": "2027-10",
+      "file": "2027-10.fc5d4d9692859ad9.json",
+      "sha256": "fc5d4d9692859ad926aa90798b958ebb4897c11f72a0065dd0d83b73a3317c04",
+      "days": 31,
+      "firstDate": "2027-10-01",
+      "lastDate": "2027-10-31"
+    },
+    {
+      "month": "2027-11",
+      "file": "2027-11.55c4ab0197a0bc94.json",
+      "sha256": "55c4ab0197a0bc94d575b0969512db867791c5a91a8c3a2d64e4a5f183a1f51b",
+      "days": 30,
+      "firstDate": "2027-11-01",
+      "lastDate": "2027-11-30"
+    },
+    {
+      "month": "2027-12",
+      "file": "2027-12.37981218dafc238e.json",
+      "sha256": "37981218dafc238ec524b2373828404d19be919ea0916485f19f99e06fc50705",
+      "days": 31,
+      "firstDate": "2027-12-01",
+      "lastDate": "2027-12-31"
+    },
+    {
+      "month": "2028-01",
+      "file": "2028-01.5b0bbdccd8034dcb.json",
+      "sha256": "5b0bbdccd8034dcb85a2d48cd54c3a1a6bc70a9129838bd42d571d8c01ae18a9",
+      "days": 31,
+      "firstDate": "2028-01-01",
+      "lastDate": "2028-01-31"
+    },
+    {
+      "month": "2028-02",
+      "file": "2028-02.c416ad18a4d67078.json",
+      "sha256": "c416ad18a4d6707804506cd43062b6c7b91644d78d963d937a29b342ee05d95d",
+      "days": 29,
+      "firstDate": "2028-02-01",
+      "lastDate": "2028-02-29"
+    },
+    {
+      "month": "2028-03",
+      "file": "2028-03.c5ccec01feaac7d6.json",
+      "sha256": "c5ccec01feaac7d61221304a31f9396a6957cfa1f90ea89676ab953bb0717477",
+      "days": 31,
+      "firstDate": "2028-03-01",
+      "lastDate": "2028-03-31"
+    },
+    {
+      "month": "2028-04",
+      "file": "2028-04.0aebd54af032385b.json",
+      "sha256": "0aebd54af032385b2e7b679cbc85017abe8b7c7ec9eb65de5e140f8b944fa567",
+      "days": 30,
+      "firstDate": "2028-04-01",
+      "lastDate": "2028-04-30"
+    },
+    {
+      "month": "2028-05",
+      "file": "2028-05.3d76cd65237a7335.json",
+      "sha256": "3d76cd65237a7335b9c73783003d10e5dd77c09a1582f067c874b72a5b2b1dcf",
+      "days": 31,
+      "firstDate": "2028-05-01",
+      "lastDate": "2028-05-31"
+    },
+    {
+      "month": "2028-06",
+      "file": "2028-06.3eef0d7786a0f600.json",
+      "sha256": "3eef0d7786a0f600f1f696dfd5a396b694d86c26f27343d9a8b45d60bb0e7fca",
+      "days": 30,
+      "firstDate": "2028-06-01",
+      "lastDate": "2028-06-30"
+    },
+    {
+      "month": "2028-07",
+      "file": "2028-07.9724df809877291f.json",
+      "sha256": "9724df809877291fc539f0d2c67a2e3d750afe9cf078b6f9c2798a979214aa01",
+      "days": 31,
+      "firstDate": "2028-07-01",
+      "lastDate": "2028-07-31"
+    },
+    {
+      "month": "2028-08",
+      "file": "2028-08.90345cf35f002c05.json",
+      "sha256": "90345cf35f002c053aedee2d06ce134787ccccac3301907dd93668090b3e99bb",
+      "days": 31,
+      "firstDate": "2028-08-01",
+      "lastDate": "2028-08-31"
+    },
+    {
+      "month": "2028-09",
+      "file": "2028-09.186c797e7c491401.json",
+      "sha256": "186c797e7c4914016dceec97bee1758a1d81131cb5c4014aaa129db008076d41",
+      "days": 30,
+      "firstDate": "2028-09-01",
+      "lastDate": "2028-09-30"
+    },
+    {
+      "month": "2028-10",
+      "file": "2028-10.e8de0fb4cfa6954f.json",
+      "sha256": "e8de0fb4cfa6954fc2c04060084ff0731894d877c5cdb4e4d30c7d225a7d04b9",
+      "days": 31,
+      "firstDate": "2028-10-01",
+      "lastDate": "2028-10-31"
+    },
+    {
+      "month": "2028-11",
+      "file": "2028-11.35e5b0ce810b8046.json",
+      "sha256": "35e5b0ce810b8046c2a839ec6e827769845ae68635b2459fb16a6919744ff6ce",
+      "days": 30,
+      "firstDate": "2028-11-01",
+      "lastDate": "2028-11-30"
+    },
+    {
+      "month": "2028-12",
+      "file": "2028-12.a8d454b1317b6764.json",
+      "sha256": "a8d454b1317b6764c3b2f530e5e0d13a13d6353c3f7c2cabe0803a41b770cb7b",
+      "days": 31,
+      "firstDate": "2028-12-01",
+      "lastDate": "2028-12-31"
+    },
+    {
+      "month": "2029-01",
+      "file": "2029-01.a1d99c3a776e688b.json",
+      "sha256": "a1d99c3a776e688bd3b452f7f77657fa39d6a6fab449c26fe4ab62511c19946e",
+      "days": 31,
+      "firstDate": "2029-01-01",
+      "lastDate": "2029-01-31"
+    },
+    {
+      "month": "2029-02",
+      "file": "2029-02.614b3316fb77cdd6.json",
+      "sha256": "614b3316fb77cdd65eac773183b5d12b1716cb433823a14e124bda2722fa8869",
+      "days": 28,
+      "firstDate": "2029-02-01",
+      "lastDate": "2029-02-28"
+    },
+    {
+      "month": "2029-03",
+      "file": "2029-03.d52dd922a276e6e1.json",
+      "sha256": "d52dd922a276e6e15bab154e9b2c99301dd21befcd956b4a968728eba40a89fe",
+      "days": 31,
+      "firstDate": "2029-03-01",
+      "lastDate": "2029-03-31"
+    },
+    {
+      "month": "2029-04",
+      "file": "2029-04.ed5a837b0ae678fb.json",
+      "sha256": "ed5a837b0ae678fb07ca2eed0556218141f919c7fced7919716046bd788678ce",
+      "days": 30,
+      "firstDate": "2029-04-01",
+      "lastDate": "2029-04-30"
+    },
+    {
+      "month": "2029-05",
+      "file": "2029-05.fbb41144fa41541d.json",
+      "sha256": "fbb41144fa41541d24a3865cfd6d6aa5641b32fdd6045ef9b21dd100ebdbd104",
+      "days": 31,
+      "firstDate": "2029-05-01",
+      "lastDate": "2029-05-31"
+    },
+    {
+      "month": "2029-06",
+      "file": "2029-06.c7ca9c9020d299ca.json",
+      "sha256": "c7ca9c9020d299cabb99014d63a23eb1140b94ee8d05df53f93683e2f94011bb",
+      "days": 30,
+      "firstDate": "2029-06-01",
+      "lastDate": "2029-06-30"
+    },
+    {
+      "month": "2029-07",
+      "file": "2029-07.d9072804b9becca8.json",
+      "sha256": "d9072804b9becca83e57e51fb3b95703f3bd5f78f3c210ced38c27891bbdc473",
+      "days": 31,
+      "firstDate": "2029-07-01",
+      "lastDate": "2029-07-31"
+    },
+    {
+      "month": "2029-08",
+      "file": "2029-08.d2cffd6761a69182.json",
+      "sha256": "d2cffd6761a69182093f34c8755861f3c0a335e7e6168b99b22c11c8f49a6c63",
+      "days": 31,
+      "firstDate": "2029-08-01",
+      "lastDate": "2029-08-31"
+    },
+    {
+      "month": "2029-09",
+      "file": "2029-09.6436db6cc24ec318.json",
+      "sha256": "6436db6cc24ec31868816e545fb75679cfa8c8d4f4a064a8e0fb7d28bdfb02f8",
+      "days": 30,
+      "firstDate": "2029-09-01",
+      "lastDate": "2029-09-30"
+    },
+    {
+      "month": "2029-10",
+      "file": "2029-10.79a1807620531b57.json",
+      "sha256": "79a1807620531b5730477866dc47f41b20a70e974a764efde619d264b0bb7ced",
+      "days": 31,
+      "firstDate": "2029-10-01",
+      "lastDate": "2029-10-31"
+    },
+    {
+      "month": "2029-11",
+      "file": "2029-11.0b547b057c769313.json",
+      "sha256": "0b547b057c76931300af5958aa9a57538ea7e8d9fe04ebb0f8eaf896f532aa19",
+      "days": 30,
+      "firstDate": "2029-11-01",
+      "lastDate": "2029-11-30"
+    },
+    {
+      "month": "2029-12",
+      "file": "2029-12.edbbc08ed27e9be0.json",
+      "sha256": "edbbc08ed27e9be0c5dffc2da902260969e235afb0e2f6032f4f1562a7dfac46",
+      "days": 31,
+      "firstDate": "2029-12-01",
+      "lastDate": "2029-12-31"
+    },
+    {
+      "month": "2030-01",
+      "file": "2030-01.457cd4e425adcdd9.json",
+      "sha256": "457cd4e425adcdd9bf5d186418a20615d00fe1e6124de8fd2232d04405006780",
+      "days": 31,
+      "firstDate": "2030-01-01",
+      "lastDate": "2030-01-31"
+    },
+    {
+      "month": "2030-02",
+      "file": "2030-02.7821d840a7cffebd.json",
+      "sha256": "7821d840a7cffebd780dd6319efc3274b8c7b600dded4e8999d043400602849b",
+      "days": 28,
+      "firstDate": "2030-02-01",
+      "lastDate": "2030-02-28"
+    },
+    {
+      "month": "2030-03",
+      "file": "2030-03.a55411819c449688.json",
+      "sha256": "a55411819c44968844ef3ea0bcfb84c7fbb517c8cd0020a8b42eef11043f7023",
+      "days": 31,
+      "firstDate": "2030-03-01",
+      "lastDate": "2030-03-31"
+    },
+    {
+      "month": "2030-04",
+      "file": "2030-04.31d314271e8583de.json",
+      "sha256": "31d314271e8583dec95c83f15de9ef29c5e3f621299d348efb02d90ca58aec24",
+      "days": 30,
+      "firstDate": "2030-04-01",
+      "lastDate": "2030-04-30"
+    },
+    {
+      "month": "2030-05",
+      "file": "2030-05.bf98e9090d4f48fd.json",
+      "sha256": "bf98e9090d4f48fd32e5d02bdb0ee26fbba4e56a6415d01f029f84b40b0ff2a7",
+      "days": 31,
+      "firstDate": "2030-05-01",
+      "lastDate": "2030-05-31"
+    },
+    {
+      "month": "2030-06",
+      "file": "2030-06.2c3518156615397a.json",
+      "sha256": "2c3518156615397a72bf2075b119f4704a6f06c94189ba964970ac8f53a72d7e",
+      "days": 30,
+      "firstDate": "2030-06-01",
+      "lastDate": "2030-06-30"
+    },
+    {
+      "month": "2030-07",
+      "file": "2030-07.b84e407ce3c845ad.json",
+      "sha256": "b84e407ce3c845ada8a93ae3fcb7c5a6dbf076d128f32b4c01323360eb35d3f0",
+      "days": 31,
+      "firstDate": "2030-07-01",
+      "lastDate": "2030-07-31"
+    },
+    {
+      "month": "2030-08",
+      "file": "2030-08.0a6080d51133cb71.json",
+      "sha256": "0a6080d51133cb7199d98cba6151f5ec391929db9ec9020e723035823478e66e",
+      "days": 31,
+      "firstDate": "2030-08-01",
+      "lastDate": "2030-08-31"
+    },
+    {
+      "month": "2030-09",
+      "file": "2030-09.9fb534aa01ab9481.json",
+      "sha256": "9fb534aa01ab948148fcc0e16fc6151e33212feb92e32d466feffd49214b3e92",
+      "days": 30,
+      "firstDate": "2030-09-01",
+      "lastDate": "2030-09-30"
+    },
+    {
+      "month": "2030-10",
+      "file": "2030-10.f67bb9fb7d1fce59.json",
+      "sha256": "f67bb9fb7d1fce59873f22408c36137594e1657e307da61781b3b8331eb15dc0",
+      "days": 31,
+      "firstDate": "2030-10-01",
+      "lastDate": "2030-10-31"
+    },
+    {
+      "month": "2030-11",
+      "file": "2030-11.e1da3302eab7b475.json",
+      "sha256": "e1da3302eab7b4751b5d60eb743afd5afc9cdcc57da978fd270c41b2110032e0",
+      "days": 30,
+      "firstDate": "2030-11-01",
+      "lastDate": "2030-11-30"
+    },
+    {
+      "month": "2030-12",
+      "file": "2030-12.e24fca7db0480e85.json",
+      "sha256": "e24fca7db0480e855f812d22bdaf409de69938483a6d7f542149cd26306a7487",
+      "days": 31,
+      "firstDate": "2030-12-01",
+      "lastDate": "2030-12-31"
+    },
+    {
+      "month": "2031-01",
+      "file": "2031-01.95ec4036503ab141.json",
+      "sha256": "95ec4036503ab1419c1aad1ad3fc249f097d3ed0fd40138f645fd9792fd42776",
+      "days": 31,
+      "firstDate": "2031-01-01",
+      "lastDate": "2031-01-31"
+    },
+    {
+      "month": "2031-02",
+      "file": "2031-02.afdc2fa385dab3fb.json",
+      "sha256": "afdc2fa385dab3fb5601105c121a68f6e15f6f73edeaf6f6e93705e671502146",
+      "days": 28,
+      "firstDate": "2031-02-01",
+      "lastDate": "2031-02-28"
+    },
+    {
+      "month": "2031-03",
+      "file": "2031-03.9a515fc1acdee219.json",
+      "sha256": "9a515fc1acdee2192edc1f8eb6f20d087a05cb8cc178ed5edb61587341f23e19",
+      "days": 31,
+      "firstDate": "2031-03-01",
+      "lastDate": "2031-03-31"
+    },
+    {
+      "month": "2031-04",
+      "file": "2031-04.93232db68183f38b.json",
+      "sha256": "93232db68183f38b311985a2011fd03310909422d0675d1db5d53b484f73623e",
+      "days": 30,
+      "firstDate": "2031-04-01",
+      "lastDate": "2031-04-30"
+    },
+    {
+      "month": "2031-05",
+      "file": "2031-05.08a4ee86c5fea0e7.json",
+      "sha256": "08a4ee86c5fea0e7778be7de94bbb573d9bedb6611f94ce90205a1c4946dadb2",
+      "days": 31,
+      "firstDate": "2031-05-01",
+      "lastDate": "2031-05-31"
+    },
+    {
+      "month": "2031-06",
+      "file": "2031-06.216090eb09b4e22b.json",
+      "sha256": "216090eb09b4e22b08f6e94142193f2eb38ab5703df8f4b4b317945bc7ba52d5",
+      "days": 30,
+      "firstDate": "2031-06-01",
+      "lastDate": "2031-06-30"
+    },
+    {
+      "month": "2031-07",
+      "file": "2031-07.d772f6b4162ecddb.json",
+      "sha256": "d772f6b4162ecddb5175e526920ffa527c73ce3576a5119d669eda6550ecde8d",
+      "days": 31,
+      "firstDate": "2031-07-01",
+      "lastDate": "2031-07-31"
+    },
+    {
+      "month": "2031-08",
+      "file": "2031-08.9c0d4eff05c67853.json",
+      "sha256": "9c0d4eff05c67853734b74e0025a8ab31f4c25ac3825c7b64e719983be1a5cf9",
+      "days": 31,
+      "firstDate": "2031-08-01",
+      "lastDate": "2031-08-31"
+    },
+    {
+      "month": "2031-09",
+      "file": "2031-09.4ad2bd7e963297fe.json",
+      "sha256": "4ad2bd7e963297fe59ae53dabba5707f68bd7475f4fab88aca4ce060812085e0",
+      "days": 30,
+      "firstDate": "2031-09-01",
+      "lastDate": "2031-09-30"
+    },
+    {
+      "month": "2031-10",
+      "file": "2031-10.37f8894c4ce47171.json",
+      "sha256": "37f8894c4ce47171fb21a3dae378f390d48f57ab47ea622d159cfb70f68a8dd4",
+      "days": 31,
+      "firstDate": "2031-10-01",
+      "lastDate": "2031-10-31"
+    },
+    {
+      "month": "2031-11",
+      "file": "2031-11.48e859419eaee9ac.json",
+      "sha256": "48e859419eaee9ac972ef03653d265ffd65abafa500b953f1eefbbb1fbbad794",
+      "days": 30,
+      "firstDate": "2031-11-01",
+      "lastDate": "2031-11-30"
+    },
+    {
+      "month": "2031-12",
+      "file": "2031-12.43bacee4a15cdad7.json",
+      "sha256": "43bacee4a15cdad7feaa148501049f9d4d5ebdc713ada5acbe5f8b025a087eda",
+      "days": 31,
+      "firstDate": "2031-12-01",
+      "lastDate": "2031-12-31"
+    },
+    {
+      "month": "2032-01",
+      "file": "2032-01.03b69b5257b35ca8.json",
+      "sha256": "03b69b5257b35ca8556caf67913221d28e45f2eb37aabc83b77fab7a2fca3fb3",
+      "days": 31,
+      "firstDate": "2032-01-01",
+      "lastDate": "2032-01-31"
+    },
+    {
+      "month": "2032-02",
+      "file": "2032-02.e16f63c81cb2e72c.json",
+      "sha256": "e16f63c81cb2e72c0ac3965daee506b7c0fe47f9e10b90bc7c3ee75a4d5301f7",
+      "days": 29,
+      "firstDate": "2032-02-01",
+      "lastDate": "2032-02-29"
+    },
+    {
+      "month": "2032-03",
+      "file": "2032-03.de5f40faef568cbd.json",
+      "sha256": "de5f40faef568cbdcf1ef9402feb1a5e573886902523ad67346c1c3af50597c4",
+      "days": 31,
+      "firstDate": "2032-03-01",
+      "lastDate": "2032-03-31"
+    },
+    {
+      "month": "2032-04",
+      "file": "2032-04.2424a735564648b8.json",
+      "sha256": "2424a735564648b8dac3898590e7c90c30cbbd1baf652705dd0c71d856494b38",
+      "days": 30,
+      "firstDate": "2032-04-01",
+      "lastDate": "2032-04-30"
+    },
+    {
+      "month": "2032-05",
+      "file": "2032-05.58c337248229f912.json",
+      "sha256": "58c337248229f912d522d29b34d9ec7eb4cc11feaf29bbef12eadb36b9aedbdf",
+      "days": 31,
+      "firstDate": "2032-05-01",
+      "lastDate": "2032-05-31"
+    },
+    {
+      "month": "2032-06",
+      "file": "2032-06.ec5f2f166bb2de45.json",
+      "sha256": "ec5f2f166bb2de45c3e93191ef618f2a5dd43174c3e8245e03a287a87aa4cefb",
+      "days": 30,
+      "firstDate": "2032-06-01",
+      "lastDate": "2032-06-30"
+    },
+    {
+      "month": "2032-07",
+      "file": "2032-07.05ad1ae5d30feace.json",
+      "sha256": "05ad1ae5d30feace168bcdad79aa7510a55b90306b2eb536d9de71d5e584cb7d",
+      "days": 31,
+      "firstDate": "2032-07-01",
+      "lastDate": "2032-07-31"
+    },
+    {
+      "month": "2032-08",
+      "file": "2032-08.b8f825eeab32f869.json",
+      "sha256": "b8f825eeab32f86919fbe18ee45d3c3aae99fa2d40dd717bcc2305a0f445133a",
+      "days": 31,
+      "firstDate": "2032-08-01",
+      "lastDate": "2032-08-31"
+    },
+    {
+      "month": "2032-09",
+      "file": "2032-09.5792f9c2fcc05f46.json",
+      "sha256": "5792f9c2fcc05f46a89322b23448aca96cd942bdc687e07511888d5b1f7cd6df",
+      "days": 30,
+      "firstDate": "2032-09-01",
+      "lastDate": "2032-09-30"
+    },
+    {
+      "month": "2032-10",
+      "file": "2032-10.c0f76385d39ebc59.json",
+      "sha256": "c0f76385d39ebc5975f77b93108503c4eb659ba28dc881b1ef2a9081e317c589",
+      "days": 31,
+      "firstDate": "2032-10-01",
+      "lastDate": "2032-10-31"
+    },
+    {
+      "month": "2032-11",
+      "file": "2032-11.2d0dc4e69517b7ea.json",
+      "sha256": "2d0dc4e69517b7eaf42907202e827dfa29061c7f7961cded4e3f617db88a5f2a",
+      "days": 30,
+      "firstDate": "2032-11-01",
+      "lastDate": "2032-11-30"
+    },
+    {
+      "month": "2032-12",
+      "file": "2032-12.fddeca93afacedfb.json",
+      "sha256": "fddeca93afacedfb9f28648e1988e3266e1bcd844a6c132759aa628f5a084f99",
+      "days": 31,
+      "firstDate": "2032-12-01",
+      "lastDate": "2032-12-31"
+    },
+    {
+      "month": "2033-01",
+      "file": "2033-01.17d04f230a8527da.json",
+      "sha256": "17d04f230a8527da134ebb7c13e6941271d1034c6f9d442bacd712751e09f434",
+      "days": 31,
+      "firstDate": "2033-01-01",
+      "lastDate": "2033-01-31"
+    },
+    {
+      "month": "2033-02",
+      "file": "2033-02.6687a00623689a47.json",
+      "sha256": "6687a00623689a471b00e251dd5c683f6af644f8af09b0c94e6730d8e964ac6e",
+      "days": 28,
+      "firstDate": "2033-02-01",
+      "lastDate": "2033-02-28"
+    },
+    {
+      "month": "2033-03",
+      "file": "2033-03.929b2e79eb4c04cb.json",
+      "sha256": "929b2e79eb4c04cba79bcbe1483ae9767f9fd156ca399ec0244a196b78869c93",
+      "days": 31,
+      "firstDate": "2033-03-01",
+      "lastDate": "2033-03-31"
+    },
+    {
+      "month": "2033-04",
+      "file": "2033-04.93f97a23b6c64d99.json",
+      "sha256": "93f97a23b6c64d9944b9b527bd8c29c20838633bd615eca0e123338a6e6d2d85",
+      "days": 30,
+      "firstDate": "2033-04-01",
+      "lastDate": "2033-04-30"
+    },
+    {
+      "month": "2033-05",
+      "file": "2033-05.3b9edf5ff618883b.json",
+      "sha256": "3b9edf5ff618883b7ee2d49c0c90ed8d9fd676e3a94f0a04abc5f78408427bbb",
+      "days": 31,
+      "firstDate": "2033-05-01",
+      "lastDate": "2033-05-31"
+    },
+    {
+      "month": "2033-06",
+      "file": "2033-06.d9823a4a091d3cdf.json",
+      "sha256": "d9823a4a091d3cdf6deb5fa44b2e859191efb535e233e017bfe74d94a4a4fb1d",
+      "days": 30,
+      "firstDate": "2033-06-01",
+      "lastDate": "2033-06-30"
+    },
+    {
+      "month": "2033-07",
+      "file": "2033-07.05872e1c7da144b8.json",
+      "sha256": "05872e1c7da144b83ca8e5b404fbf884ddf309450c2faeec0baccc5953ea7e00",
+      "days": 31,
+      "firstDate": "2033-07-01",
+      "lastDate": "2033-07-31"
+    },
+    {
+      "month": "2033-08",
+      "file": "2033-08.22e69b33e62452ef.json",
+      "sha256": "22e69b33e62452ef8847d2f73a5d738c7e49911ece31c732e1199ff8383e3f82",
+      "days": 31,
+      "firstDate": "2033-08-01",
+      "lastDate": "2033-08-31"
+    },
+    {
+      "month": "2033-09",
+      "file": "2033-09.55753537d7e915b7.json",
+      "sha256": "55753537d7e915b7671e74cd7006d37e832547f83bf8405b2cd338029d8cfc8c",
+      "days": 30,
+      "firstDate": "2033-09-01",
+      "lastDate": "2033-09-30"
+    },
+    {
+      "month": "2033-10",
+      "file": "2033-10.6e4bdd97fdd0fb56.json",
+      "sha256": "6e4bdd97fdd0fb56e4904d4290f01110ae06cf7071afe9b7f96d022205905121",
+      "days": 31,
+      "firstDate": "2033-10-01",
+      "lastDate": "2033-10-31"
+    },
+    {
+      "month": "2033-11",
+      "file": "2033-11.ff8308896e850fbd.json",
+      "sha256": "ff8308896e850fbd9ee4125ef1b4127385c137b940f8b6fbc9d03fc84504b5d4",
+      "days": 30,
+      "firstDate": "2033-11-01",
+      "lastDate": "2033-11-30"
+    },
+    {
+      "month": "2033-12",
+      "file": "2033-12.9522e390bd452d95.json",
+      "sha256": "9522e390bd452d957fdeb54b8fd375c5577eb06114fbc9364d9d225ef976782e",
+      "days": 31,
+      "firstDate": "2033-12-01",
+      "lastDate": "2033-12-31"
+    },
+    {
+      "month": "2034-01",
+      "file": "2034-01.430360776c27159f.json",
+      "sha256": "430360776c27159fc3a331006a66240e359cafd3e94c0161d5862c0efe4c7c75",
+      "days": 31,
+      "firstDate": "2034-01-01",
+      "lastDate": "2034-01-31"
+    },
+    {
+      "month": "2034-02",
+      "file": "2034-02.3e61fc9457ee9690.json",
+      "sha256": "3e61fc9457ee96904449340f1331f10bdff6d4e1ad03d92f3ff30c48f7457d9b",
+      "days": 28,
+      "firstDate": "2034-02-01",
+      "lastDate": "2034-02-28"
+    },
+    {
+      "month": "2034-03",
+      "file": "2034-03.ef6dedbf18961aad.json",
+      "sha256": "ef6dedbf18961aada57d5dd9c5f6d5cb424ca0a77428a47278c10d30df60b714",
+      "days": 31,
+      "firstDate": "2034-03-01",
+      "lastDate": "2034-03-31"
+    },
+    {
+      "month": "2034-04",
+      "file": "2034-04.b0d4d7f7249ed866.json",
+      "sha256": "b0d4d7f7249ed866d646775f1b6737a94c2fae9ad9877b0be25336ac39f56f64",
+      "days": 30,
+      "firstDate": "2034-04-01",
+      "lastDate": "2034-04-30"
+    },
+    {
+      "month": "2034-05",
+      "file": "2034-05.c76f3eb87de70020.json",
+      "sha256": "c76f3eb87de7002027583267a0024f62668d41c39056e7e0210ce5d7e9bc28e9",
+      "days": 31,
+      "firstDate": "2034-05-01",
+      "lastDate": "2034-05-31"
+    },
+    {
+      "month": "2034-06",
+      "file": "2034-06.10043aaa9a5e9373.json",
+      "sha256": "10043aaa9a5e9373dff1e761ecac9312b94513c42c51b92c4020eb1a9650abd2",
+      "days": 30,
+      "firstDate": "2034-06-01",
+      "lastDate": "2034-06-30"
+    },
+    {
+      "month": "2034-07",
+      "file": "2034-07.74b80389ab0de7c6.json",
+      "sha256": "74b80389ab0de7c646b5e6fc6a6bb1064d519c5c74d915e581e7a2c483451b89",
+      "days": 31,
+      "firstDate": "2034-07-01",
+      "lastDate": "2034-07-31"
+    },
+    {
+      "month": "2034-08",
+      "file": "2034-08.4a60d57463baf447.json",
+      "sha256": "4a60d57463baf44736db30e0c7601e216a837232febfa831f10631114ca19a7f",
+      "days": 31,
+      "firstDate": "2034-08-01",
+      "lastDate": "2034-08-31"
+    },
+    {
+      "month": "2034-09",
+      "file": "2034-09.3505a9ef8de1a865.json",
+      "sha256": "3505a9ef8de1a86569282f6ccbc2e9326f298b649e787c534325c1eec70b7f60",
+      "days": 30,
+      "firstDate": "2034-09-01",
+      "lastDate": "2034-09-30"
+    },
+    {
+      "month": "2034-10",
+      "file": "2034-10.92e05fa5756206ff.json",
+      "sha256": "92e05fa5756206ffe41fef746dd670112abeee6fbce7302e7e25f49ae2853bdc",
+      "days": 31,
+      "firstDate": "2034-10-01",
+      "lastDate": "2034-10-31"
+    },
+    {
+      "month": "2034-11",
+      "file": "2034-11.21d39a5feaf9d829.json",
+      "sha256": "21d39a5feaf9d829d4075bee262d5a5d09545a0c902a7a80c476f74a54f1ad1c",
+      "days": 30,
+      "firstDate": "2034-11-01",
+      "lastDate": "2034-11-30"
+    },
+    {
+      "month": "2034-12",
+      "file": "2034-12.29d2be72f611a1f1.json",
+      "sha256": "29d2be72f611a1f13b88be21e39cddcdfbfdb5799c07dc9d38b654823e409cf7",
+      "days": 31,
+      "firstDate": "2034-12-01",
+      "lastDate": "2034-12-31"
+    },
+    {
+      "month": "2035-01",
+      "file": "2035-01.67fb996d0748cf51.json",
+      "sha256": "67fb996d0748cf51e73e4921a8e4504bf46c8b626ca3ef6c38d4db794d1a0383",
+      "days": 31,
+      "firstDate": "2035-01-01",
+      "lastDate": "2035-01-31"
+    },
+    {
+      "month": "2035-02",
+      "file": "2035-02.0b8dfbd71fee150e.json",
+      "sha256": "0b8dfbd71fee150ee1ebead531abd4c9f4c434564d48411d3caf5b7520bf8437",
+      "days": 28,
+      "firstDate": "2035-02-01",
+      "lastDate": "2035-02-28"
+    },
+    {
+      "month": "2035-03",
+      "file": "2035-03.82b14c6293c3671a.json",
+      "sha256": "82b14c6293c3671a48230b9fe17ba972e0fae2bfb6158c093a9e63d4708e68ee",
+      "days": 31,
+      "firstDate": "2035-03-01",
+      "lastDate": "2035-03-31"
+    },
+    {
+      "month": "2035-04",
+      "file": "2035-04.857da8ab7adb7b0f.json",
+      "sha256": "857da8ab7adb7b0fb55417776514fb160d5e6c03c3e0b7f6477540cd59db1878",
+      "days": 30,
+      "firstDate": "2035-04-01",
+      "lastDate": "2035-04-30"
+    },
+    {
+      "month": "2035-05",
+      "file": "2035-05.199f1dcb22533a9f.json",
+      "sha256": "199f1dcb22533a9f583a0ff27c7d7a466d1b94e9943b6f5725c2dad0d8206041",
+      "days": 31,
+      "firstDate": "2035-05-01",
+      "lastDate": "2035-05-31"
+    },
+    {
+      "month": "2035-06",
+      "file": "2035-06.547403fec0576d26.json",
+      "sha256": "547403fec0576d267704d1d4aea67164c5bdd80a3aef481f42fedd1e2f63e232",
+      "days": 30,
+      "firstDate": "2035-06-01",
+      "lastDate": "2035-06-30"
+    },
+    {
+      "month": "2035-07",
+      "file": "2035-07.899da6aafc0005ef.json",
+      "sha256": "899da6aafc0005ef0150c929dcb4d5ac8bd9b201ac018fde2d481bdf35191742",
+      "days": 31,
+      "firstDate": "2035-07-01",
+      "lastDate": "2035-07-31"
+    },
+    {
+      "month": "2035-08",
+      "file": "2035-08.cafdca0ab62230f4.json",
+      "sha256": "cafdca0ab62230f4e26eac6ad3e58f83f96dbd7d567855188551c49fdf646906",
+      "days": 31,
+      "firstDate": "2035-08-01",
+      "lastDate": "2035-08-31"
+    },
+    {
+      "month": "2035-09",
+      "file": "2035-09.7720973b34723285.json",
+      "sha256": "7720973b34723285531cfc370bff79c16f0a38614c26c7884a5280dda6c9adc9",
+      "days": 30,
+      "firstDate": "2035-09-01",
+      "lastDate": "2035-09-30"
+    },
+    {
+      "month": "2035-10",
+      "file": "2035-10.8d27d6a5fd1b96d5.json",
+      "sha256": "8d27d6a5fd1b96d518c4de78e298c3b534396a87421a81e750a9b954f036f350",
+      "days": 31,
+      "firstDate": "2035-10-01",
+      "lastDate": "2035-10-31"
+    },
+    {
+      "month": "2035-11",
+      "file": "2035-11.6e8cd0d009f8e132.json",
+      "sha256": "6e8cd0d009f8e132a283cecfc7aecc8ea853c7c24e579db9433c684d293d5d21",
+      "days": 30,
+      "firstDate": "2035-11-01",
+      "lastDate": "2035-11-30"
+    },
+    {
+      "month": "2035-12",
+      "file": "2035-12.bcf846b15c86772a.json",
+      "sha256": "bcf846b15c86772ab02dedc180180eed94234970b594c6ae51f5fa39fc0ae388",
+      "days": 31,
+      "firstDate": "2035-12-01",
+      "lastDate": "2035-12-31"
+    },
+    {
+      "month": "2036-01",
+      "file": "2036-01.09bb3300b0124d0a.json",
+      "sha256": "09bb3300b0124d0ae01d833365497d65459f15f3d83056e8f223ed6ebc94777a",
+      "days": 31,
+      "firstDate": "2036-01-01",
+      "lastDate": "2036-01-31"
+    },
+    {
+      "month": "2036-02",
+      "file": "2036-02.6ed84471163ceb42.json",
+      "sha256": "6ed84471163ceb42568fe70b3c4b28e2b7642eef7a190c8417ff93bd9953dc92",
+      "days": 29,
+      "firstDate": "2036-02-01",
+      "lastDate": "2036-02-29"
+    },
+    {
+      "month": "2036-03",
+      "file": "2036-03.68af0f99b6505c42.json",
+      "sha256": "68af0f99b6505c42e9c33933e2ff7c784a56ae8d07c2612d5fbdb24c3e3d18a0",
+      "days": 31,
+      "firstDate": "2036-03-01",
+      "lastDate": "2036-03-31"
+    },
+    {
+      "month": "2036-04",
+      "file": "2036-04.1ed5b1901e8211da.json",
+      "sha256": "1ed5b1901e8211daf1c449f4c578a2084301174cd6b2e31ce092edfa81e9bf4a",
+      "days": 30,
+      "firstDate": "2036-04-01",
+      "lastDate": "2036-04-30"
+    },
+    {
+      "month": "2036-05",
+      "file": "2036-05.a001c2c5c746b262.json",
+      "sha256": "a001c2c5c746b262253a3df4cdde6ba6e71da99c35c7bbe5fb2261bf74235012",
+      "days": 31,
+      "firstDate": "2036-05-01",
+      "lastDate": "2036-05-31"
+    },
+    {
+      "month": "2036-06",
+      "file": "2036-06.a50752183f629860.json",
+      "sha256": "a50752183f629860d17d53fa524adea408ba39be79d51cca63e007b0a1da3fa3",
+      "days": 30,
+      "firstDate": "2036-06-01",
+      "lastDate": "2036-06-30"
+    },
+    {
+      "month": "2036-07",
+      "file": "2036-07.884f4d6718be16b1.json",
+      "sha256": "884f4d6718be16b1277ec189778d71f9d0240aa185e4a8071bcfb37f3dee299c",
+      "days": 31,
+      "firstDate": "2036-07-01",
+      "lastDate": "2036-07-31"
+    },
+    {
+      "month": "2036-08",
+      "file": "2036-08.25347c3aae5dc098.json",
+      "sha256": "25347c3aae5dc098d8d55be578bde687188d2d7a1b854352f6c4a85fd33014d2",
+      "days": 31,
+      "firstDate": "2036-08-01",
+      "lastDate": "2036-08-31"
+    }
+  ]
+}

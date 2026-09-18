@@ -48,3 +48,6 @@ next-env.d.ts
 
 # chromium debug output from playwright runs
 debug.log
+
+# a corpus build that was interrupted before it could swap into place
+/public/puzzles.staging/
