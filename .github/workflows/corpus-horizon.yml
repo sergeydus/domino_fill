@@ -36,5 +36,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Verify before asking about the horizon. The guard now validates structure itself, but
+      # this repository has no general CI (spec D10-s), so a corpus change would otherwise
+      # reach the branch with nothing having solved a single one of its puzzles.
+      - name: Does the corpus hold together?
+        run: npm run corpus:verify
       - name: How much content is left?
         run: npm run corpus:horizon

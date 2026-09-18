@@ -1014,11 +1014,44 @@ fewer months than are already published extends rather than truncates. Puzzle id
 position in a file — the old `v1-000-easy-1` scheme would have re-pointed every saved session
 if a day were ever inserted.
 
-**Validated before it replaces anything.** Structure, chunk hashes, slot sizes and rock
-counts, date contiguity across chunk boundaries, id uniqueness, and then **every puzzle
-through the production solver**. Only then is anything written, and it is written to
-`public/puzzles.staging` and renamed over the target, so an interrupted build cannot leave a
-manifest pointing at chunks that were never written.
+**Distinct, not merely valid.** "Exactly one solution" is not the same as "a new puzzle".
+The first corpus built here was structurally perfect and contained **314 exact repeats**
+among 32,877 entries — 297 easy, 17 medium, none hard — the closest pair four days apart. A
+player meeting the same board twice in a week reads that as the game being broken. Generation
+now carries the set of definitions already emitted and re-rolls a slot onto a different seed
+when it would repeat one, comparing the **full canonical definition** rather than the 32-bit
+`definitionHash`, which would itself collide by birthday across this many entries. The
+re-roll is folded into the seed only when non-zero, so puzzles that never collided are
+untouched and a corpus diff shows only what actually changed. `duplicateDefinitions` is then
+run over the finished corpus as a separate check, by both the build and `corpus:verify`.
+
+**Validated before it replaces anything.** Structure, chunk hashes, every manifest field
+against one derived from the chunk itself, slot sizes and rock counts, date contiguity across
+chunk boundaries, id uniqueness, repetition, and then **every puzzle through the production
+solver** — once each, not, as the first version did, three times over.
+
+**Committed atomically**, by the transaction the content-addressed design already provides
+rather than by a directory swap. The first version did `rm(dir, { recursive: true })` then
+`rename(staging, dir)`, which leaves no corpus at all in between — and cannot be fixed by
+reordering, because renaming a directory over a non-empty one fails with `EPERM` on Windows
+(measured). It could also be pointed at `public` or at the repository root and would delete
+either.
+
+A chunk's filename contains the hash of its bytes, so a new chunk can never collide with a
+live one. New chunks are therefore written alongside the old ones, harming nothing; the
+manifest decides which files constitute the corpus, and replacing a single *file* by rename
+is atomic even on Windows. So: write the new chunks, write the manifest under a unique
+temporary name, read it back to prove it landed intact, rename it over `index.json` — that
+rename is the commit — and only then delete the chunks nothing references. Interrupted
+anywhere before the rename, the previous corpus is still complete and still readable; the
+cost is some unreferenced files, which `orphanFiles` reports and the next successful build
+removes. The output directory is refused before generation unless it is absent, empty, or
+already a corpus.
+
+`readCorpus` treats only a missing manifest as "no corpus". Every other failure propagates:
+a permissions error read as absence would leave the append-only check with nothing to
+compare against, and it is the only thing standing between a rebuild and ten years of
+overwritten content.
 
 **Out of the JS import graph.** `public/puzzles/`, fetched as static assets, never imported.
 Chunk filenames carry a content hash (`2026-09.96fc740c71f810c0.json`) so they can be cached
@@ -1029,8 +1062,8 @@ a corrupted or swapped chunk is detectable rather than merely wrong.
 
 | | |
 |---|---|
-| generation | 304s (5min) |
-| solver verification of all 32,877 | 1.8s |
+| generation | 359s (6min) |
+| solver verification of all 32,877 | 0.7s |
 | on disk, minified | 12.00 MB |
 | gzip | 0.86 MB |
 | brotli | 0.71 MB |
@@ -1043,8 +1076,18 @@ trade: no backend, no runtime generation.
 **The horizon guard** (`.github/workflows/corpus-horizon.yml`) is measured from the **last
 indexed date**, never from a count of files — a count cannot distinguish ten years of runway
 from ten years of history. It is scheduled monthly rather than only run on push, because
-nothing about a commit shrinks the horizon; time does. This repository still has no general
-CI pipeline (D10-s); that remains P2.
+nothing about a commit shrinks the horizon; time does.
+
+It validates the corpus first and takes that date from the **last chunk**, not from
+`manifest.lastDate`. Reading the field directly was a real hole: `readCorpus` verifies every
+chunk's hash, but nothing tied the manifest's summary to the chunks, so editing one line of
+`index.json` would have kept the guard green for years with no extra content behind it. A
+guard that can be silenced by editing the thing it guards is not a guard. An unparseable
+`--today` is rejected rather than subtracted into `NaN months left` with a zero exit.
+
+The workflow runs `corpus:verify` before the guard, since this repository still has no
+general CI pipeline (D10-s — that remains P2) and a corpus change would otherwise reach the
+branch with nothing having solved any of its puzzles.
 
 **P1-7. Persist progress.** `{board, completed, elapsedMs}` under a versioned namespace, keyed by
 the **`puzzleId`** from P0-5 — one identity across cache, persistence and archive — with the
@@ -1224,7 +1267,7 @@ whole of P0 into one oversized set.)
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
 | 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
 | 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator’s exhaustive `solutionsByTargets` is replaced by it, and the candidate search it feeds carries a **separate** `tilingBudget`; all shipped puzzles are solver-verified by `tests/corpus.test.ts` | unit |
-| 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; atomic staging-then-swap; every puzzle solver-verified before anything is written; horizon guard measured from the last indexed date | unit + CI |
+| 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; no repeated definitions; atomic manifest-rename commit with the previous corpus readable throughout; every puzzle solver-verified before anything is written; horizon guard derived from the last chunk | unit + CI |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint**, built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |

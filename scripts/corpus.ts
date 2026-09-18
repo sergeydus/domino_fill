@@ -180,9 +180,17 @@ export const monthsBetween = (from: string, to: string): number => {
  * produce neighbouring streams. The version and the root seed are folded in, which is what
  * makes `CORPUS_VERSION` a real lever rather than documentation.
  */
-export const seedFor = (date: string, group: string, level: number): number => {
+export const seedFor = (date: string, group: string, level: number, reroll = 0): number => {
+    // `reroll` is folded in only when it is non-zero, so introducing re-rolling left every
+    // puzzle that did not collide exactly as it was. The corpus diff then shows only the
+    // boards that actually changed, which is the difference between a reviewable change and
+    // a thirty-thousand-file one.
+    const parts = reroll === 0
+        ? [String(CORPUS_VERSION), date, group, String(level)]
+        : [String(CORPUS_VERSION), date, group, String(level), `r${reroll}`]
+
     let hash = 0x811c9dc5 ^ CORPUS_SEED
-    for (const part of [String(CORPUS_VERSION), date, group, String(level)]) {
+    for (const part of parts) {
         for (let i = 0; i < part.length; i++) {
             hash ^= part.charCodeAt(i)
             hash = Math.imul(hash, 0x01000193) >>> 0
@@ -229,39 +237,93 @@ export const puzzleIdFor = (date: string, group: SlotGroup, level: number): stri
 export const generateSlot = (
     date: string,
     slot: typeof SLOTS[number],
-    attempts?: number,
+    options: { attempts?: number, seen?: Set<string> } = {},
 ): StoredPuzzle => {
-    const generated = generateBoard({
-        size: slot.size,
-        rocks: slot.rocks,
-        random: rngFrom(seedFor(date, slot.group, slot.level)),
-        ...(attempts === undefined ? {} : { attempts }),
-    })
-    if (!generated) {
-        // Loud, not skipped. A day with eight puzzles would be a silent hole in the calendar
-        // that surfaced only when a player reached it, years later.
-        throw new Error(
-            `no puzzle for ${date} ${slot.group} level ${slot.level} ` +
-            `(${slot.size}x${slot.size}, ${slot.rocks} rocks) within the attempt budget`)
+    const { attempts, seen } = options
+
+    for (let reroll = 0; reroll < MAX_REROLLS; reroll++) {
+        const generated = generateBoard({
+            size: slot.size,
+            rocks: slot.rocks,
+            random: rngFrom(seedFor(date, slot.group, slot.level, reroll)),
+            ...(attempts === undefined ? {} : { attempts }),
+        })
+        if (!generated) {
+            // Loud, not skipped. A day with eight puzzles would be a silent hole in the
+            // calendar that surfaced only when a player reached it, years later.
+            throw new Error(
+                `no puzzle for ${date} ${slot.group} level ${slot.level} ` +
+                `(${slot.size}x${slot.size}, ${slot.rocks} rocks) within the attempt budget`)
+        }
+
+        const puzzle: StoredPuzzle = {
+            puzzleId: puzzleIdFor(date, slot.group, slot.level),
+            board: generated.board,
+            boardHorizontalNumbers: generated.boardHorizontalNumbers,
+            boardVerticalNumbers: generated.boardVerticalNumbers,
+        }
+        if (!seen) return puzzle
+
+        /*
+         * "Exactly one solution" is not the same as "a new puzzle". The first corpus built
+         * here contained 314 exact repeats among 32,877 entries -- 297 easy, 17 medium, none
+         * hard -- and the closest pair was four days apart. A player meeting the same board
+         * twice in a week has no way to read that as anything but the game being broken.
+         *
+         * Re-rolling is deterministic: the same date and slot always take the same path
+         * through the same re-roll sequence, because `seen` is filled in date order from the
+         * first month of the corpus every time it is built.
+         */
+        const key = canonicalDefinition(puzzle)
+        if (!seen.has(key)) {
+            seen.add(key)
+            return puzzle
+        }
     }
-    return {
-        puzzleId: puzzleIdFor(date, slot.group, slot.level),
-        board: generated.board,
-        boardHorizontalNumbers: generated.boardHorizontalNumbers,
-        boardVerticalNumbers: generated.boardVerticalNumbers,
-    }
+
+    throw new Error(
+        `no unused puzzle for ${date} ${slot.group} level ${slot.level} after ${MAX_REROLLS} `
+        + `re-rolls; this slot's space of single-solution boards may be exhausted`)
 }
 
-export const generateDay = (date: string): DayEntry => {
+/**
+ * A puzzle's content, as bytes, with its name left out.
+ *
+ * Two puzzles with the same rocks and the same targets are the same puzzle however they are
+ * labelled, and a daily game that serves one twice has repeated itself. The full definition
+ * is compared rather than `definitionHash`, which is a 32-bit FNV value chosen to detect
+ * change cheaply and will collide across tens of thousands of entries by birthday alone.
+ */
+export const canonicalDefinition = (puzzle: StoredPuzzle): string =>
+    JSON.stringify([puzzle.board, puzzle.boardHorizontalNumbers, puzzle.boardVerticalNumbers])
+
+/**
+ * How many times a slot may be re-rolled before the build gives up.
+ *
+ * Generous: the observed collision rate was 314 in 32,877, almost all of them on the
+ * roomiest easy board, and a re-roll draws from a different stream entirely. Needing more
+ * than a handful would mean the slot's space is genuinely exhausted, which is a content
+ * design problem and should be reported rather than papered over.
+ */
+export const MAX_REROLLS = 32
+
+export const generateDay = (date: string, seen?: Set<string>): DayEntry => {
     const day: DayEntry = { date, easyBoards: [], mediumBoards: [], hardBoards: [] }
-    for (const slot of SLOTS) day[slot.group].push(generateSlot(date, slot))
+    for (const slot of SLOTS) day[slot.group].push(generateSlot(date, slot, { seen }))
     return day
 }
 
-export const generateChunk = (month: string): Chunk => ({
+/**
+ * A month of days.
+ *
+ * `seen` is threaded through so that duplicate detection spans the whole corpus rather than
+ * a single month. It must be filled in date order from the very first month for the result
+ * to be reproducible, which is what `build-corpus.ts` does.
+ */
+export const generateChunk = (month: string, seen?: Set<string>): Chunk => ({
     month,
     version: CORPUS_VERSION,
-    days: datesIn(month).map(generateDay),
+    days: datesIn(month).map(date => generateDay(date, seen)),
 })
 
 // ---------------------------------------------------------------------------
@@ -336,8 +398,19 @@ export const validateCorpus = (manifest: Manifest, chunks: Chunk[]): Problem[] =
         const ref = manifest.chunks[index]
         if (!ref) return
 
+        /*
+         * Every field of the ref is compared against one derived from the chunk itself,
+         * rather than only the hash. `days`, `firstDate`, `lastDate` and `file` used to be
+         * taken on trust, which meant the manifest could describe a corpus that the chunks
+         * did not contain -- and the horizon guard reads exactly those fields.
+         */
+        const derived = chunkRefFor(chunk)
         if (ref.month !== chunk.month) say(`manifest chunk ${index} is ${ref.month} but the chunk says ${chunk.month}`)
-        if (ref.sha256 !== sha256(encodeChunk(chunk))) say(`${chunk.month}: content does not match its manifest hash`)
+        if (ref.sha256 !== derived.sha256) say(`${chunk.month}: content does not match its manifest hash`)
+        if (ref.file !== derived.file) say(`${chunk.month}: is published as ${ref.file}, but its content names it ${derived.file}`)
+        if (ref.days !== derived.days) say(`${chunk.month}: manifest says ${ref.days} days, the chunk holds ${derived.days}`)
+        if (ref.firstDate !== derived.firstDate) say(`${chunk.month}: manifest says it starts ${ref.firstDate}, the chunk starts ${derived.firstDate}`)
+        if (ref.lastDate !== derived.lastDate) say(`${chunk.month}: manifest says it ends ${ref.lastDate}, the chunk ends ${derived.lastDate}`)
         if (chunk.version !== CORPUS_VERSION) say(`${chunk.month}: chunk version ${chunk.version} is not ${CORPUS_VERSION}`)
 
         // Months run consecutively: a gap would be a month of blank days in the calendar.
@@ -395,9 +468,11 @@ export const validateCorpus = (manifest: Manifest, chunks: Chunk[]): Problem[] =
     })
 
     if (manifest.firstDate !== chunks[0].days[0].date) say('manifest firstDate disagrees with the first chunk')
-    const lastChunk = chunks[chunks.length - 1]
-    if (manifest.lastDate !== lastChunk.days[lastChunk.days.length - 1].date)
-        say('manifest lastDate disagrees with the last chunk')
+    if (manifest.lastDate !== lastDateOf(chunks))
+        say(`manifest lastDate is ${manifest.lastDate}, but the chunks end ${lastDateOf(chunks)}`)
+
+    const actualDays = chunks.reduce((total, chunk) => total + chunk.days.length, 0)
+    if (manifest.days !== actualDays) say(`manifest claims ${manifest.days} days, found ${actualDays}`)
     if (manifest.puzzles !== seenIds.size) say(`manifest claims ${manifest.puzzles} puzzles, found ${seenIds.size}`)
 
     return problems
@@ -416,8 +491,12 @@ export const unsolvablePuzzles = (chunks: Chunk[], onDay?: (date: string) => voi
     for (const chunk of chunks) {
         for (const day of chunk.days) {
             onDay?.(day.date)
-            for (const slot of SLOTS) {
-                for (const puzzle of day[slot.group]) {
+            // `GROUPS`, not `SLOTS`. Iterating the nine slots and then the whole group each
+            // time walked every group three times over: 98,631 solver calls for a corpus of
+            // 32,877 puzzles, while the progress line said 32,877. The answer was right and
+            // the work was triple.
+            for (const group of GROUPS) {
+                for (const puzzle of day[group]) {
                     const result = solve(definitionFrom(puzzle))
                     if (result.kind !== 'solved') {
                         problems.push(`${puzzle.puzzleId}: solver says ${result.kind}`)
@@ -427,6 +506,38 @@ export const unsolvablePuzzles = (chunks: Chunk[], onDay?: (date: string) => voi
         }
     }
     return problems
+}
+
+/**
+ * Definitions that appear more than once anywhere in the corpus.
+ *
+ * Structural validation can say every puzzle is well-formed and uniquely solvable while the
+ * corpus still repeats itself, which is what happened: the first build had 314 exact
+ * repeats. This is the check that would have caught it.
+ */
+export const duplicateDefinitions = (chunks: Chunk[]): Problem[] => {
+    const firstSeen = new Map<string, string>()
+    const problems: Problem[] = []
+    for (const chunk of chunks) {
+        for (const day of chunk.days) {
+            for (const group of GROUPS) {
+                for (const puzzle of day[group]) {
+                    const key = canonicalDefinition(puzzle)
+                    const earlier = firstSeen.get(key)
+                    if (earlier) problems.push(`${puzzle.puzzleId} repeats ${earlier}`)
+                    else firstSeen.set(key, puzzle.puzzleId)
+                }
+            }
+        }
+    }
+    return problems
+}
+
+/** The last day the chunks actually contain, as opposed to what the manifest claims. */
+export const lastDateOf = (chunks: Chunk[]): string | null => {
+    const last = chunks[chunks.length - 1]
+    if (!last || last.days.length === 0) return null
+    return last.days[last.days.length - 1].date
 }
 
 /**

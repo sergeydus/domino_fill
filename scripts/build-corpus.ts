@@ -1,10 +1,10 @@
 import { gzipSync, brotliCompressSync, constants } from "node:zlib"
 import {
-    CORPUS_MONTHS, CORPUS_START_MONTH, addMonths, appendOnlyProblems, encodeChunk,
-    generateChunk, manifestFor, monthsBetween, monthOf, unsolvablePuzzles, validateCorpus,
-    type Chunk,
+    CORPUS_MONTHS, CORPUS_START_MONTH, addMonths, appendOnlyProblems, duplicateDefinitions,
+    encodeChunk, generateChunk, manifestFor, monthsBetween, monthOf, unsolvablePuzzles,
+    validateCorpus, type Chunk,
 } from "./corpus"
-import { readCorpus, writeCorpus, CORPUS_DIR } from "./corpus-io"
+import { assertSafeTarget, readCorpus, writeCorpus, CORPUS_DIR } from "./corpus-io"
 
 /**
  * Build the puzzle corpus (spec P1-6, row 18c).
@@ -32,6 +32,10 @@ const main = async () => {
     }
     const dir = arg('out') ?? CORPUS_DIR
 
+    // Before generating, not after: five minutes of work should not be spent discovering
+    // that the destination was never writable.
+    await assertSafeTarget(dir)
+
     const previous = await readCorpus(dir)
     if (previous) {
         console.log(`existing corpus: ${previous.manifest.firstDate} to ${previous.manifest.lastDate} `
@@ -50,9 +54,13 @@ const main = async () => {
 
     const started = Date.now()
     const chunks: Chunk[] = []
+    // Shared across the whole run and filled in date order, so a puzzle is only ever
+    // compared against ones that come before it -- which is what makes re-rolling on a
+    // collision reproducible rather than dependent on where the build happened to start.
+    const seen = new Set<string>()
     for (let i = 0; i < total; i++) {
         const month = addMonths(CORPUS_START_MONTH, i)
-        chunks.push(generateChunk(month))
+        chunks.push(generateChunk(month, seen))
         if ((i + 1) % 12 === 0 || i === total - 1) {
             const done = i + 1
             const rate = (Date.now() - started) / done
@@ -74,6 +82,17 @@ const main = async () => {
         return
     }
     console.log('structure ok')
+
+    // Belt and braces: generation re-rolls to avoid repeats, and this proves it worked
+    // rather than trusting that it did.
+    const repeats = duplicateDefinitions(chunks)
+    if (repeats.length) {
+        console.error(`\n${repeats.length} puzzles repeat an earlier definition:`)
+        for (const problem of repeats.slice(0, 20)) console.error(`  ${problem}`)
+        process.exitCode = 1
+        return
+    }
+    console.log(`no repeated definitions among ${manifest.puzzles} puzzles`)
 
     const solverStarted = Date.now()
     let checked = 0

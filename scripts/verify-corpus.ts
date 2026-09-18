@@ -1,4 +1,4 @@
-import { unsolvablePuzzles, validateCorpus } from "./corpus"
+import { duplicateDefinitions, unsolvablePuzzles, validateCorpus } from "./corpus"
 import { orphanFiles, readCorpus, CORPUS_DIR } from "./corpus-io"
 
 /**
@@ -39,6 +39,10 @@ const main = async () => {
 
     const orphans = await orphanFiles(corpus)
     report('stray files', orphans.map(name => `${name} is not referenced by the manifest`))
+
+    // Structural validity says nothing about repetition: the first corpus built here was
+    // entirely valid and still served 314 boards twice.
+    report('duplicate definitions', duplicateDefinitions(corpus.chunks))
 
     const started = Date.now()
     let checked = 0

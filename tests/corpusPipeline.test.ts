@@ -1,13 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
     CORPUS_SEED, CORPUS_START_MONTH, CORPUS_VERSION, HORIZON_WARNING_MONTHS, SLOTS,
     addMonths, appendOnlyProblems, chunkRefFor, datesIn, encodeChunk, generateDay,
     isoDate, manifestFor, monthOf, monthsBetween, monthsRemaining, parseDate,
-    generateSlot, puzzleIdFor, rngFrom, seedFor, sha256, validateCorpus,
+    canonicalDefinition, duplicateDefinitions, generateSlot, lastDateOf, puzzleIdFor,
+    rngFrom, seedFor, sha256, unsolvablePuzzles, validateCorpus,
     type Chunk, type DayEntry, type Manifest,
 } from '@/scripts/corpus'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { solve } from '@/app/stores/solver'
+import * as solverModule from '@/app/stores/solver'
 
 /**
  * The content pipeline's rules (spec P1-6, row 18c).
@@ -169,7 +171,7 @@ describe('a slot that cannot be filled', () => {
          * A day with eight puzzles would be a hole in the calendar that surfaced only when
          * a player reached it, possibly years later. `attempts: 0` forces the case.
          */
-        expect(() => generateSlot('2026-09-18', SLOTS[0], 0))
+        expect(() => generateSlot('2026-09-18', SLOTS[0], { attempts: 0 }))
             .toThrow(/no puzzle for 2026-09-18 easyBoards level 1 \(6x6, 8 rocks\)/)
     })
 
@@ -327,8 +329,11 @@ describe('structural validation', () => {
     it('rejects a manifest whose totals disagree with the chunks', () => {
         const manifest: Manifest = { ...goodManifest, puzzles: 1, days: 1, lastDate: '2099-01-01' }
         const problems = validateCorpus(manifest, goodChunks).join('; ')
-        expect(problems).toContain('manifest lastDate disagrees')
-        expect(problems).toContain('claims 1 puzzles')
+        // All three, including the day count. This test used to set `days: 1` and never
+        // assert anything about it, so that third of it was decoration.
+        expect(problems).toContain('manifest lastDate is 2099-01-01, but the chunks end 2026-09-30')
+        expect(problems).toContain('manifest claims 1 days, found 30')
+        expect(problems).toContain('manifest claims 1 puzzles')
     })
 
     it('rejects a seed or version that is not the committed one', () => {
@@ -351,7 +356,7 @@ describe('append-only', () => {
     it('allows a corpus that only adds later dates', () => {
         const extended = [
             published[0],
-            { month: '2026-10', version: CORPUS_VERSION, days: ['2026-10-01'].map(generateDay) },
+            { month: '2026-10', version: CORPUS_VERSION, days: ['2026-10-01'].map(date => generateDay(date)) },
         ]
         expect(appendOnlyProblems(before, { manifest: manifestFor(extended, 'x'), chunks: extended }))
             .toEqual([])
@@ -381,7 +386,7 @@ describe('append-only', () => {
     })
 
     it('refuses to move the start of the corpus', () => {
-        const later = [{ month: '2026-10', version: CORPUS_VERSION, days: ['2026-10-01'].map(generateDay) }]
+        const later = [{ month: '2026-10', version: CORPUS_VERSION, days: ['2026-10-01'].map(date => generateDay(date)) }]
         const problems = appendOnlyProblems(before, { manifest: manifestFor(later, 'x'), chunks: later })
         expect(problems.join('; ')).toContain('used to start at 2026-09-01')
     })
@@ -437,5 +442,191 @@ describe('the day entry a chunk carries', () => {
             expect(Object.keys(puzzle).sort())
                 .toEqual(['board', 'boardHorizontalNumbers', 'boardVerticalNumbers', 'puzzleId'])
         }
+    })
+})
+
+
+describe('duplicate definitions', () => {
+    /*
+     * The gap that mattered most in the first corpus. Structural validation said every one
+     * of 32,877 puzzles was well-formed and uniquely solvable, and 314 of them were exact
+     * repeats of an earlier board -- 297 easy, 17 medium, none hard -- with the closest pair
+     * four days apart (v1-2026-11-28-easy-3 and v1-2026-12-02-easy-3).
+     *
+     * "Exactly one solution" is not the same as "a new puzzle". A player meeting the same
+     * board twice in a week reads that as the game being broken, and nothing in the pipeline
+     * could see it.
+     */
+
+    it('finds a repeat and names both ends of it', () => {
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION,
+            days: ['2026-09-01', '2026-09-02'].map(dayLike),
+        }]
+        // `dayLike` copies one template day, so every later day repeats the first by
+        // construction -- nine repeats, one per slot.
+        const problems = duplicateDefinitions(chunks)
+        expect(problems).toHaveLength(SLOTS.length)
+        expect(problems[0]).toBe('v1-2026-09-02-easy-1 repeats v1-2026-09-01-easy-1')
+    })
+
+    it('says nothing about a corpus of genuinely different puzzles', () => {
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION,
+            days: ['2026-09-01', '2026-09-02', '2026-09-03'].map(date => generateDay(date)),
+        }]
+        expect(duplicateDefinitions(chunks)).toEqual([])
+    })
+
+    it('compares the full definition, not a 32-bit hash of it', () => {
+        /*
+         * `definitionHash` is FNV-32 and exists to notice that content changed, cheaply.
+         * Across tens of thousands of entries it will collide by birthday alone, and a
+         * collision there would reject a puzzle that was perfectly new. The comparison is
+         * over the canonical bytes for that reason.
+         */
+        const a = generateDay('2026-09-01').easyBoards[0]
+        const b = generateDay('2026-09-02').easyBoards[0]
+        expect(canonicalDefinition(a)).not.toBe(canonicalDefinition(b))
+        // And the name is not part of it: the same board under two ids is the same board.
+        expect(canonicalDefinition(a)).toBe(canonicalDefinition({ ...a, puzzleId: 'renamed' }))
+    })
+
+    it('generates around a collision instead of emitting one', () => {
+        /*
+         * The fix, exercised directly: hand the generator a `seen` set already containing
+         * the puzzle it is about to produce, and it must come back with a different board
+         * under the same id rather than with the duplicate.
+         */
+        const natural = generateSlot('2026-09-01', SLOTS[0])
+        const seen = new Set([canonicalDefinition(natural)])
+        const rerolled = generateSlot('2026-09-01', SLOTS[0], { seen })
+
+        expect(rerolled.puzzleId).toBe(natural.puzzleId)
+        expect(canonicalDefinition(rerolled)).not.toBe(canonicalDefinition(natural))
+        expect(seen.size).toBe(2)
+
+        // And it is still a real puzzle, not merely a different arrangement of cells.
+        expect(solve(definitionFrom(rerolled)).kind).toBe('solved')
+    })
+
+    it('re-rolls deterministically, so a rebuild reproduces the same choice', () => {
+        const natural = generateSlot('2026-09-01', SLOTS[0])
+        const once = generateSlot('2026-09-01', SLOTS[0], { seen: new Set([canonicalDefinition(natural)]) })
+        const again = generateSlot('2026-09-01', SLOTS[0], { seen: new Set([canonicalDefinition(natural)]) })
+        expect(canonicalDefinition(again)).toBe(canonicalDefinition(once))
+    })
+
+    it('leaves a slot untouched when nothing collides', () => {
+        // Re-rolling must not perturb the 32,563 puzzles that were already fine: re-roll 0
+        // uses the seed it always did, so the corpus diff shows only what actually changed.
+        const withoutSeen = generateSlot('2026-09-01', SLOTS[0])
+        const withSeen = generateSlot('2026-09-01', SLOTS[0], { seen: new Set() })
+        expect(canonicalDefinition(withSeen)).toBe(canonicalDefinition(withoutSeen))
+    })
+
+    it('gives up loudly rather than looping when a slot is exhausted', () => {
+        // A `seen` that rejects everything. Better a build failure naming the slot than an
+        // unbounded search, or a duplicate slipped through to keep things moving.
+        const always = { has: () => true, add: () => undefined } as unknown as Set<string>
+        expect(() => generateSlot('2026-09-01', SLOTS[0], { seen: always }))
+            .toThrow(/no unused puzzle for 2026-09-01 easyBoards level 1 after \d+ re-rolls/)
+    })
+})
+
+describe('the solver verification pass', () => {
+    it('visits each puzzle exactly once', () => {
+        /*
+         * It used to iterate the nine slots and then the whole three-puzzle group for each,
+         * walking every group three times over: 98,631 solver calls for a corpus of 32,877
+         * puzzles, while the progress line said 32,877. The verdict was right and the work
+         * was triple, so the verification time it reported meant nothing.
+         */
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION,
+            days: ['2026-09-01', '2026-09-02'].map(date => generateDay(date)),
+        }]
+        const spy = vi.spyOn(solverModule, 'solve')
+        unsolvablePuzzles(chunks)
+        expect(spy).toHaveBeenCalledTimes(2 * SLOTS.length)
+        spy.mockRestore()
+    })
+
+    it('reports one problem per bad puzzle, not three', () => {
+        // The same triple traversal would have reported one broken board three times.
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION, days: [generateDay('2026-09-01')],
+        }]
+        chunks[0].days[0].easyBoards[0].boardHorizontalNumbers = '0,0,0,0,0,0'
+
+        const problems = unsolvablePuzzles(chunks)
+        expect(problems).toHaveLength(1)
+        expect(problems[0]).toMatch(/^v1-2026-09-01-easy-1: solver says \w+$/)
+    })
+
+    it('reports nothing for a corpus of sound puzzles', () => {
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION, days: [generateDay('2026-09-01')],
+        }]
+        expect(unsolvablePuzzles(chunks)).toEqual([])
+    })
+
+    it('calls back once per day, which is what the progress line counts', () => {
+        const chunks: Chunk[] = [{
+            month: '2026-09', version: CORPUS_VERSION,
+            days: ['2026-09-01', '2026-09-02', '2026-09-03'].map(date => generateDay(date)),
+        }]
+        const days: string[] = []
+        unsolvablePuzzles(chunks, date => days.push(date))
+        expect(days).toEqual(['2026-09-01', '2026-09-02', '2026-09-03'])
+    })
+})
+
+describe('what the manifest claims versus what the chunks hold', () => {
+    /*
+     * The horizon guard reads the manifest. `readCorpus` verifies every chunk's hash, but
+     * nothing tied the manifest's summary fields to the chunks -- so editing one line of
+     * `index.json` would have satisfied the scheduled guard for years without a single extra
+     * puzzle existing. These close that off; the guard itself now also derives its endpoint
+     * from the last chunk rather than from the field.
+     */
+    const chunks = [buildChunk('2026-09', datesIn('2026-09'))]
+    const honest = manifestFor(chunks, 'x')
+
+    it('rejects a lastDate that runs ahead of the content', () => {
+        const lying: Manifest = { ...honest, lastDate: '2099-12-31' }
+        expect(validateCorpus(lying, chunks).join('; '))
+            .toContain('manifest lastDate is 2099-12-31, but the chunks end 2026-09-30')
+    })
+
+    it('rejects a day count that does not match', () => {
+        // The previous version of this test set `days: 1` and never asserted anything about
+        // it, so that half of it was decoration.
+        expect(validateCorpus({ ...honest, days: 1 }, chunks).join('; '))
+            .toContain('manifest claims 1 days, found 30')
+    })
+
+    it('rejects a chunk ref that misdescribes its chunk', () => {
+        const refs = honest.chunks.map(ref => ({ ...ref }))
+        refs[0].days = 999
+        refs[0].firstDate = '1999-01-01'
+        refs[0].lastDate = '2099-01-01'
+        const problems = validateCorpus({ ...honest, chunks: refs }, chunks).join('; ')
+
+        expect(problems).toContain('manifest says 999 days, the chunk holds 30')
+        expect(problems).toContain('manifest says it starts 1999-01-01')
+        expect(problems).toContain('manifest says it ends 2099-01-01')
+    })
+
+    it('rejects a filename that is not derived from the content', () => {
+        const refs = honest.chunks.map(ref => ({ ...ref, file: '2026-09.0000000000000000.json' }))
+        expect(validateCorpus({ ...honest, chunks: refs }, chunks).join('; '))
+            .toContain('its content names it')
+    })
+
+    it('reports the real endpoint, so a guard can be built on it', () => {
+        expect(lastDateOf(chunks)).toBe('2026-09-30')
+        expect(lastDateOf([])).toBeNull()
+        expect(lastDateOf([{ month: '2026-09', version: CORPUS_VERSION, days: [] }])).toBeNull()
     })
 })
