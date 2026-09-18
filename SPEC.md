@@ -888,6 +888,35 @@ Move `DominoBoard` into `scripts/generate-boards.ts`. **Fix the output contract 
 emit comma-joined sums and repair `allow0Lines`, or the generator ships uncompletable boards.
 Replace enumerate-every-solution with a search that **aborts on the second solution**.
 
+**The solver (18b).** It lives in `app/stores/solver.ts` because check and hint (18e) are
+player-facing; `e2e/solve.ts` stays where it is and is not promoted. The contract is a
+discriminated union, and the rule behind it is that *a result is only as strong as what was
+actually proven*:
+
+| result | meaning |
+|---|---|
+| `solved` | exactly one completion, proven by exhausting the space |
+| `multiple` | at least two, returned the moment the second is found |
+| `unsolvable` | no completion, proven by exhausting the space |
+| `budget-exhausted` | **unknown.** `solutionsFound` distinguishes "found one, uniqueness unsettled" from "found nothing" |
+| `invalid` | not a position at all: `shape`, `cell-value`, `rocks`, `pairing`, `targets` |
+
+Three boundaries are load-bearing. **`budget-exhausted` outranks a single solution** — finding
+one completion and running out of budget is not `solved`, because the generator would ship an
+ambiguous board and a hint would tell the player they are finished when they may not be.
+**`unsolvable` is a verdict about a legal position**, not a complaint about the input; a board
+whose line is already over its target is lost, not corrupt, and telling the player their save
+is broken would be wrong. And **an invalid *budget* throws `RangeError`** rather than
+returning `invalid`, matching the generator's configuration-versus-search distinction above.
+
+A node is one visit to a search state, counted on entry, and the budget is an exact ceiling:
+a search needing N nodes succeeds at `budget: N` and is exhausted at `N - 1`; `budget: 0`
+visits nothing. Node counts are reproducible because the branch order is fixed — first empty
+cell in row-major order, vertical before horizontal.
+
+The generator now asks this solver for uniqueness instead of counting every solution, and a
+candidate whose check comes back `budget-exhausted` is **discarded rather than emitted**.
+
 The generator must also **terminate for every input**, which the original did not: rocks were
 placed by drawing a cell and retrying when it was taken, so more rocks than cells — or an RNG
 that kept returning the same cell — spun forever. `attempts` did not cover this, because it
@@ -1118,7 +1147,7 @@ whole of P0 into one oversized set.)
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
 | 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
 | 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
-| 18b | **P1-6** solver contract: a pure production solver with distinct results for solved / unsolvable / multiple / invalid / budget-exhausted, a deterministic node budget, partially-played boards left unmutated, uniqueness stopping at solution two | unit |
+| 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator's exhaustive `solutionsByTargets` is replaced by it | unit |
 | 18c | **P1-6** content pipeline: pre-generated fixed horizon, monthly static chunks, append-only date→puzzleId map, 12-month CI guard, generated JSON kept out of the JS import graph | unit |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint**, built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |

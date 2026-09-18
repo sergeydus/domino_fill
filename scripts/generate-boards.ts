@@ -1,4 +1,5 @@
-import type { DominoLevel } from "../app/stores/PuzzleDefinition"
+import { definitionFrom, type DominoLevel } from "../app/stores/PuzzleDefinition"
+import { solve, DEFAULT_NODE_BUDGET } from "../app/stores/solver"
 
 /**
  * The puzzle generator (spec P1-6, D10-j).
@@ -68,28 +69,26 @@ const firstEmpty = (board: (number | null)[][]): [number, number] | null => {
     return null
 }
 
-export type Solution = { board: (number | null)[][], count: number }
-
 /**
- * Every distinct target string the rocks admit, with one example solution and how many
- * solutions share it.
+ * Every way the rocks can be tiled, in a fixed order, one at a time.
  *
- * Enumerates exhaustively, which is what P1-6 will replace with a search that stops at the
- * second solution — that belongs with the real solver and its node budget, and is deliberately
- * not attempted here. This stage is about the *format* being right.
+ * This replaces `solutionsByTargets`, which built a map of *every* solution grouped by target
+ * string and counted the groups. Counting every solution in order to learn whether one is
+ * unique is exactly the exhaustive enumeration P1-6 exists to remove: the answer is settled
+ * by the second solution, and everything found after it is wasted. Uniqueness is now decided
+ * by the production solver, which stops there and has a node budget. This only supplies
+ * candidates.
+ *
+ * A generator function rather than an array, so a caller that accepts the first workable
+ * candidate never pays for the rest — which is the usual case.
  */
-export const solutionsByTargets = (puzzle: (number | null)[][]): Map<string, Solution> => {
+export function* tilings(puzzle: (number | null)[][]): Generator<(number | null)[][]> {
     const size = puzzle.length
-    const found = new Map<string, Solution>()
 
-    const recur = (board: (number | null)[][]) => {
+    function* recur(board: (number | null)[][]): Generator<(number | null)[][]> {
         const next = firstEmpty(board)
         if (!next) {
-            const { boardHorizontalNumbers, boardVerticalNumbers } = targetsOf(board)
-            const key = `${boardHorizontalNumbers}|${boardVerticalNumbers}`
-            const seen = found.get(key)
-            if (seen) seen.count++
-            else found.set(key, { board: board.map(row => [...row]), count: 1 })
+            yield board.map(row => [...row])
             return
         }
 
@@ -99,19 +98,18 @@ export const solutionsByTargets = (puzzle: (number | null)[][]): Map<string, Sol
             const attempt = board.map(row => [...row])
             attempt[i][j] = 1
             attempt[i + 1][j] = 0
-            recur(attempt)
+            yield* recur(attempt)
         }
         // Horizontal: 0 on the left, 2 on the right.
         if (j + 1 < size && board[i][j + 1] === null) {
             const attempt = board.map(row => [...row])
             attempt[i][j] = 0
             attempt[i][j + 1] = 2
-            recur(attempt)
+            yield* recur(attempt)
         }
     }
 
-    recur(puzzle)
-    return found
+    yield* recur(puzzle)
 }
 
 /**
@@ -165,6 +163,15 @@ export type GenerateOptions = {
     random?: () => number
     /** How many rock layouts to try before giving up, so a valid request cannot run forever. */
     attempts?: number
+    /**
+     * The node budget each uniqueness check is given.
+     *
+     * A candidate whose check runs out of budget is **discarded**, never emitted. The solver
+     * reports that case as `budget-exhausted` rather than `solved` precisely because
+     * uniqueness was not established, and shipping a board on that basis would be shipping a
+     * board that might have two answers.
+     */
+    solverBudget?: number
 }
 
 /** A generated puzzle, together with the solution it was built from. */
@@ -268,10 +275,14 @@ export const scatterRocks = (
 /**
  * Generate a puzzle with exactly one solution.
  *
- * Rock layouts are drawn at random and rejected until one yields a single-solution target
- * pair, which is the same brute-force approach as before — the search is P1-6's to replace.
- * What has changed is that the result is *correct*: the targets it emits are the ones the
- * runtime parser reads back, and the loop now terminates for every input.
+ * Rock layouts are drawn at random, and for each one the candidate tilings are walked in
+ * order until a target pair turns out to have exactly one solution. Uniqueness is decided by
+ * the **production solver** — the same code the player's check and hint will run — rather
+ * than by counting every solution, so the search stops at the second answer instead of
+ * enumerating thousands more that cannot change the verdict.
+ *
+ * Candidates are keyed by their targets, because every tiling that produces the same targets
+ * asks the same question, and asking it once is enough.
  *
  * Returns `null` when a valid request found no puzzle within `attempts`; throws `RangeError`
  * when the request itself is impossible — which includes leaving an odd number of playable
@@ -283,6 +294,7 @@ export const generateBoard = ({
     allow0Lines = true,
     random = Math.random,
     attempts = 500,
+    solverBudget = DEFAULT_NODE_BUDGET,
 }: GenerateOptions = {}): GeneratedBoard | null => {
     validate(size, rocks, attempts)
     validatePlayable(size, rocks)
@@ -291,14 +303,27 @@ export const generateBoard = ({
         const puzzle = scatterRocks(size, rocks, random)
         if (!rocksArePlayable(puzzle)) continue
 
-        for (const { board: solution, count } of solutionsByTargets(puzzle).values()) {
-            if (count !== 1) continue
-            if (!allow0Lines && hasZeroLine(solution)) continue
-            return {
-                board: withoutPieces(solution),
-                solution,
-                ...targetsOf(solution),
-            }
+        const asked = new Set<string>()
+        for (const tiling of tilings(puzzle)) {
+            // Every tiling sharing these targets has the same line sums, so the zero-line
+            // question is settled by the targets and is asked before the expensive part.
+            if (!allow0Lines && hasZeroLine(tiling)) continue
+
+            const targets = targetsOf(tiling)
+            const key = `${targets.boardHorizontalNumbers}|${targets.boardVerticalNumbers}`
+            if (asked.has(key)) continue
+            asked.add(key)
+
+            const board = withoutPieces(tiling)
+            // Through `definitionFrom`, so the candidate is parsed by the same code the app
+            // parses shipped data with. A board only the generator can read is D10-j.
+            const definition = definitionFrom({ puzzleId: 'candidate', board, ...targets })
+            const result = solve(definition, { budget: solverBudget })
+            if (result.kind !== 'solved') continue
+
+            // The solver's solution, not the candidate tiling. They are equal -- that is what
+            // `solved` means -- but emitting the proven one keeps the loop closed.
+            return { board, solution: result.solution, ...targets }
         }
     }
     return null

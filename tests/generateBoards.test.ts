@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
     columnSumsOf, rowSumsOf, targetsOf, hasZeroLine, rocksArePlayable,
-    solutionsByTargets, generateBoard, scatterRocks,
+    tilings, generateBoard, scatterRocks,
 } from '@/scripts/generate-boards'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { isBoardFull, targetsMatch } from '@/app/stores/boardRules'
+import { solve } from '@/app/stores/solver'
 
 /**
  * The generator's output contract (spec P1-6, D10-j).
@@ -69,6 +70,10 @@ const runtimeAccepts = (generated: {
         definition,
     }
 }
+
+/** Ask the production solver the question the generator claims to have answered. */
+const uniquenessOf = (generated: { board: (number | null)[][], boardHorizontalNumbers: string, boardVerticalNumbers: string }) =>
+    solve(definitionFrom({ puzzleId: 'generated', ...generated })).kind
 
 describe('the targets are emitted in the format the runtime reads', () => {
     it('joins with commas, which is what `targetsMatch` compares against', () => {
@@ -200,9 +205,10 @@ describe('a generated board satisfies the runtime that has to play it', () => {
         expect(full).toBe(true)
         expect(matches).toBe(true)
 
-        const matching = solutionsByTargets(generated!.board).get(
-            `${generated!.boardHorizontalNumbers}|${generated!.boardVerticalNumbers}`)
-        expect(matching!.count, `seed ${seed} admits more than one solution`).toBe(1)
+        // Uniqueness according to the production solver, which is now the only thing that
+        // decides it. `solved` is the branch that means "exactly one, and proven".
+        expect(uniquenessOf(generated!), `seed ${seed} is not a uniquely solvable puzzle`)
+            .toBe('solved')
     })
 
     it('emits a puzzle with no pieces on it, only rocks', () => {
@@ -240,13 +246,29 @@ describe('a generated board satisfies the runtime that has to play it', () => {
         // The whole point of the rejection loop. A board with two answers is not a deduction
         // puzzle, and the player's correct reasoning could be contradicted by the targets.
         const generated = generateBoard({ size: 4, rocks: 2, random: seeded(12345) })!
-        const forThisPuzzle = solutionsByTargets(generated.board)
-        const matching = forThisPuzzle.get(
-            `${generated.boardHorizontalNumbers}|${generated.boardVerticalNumbers}`)
+        const result = solve(definitionFrom({ puzzleId: 'generated', ...generated }))
 
-        expect(matching, 'the emitted targets are not reachable from the emitted puzzle')
-            .toBeDefined()
-        expect(matching!.count, 'more than one board meets these targets').toBe(1)
+        expect(result.kind).toBe('solved')
+        // And the solution the solver reaches is the one the generator shipped, so the
+        // emitted targets really are reachable from the emitted puzzle.
+        expect(result.kind === 'solved' && result.solution).toEqual(generated.solution)
+    })
+
+    it('never emits a board whose uniqueness it could not prove', () => {
+        /*
+         * A budget too small to settle uniqueness makes the solver answer `budget-exhausted`,
+         * which is *not* `solved` -- and the generator must treat it as a rejection rather
+         * than as a near-enough yes. The failure this guards against is silent: a board that
+         * turns out to have two answers looks exactly like a good one until a player finds
+         * the other.
+         */
+        expect(generateBoard({ size: 4, rocks: 2, attempts: 5, solverBudget: 1, random: seeded(12345) }))
+            .toBeNull()
+
+        // Same seed, same attempts, an adequate budget: a board comes out. So the null above
+        // is the budget talking, not an unlucky seed.
+        expect(generateBoard({ size: 4, rocks: 2, attempts: 5, random: seeded(12345) }))
+            .not.toBeNull()
     })
 
     it('is deterministic for a given sequence of numbers', () => {
@@ -307,22 +329,57 @@ describe('the rock check the generator used to compute and ignore', () => {
     })
 })
 
-describe('enumerating solutions', () => {
-    it('finds the single solution of a board that has one', () => {
-        // A 2x2 with the right column rocked out: one vertical domino, one answer.
-        const puzzle: (number | null)[][] = [[null, -1], [null, -1]]
-        const found = solutionsByTargets(puzzle)
+describe('enumerating candidate tilings', () => {
+    /*
+     * `tilings` replaced `solutionsByTargets`. The old one built a map of every solution
+     * grouped by target string so the generator could look for a group of size one -- which
+     * is the exhaustive enumeration P1-6 exists to remove, since the answer is settled by the
+     * second solution. Uniqueness is the solver's job now; this only offers candidates.
+     */
 
-        expect(found.size).toBe(1)
-        expect([...found.values()][0].count).toBe(1)
+    it('finds the one tiling of a board that has one', () => {
+        // A 2x2 with the right column rocked out: one vertical domino, one answer.
+        const found = [...tilings([[null, -1], [null, -1]])]
+        expect(found).toEqual([[[1, -1], [0, -1]]])
     })
 
-    it('counts the solutions that share a target pair', () => {
-        // A 2x2 has two tilings -- two verticals or two horizontals -- and they give different
-        // targets, so each is its own entry.
+    it('finds every tiling, in a fixed order', () => {
+        // A 2x2 has two tilings: two verticals, or two horizontals. Vertical is tried first.
+        expect([...tilings([[null, null], [null, null]])]).toEqual([
+            [[1, 1], [0, 0]],
+            [[0, 2], [0, 2]],
+        ])
+    })
+
+    it('yields lazily, so a caller that stops early does not pay for the rest', () => {
+        /*
+         * The point of the change. Taking one tiling from a board with many must not walk
+         * them all -- the generator takes candidates until one proves unique, and on a real
+         * board the remainder runs to thousands.
+         */
+        const open: (number | null)[][] = Array.from({ length: 4 }, () => Array(4).fill(null))
+        const all = [...tilings(open)]
+        expect(all.length).toBeGreaterThan(10)
+
+        let produced = 0
+        for (const tiling of tilings(open)) {
+            expect(tiling).toHaveLength(4)
+            produced++
+            if (produced === 2) break
+        }
+        expect(produced).toBe(2)
+    })
+
+    it('yields nothing for a board that cannot be tiled', () => {
+        // Nine playable cells, and a domino covers two.
+        expect([...tilings(Array.from({ length: 3 }, () => Array(3).fill(null)))]).toEqual([])
+    })
+
+    it('does not mutate the puzzle it was given', () => {
         const puzzle: (number | null)[][] = [[null, null], [null, null]]
-        const found = solutionsByTargets(puzzle)
-        expect(found.size).toBe(2)
+        const before = JSON.stringify(puzzle)
+        void [...tilings(puzzle)]
+        expect(JSON.stringify(puzzle)).toBe(before)
     })
 })
 
