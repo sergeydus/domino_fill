@@ -125,6 +125,27 @@ describe('the committed corpus on disk', () => {
         expect(manifest.chunks[manifest.chunks.length - 1].lastDate).toBe(manifest.lastDate)
     })
 
+    it('is stored with the exact bytes it was hashed with, line endings included', () => {
+        /*
+         * The corpus is content-addressed, so anything that rewrites a byte on the way out of
+         * git invalidates every hash. `core.autocrlf=true` is the Windows default and does
+         * exactly that.
+         *
+         * Verified by cloning the repository before this was fixed: the first chunk came back
+         * hashing 38cea739b0250c17 against a manifest expecting 96fc740c71f810c0, and every
+         * other chunk failed the same way. `readCorpus` refuses the whole corpus in that
+         * state and blames corruption, which is a poor description of a line-ending setting.
+         * `.gitattributes` marks these files `-text`; this is the regression test, kept
+         * separate from the hash check below so the failure says what actually went wrong.
+         */
+        for (const ref of manifest.chunks.slice(0, 3)) {
+            const text = readFileSync(join('public', 'puzzles', ref.file), 'utf8')
+            expect(text.includes('\r\n'), `${ref.file} has CRLF line endings; `
+                + 'git rewrote it on checkout and every chunk hash is now wrong. '
+                + 'Check that .gitattributes still marks public/puzzles/** as -text.').toBe(false)
+        }
+    })
+
     it('names every chunk after its own content, and the bytes still match', () => {
         // A sample rather than all 120: this runs on every unit invocation, and
         // `corpus:verify` hashes the lot. First, last, and a few in between.

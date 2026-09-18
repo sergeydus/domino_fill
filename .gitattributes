@@ -1,0 +1,11 @@
+# The generated puzzle corpus is content-addressed: every chunk's filename and its manifest
+# entry carry a SHA-256 of the file's exact bytes. Git's end-of-line conversion rewrites those
+# bytes on checkout, so on any machine with `core.autocrlf=true` -- the Windows default -- a
+# fresh clone produced a corpus in which *every* chunk failed its hash. Verified by cloning:
+# the first chunk hashed 38cea739b0250c17 against a manifest expecting 96fc740c71f810c0.
+#
+# The failure was total and silent until something checked: `readCorpus` refuses the whole
+# corpus as corrupt, and the message blames corruption rather than line endings.
+#
+# `-text` means git stores and restores these byte for byte, in both directions.
+public/puzzles/** -text
