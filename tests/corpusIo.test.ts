@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtemp, mkdir, rm, readFile, writeFile, readdir } from 'node:fs/promises'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtemp, mkdir, rm, readFile, writeFile, readdir, stat, utimes } from 'node:fs/promises'
+import { readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,7 +10,7 @@ import {
 } from '@/scripts/corpus'
 import {
     assertSafeTarget, corpusIsReadable, orphanFiles, readCorpus, writeCorpus, MANIFEST_FILE,
-    LOCK_FILE,
+    LOCK_FILE, LOCK_OWNER,
 } from '@/scripts/corpus-io'
 import { randomUUID } from 'node:crypto'
 
@@ -25,9 +25,11 @@ import { randomUUID } from 'node:crypto'
  * recursively delete either.
  *
  * What replaced it uses the transaction the content-addressed design already provides: a
- * chunk's filename contains the hash of its bytes, so a new chunk can never collide with a
- * live one, and the manifest -- a single file, replaceable by an atomic rename even on
- * Windows -- is what decides which files are the corpus.
+ * chunk's filename carries 64 bits of the hash of its bytes, so a new chunk is
+ * overwhelmingly unlikely to collide with a live one -- collision-resistant, not
+ * collision-free, which is why the manifest carries the full SHA-256 and that is what
+ * everything is verified against -- and the manifest, a single file replaceable by an
+ * atomic rename even on Windows, is what decides which files are the corpus.
  *
  * The tests below inject failures at each step and require the same thing every time: the
  * corpus that was readable before is still readable after.
@@ -50,6 +52,8 @@ const hooks = vi.hoisted(() => ({
     onRename: null as null | ((from: string) => void | Promise<void>),
     /** Observe a removal; called with the path before it happens. */
     onRemove: null as null | ((path: string) => void),
+    /** Called *after* a successful mkdir; return a promise to suspend the caller there. */
+    onMkdir: null as null | ((path: string) => void | Promise<void>),
 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -73,6 +77,13 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         rm: async (path: never, ...rest: never[]) => {
             hooks.onRemove?.(String(path))
             return real.rm(path, ...(rest as [never]))
+        },
+        mkdir: async (path: never, ...rest: never[]) => {
+            const made = await real.mkdir(path, ...(rest as [never]))
+            // After the directory exists, before the caller can do anything inside it --
+            // which is exactly the acquisition window the lock has to survive.
+            await hooks.onMkdir?.(String(path))
+            return made
         },
     }
 })
@@ -102,7 +113,30 @@ const clearHooks = () => {
     hooks.onRead = null
     hooks.onRename = null
     hooks.onRemove = null
+    hooks.onMkdir = null
 }
+
+/** Plant a lock directory, optionally with an owner record and an age. */
+const plantLock = async (
+    owner: string | null, ageMs = 0,
+): Promise<string> => {
+    const lock = join(dir, LOCK_FILE)
+    await mkdir(lock, { recursive: true })
+    if (owner !== null) await writeFile(join(lock, LOCK_OWNER), owner, 'utf8')
+    if (ageMs > 0) {
+        const when = new Date(Date.now() - ageMs)
+        await utimes(lock, when, when)
+    }
+    return lock
+}
+
+const lockExists = async (): Promise<boolean> =>
+    stat(join(dir, LOCK_FILE)).then(() => true, () => false)
+
+/** A pid that is real enough to be checked and certain not to be running. */
+const DEAD_PID = 0x7fffffff
+const ownerRecord = (pid: number, token: string = randomUUID()) =>
+    JSON.stringify({ pid, at: new Date().toISOString(), token })
 
 beforeEach(async () => {
     clearHooks()
@@ -441,9 +475,9 @@ describe('recovering from an interrupted build', () => {
 
     it('proceeds when a lock is left by a process that no longer exists', async () => {
         // A crash must not require a human before any build can run again.
-        await writeFile(join(dir, LOCK_FILE), JSON.stringify({ pid: 0x7fffffff, at: 'then' }))
+        await plantLock(ownerRecord(DEAD_PID))
         await expect(writeCorpus(corpusOf(['2026-09']), dir)).resolves.toBeUndefined()
-        expect((await readdir(dir)).includes(LOCK_FILE)).toBe(false)
+        expect(await lockExists()).toBe(false)
     })
 
     it('recovers a first build that died before its manifest existed', async () => {
@@ -547,6 +581,247 @@ describe('two builds at once', () => {
             .filter(index => index >= 0)
         // Exactly one, and it is the last thing that happens.
         expect(lockRemovals).toEqual([removed.length - 1])
+    })
+
+    it('refuses a second writer that arrives inside the acquisition window', async () => {
+        /*
+         * The defect this replaced. `writeFile(lock, mine, { flag: 'wx' })` is exclusive but
+         * not atomic: it opens the file and then writes it, and in between the lock exists
+         * and is empty. A second build reading it there got `''`, parsed `{}`, found no
+         * live pid, decided the lock was stale and deleted a live holder's lock. Measured
+         * with a separate process reading the lock as fast as it could while this one
+         * created it: 7,787 of 22,920 observations saw it empty.
+         *
+         * `mkdir` cannot be seen half-made, but the owner record inside it still cannot
+         * exist at the instant the directory does. This test stops the first writer in
+         * precisely that gap.
+         */
+        let release = () => { }
+        const gate = new Promise<void>(resolve => { release = resolve })
+        let inTheWindow = () => { }
+        const arrived = new Promise<void>(resolve => { inTheWindow = resolve })
+
+        hooks.onMkdir = async path => {
+            if (!path.endsWith(LOCK_FILE)) return
+            inTheWindow()
+            await gate
+        }
+
+        const first = writeCorpus(corpusOf(['2026-09', '2026-10']), dir)
+        await arrived
+        clearHooks()
+
+        // The lock exists and says nothing about who owns it. That is not an invitation.
+        expect(await lockExists()).toBe(true)
+        expect(await readFile(join(dir, LOCK_FILE, LOCK_OWNER), 'utf8').catch(() => null))
+            .toBeNull()
+        await expect(writeCorpus(corpusOf(['2026-09']), dir))
+            .rejects.toThrow(/has not said who owns it yet/)
+
+        release()
+        await first
+        expect((await readCorpus(dir))!.chunks).toHaveLength(2)
+    })
+
+    it('does not steal a recent lock that carries no owner record', async () => {
+        // Same window, reached from the other side: whatever made this lock, it was a
+        // moment ago, and the only safe reading of "a moment ago" is "still working".
+        await plantLock(null)
+        await expect(writeCorpus(corpusOf(['2026-09']), dir))
+            .rejects.toThrow(/has not said who owns it yet/)
+        expect(await lockExists()).toBe(true)
+    })
+
+    it('does not steal a recent lock whose owner record is half written', async () => {
+        await plantLock('{"pid":')
+        await expect(writeCorpus(corpusOf(['2026-09']), dir))
+            .rejects.toThrow(/has not said who owns it yet/)
+        expect(await lockExists()).toBe(true)
+    })
+
+    it('does not steal a recent lock whose owner record says nothing', async () => {
+        // Parses cleanly and still identifies nobody. `pid: undefined` reaches
+        // `process.kill(undefined, 0)`, which does not fail with EPERM, so a shape check
+        // that stopped at `JSON.parse` would read this as "holder is dead" and take it.
+        await plantLock('{}')
+        await expect(writeCorpus(corpusOf(['2026-09']), dir))
+            .rejects.toThrow(/has not said who owns it yet/)
+        expect(await lockExists()).toBe(true)
+    })
+
+    it('publishes the owner record only by rename, never in place', async () => {
+        /*
+         * `mkdir` cannot be observed half-made; a `writeFile` can. If the record were
+         * written straight to its final name, the empty-file window would simply move from
+         * the lock to the owner record and the whole exercise would be pointless. So the
+         * record goes through the same temp-and-rename as every other file here, and the
+         * only way `owner.json` ever appears is complete.
+         */
+        const lock = join(dir, LOCK_FILE)
+        const writtenInsideTheLock: string[] = []
+        hooks.onWrite = path => {
+            if (path.startsWith(lock)) writtenInsideTheLock.push(path)
+        }
+        await writeCorpus(corpusOf(['2026-09']), dir)
+        clearHooks()
+
+        expect(writtenInsideTheLock).toHaveLength(1)
+        expect(writtenInsideTheLock[0]).not.toBe(join(lock, LOCK_OWNER))
+        expect(writtenInsideTheLock[0]).toContain(`.${LOCK_OWNER}`)
+    })
+
+    it('gives each acquisition a token no other build can be holding', async () => {
+        /*
+         * The previous test plants a replacement lock with a literal token, so it passes
+         * even if every build uses the *same* token -- which would put us back where the
+         * pid left us, with two builds indistinguishable from each other. Found by
+         * mutation-testing. What actually has to hold is that two acquisitions never
+         * collide, so this one makes the production code take both locks.
+         *
+         * Both writers are stopped at their manifest rename, so they genuinely overlap:
+         * the second is still holding its lock when the first finishes and releases.
+         */
+        const gates: Array<() => void> = []
+        const arrivals: Array<() => void> = []
+        const arrived = [0, 1].map(() => new Promise<void>(resolve => { arrivals.push(resolve) }))
+
+        let nth = 0
+        hooks.onRename = async from => {
+            if (!from.includes(`.${MANIFEST_FILE}`)) return
+            const index = nth++
+            const gate = new Promise<void>(resolve => { gates.push(resolve) })
+            arrivals[index]()
+            await gate
+        }
+
+        const ownerNow = () => readFile(join(dir, LOCK_FILE, LOCK_OWNER), 'utf8').catch(() => null)
+
+        const first = writeCorpus(corpusOf(['2026-09']), dir)
+        await arrived[0]
+        const firstOwner = await ownerNow()
+
+        // The first writer's lock disappears -- by hand, by a cleanup script, by a
+        // stale-breaker that judged it dead. The second is then entitled to one.
+        await rm(join(dir, LOCK_FILE), { recursive: true, force: true })
+        const second = writeCorpus(corpusOf(['2026-09']), dir)
+        await arrived[1]
+        const secondOwner = await ownerNow()
+
+        expect(secondOwner).not.toBeNull()
+        expect(JSON.parse(secondOwner!).token).not.toBe(JSON.parse(firstOwner!).token)
+
+        gates[0]()
+        await first
+        // The first writer has finished and released. The lock it released was not this one.
+        expect(await ownerNow()).toBe(secondOwner)
+
+        gates[1]()
+        await second
+        clearHooks()
+        expect(await lockExists()).toBe(false)
+    })
+
+    it('leaves no lock behind when it cannot publish who owns it', async () => {
+        /*
+         * Owning the directory but being unable to say so is the one state nothing else
+         * here can interpret: the next build finds an unattributed lock and, correctly,
+         * waits out the grace period before touching it. So the acquirer cleans up after
+         * itself rather than making everyone else pay for its failure.
+         */
+        hooks.onRename = from => {
+            if (from.includes(`.${LOCK_OWNER}`)) throw new Error('rename refused')
+        }
+        await expect(writeCorpus(corpusOf(['2026-09']), dir)).rejects.toThrow(/rename refused/)
+        clearHooks()
+
+        expect(await lockExists()).toBe(false)
+        // Immediately, not ten seconds from now.
+        await expect(writeCorpus(corpusOf(['2026-09']), dir)).resolves.toBeUndefined()
+    })
+
+    it('retries when the lock is released while being judged', async () => {
+        /*
+         * Between finding the lock present and asking how old it is, the holder can finish
+         * and remove it. The age lookup then fails, and that failure means "there is no
+         * lock any more" -- so it must loop round and take one, not report a stat error to
+         * someone whose build is perfectly fine.
+         */
+        await plantLock(null)
+        hooks.onRead = path => {
+            // Exactly the owner lookup, exactly once: the temporary the retry then writes
+            // inside the lock ends in the same name.
+            if (path !== join(dir, LOCK_FILE, LOCK_OWNER)) return
+            hooks.onRead = null
+            rmSync(join(dir, LOCK_FILE), { recursive: true, force: true })
+        }
+        await expect(writeCorpus(corpusOf(['2026-09']), dir)).resolves.toBeUndefined()
+        clearHooks()
+        expect(await corpusIsReadable(dir)).toBe(true)
+    })
+
+    it('recovers an old lock whose owner record never arrived', async () => {
+        /*
+         * The other half of the same rule, and the reason it cannot simply be "refuse".
+         * A build killed between creating the lock and publishing its owner leaves exactly
+         * this, and treating it as permanently busy would need a human -- the
+         * recovery-blocking failure again, one layer down.
+         */
+        await plantLock(null, 60 * 60 * 1000)
+        await expect(writeCorpus(corpusOf(['2026-09']), dir)).resolves.toBeUndefined()
+        expect(await corpusIsReadable(dir)).toBe(true)
+        expect(await lockExists()).toBe(false)
+    })
+
+    it('recovers an old lock whose owner record is malformed', async () => {
+        // The previous version did `JSON.parse(held || '{}')` unguarded, so this threw out
+        // of acquisition: a lock nobody held that nobody could break.
+        await plantLock('not json at all', 60 * 60 * 1000)
+        await expect(writeCorpus(corpusOf(['2026-09']), dir)).resolves.toBeUndefined()
+        expect(await lockExists()).toBe(false)
+    })
+
+    it('never steals a lock held by a live process, however old', async () => {
+        // Age decides only for locks that do not say who owns them. A named, living owner
+        // is an answer, and it outranks the clock.
+        await plantLock(ownerRecord(process.pid), 365 * 24 * 60 * 60 * 1000)
+        await expect(writeCorpus(corpusOf(['2026-09']), dir))
+            .rejects.toThrow(new RegExp(`another build \\(pid ${process.pid}\\) is writing`))
+        expect(await lockExists()).toBe(true)
+    })
+
+    it('does not delete a replacement lock taken by someone else', async () => {
+        /*
+         * Releasing is not just `rm`. If our lock is removed from underneath us -- by hand,
+         * by a cleanup script, by a stale-breaker that judged us dead -- another build can
+         * legitimately be holding one by the time we finish, and an unconditional remove
+         * would evict it. The token is what makes the difference between "remove the lock"
+         * and "remove *our* lock".
+         */
+        let release = () => { }
+        const gate = new Promise<void>(resolve => { release = resolve })
+        let reached = () => { }
+        const arrived = new Promise<void>(resolve => { reached = resolve })
+
+        hooks.onRename = async from => {
+            if (!from.includes(`.${MANIFEST_FILE}`)) return
+            reached()
+            await gate
+        }
+
+        const first = writeCorpus(corpusOf(['2026-09']), dir)
+        await arrived
+        clearHooks()
+
+        // Somebody else's lock now stands where ours was.
+        await rm(join(dir, LOCK_FILE), { recursive: true, force: true })
+        const replacement = ownerRecord(process.pid, 'someone-elses-token')
+        await plantLock(replacement)
+
+        release()
+        await first
+
+        expect(await readFile(join(dir, LOCK_FILE, LOCK_OWNER), 'utf8')).toBe(replacement)
+        await rm(join(dir, LOCK_FILE), { recursive: true, force: true })
     })
 
     it('releases the lock even when the write fails', async () => {

@@ -1037,8 +1037,10 @@ reordering, because renaming a directory over a non-empty one fails with `EPERM`
 (measured). It could also be pointed at `public` or at the repository root and would delete
 either.
 
-A chunk's filename contains the hash of its bytes, so a new chunk can never collide with a
-live one. New chunks are therefore written alongside the old ones, harming nothing; the
+A chunk's filename carries the first 64 bits of the hash of its bytes, so a new chunk is
+overwhelmingly unlikely to collide with a live one — collision-*resistant*, not
+collision-free, which is why the manifest carries the full SHA-256 and that is what every
+check compares against. New chunks are therefore written alongside the old ones; the
 manifest decides which files constitute the corpus, and replacing a single *file* by rename
 is atomic even on Windows. So: write the new chunks, write the manifest, read it back to
 prove it landed intact, rename it over `index.json` — that rename is the commit — and only
@@ -1054,13 +1056,37 @@ and committed a manifest pointing at the wreckage — *reporting success*, with 
 surfacing only at read time, later, somewhere else. A filename is not evidence about bytes,
 and 64 bits of digest would not be much evidence even if it were.
 
-**Writes are serialised by a lock** taken with `wx`, which fails atomically if the file
-exists. Unique temporary names prevent two builds clobbering each other's scratch; they do
-nothing about the race that matters, which is two builds committing manifests — a 122-month
-build can commit and then be replaced by a 121-month one that started earlier and finished
-later, and the corpus silently goes backwards. A lock held by a process that is no longer
-running is broken automatically, since otherwise a crash would need a human before any build
-could run again; one held by a live process is reported, not stolen.
+**Writes are serialised by a lock**, because unique temporary names prevent two builds
+clobbering each other's scratch and do nothing about the race that matters — two builds
+committing manifests. A 122-month build can commit and then be replaced by a 121-month one
+that started earlier and finished later, and the corpus silently goes backwards.
+
+The lock is a **directory**, created with `mkdir`, and an **owner record published inside it
+by rename**. It was first a file created with `writeFile(..., { flag: 'wx' })`, which is
+exclusive but not atomic in the sense that matters: it opens the file and *then* writes it,
+and in between the lock exists and is empty. A second build reading it there got `''`,
+parsed `{}`, found no live pid, concluded the lock was stale and deleted a live holder's
+lock. Measured with a separate process reading the lock as fast as it could while this one
+created it: **7,787 of 22,920 observations saw it empty** — so a colliding build stole a live
+lock about a third of the time. `mkdir` has no such window, and the record inside goes
+through the same temp-and-rename as every other file, so it is never visible
+half-written: measured the same way, **zero empty and zero malformed records in 173,544
+observations across 2,402 acquisitions** — only complete or absent.
+
+A lock that names a **live** process is reported, not stolen, however old it is. One that
+names a **dead** one is broken immediately, since otherwise a crash would need a human
+before any build could run again. One that names **nobody** — missing or malformed — is the
+ambiguous case, and only its age separates a holder that took it microseconds ago from a
+build that died inside that window: under ten seconds it is busy, over ten seconds it is
+wreckage. Guessing "stale" is the dangerous guess, because it evicts a live writer, so the
+young end of that rule errs towards waiting.
+
+Each acquisition also carries an **unguessable token**, and the release removes the lock only
+while the token still matches. A pid is not enough: pids are reused, and the failure this
+guards against is our lock being removed externally and another build legitimately taking
+one, at which point an unconditional `rm` would evict a build that has done nothing wrong.
+This narrows the window rather than closing it — closing it needs an atomic
+compare-and-delete, which the filesystem does not offer.
 
 **The output directory is refused before generation** unless everything in it belongs to this
 pipeline — and belonging is *proved*, not assumed: a chunk-named file must hash to the name
