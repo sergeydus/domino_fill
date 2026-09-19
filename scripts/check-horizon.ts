@@ -8,6 +8,7 @@ import { readCorpus, CORPUS_DIR } from "./corpus-io"
  *
  *     npm run corpus:horizon
  *     npm run corpus:horizon -- --today 2035-01-15    (for testing the guard itself)
+ *     npm run corpus:horizon -- --dir <path>          (ditto, against a fixture)
  *
  * **Measured from the last indexed date, not from a count of files.** A count cannot tell
  * you anything: a hundred and twenty chunks are ten years of runway on the day they are
@@ -21,9 +22,18 @@ import { readCorpus, CORPUS_DIR } from "./corpus-io"
  * guard that can be silenced by editing the thing it is guarding is not a guard.
  */
 
+const arg = (name: string): string | null => {
+    const at = process.argv.indexOf(`--${name}`)
+    return at >= 0 ? process.argv[at + 1] ?? '' : null
+}
+
 const main = async () => {
-    const at = process.argv.indexOf('--today')
-    const today = at >= 0 ? process.argv[at + 1] ?? '' : new Date().toISOString().slice(0, 10)
+    const today = arg('today') ?? new Date().toISOString().slice(0, 10)
+    // So the guard can be exercised end-to-end against a fixture. A test that edited the
+    // committed manifest in place -- which this one used to -- can leave the repository
+    // corrupted if its worker is killed, and any test running in parallel sees the tampered
+    // file in the meantime.
+    const dir = arg('dir') ?? CORPUS_DIR
     if (!parseDate(today)) {
         // Otherwise the subtraction yields NaN and the guard reports "NaN months left" while
         // exiting zero, which reads as a pass.
@@ -32,9 +42,9 @@ const main = async () => {
         return
     }
 
-    const corpus = await readCorpus()
+    const corpus = await readCorpus(dir)
     if (!corpus) {
-        console.error(`no corpus at ${CORPUS_DIR}; run \`npm run corpus:build\``)
+        console.error(`no corpus at ${dir}; run \`npm run corpus:build\``)
         process.exitCode = 1
         return
     }

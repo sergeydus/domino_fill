@@ -1040,13 +1040,38 @@ either.
 A chunk's filename contains the hash of its bytes, so a new chunk can never collide with a
 live one. New chunks are therefore written alongside the old ones, harming nothing; the
 manifest decides which files constitute the corpus, and replacing a single *file* by rename
-is atomic even on Windows. So: write the new chunks, write the manifest under a unique
-temporary name, read it back to prove it landed intact, rename it over `index.json` — that
-rename is the commit — and only then delete the chunks nothing references. Interrupted
-anywhere before the rename, the previous corpus is still complete and still readable; the
-cost is some unreferenced files, which `orphanFiles` reports and the next successful build
-removes. The output directory is refused before generation unless it is absent, empty, or
-already a corpus.
+is atomic even on Windows. So: write the new chunks, write the manifest, read it back to
+prove it landed intact, rename it over `index.json` — that rename is the commit — and only
+then delete what nothing references. Interrupted anywhere before the rename, the previous
+corpus is still complete and still readable; the cost is some unreferenced files, which
+`orphanFiles` reports and the next successful build removes.
+
+**Every file goes through a unique temporary name and is read back before being renamed**,
+so a name asserting a content hash is never created for bytes that do not hash to it. And an
+existing chunk is **re-hashed rather than trusted**: a process killed mid-write used to leave
+a truncated file under its final name, and the next build skipped it on sight of the filename
+and committed a manifest pointing at the wreckage — *reporting success*, with the corruption
+surfacing only at read time, later, somewhere else. A filename is not evidence about bytes,
+and 64 bits of digest would not be much evidence even if it were.
+
+**Writes are serialised by a lock** taken with `wx`, which fails atomically if the file
+exists. Unique temporary names prevent two builds clobbering each other's scratch; they do
+nothing about the race that matters, which is two builds committing manifests — a 122-month
+build can commit and then be replaced by a 121-month one that started earlier and finished
+later, and the corpus silently goes backwards. A lock held by a process that is no longer
+running is broken automatically, since otherwise a crash would need a human before any build
+could run again; one held by a live process is reported, not stolen.
+
+**The output directory is refused before generation** unless everything in it belongs to this
+pipeline — and belonging is *proved*, not assumed: a chunk-named file must hash to the name
+it claims. A directory holding `2026-09.deadbeefdeadbeef.json` full of unrelated bytes was
+previously accepted on the strength of the filename alone. Recovery state from an interrupted
+run — a manifest, a lock, this module's own temporaries — is recognised rather than treated as
+foreign; classifying an abandoned temporary as a stranger made every subsequent build refuse,
+permanently, which turned the recovery story into a recovery blocker. A badly-hashing chunk is
+this pipeline's wreckage when it sits alongside such evidence and may be overwritten; alone in
+a directory it is indistinguishable from someone else's file, and nothing here will delete
+it.
 
 `readCorpus` treats only a missing manifest as "no corpus". Every other failure propagates:
 a permissions error read as absence would leave the append-only check with nothing to

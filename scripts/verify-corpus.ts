@@ -13,9 +13,12 @@ import { orphanFiles, readCorpus, CORPUS_DIR } from "./corpus-io"
  */
 
 const main = async () => {
-    const corpus = await readCorpus()
+    const at = process.argv.indexOf('--dir')
+    const dir = at >= 0 ? process.argv[at + 1] ?? '' : CORPUS_DIR
+
+    const corpus = await readCorpus(dir)
     if (!corpus) {
-        console.error(`no corpus at ${CORPUS_DIR}; run \`npm run corpus:build\``)
+        console.error(`no corpus at ${dir}; run \`npm run corpus:build\``)
         process.exitCode = 1
         return
     }
@@ -37,7 +40,7 @@ const main = async () => {
 
     report('structure', validateCorpus(corpus.manifest, corpus.chunks))
 
-    const orphans = await orphanFiles(corpus)
+    const orphans = await orphanFiles(corpus, dir)
     report('stray files', orphans.map(name => `${name} is not referenced by the manifest`))
 
     // Structural validity says nothing about repetition: the first corpus built here was
