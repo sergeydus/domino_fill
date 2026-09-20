@@ -996,9 +996,22 @@ content under different dates. Replace it with an explicit, append-only date→`
 
 `scripts/corpus.ts` holds the rules and is pure; `corpus-io.ts` does the filesystem;
 `build-corpus.ts`, `verify-corpus.ts` and `check-horizon.ts` are the three entry points
-(`npm run corpus:build` / `:verify` / `:horizon`). TypeScript scripts run under `tsx`, added
-as a dev dependency — Node's own type stripping needs explicit `.ts` extensions on every
-import, which would have meant rewriting app-internal imports for the benefit of a script.
+(`npm run corpus:build` / `:verify` / `:horizon`), and `args.ts` parses their command lines.
+TypeScript scripts run under `tsx`, added as a dev dependency — Node's own type stripping
+needs explicit `.ts` extensions on every import, which would have meant rewriting
+app-internal imports for the benefit of a script.
+
+**Arguments are configuration, so a wrong one fails immediately**, the same way an
+impossible generator request throws rather than searching. Each script used to find its
+options with `process.argv.indexOf('--out')` and take whatever sat next to it, which is
+permissive three ways: `--out ""` passed every check, generated a whole corpus and then
+died on `mkdir ''` — after the work, in the one script whose entire shape is
+validate-then-write; `--out --months 3` would have written the corpus to a directory called
+`--months`; and `--monts 3` matched nothing, so the typo quietly ran the default 120-month
+build. The parser now rejects unknown options, repeated options, missing, empty and
+option-shaped values, and bare arguments, and names what would have worked. Underneath it,
+`assertSafeTarget` refuses the empty path outright rather than letting `readdir('')`'s
+ENOENT read as "does not exist yet, it will be created".
 
 **Reproducible.** Every puzzle is a pure function of `(CORPUS_VERSION, CORPUS_SEED, date,
 slot)`, hashed with FNV-1a into an xorshift32 stream. Two rebuilds produce byte-identical

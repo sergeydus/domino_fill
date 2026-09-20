@@ -64,6 +64,14 @@ export type Corpus = { manifest: Manifest, chunks: Chunk[] }
  * previously accepted on the strength of its filename alone.
  */
 export const assertSafeTarget = async (dir: string): Promise<void> => {
+    /*
+     * `readdir('')` fails with ENOENT, which the next clause reads as "does not exist yet,
+     * it will be created" -- so an empty path passed every check here and then died on
+     * `mkdir ''` after the corpus had been generated. The empty string is not a directory
+     * that could be created; it is a missing argument.
+     */
+    if (dir.trim() === '') throw new Error('no corpus directory was given')
+
     let entries: string[]
     try {
         entries = await readdir(dir)

@@ -51,3 +51,6 @@ debug.log
 
 # a corpus build that was interrupted before it could swap into place
 /public/puzzles.staging/
+
+# Stray build logs. One was swept into a commit by `git add -A`.
+*.log

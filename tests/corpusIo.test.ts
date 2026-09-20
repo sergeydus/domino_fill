@@ -156,6 +156,24 @@ describe('refusing an unsafe target', () => {
      * a manifest and correctly-named chunks.
      */
 
+    it('refuses the empty path instead of reading it as "does not exist yet"', async () => {
+        /*
+         * `readdir('')` fails with ENOENT, which the next clause reads as "will be
+         * created". So `--out ""` passed every check, generated a whole corpus, and only
+         * then died on `mkdir ''` -- after the work, in a script whose entire shape is
+         * validate-then-write. The CLI now rejects it at parse time; this is the same
+         * refusal one layer down, for any caller.
+         */
+        await expect(assertSafeTarget('')).rejects.toThrow(/no corpus directory was given/)
+        await expect(assertSafeTarget('   ')).rejects.toThrow(/no corpus directory was given/)
+        // Through the write path too -- but with '' rather than '   ', because a test has
+        // to stay harmless when the code under it is broken. Mutating the guard away and
+        // running this with '   ' wrote a whole corpus into a directory in the repository
+        // root that Windows tooling could not even open (it trims trailing spaces).
+        await expect(writeCorpus(corpusOf(['2026-09']), ''))
+            .rejects.toThrow(/no corpus directory was given/)
+    })
+
     it('accepts a directory that does not exist yet', async () => {
         await expect(assertSafeTarget(join(dir, 'fresh'))).resolves.toBeUndefined()
     })

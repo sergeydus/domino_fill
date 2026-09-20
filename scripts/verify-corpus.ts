@@ -1,10 +1,12 @@
 import { duplicateDefinitions, unsolvablePuzzles, validateCorpus } from "./corpus"
 import { orphanFiles, readCorpus, CORPUS_DIR } from "./corpus-io"
+import { parseArgs, runCli } from "./args"
 
 /**
  * Verify the committed corpus (spec P1-6, row 18c).
  *
  *     npm run corpus:verify
+ *     npm run corpus:verify -- --dir <path>    (against a fixture)
  *
  * The full sweep: chunk hashes, structure, append-only shape, and every puzzle through the
  * production solver. Thirty thousand boards take long enough that the unit suite checks a
@@ -13,8 +15,7 @@ import { orphanFiles, readCorpus, CORPUS_DIR } from "./corpus-io"
  */
 
 const main = async () => {
-    const at = process.argv.indexOf('--dir')
-    const dir = at >= 0 ? process.argv[at + 1] ?? '' : CORPUS_DIR
+    const dir = parseArgs(process.argv.slice(2), ['dir']).dir ?? CORPUS_DIR
 
     const corpus = await readCorpus(dir)
     if (!corpus) {
@@ -60,7 +61,4 @@ const main = async () => {
     else console.log('\ncorpus verified')
 }
 
-main().catch(error => {
-    console.error(error)
-    process.exitCode = 1
-})
+runCli(main)

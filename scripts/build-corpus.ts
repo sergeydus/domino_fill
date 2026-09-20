@@ -5,32 +5,32 @@ import {
     validateCorpus, type Chunk,
 } from "./corpus"
 import { assertSafeTarget, readCorpus, writeCorpus, CORPUS_DIR } from "./corpus-io"
+import { ArgumentError, parseArgs, runCli } from "./args"
 
 /**
  * Build the puzzle corpus (spec P1-6, row 18c).
  *
  *     npm run corpus:build            extend the horizon to CORPUS_MONTHS from the start
  *     npm run corpus:build -- --months 3     a short run, for trying things out
+ *     npm run corpus:build -- --out <path>   somewhere other than public/puzzles
  *
  * Nothing is written until the whole corpus has been validated and checked against what is
  * already committed. That order is the point of the script: generation is cheap to redo and
- * a wrong corpus is expensive to notice.
+ * a wrong corpus is expensive to notice. The arguments are parsed strictly for the same
+ * reason — `--out ""` used to generate a whole corpus and then fail on `mkdir ''`.
  */
-
-const arg = (name: string): string | null => {
-    const at = process.argv.indexOf(`--${name}`)
-    return at >= 0 ? process.argv[at + 1] ?? null : null
-}
 
 const kb = (bytes: number) => `${(bytes / 1024).toFixed(1)} KB`
 const mb = (bytes: number) => `${(bytes / 1048576).toFixed(2)} MB`
 
 const main = async () => {
-    const months = Number(arg('months') ?? CORPUS_MONTHS)
+    const options = parseArgs(process.argv.slice(2), ['months', 'out'])
+    const months = Number(options.months ?? CORPUS_MONTHS)
     if (!Number.isInteger(months) || months < 1) {
-        throw new RangeError(`--months must be a positive integer, got ${arg('months')}`)
+        throw new ArgumentError(
+            `--months must be a positive integer, got ${JSON.stringify(options.months)}.`)
     }
-    const dir = arg('out') ?? CORPUS_DIR
+    const dir = options.out ?? CORPUS_DIR
 
     // Before generating, not after: five minutes of work should not be spent discovering
     // that the destination was never writable.
@@ -144,7 +144,4 @@ const main = async () => {
     console.log(`  generation          ${(generationMs / 1000).toFixed(1)}s`)
 }
 
-main().catch(error => {
-    console.error(error)
-    process.exitCode = 1
-})
+runCli(main)
