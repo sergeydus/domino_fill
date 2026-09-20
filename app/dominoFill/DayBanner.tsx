@@ -22,11 +22,18 @@ type Props = {
 }
 
 const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
-    const { viewingDate, pendingDay, today } = boardsStore
+    const { viewingDate, pendingDay, today, deviceToday, clockClamp } = boardsStore
     if (!viewingDate) return null
 
-    const showing = !boardsStore.isViewingToday || pendingDay !== null
+    // A clamped clock is worth saying even when the player is on the newest day there is:
+    // otherwise the game silently disagrees with their device about what day it is.
+    const showing = !boardsStore.isViewingToday || pendingDay !== null || clockClamp !== null
     if (!showing) return null
+
+    const clampNote = clockClamp && deviceToday
+        ? ` Your device says ${deviceToday}, which is ${clockClamp === 'before' ? 'before' : 'after'}`
+        + ' every published puzzle.'
+        : ''
 
     return (
         <div
@@ -43,26 +50,33 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
                 {pendingDay
                     ? `A new puzzle is ready. You are still on ${viewingDate}.`
                     : `Showing ${viewingDate}.`}
+                {clampNote && <span data-clock-clamp>{clampNote}</span>}
             </span>
-            <button
-                type='button'
-                data-go-to-today
-                className='rounded-md bg-amber-700 px-2 py-1 font-semibold text-white'
-                /*
-                 * Two routes to the same place. A held-back day is already fetched, so
-                 * adopting it is instant and cannot fail; an archive day was chosen
-                 * deliberately and nothing newer was loaded, so getting back to today is a
-                 * fetch. Both are the player asking, which is why neither is subject to the
-                 * hold-back rule.
-                 */
-                onClick={() => {
-                    if (pendingDay) { boardsStore.adoptPendingDay(); return }
-                    if (today) void onGoToDate(today)
-                }}
-                disabled={!pendingDay && !today}
-            >
-                Play today
-            </button>
+            {/*
+              * Rendered only when it would do something. A clamped clock used to leave a
+              * "Play today" here that fetched the day already on screen -- a button whose
+              * whole effect was to tell the player nothing had happened.
+              */}
+            {boardsStore.canGoToToday && (
+                <button
+                    type='button'
+                    data-go-to-today
+                    className='rounded-md bg-amber-700 px-2 py-1 font-semibold text-white'
+                    /*
+                     * Two routes to the same place. A held-back day is already fetched, so
+                     * adopting it is instant and cannot fail; an archive day was chosen
+                     * deliberately and nothing newer was loaded, so getting back to today is
+                     * a fetch. Both are the player asking, which is why neither is subject
+                     * to the hold-back rule.
+                     */
+                    onClick={() => {
+                        if (pendingDay) { boardsStore.adoptPendingDay(); return }
+                        if (today) void onGoToDate(today)
+                    }}
+                >
+                    Play today
+                </button>
+            )}
         </div>
     )
 }

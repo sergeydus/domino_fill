@@ -5,6 +5,7 @@ import type { LevelStore } from '../stores/BoardsStore'
 import type { CorpusSource } from '../stores/corpusSource'
 import { addMonths, datesIn, monthOf, type Chunk, type Manifest } from '../stores/corpus'
 import { readAllProgress, type PuzzleProgress } from '../stores/progressStorage'
+import { markForDay, type DayMark } from '../stores/dayMark'
 
 /**
  * Every published day, reachable (spec P1-6, row 18d).
@@ -24,7 +25,13 @@ import { readAllProgress, type PuzzleProgress } from '../stores/progressStorage'
  * out of the key. That is exactly the derivation the spec forbids — an id is opaque, and
  * treating it as parseable is how content identity and state identity re-entangle. The month
  * being displayed is fetched anyway to know which dates exist, so its real ids are already
- * to hand: the marks are looked up, not inferred.
+ * to hand: the marks are looked up, not inferred. They are also *checked* rather than
+ * believed; `markForDay` says why.
+ *
+ * **The calendar is bounded by the day that can actually be served**, not by the device
+ * clock. They are the same thing until the clock is outside the published range, and then
+ * they are very different: a clock set before the corpus made every published day "in the
+ * future" and emptied the archive entirely, including the day being played at the time.
  */
 
 type Props = {
@@ -32,19 +39,6 @@ type Props = {
     corpus: CorpusSource
     /** Load a date and put it on screen. Explicit, so it always applies. */
     onPick: (date: string) => Promise<void>
-}
-
-/** How a day looks in the grid. */
-type DayMark = 'none' | 'started' | 'partial' | 'complete'
-
-const markFor = (
-    ids: string[], progress: Record<string, PuzzleProgress>,
-): DayMark => {
-    const records = ids.map(id => progress[id]).filter(Boolean)
-    if (records.length === 0) return 'none'
-    const done = records.filter(record => record.completed).length
-    if (done === ids.length) return 'complete'
-    return done > 0 ? 'partial' : 'started'
 }
 
 const MARK_CLASS: Record<DayMark, string> = {
@@ -80,6 +74,10 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
     // Read once, at open. Another tab may have played since; the store's own `saved` is
     // filtered to the day it is serving, so it cannot answer for the rest of the archive.
     const [progress] = useState<Record<string, PuzzleProgress>>(() => readAllProgress())
+    // One instant for the whole panel, taken when it opens: retention is measured against
+    // it, and a mark that changed halfway down the grid would be a worse answer than a
+    // slightly stale one.
+    const [now] = useState(() => Date.now())
     const [month, setMonth] = useState<string>(
         () => monthOf(viewingDate ?? boardsStore.today ?? ''))
     const [manifest, setManifest] = useState<Manifest | null>(null)
@@ -163,11 +161,10 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                         const entry = chunk?.month === month
                             ? chunk.days.find(day => day.date === date)
                             : undefined
-                        const ids = entry
+                        const puzzles = entry
                             ? [...entry.easyBoards, ...entry.mediumBoards, ...entry.hardBoards]
-                                .map(puzzle => puzzle.puzzleId)
                             : []
-                        const mark = markFor(ids, progress)
+                        const mark: DayMark = markForDay(puzzles, progress, now)
                         return (
                             <button
                                 key={date}

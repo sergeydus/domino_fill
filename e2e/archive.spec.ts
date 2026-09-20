@@ -304,3 +304,87 @@ test.describe('midnight does not take the board away', () => {
         await expect.poll(() => boardFingerprint(page)).not.toBe(before)
     })
 })
+
+test.describe('the published assets are cached the way their names promise', () => {
+    /*
+     * Measured, because the claim was false. Chunk filenames carry a content hash precisely
+     * so they can be cached forever -- and against `next start` every file under `public/`
+     * came back `Cache-Control: public, max-age=0`, so the browser revalidated a 104 KB
+     * immutable file on every load and the hashing bought nothing. A hashed filename does
+     * not change Next's `public/` policy on its own.
+     *
+     * Against the production server, because that is the only place the answer is real: a
+     * dev server serves `public/` with different rules entirely.
+     */
+    test('a hashed chunk is immutable and the index is revalidated', async ({ page }) => {
+        await watchCorpus(page)
+        await openBoard(page)
+        const chunk = corpusRequests(page).find(url => !url.endsWith('/index.json'))!
+
+        const chunkHeaders = (await page.request.get(chunk)).headers()
+        expect(chunkHeaders['cache-control']).toMatch(/immutable/)
+        expect(chunkHeaders['cache-control']).toMatch(/max-age=31536000/)
+
+        // The one file that is rewritten every time the corpus is extended. Pinning it
+        // would leave a client with an index that does not know about the months added
+        // since -- the one stale document that actually matters here.
+        const indexHeaders = (await page.request.get('/puzzles/index.json')).headers()
+        expect(indexHeaders['cache-control']).toMatch(/must-revalidate/)
+        expect(indexHeaders['cache-control']).not.toMatch(/immutable/)
+    })
+})
+
+test.describe('a device clock outside the published range', () => {
+    /*
+     * The clamp, end to end, from both sides. `loadDay` moves such a date into the corpus
+     * rather than refusing it, and what is tested here is that the *clamp* survives into the
+     * screen: an honest message, no action that does nothing, and an archive bounded by a
+     * day that exists.
+     */
+    const openAt = async (page: Page, when: Date) => {
+        await page.clock.install({ time: when })
+        await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
+        await page.goto('/')
+        await waitForBoard(page)
+    }
+
+    test('a clock past the corpus plays the last day and says so', async ({ page }) => {
+        await openAt(page, new Date('2099-01-01T12:00:00'))
+
+        await expect(page.locator('[data-day-banner]')).toBeVisible()
+        await expect(page.locator('[data-clock-clamp]')).toContainText('2099-01-01')
+        await expect(page.locator('[data-clock-clamp]')).toContainText('after')
+        // No button, because there is nowhere for it to go: it used to refetch the board
+        // already on screen and report success.
+        await expect(page.locator('[data-go-to-today]')).toHaveCount(0)
+
+        // And the archive stops where the content does, rather than paging into empty months.
+        await openArchive(page)
+        await expect(page.locator('[data-archive-next]')).toBeDisabled()
+        const dates = await offeredDates(page)
+        expect(dates.length).toBeGreaterThan(0)
+        expect(dates.at(-1)).toBe('2036-08-31')
+    })
+
+    test('a clock before the corpus plays the first day, with a usable archive', async ({ page }) => {
+        // The worse of the two: bounding the grid by the device date made every published
+        // day "the future", so the archive offered nothing at all -- not even the day the
+        // player was looking at.
+        await openAt(page, new Date('2019-04-01T12:00:00'))
+
+        await expect(page.locator('[data-clock-clamp]')).toContainText('before')
+        await expect(page.locator('[data-viewing-date]')).toContainText('2026-09-01')
+
+        await openArchive(page)
+        await expect(page.locator('[data-archive-month]')).toHaveText('2026-09')
+        expect(await offeredDates(page)).toEqual(['2026-09-01'])
+        await expect(page.locator('[data-archive-prev]')).toBeDisabled()
+        await expect(page.locator('[data-archive-next]')).toBeDisabled()
+    })
+
+    test('an ordinary clock shows no clamp notice at all', async ({ page }) => {
+        await openBoard(page)
+        await expect(page.locator('[data-clock-clamp]')).toHaveCount(0)
+        await expect(page.locator('[data-day-banner]')).toHaveCount(0)
+    })
+})

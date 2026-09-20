@@ -1,6 +1,7 @@
 "use client"
 import { makeAutoObservable, observable, reaction } from "mobx"
 import { type DayEntry } from "./corpus"
+import { type LoadedDay } from "./corpusSource"
 import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
@@ -58,7 +59,26 @@ export class LevelStore {
      * arrived while they were mid-board and was not allowed to take it away from them.
      */
     viewingDate: string | null = null
+
+    /**
+     * The latest day this player can actually be served, and what their clock claimed.
+     *
+     * Not the same thing, and the difference is load-bearing. A device clock can be years
+     * out; `loadDay` clamps such a date into the published range rather than refusing it,
+     * because a playable board beats an error page. But the *clamp* has to be carried, not
+     * dropped: `today` holds the effective day so everything downstream — "am I on today",
+     * how far the archive may page — is bounded by content that exists, while `deviceToday`
+     * and `clockClamp` are what let the screen say so honestly.
+     *
+     * Keeping only the raw clock date broke both ends. A clock *after* the corpus offered a
+     * "Play today" that reloaded the same board, and let the archive page forward into
+     * months with nothing in them. A clock *before* it emptied the archive completely —
+     * every published day is later than "today", so nothing was offered, including the very
+     * day being played.
+     */
     today: string | null = null
+    deviceToday: string | null = null
+    clockClamp: 'before' | 'after' | null = null
 
     /**
      * A newer day, fetched and held back rather than applied.
@@ -174,7 +194,8 @@ export class LevelStore {
      * in the component so it can be reasoned about without a browser. `today` moves
      * unconditionally — it is a fact about the clock, not a proposal.
      */
-    receiveDay(day: DayEntry, today: string) {
+    receiveDay(loaded: LoadedDay) {
+        const day = loaded.day
         /*
          * Were they following the calendar, or standing somewhere on purpose?
          *
@@ -184,7 +205,11 @@ export class LevelStore {
          * away mid-move -- the archive day is offered, not imposed.
          */
         const wasFollowingToday = this.viewingDate === null || this.viewingDate === this.today
-        this.today = today
+        // The served date, not the requested one: a clamped clock must not make every
+        // comparison below ask about a day the corpus does not have.
+        this.today = day.date
+        this.deviceToday = loaded.requested
+        this.clockClamp = loaded.clamped
         /*
          * Never silently swap the board under an active player (spec P0-5, P1-7).
          *
@@ -294,6 +319,16 @@ export class LevelStore {
     /** Whether the player is on the current day's puzzles. */
     get isViewingToday(): boolean {
         return this.viewingDate !== null && this.viewingDate === this.today
+    }
+
+    /**
+     * Somewhere to go, or nothing to offer.
+     *
+     * The banner's button is built on this rather than on "is there a pending day", so a
+     * clamped clock cannot produce an action that reloads the board already on screen.
+     */
+    get canGoToToday(): boolean {
+        return this.pendingDay !== null || (this.today !== null && this.today !== this.viewingDate)
     }
 
     setArchiveOpen(open: boolean) { this.archiveOpen = open }

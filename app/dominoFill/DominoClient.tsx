@@ -38,9 +38,9 @@ const DominoClient: React.FC = () => {
    * while the rollover check below, which can only be local, disagreed with it.
    */
   const loadBoards = useCallback(async () => {
-    const today = dayKey(new Date())
-    const loaded = await corpus.loadDay(today)
-    boardsStore.receiveDay(loaded.day, today)
+    // The whole result, not just the content: a clock outside the published range is
+    // clamped, and the store needs to know that happened or the screen cannot say so.
+    boardsStore.receiveDay(await corpus.loadDay(dayKey(new Date())))
   }, [boardsStore, corpus])
 
   /*

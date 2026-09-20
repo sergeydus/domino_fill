@@ -1282,10 +1282,27 @@ measured by the test that counts requests. A *rejected* promise is evicted, so o
 at startup is not remembered for the life of the tab — which matters because
 `useDayRollover`'s retry assumes exactly that.
 
-**A clock outside the corpus is clamped, and the clamp is reported.** A device can be years
-wrong, and a playable board beats an error page; silently serving some other day's puzzle
-would break the one promise the date index makes, so `loadDay` returns the requested date
-alongside the served one.
+**Hashed chunks are cached the way their names promise.** Measured, because the claim was
+false: `next start` serves everything under `public/` as `Cache-Control: public, max-age=0`,
+so the browser revalidated a 104 KB immutable file on every load and the content hash in the
+filename bought nothing. A hashed name does not change Next's `public/` policy on its own.
+`next.config.ts` now pins `YYYY-MM.<16 hex>.json` for a year as `immutable` — different
+content means a different name, so the bytes can never change — while `index.json`, the one
+file that is rewritten whenever the corpus is extended, stays revalidatable. Both are checked
+against the production server in an E2E test.
+
+**A clock outside the corpus is clamped, the clamp is reported, and the report is used.** A
+device can be years wrong, and a playable board beats an error page; silently serving some
+other day's puzzle would break the one promise the date index makes, so `loadDay` returns
+the requested date alongside the served one. The store then keeps *both*: `today` is the day
+that can actually be served and bounds everything downstream, while `deviceToday` and
+`clockClamp` are what let the screen say what happened.
+
+Carrying only the clock's own date broke it at both ends. Past the corpus, "am I on today"
+was false forever, so the banner offered a "Play today" whose entire effect was to refetch
+the board already on screen, and the archive would page forward into months holding nothing.
+Before the corpus, every published day was in the future, so the archive offered no days at
+all — not even the one being played at that moment.
 
 **A new day is offered, not imposed.** This is P1-7's rollover obligation. `receiveDay`
 decides whether a day may replace what is on screen; `setDay` obeys. A day is **held back**
@@ -1307,7 +1324,16 @@ exist as files and are never offered: handing out tomorrow's puzzle is the one t
 game must not do. A day's completion mark is looked up from the **ids in the chunk**, never
 by parsing a date out of a `puzzleId` — that derivation is exactly how content identity and
 state identity re-entangle, and the month is fetched anyway, so the real ids are already to
-hand. The panel is mounted only while it is open, which is what lets the records and the
+hand.
+
+A mark is also **checked, not believed**. The first version read the raw records and trusted
+`record.completed`, which is a different claim from the one the rest of the app makes:
+everywhere else a record must pass `progressFor` — hash, size, rock positions, every placed
+half part of exactly one well-formed domino, and a `completed: true` record actually being a
+full board that matches its targets — and retention is applied where the answer is used,
+because `pruneStorage` can be refused. Without those, a day showed as finished because a flag
+was edited in a console, and as played because a record that aged out three weeks ago could
+not be deleted under quota pressure. `markForDay` applies both. The panel is mounted only while it is open, which is what lets the records and the
 starting month be initial state instead of an effect, and means a player who never opens it
 fetches none of it.
 

@@ -4,6 +4,7 @@ import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
 import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import type { DayEntry } from '@/app/stores/corpus'
+import type { LoadedDay } from '@/app/stores/corpusSource'
 import { KEY_PREFIX, readProgress } from '@/app/stores/progressStorage'
 
 /**
@@ -59,6 +60,14 @@ const day = (date: string, make = puzzle): DayEntry => ({
     hardBoards: [1, 2, 3].map(n => make(`v1-${date}-hard-${n}`)),
 })
 
+/**
+ * A day as the loader hands it over: the content, the date that was asked for, and whether
+ * it had to be moved to land inside the corpus.
+ */
+const arriving = (entry: DayEntry, over: Partial<LoadedDay> = {}): LoadedDay => ({
+    day: entry, requested: entry.date, clamped: null, ...over,
+})
+
 /** Put a domino on the visible board, through the rules. */
 const play = () => runInAction(() => { store().currentBoard!.placeToward([1, 0], 'down') })
 
@@ -69,12 +78,12 @@ beforeEach(() => {
 
 describe('a new day is offered, not imposed', () => {
     it('holds back a day that would take an in-play board away', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         play()
         expect(store().currentIsInPlay).toBe(true)
         const playing = store().currentBoard
 
-        runInAction(() => { store().receiveDay(day('2026-09-02'), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02'))) })
 
         // Still their board, with their move on it.
         expect(store().currentBoard).toBe(playing)
@@ -88,9 +97,9 @@ describe('a new day is offered, not imposed', () => {
     it('adopts a day when the board on screen is untouched', () => {
         // Nothing to lose, so nothing to ask about. A prompt here would be noise every
         // morning for the player who finished yesterday or never started it.
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
 
-        runInAction(() => { store().receiveDay(day('2026-09-02'), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02'))) })
 
         expect(store().viewingDate).toBe('2026-09-02')
         expect(store().pendingDay).toBeNull()
@@ -98,11 +107,11 @@ describe('a new day is offered, not imposed', () => {
     })
 
     it('adopts a day when the board on screen is finished', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-01', solvable), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01', solvable))) })
         runInAction(() => { store().currentBoard!.placeToward([0, 0], 'down') })
         expect(store().currentBoard!.completed).toBe(true)
 
-        runInAction(() => { store().receiveDay(day('2026-09-02', solvable), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02', solvable))) })
 
         expect(store().viewingDate).toBe('2026-09-02')
     })
@@ -113,11 +122,11 @@ describe('a new day is offered, not imposed', () => {
          * rollover whose first attempt failed retries with the same day and the retry must
          * not be refused as if it were news.
          */
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         play()
         const board = store().currentBoard!.board.map(row => [...row])
 
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
 
         expect(store().pendingDay).toBeNull()
         expect(store().viewingDate).toBe('2026-09-01')
@@ -126,9 +135,9 @@ describe('a new day is offered, not imposed', () => {
     })
 
     it('hands the held-back day over when the player asks for it', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         play()
-        runInAction(() => { store().receiveDay(day('2026-09-02'), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02'))) })
 
         runInAction(() => { store().adoptPendingDay() })
 
@@ -145,9 +154,9 @@ describe('a new day is offered, not imposed', () => {
          * than adopting. Without the clear the banner goes on saying "a new puzzle is
          * ready" while they are looking at it.
          */
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         play()
-        runInAction(() => { store().receiveDay(day('2026-09-02'), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02'))) })
         expect(store().pendingDay).not.toBeNull()
 
         runInAction(() => { store().setDay(day('2026-09-02')) })
@@ -158,9 +167,9 @@ describe('a new day is offered, not imposed', () => {
 
     it('keeps announcing it when the player goes somewhere older instead', () => {
         // The other side of the same line: they have still not seen today.
-        runInAction(() => { store().receiveDay(day('2026-09-05'), '2026-09-05') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-05'))) })
         play()
-        runInAction(() => { store().receiveDay(day('2026-09-06'), '2026-09-06') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-06'))) })
 
         runInAction(() => { store().setDay(day('2026-09-02')) })
 
@@ -168,7 +177,7 @@ describe('a new day is offered, not imposed', () => {
     })
 
     it('does nothing when there is no held-back day to adopt', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         runInAction(() => { store().adoptPendingDay() })
         expect(store().viewingDate).toBe('2026-09-01')
     })
@@ -182,11 +191,11 @@ describe('a date the player chose is theirs until they leave it', () => {
          * though the board is untouched and nothing would be *lost*. What would be lost is
          * the player's place in a thing they went looking for.
          */
-        runInAction(() => { store().receiveDay(day('2026-09-10'), '2026-09-10') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-10'))) })
         runInAction(() => { store().setDay(day('2026-09-01')) })
         expect(store().isViewingToday).toBe(false)
 
-        runInAction(() => { store().receiveDay(day('2026-09-11'), '2026-09-11') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-11'))) })
 
         expect(store().viewingDate).toBe('2026-09-01')
         expect(store().pendingDay?.date).toBe('2026-09-11')
@@ -194,18 +203,18 @@ describe('a date the player chose is theirs until they leave it', () => {
     })
 
     it('follows the calendar again once the player returns to today', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-10'), '2026-09-10') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-10'))) })
         runInAction(() => { store().setDay(day('2026-09-01')) })
         runInAction(() => { store().setDay(day('2026-09-10')) })
         expect(store().isViewingToday).toBe(true)
 
-        runInAction(() => { store().receiveDay(day('2026-09-11'), '2026-09-11') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-11'))) })
 
         expect(store().viewingDate).toBe('2026-09-11')
     })
 
     it('an explicit move to another date is never refused, mid-move or not', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-10'), '2026-09-10') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-10'))) })
         play()
 
         runInAction(() => { store().setDay(day('2026-09-01')) })
@@ -222,7 +231,7 @@ describe('the day left behind is still there when you come back', () => {
          * midnight -- so coming back is a genuine restore from storage, not a session that
          * happened to survive.
          */
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         const left = store().currentBoard!
         const puzzleId = left.puzzleId
         const definitionHash = left.definition.definitionHash
@@ -245,7 +254,7 @@ describe('the day left behind is still there when you come back', () => {
     it('the stored record names the same puzzle the board was restored into', () => {
         // Identity and invalidation are separate fields, and both have to line up: the
         // record is found by `puzzleId` and accepted only if its `definitionHash` matches.
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         const puzzleId = store().currentBoard!.puzzleId
         play()
 
@@ -261,18 +270,85 @@ describe('the day left behind is still there when you come back', () => {
     })
 
     it('a held-back day, once adopted, still leaves yesterday reachable', () => {
-        runInAction(() => { store().receiveDay(day('2026-09-01'), '2026-09-01') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
         const yesterday = store().currentBoard!.puzzleId
         play()
         const board = store().currentBoard!.board.map(row => [...row])
 
-        runInAction(() => { store().receiveDay(day('2026-09-02'), '2026-09-02') })
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-02'))) })
         runInAction(() => { store().adoptPendingDay() })
         expect(store().sessions.has(yesterday)).toBe(false)
 
         // Through the archive, which is the "somewhere to go" row 17 was waiting for.
         runInAction(() => { store().setDay(day('2026-09-01')) })
         expect(store().currentBoard!.board).toEqual(board)
+    })
+})
+
+describe('a clock outside the published range', () => {
+    /*
+     * `loadDay` clamps rather than refusing, because a device clock can be years wrong and a
+     * playable board beats an error page. The clamp then has to be *carried*: the first
+     * version of this row kept only `loaded.day` and threw `requested`/`clamped` away, which
+     * broke both directions.
+     *
+     * After the corpus, `today` stayed at the device's date, so "am I on today" was false
+     * forever -- the banner offered a "Play today" whose entire effect was to refetch the
+     * board already on screen -- and the archive would page forward into months holding
+     * nothing. Before the corpus, every published day was "in the future", so the archive
+     * offered no days at all, including the one being played at that moment.
+     */
+    const clamped = (entry: DayEntry, requested: string, how: 'before' | 'after') =>
+        arriving(entry, { requested, clamped: how })
+
+    it('treats the served day as today when the clock is past the corpus', () => {
+        runInAction(() => {
+            store().receiveDay(clamped(day('2036-08-31'), '2099-01-01', 'after'))
+        })
+
+        // Effective, not literal: everything downstream is bounded by content that exists.
+        expect(store().today).toBe('2036-08-31')
+        expect(store().isViewingToday).toBe(true)
+        // And the device's own answer is kept, because the screen has to say why.
+        expect(store().deviceToday).toBe('2099-01-01')
+        expect(store().clockClamp).toBe('after')
+    })
+
+    it('offers no action when there is nowhere else to go', () => {
+        runInAction(() => {
+            store().receiveDay(clamped(day('2036-08-31'), '2099-01-01', 'after'))
+        })
+        // The no-op button. It refetched the day already on screen and reported success.
+        expect(store().canGoToToday).toBe(false)
+    })
+
+    it('treats the served day as today when the clock is before the corpus', () => {
+        runInAction(() => {
+            store().receiveDay(clamped(day('2026-09-01'), '2019-04-01', 'before'))
+        })
+
+        expect(store().today).toBe('2026-09-01')
+        expect(store().clockClamp).toBe('before')
+        // The archive bounds itself by `today`; with the device's date it saw nothing at
+        // all, since every published day is later than 2019.
+        expect(store().today! >= '2026-09-01').toBe(true)
+    })
+
+    it('still offers a way back once the player has gone elsewhere', () => {
+        runInAction(() => {
+            store().receiveDay(clamped(day('2036-08-31'), '2099-01-01', 'after'))
+        })
+        runInAction(() => { store().setDay(day('2026-09-01')) })
+
+        expect(store().canGoToToday).toBe(true)
+        expect(store().today).toBe('2036-08-31')
+    })
+
+    it('reports no clamp for an ordinary clock', () => {
+        runInAction(() => { store().receiveDay(arriving(day('2026-09-01'))) })
+        expect(store().clockClamp).toBeNull()
+        expect(store().deviceToday).toBe('2026-09-01')
+        expect(store().canGoToToday).toBe(false)
     })
 })
 
