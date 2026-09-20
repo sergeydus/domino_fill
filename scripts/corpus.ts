@@ -1,7 +1,22 @@
 import { createHash } from "node:crypto"
 import { definitionFrom, type StoredPuzzle } from "../app/stores/PuzzleDefinition"
 import { solve } from "../app/stores/solver"
+import {
+    addDays, addMonths, datesIn, monthOf, monthsBetween,
+    type Chunk, type ChunkRef, type DayEntry, type Manifest,
+} from "../app/stores/corpus"
 import { generateBoard } from "./generate-boards"
+
+/*
+ * The published shape and the date arithmetic live under `app/stores/corpus.ts`, because the
+ * runtime loader (row 18d) needs them and cannot import this file -- `node:crypto` and the
+ * generator are not browser code. Re-exported here so the pipeline and its tests keep one
+ * import to reason about.
+ */
+export {
+    addDays, addMonths, clampToCorpus, datesIn, isoDate, monthOf, monthsBetween, parseDate,
+} from "../app/stores/corpus"
+export type { Chunk, ChunkRef, DayEntry, Manifest } from "../app/stores/corpus"
 
 /**
  * The content pipeline (spec P1-6, row 18c).
@@ -82,93 +97,6 @@ export type SlotGroup = typeof SLOTS[number]['group']
 export const GROUPS = [...new Set(SLOTS.map(slot => slot.group))] as SlotGroup[]
 
 /** One day's nine puzzles, in the shape the runtime's `BoardsResponse` already has. */
-export type DayEntry = {
-    date: string
-    easyBoards: StoredPuzzle[]
-    mediumBoards: StoredPuzzle[]
-    hardBoards: StoredPuzzle[]
-}
-
-export type Chunk = {
-    /** `YYYY-MM`. */
-    month: string
-    version: number
-    days: DayEntry[]
-}
-
-export type ChunkRef = {
-    month: string
-    /** The published filename, which carries a content hash so it can be cached forever. */
-    file: string
-    /** SHA-256 of the chunk's exact bytes, so a corrupted or swapped chunk is detectable. */
-    sha256: string
-    days: number
-    firstDate: string
-    lastDate: string
-}
-
-export type Manifest = {
-    version: number
-    seed: number
-    /** When the corpus was built. Informational: it is not an input to any puzzle. */
-    generatedAt: string
-    firstDate: string
-    lastDate: string
-    days: number
-    puzzles: number
-    chunks: ChunkRef[]
-}
-
-// ---------------------------------------------------------------------------
-// Dates. Plain UTC arithmetic on `YYYY-MM-DD`, with no `Date` in any seed.
-// ---------------------------------------------------------------------------
-
-const DAY_MS = 86_400_000
-
-/** `YYYY-MM-DD` for a UTC timestamp. */
-export const isoDate = (time: number): string => new Date(time).toISOString().slice(0, 10)
-
-/**
- * Parse `YYYY-MM-DD` to a UTC timestamp, or null.
- *
- * Round-tripped rather than shape-checked, which is the same trick `Boards.ts` uses and for
- * the same reason: `Date.UTC` normalises `2026-02-31` into March, so anything that does not
- * come back unchanged was never a real date.
- */
-export const parseDate = (date: string): number | null => {
-    const [year, month, day] = date.split('-').map(Number)
-    const time = Date.UTC(year, month - 1, day)
-    if (Number.isNaN(time)) return null
-    return isoDate(time) === date ? time : null
-}
-
-/** `YYYY-MM` of a date. */
-export const monthOf = (date: string): string => date.slice(0, 7)
-
-/** The `YYYY-MM` that is `offset` months after `month`. */
-export const addMonths = (month: string, offset: number): string => {
-    const [year, index] = month.split('-').map(Number)
-    const total = year * 12 + (index - 1) + offset
-    return `${String(Math.floor(total / 12)).padStart(4, '0')}-${String((total % 12) + 1).padStart(2, '0')}`
-}
-
-/** Every `YYYY-MM-DD` in a month, in order. */
-export const datesIn = (month: string): string[] => {
-    const [year, index] = month.split('-').map(Number)
-    const dates: string[] = []
-    for (let time = Date.UTC(year, index - 1, 1); isoDate(time).startsWith(month); time += DAY_MS) {
-        dates.push(isoDate(time))
-    }
-    return dates
-}
-
-/** Whole months between two `YYYY-MM`, positive when `to` is later. */
-export const monthsBetween = (from: string, to: string): number => {
-    const [fy, fm] = from.split('-').map(Number)
-    const [ty, tm] = to.split('-').map(Number)
-    return (ty * 12 + tm) - (fy * 12 + fm)
-}
-
 // ---------------------------------------------------------------------------
 // Generation
 // ---------------------------------------------------------------------------
@@ -427,7 +355,7 @@ export const validateCorpus = (manifest: Manifest, chunks: Chunk[]): Problem[] =
             // Contiguity across the whole corpus, not only within a chunk.
             if (expectedDate !== null && day.date !== expectedDate)
                 say(`${day.date} follows a gap; expected ${expectedDate}`)
-            expectedDate = isoDate((parseDate(day.date) ?? 0) + DAY_MS)
+            expectedDate = addDays(day.date, 1)
 
             /*
              * Walk the arrays the chunk actually holds, rather than looking up the ids that

@@ -1,6 +1,7 @@
 "use client"
 import { LevelStore } from "./BoardsStore";
 import { SizeStore } from "./SizeStore";
+import { CorpusSource } from "./corpusSource";
 
 /**
  * The store graph.
@@ -13,7 +14,17 @@ import { SizeStore } from "./SizeStore";
 export class RootStore {
     boardsStore: LevelStore
     sizeStore: SizeStore
-    constructor() {
+    /**
+     * Where puzzles come from (row 18d).
+     *
+     * On the graph rather than imported directly by the components that need it, so a test
+     * can hand the whole app a corpus of its own without a module mock. Its caches are
+     * per-instance for the same reason.
+     */
+    corpus: CorpusSource
+
+    constructor(corpus: CorpusSource = new CorpusSource()) {
+        this.corpus = corpus
         this.boardsStore = new LevelStore(this)
         this.sizeStore = new SizeStore(this)
     }

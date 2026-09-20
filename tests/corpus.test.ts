@@ -21,12 +21,18 @@ import {
  * this one.
  *
  * Deliberately the *production* solver, and deliberately every puzzle rather than a sample.
+ *
+ * **These eighteen are no longer what ships.** Since row 18d the game serves the corpus in
+ * `public/puzzles`, which the block below sweeps in full; `app/mocks/dominoBoards.json` is
+ * now the fixture the store and session tests are written against, and keeping it under the
+ * solver is worth the second it costs -- a fixture that the rules could not produce makes
+ * every test built on it meaningless.
  */
 
 const puzzles: StoredPuzzle[] = (dominoBoards as unknown as Record<string, StoredPuzzle[]>[])
     .flatMap(day => Object.values(day).flat())
 
-describe('the shipped puzzles', () => {
+describe('the fixture puzzles', () => {
     it('are all present and identifiable', () => {
         // A guard on the fixture itself: a test that silently iterates nothing passes.
         expect(puzzles.length).toBeGreaterThan(0)

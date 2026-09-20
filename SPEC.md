@@ -991,6 +991,8 @@ three at once. The options, in order of preference:
 **The archive needs stable identity, which modulo rotation cannot provide.** `daysSinceEpoch % 2`
 is a rotation, not a mapping: it gives no permanent date→puzzle relation and re-serves the same
 content under different dates. Replace it with an explicit, append-only date→`puzzleId` index.
+**Done in 18d**: `getCurrentActiveBoard` and its modulus are gone, and with them the Server
+Action — the lookup is a fetch of one published month in the browser.
 
 ### The pipeline (18c)
 
@@ -1243,13 +1245,11 @@ boards unless the Map is populated first.
 > honest merge of "these two dominoes were placed in different places", and the alternative is
 > asking a player which of their own boards to throw away.
 >
-> **Rollover still swaps an unfinished board, and row 17 does not fix it.** The policy above
-> says never silently swap the board under an active player and keep the old one reachable from
-> the archive. When the served ids change, `setBoards` selects the new pack and the previous
-> unfinished puzzle becomes unreachable — its *progress* is safe (the record is kept for the
-> retention window and the session is dropped only from memory), but there is no way back to
-> it. Closing this needs somewhere to go, which is the archive, which is row 18. **P1-7 is
-> therefore partial**, and this is a row-18 acceptance criterion rather than a note.
+> **Rollover used to swap an unfinished board. Closed in row 18d.** When the served ids
+> changed, the new pack was selected and the previous unfinished puzzle became unreachable
+> — its *progress* was safe (the record is kept for the retention window and the session is
+> dropped only from memory), but there was no way back to it. Closing it needed somewhere to
+> go, which is the archive; see "The runtime (18d)" below for the rule that replaced it.
 >
 > **Note on the test environment, not on the product.** Node 25 defines its own `localStorage`
 > global that shadows jsdom's and has *no working methods* — probed: `getItem`, `setItem`,
@@ -1258,6 +1258,58 @@ boards unless the Map is populated first.
 > place the feature meets a real browser store. The production guards feature-check the method
 > rather than the object, which is exactly why this environment fails closed instead of
 > throwing.
+
+### The runtime (18d)
+
+**One chunk, fetched, not imported.** `app/stores/corpusSource.ts` reads `index.json`, finds
+the month, and fetches that one file. Bundling the corpus would put 10.8 MB of minified JSON
+in the JavaScript graph to serve one day of it; as static assets it is ~4 KB for the index
+and ~6 KB brotli for a month. Chunk filenames carry a content hash, so they are immutable
+and cache forever — only `index.json` is ever refetched. An E2E test reads every script tag
+the page actually loads and fails if chunk content is in any of them, because an accidental
+`import` would pass every other test here.
+
+The shape of both documents is checked but not their hashes. Over HTTPS the bytes are
+already protected in transit; what this actually guards against is a stale deploy or a proxy
+answering 200 with an error page, and asking whether the document says what it should catches
+that at least as well as a digest would.
+
+Caching is **per-promise, not per-result**, so two callers arriving together share one
+request — and the cache entry is installed in the same synchronous turn as the miss that
+found it. An `async` version that awaited the manifest first let three concurrent callers all
+pass the cache check before any of them filled it, and fetched the month three times;
+measured by the test that counts requests. A *rejected* promise is evicted, so one bad moment
+at startup is not remembered for the life of the tab — which matters because
+`useDayRollover`'s retry assumes exactly that.
+
+**A clock outside the corpus is clamped, and the clamp is reported.** A device can be years
+wrong, and a playable board beats an error page; silently serving some other day's puzzle
+would break the one promise the date index makes, so `loadDay` returns the requested date
+alongside the served one.
+
+**A new day is offered, not imposed.** This is P1-7's rollover obligation. `receiveDay`
+decides whether a day may replace what is on screen; `setDay` obeys. A day is **held back**
+when the board on screen is unfinished *and has moves on it*, or when the player is standing
+on a date they chose from the archive. Everything the player asks for goes through `setDay`,
+because the rule protects them from the clock and not from themselves.
+
+"Under an active player" is read narrowly and deliberately: the board they are *looking at*.
+The wider reading — hold the day back if any of the day's nine is half-played — was rejected,
+because a level abandoned half-done would then interpose a prompt every morning forever, and
+what it would be protecting is already safe: the progress is stored and the archive can reach
+it. What cannot be undone is taking a board away mid-move.
+
+A refetch of the day already on screen is *not* a swap and is always applied — otherwise a
+rollover whose first attempt failed would have its retry refused as if it were news.
+
+**The archive** lists every published day up to today, a month at a time. Days after today
+exist as files and are never offered: handing out tomorrow's puzzle is the one thing a daily
+game must not do. A day's completion mark is looked up from the **ids in the chunk**, never
+by parsing a date out of a `puzzleId` — that derivation is exactly how content identity and
+state identity re-entangle, and the month is fetched anyway, so the real ids are already to
+hand. The panel is mounted only while it is open, which is what lets the records and the
+starting month be initial state instead of an effect, and means a player who never opens it
+fetches none of it.
 
 **P1-8. Accessibility.** Real `<button>`s for `LevelSelector` and `DominoPieces`; `aria-pressed` /
 `role="radiogroup"` on the difficulty slider. If `role="grid"` is used it needs `role="row"`
@@ -1328,7 +1380,7 @@ whole of P0 into one oversized set.)
 | 14 | **P1-3** undo + reset — **✅ done**; fixes D10-h and D10-i's restart half | unit (undo round-trip) + E2E (controls) |
 | 15 | **P1-4** completion feedback — **✅ done**; closes P1-1's completion-focus clause and row 14's deferred browser win | unit + E2E (real win) |
 | 16 | **P1-5** honest feedback; shake on reject — **✅ done**; fixes D10-f and D10-g. Check/hint **deferred to row 18**, where the solver contract is built | unit + E2E |
-| 17 | **P1-7** persistence + day rollover — **⚠️ partial**; closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); an unfinished board is still swapped at rollover, which needs row 18's archive | unit + E2E |
+| 17 | **P1-7** persistence + day rollover — closes D10-i's remainder. `elapsedMs` **cut to a later row** (no clock exists to save); the unfinished-board rollover gap was its remaining hole and **row 18d closed it** | unit + E2E |
 | 18a | **P1-6** generator contract — **✅ done**; fixes D10-j and D10-o. Generator moved to `scripts/`, comma-joined targets, numeric `allow0Lines`, round-trip through the production parser. Follow-ups: rock placement draws **without replacement** so the generator terminates for every input; an impossible *configuration* throws `RangeError` while a fruitless *search* returns `null`; and the playable-cell count is validated as even and ≥ 2, so neither an untileable board nor an already-complete all-rock one can be emitted | unit |
 | 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator’s exhaustive `solutionsByTargets` is replaced by it, and the candidate search it feeds carries a **separate** `tilingBudget`; all shipped puzzles are solver-verified by `tests/corpus.test.ts` | unit |
 | 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; no repeated definitions; atomic manifest-rename commit with the previous corpus readable throughout; every puzzle solver-verified before anything is written; horizon guard derived from the last chunk | unit + CI |

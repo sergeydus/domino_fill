@@ -3,7 +3,7 @@ import { runInAction } from 'mobx'
 import { RootStore } from '@/app/stores/RootStore'
 import { definitionFrom, cloneInitialBoard } from '@/app/stores/PuzzleDefinition'
 import { PuzzleSession } from '@/app/stores/PuzzleSession'
-import type { BoardsResponse } from '@/app/dominoFill/Boards'
+import type { DayEntry } from '@/app/stores/corpus'
 import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import sourceData from '@/app/mocks/dominoBoards.json'
 
@@ -15,7 +15,7 @@ import sourceData from '@/app/mocks/dominoBoards.json'
  *  - a session deep-clones its board; gameplay never writes to the imported JSON
  *  - `currentBoard` is a pure Map lookup
  *  - switching away and back returns the SAME session, with moves intact
- *  - `setBoards` reconciles by puzzleId rather than clearing, and retires only the puzzles
+ *  - `setDay` reconciles by puzzleId rather than clearing, and retires only the puzzles
  *    it has stopped serving (P1-7's day rollover)
  */
 
@@ -30,7 +30,8 @@ const puzzle = (id: string, over: Partial<StoredPuzzle> = {}): StoredPuzzle => (
     ...over,
 })
 
-const response = (over: Partial<BoardsResponse> = {}): BoardsResponse => ({
+const response = (over: Partial<DayEntry> = {}): DayEntry => ({
+    date: '2026-09-01',
     easyBoards: [puzzle('e1'), puzzle('e2'), puzzle('e3')],
     mediumBoards: [puzzle('m1'), puzzle('m2'), puzzle('m3')],
     hardBoards: [puzzle('h1'), puzzle('h2'), puzzle('h3')],
@@ -71,9 +72,9 @@ describe('definitions stay frozen inside the store', () => {
     // makeAutoObservable deep-converts by default, which would replace each frozen
     // definition with an observable copy and silently undo definitionFrom's guarantee.
     // The definition collections are observable.ref for exactly this reason.
-    it('currentDefinition is still the frozen object after setBoards', () => {
+    it('currentDefinition is still the frozen object after setDay', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const def = store.currentDefinition!
 
         expect(Object.isFrozen(def)).toBe(true)
@@ -81,9 +82,9 @@ describe('definitions stay frozen inside the store', () => {
         expect(Object.isFrozen(def.initialBoard[0])).toBe(true)
     })
 
-    it("a session's definition is still frozen after setBoards", () => {
+    it("a session's definition is still frozen after setDay", () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const def = store.currentBoard!.definition
 
         expect(Object.isFrozen(def)).toBe(true)
@@ -92,7 +93,7 @@ describe('definitions stay frozen inside the store', () => {
 
     it('the stored definition is the same object the factory produced', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         expect(store.currentBoard!.definition).toBe(store.currentDefinition)
     })
 })
@@ -110,8 +111,8 @@ describe('source immutability', () => {
         const before = JSON.stringify(sourceData)
 
         const store = root.boardsStore
-        // sourceData is an array of day-entries; a single day is one BoardsResponse.
-        store.setBoards((sourceData as unknown as BoardsResponse[])[0])
+        // sourceData is an array of day-entries; a single day is one DayEntry.
+        store.setDay({ ...(sourceData as unknown as DayEntry[])[0], date: '2026-09-01' })
         const session = store.currentBoard!
         expect(session).toBeTruthy()
 
@@ -152,10 +153,10 @@ describe('source immutability', () => {
     })
 })
 
-describe('setBoards populates eagerly', () => {
+describe('setDay populates eagerly', () => {
     it('creates a session for every puzzle up front', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         expect(store.sessions.size).toBe(9)
         for (const id of ['e1', 'e2', 'e3', 'm1', 'm2', 'm3', 'h1', 'h2', 'h3']) {
             expect(store.sessions.get(id)).toBeInstanceOf(PuzzleSession)
@@ -164,7 +165,7 @@ describe('setBoards populates eagerly', () => {
 
     it('currentBoard is a pure lookup, not a construction', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const a = store.currentBoard
         const b = store.currentBoard
         expect(a).toBe(b)
@@ -180,7 +181,7 @@ describe('setBoards populates eagerly', () => {
 describe('session identity and isolation', () => {
     it('preserves moves when switching difficulty away and back', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         const easy = store.currentBoard!
         runInAction(() => { easy.board[0][0] = 1 })
@@ -196,7 +197,7 @@ describe('session identity and isolation', () => {
 
     it('preserves moves when switching level away and back', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         const first = store.currentBoard!
         runInAction(() => { first.board[2][2] = 1 })
@@ -212,7 +213,7 @@ describe('session identity and isolation', () => {
 
     it('keeps sessions independent of one another', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         runInAction(() => { store.sessions.get('e1')!.board[0][0] = 1 })
         expect(store.sessions.get('e2')!.board[0][0]).toBeNull()
@@ -220,16 +221,16 @@ describe('session identity and isolation', () => {
     })
 })
 
-describe('setBoards reconciles rather than clearing', () => {
-    it('a repeated identical setBoards preserves sessions and their progress', () => {
+describe('setDay reconciles rather than clearing', () => {
+    it('a repeated identical setDay preserves sessions and their progress', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         const session = store.sessions.get('e1')!
         runInAction(() => { session.board[0][0] = 1 })
 
         // A duplicate effect or a refetch must not wipe live progress.
-        store.setBoards(response())
+        store.setDay(response())
 
         expect(store.sessions.get('e1')).toBe(session)
         expect(store.sessions.get('e1')!.board[0][0]).toBe(1)
@@ -237,12 +238,12 @@ describe('setBoards reconciles rather than clearing', () => {
 
     it('replaces a session when the same id arrives with changed content', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         const stale = store.sessions.get('e1')!
         runInAction(() => { stale.board[0][0] = 1 })
 
-        store.setBoards(response({
+        store.setDay(response({
             easyBoards: [
                 puzzle('e1', { boardHorizontalNumbers: '1,2,3,4,5,6' }), // changed content
                 puzzle('e2'), puzzle('e3'),
@@ -257,11 +258,11 @@ describe('setBoards reconciles rather than clearing', () => {
 
     it('adds new ids without disturbing existing sessions', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const kept = store.sessions.get('e1')!
         runInAction(() => { kept.board[0][0] = 1 })
 
-        store.setBoards(response({
+        store.setDay(response({
             easyBoards: [puzzle('e1'), puzzle('e2'), puzzle('e9')],
         }))
 
@@ -277,11 +278,11 @@ describe('setBoards reconciles rather than clearing', () => {
          * board the player is in the middle of.
          */
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const kept = store.sessions.get('e1')!
         runInAction(() => { kept.board[0][0] = 1 })
 
-        store.setBoards(response())
+        store.setDay(response())
 
         expect(store.sessions.get('e1')).toBe(kept)
         expect(store.sessions.get('e1')!.board[0][0]).toBe(1)
@@ -303,8 +304,8 @@ describe('setBoards reconciles rather than clearing', () => {
          * records of days no longer served survive exactly this.
          */
         const store = root.boardsStore
-        store.setBoards(response())
-        store.setBoards(response({
+        store.setDay(response())
+        store.setDay(response({
             easyBoards: [puzzle('e9'), puzzle('e8'), puzzle('e7')],
         }))
 
@@ -317,7 +318,7 @@ describe('setBoards reconciles rather than clearing', () => {
 
 describe('shipped data', () => {
     it('every shipped puzzle has a unique, stable puzzleId', () => {
-        const days = sourceData as unknown as BoardsResponse[]
+        const days = sourceData as unknown as DayEntry[]
         const ids = days.flatMap(d => [...d.easyBoards, ...d.mediumBoards, ...d.hardBoards])
             .map(b => b.puzzleId)
 

@@ -854,6 +854,16 @@ export class PuzzleSession {
      * the board, because the two can legitimately disagree: `reset` clears the flag, and
      * `undo` recomputes it. Saving the flag stores what the player was actually looking at.
      */
+    /**
+     * Has anything been placed here?
+     *
+     * Rocks are part of the definition, so they do not count. Used by the rollover rule: an
+     * untouched board is nothing to take away, a touched one is.
+     */
+    get hasMoves(): boolean {
+        return this.board.some(row => row.some(cell => cell !== null && cell !== -1))
+    }
+
     get snapshot(): { board: (number | null)[][], completed: boolean } {
         return {
             // A plain copy, not the observable arrays: this value is handed to JSON and to

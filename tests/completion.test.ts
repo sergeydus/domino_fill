@@ -5,7 +5,7 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { isBoardFull, columnSums, rowSums, targetsMatch } from '@/app/stores/boardRules'
 import type { Board } from '@/app/stores/boardRules'
-import type { BoardsResponse } from '@/app/dominoFill/Boards'
+import type { DayEntry } from '@/app/stores/corpus'
 
 /**
  * P0-6: completion is `isBoardFull && targetsMatch`, both pure and separately testable.
@@ -184,7 +184,8 @@ describe('the stored completion flag is written only by the store reaction', () 
         boardVerticalNumbers: '2,0',
     })
 
-    const response = (): BoardsResponse => ({
+    const response = (): DayEntry => ({
+        date: '2026-09-01',
         easyBoards: [solvable('e1'), solvable('e2'), solvable('e3')],
         mediumBoards: [solvable('m1'), solvable('m2'), solvable('m3')],
         hardBoards: [solvable('h1'), solvable('h2'), solvable('h3')],
@@ -193,7 +194,7 @@ describe('the stored completion flag is written only by the store reaction', () 
     it('flags a board that arrives already solved, without any move being made', () => {
         // There is no fireImmediately on the reaction: at construction currentBoard is
         // necessarily null. A board that is *already* solved on arrival must therefore be
-        // caught by the ordinary null -> session transition when setBoards runs.
+        // caught by the ordinary null -> session transition when setDay runs.
         //
         // An all-rock board with zero targets is exactly that board: rocks survive
         // canonicalization (only placed dominoes are stripped) and count as occupying a
@@ -206,7 +207,8 @@ describe('the stored completion flag is written only by the store reaction', () 
             boardHorizontalNumbers: '0,0',
             boardVerticalNumbers: '0,0',
         })
-        store.setBoards({
+        store.setDay({
+            date: '2026-09-01',
             easyBoards: [allRock('r1'), allRock('r2'), allRock('r3')],
             mediumBoards: [allRock('r4'), allRock('r5'), allRock('r6')],
             hardBoards: [allRock('r7'), allRock('r8'), allRock('r9')],
@@ -219,7 +221,7 @@ describe('the stored completion flag is written only by the store reaction', () 
 
     it('stays false until the combined predicate becomes true, then flips', () => {
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
         const s = store.currentBoard!
 
         expect(s.completed).toBe(false)
@@ -241,7 +243,7 @@ describe('the stored completion flag is written only by the store reaction', () 
         // synchronously, so the expression settles back to false between boards. The test
         // pins the behaviour, not the implementation choice.)
         const store = root.boardsStore
-        store.setBoards(response())
+        store.setDay(response())
 
         const first = store.currentBoard!
         runInAction(() => {
@@ -271,7 +273,8 @@ describe('the stored completion flag is written only by the store reaction', () 
             boardHorizontalNumbers: '0,0',
             boardVerticalNumbers: '0,0',
         })
-        store.setBoards({
+        store.setDay({
+            date: '2026-09-01',
             easyBoards: [zero('z1'), zero('z2'), zero('z3')],
             mediumBoards: [zero('z4'), zero('z5'), zero('z6')],
             hardBoards: [zero('z7'), zero('z8'), zero('z9')],

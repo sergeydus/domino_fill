@@ -1,6 +1,6 @@
 "use client"
 import { makeAutoObservable, observable, reaction } from "mobx"
-import { BoardsResponse } from "../dominoFill/Boards"
+import { type DayEntry } from "./corpus"
 import { RootStore } from "./RootStore"
 import { PuzzleSession } from "./PuzzleSession"
 import { PuzzleDefinition, StoredPuzzle, definitionFrom } from "./PuzzleDefinition"
@@ -48,7 +48,35 @@ export class LevelStore {
     hardBoards: PuzzleDefinition[] | null = null
 
     /**
-     * One live session per puzzleId. Populated eagerly in `setBoards` (an action) so that
+     * The date whose puzzles are on screen, and the date it actually is (spec P1-6, 18d).
+     *
+     * Two fields rather than one, because they are allowed to differ. Before the corpus
+     * there was nothing to distinguish: `daysSinceEpoch % 2` served the same two packs
+     * forever, so "which day am I playing" had no answer and the archive had nothing to
+     * navigate. Now every date maps to one set of nine puzzles, permanently, and the player
+     * can be looking at a date that is not today — from the archive, or because a rollover
+     * arrived while they were mid-board and was not allowed to take it away from them.
+     */
+    viewingDate: string | null = null
+    today: string | null = null
+
+    /**
+     * A newer day, fetched and held back rather than applied.
+     *
+     * The rollover obligation P1-7 left open. `reconcileSessions` retires the sessions for
+     * puzzles this response no longer serves, so adopting a new day while someone is
+     * halfway through a board takes that board off the screen mid-move. Their *progress*
+     * survives — the record is kept for the retention window — but before the archive there
+     * was no way back to it, which is why P1-7 was left partial and this is a row-18d
+     * acceptance criterion rather than a note.
+     */
+    pendingDay: DayEntry | null = null
+
+    /** Whether the archive is on screen. */
+    archiveOpen = false
+
+    /**
+     * One live session per puzzleId. Populated eagerly in `setDay` (an action) so that
      * `currentBoard` can be a pure lookup: constructing a store inside a computed makes
      * MobX throw once side effects in derivations are enforced, and hands back a new
      * identity on every cache miss.
@@ -100,6 +128,10 @@ export class LevelStore {
             // saved board into a proxy for no reader's benefit.
             saved: false,
             disposePersist: false,
+            // Content on its way to the screen, observed by reference for the same reason
+            // the definition lists are: the puzzles inside are frozen, and deep-converting
+            // them would undo that.
+            pendingDay: observable.ref,
         })
 
         // A focused reaction, not an autorun: it tracks exactly one derived value -- the
@@ -113,7 +145,7 @@ export class LevelStore {
         // boards. This is about not depending on that timing.)
         //
         // No `fireImmediately`: `currentBoard` is necessarily null here -- boards arrive via
-        // `setBoards` long after construction -- so it would only invoke the effect once with
+        // `setDay` long after construction -- so it would only invoke the effect once with
         // null. A board that arrives already solved is picked up by the ordinary
         // null -> session transition.
         reaction(
@@ -135,13 +167,75 @@ export class LevelStore {
         )
     }
 
-    setBoards(boards: BoardsResponse) {
+    /**
+     * Take a day's content, deciding whether it may replace what is on screen.
+     *
+     * This is the only entry point the loader uses, and the decision lives here rather than
+     * in the component so it can be reasoned about without a browser. `today` moves
+     * unconditionally — it is a fact about the clock, not a proposal.
+     */
+    receiveDay(day: DayEntry, today: string) {
+        /*
+         * Were they following the calendar, or standing somewhere on purpose?
+         *
+         * Read *before* `today` moves, because it is the comparison that answers it. A
+         * player who opened 2026-09-03 from the archive has chosen a date, and a midnight
+         * poll must not quietly walk them back to today any more than it may take a board
+         * away mid-move -- the archive day is offered, not imposed.
+         */
+        const wasFollowingToday = this.viewingDate === null || this.viewingDate === this.today
+        this.today = today
+        /*
+         * Never silently swap the board under an active player (spec P0-5, P1-7).
+         *
+         * "Under an active player" is read narrowly and deliberately: the board they are
+         * *looking at*, unfinished, with moves on it. The wider reading -- hold the day back
+         * if any of its nine is half-played -- was rejected, because a level abandoned
+         * half-done would then interpose a prompt every morning forever, and the thing it
+         * would be protecting is already safe: its progress is stored and the archive can
+         * reach it. What cannot be undone is taking a board away mid-move.
+         *
+         * A refetch of the day already on screen is not a swap and is applied, which is what
+         * makes a failed rollover retry harmless.
+         */
+        if (this.viewingDate !== null && this.viewingDate !== day.date
+            && (wasFollowingToday === false || this.currentIsInPlay)) {
+            this.pendingDay = day
+            return
+        }
+        this.setDay(day)
+    }
+
+    /** Apply a day that was held back. The player asked; there is nothing to protect. */
+    adoptPendingDay() {
+        if (!this.pendingDay) return
+        const day = this.pendingDay
+        this.pendingDay = null
+        this.setDay(day)
+    }
+
+    /**
+     * Is the visible board one that must not be taken away?
+     *
+     * Unfinished and touched. An untouched board is nothing to lose, and a finished one is
+     * finished -- neither is a reason to refuse the new day.
+     */
+    get currentIsInPlay(): boolean {
+        const session = this.currentBoard
+        return !!session && !session.completed && session.hasMoves
+    }
+
+    setDay(day: DayEntry) {
         const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
         const before = this.currentDefinition?.puzzleId ?? null
 
-        this.easyBoards = build(boards.easyBoards)
-        this.mediumBoards = build(boards.mediumBoards)
-        this.hardBoards = build(boards.hardBoards)
+        // Adopting a day cancels any held-back one: whatever was waiting is either this day
+        // or older than it, and in both cases it is no longer news.
+        if (this.pendingDay && this.pendingDay.date <= day.date) this.pendingDay = null
+        this.viewingDate = day.date
+        this.easyBoards = build(day.easyBoards)
+        this.mediumBoards = build(day.mediumBoards)
+        this.hardBoards = build(day.hardBoards)
 
         const definitions = [...this.easyBoards, ...this.mediumBoards, ...this.hardBoards]
 
@@ -197,13 +291,20 @@ export class LevelStore {
         this.beginPersisting()
     }
 
+    /** Whether the player is on the current day's puzzles. */
+    get isViewingToday(): boolean {
+        return this.viewingDate !== null && this.viewingDate === this.today
+    }
+
+    setArchiveOpen(open: boolean) { this.archiveOpen = open }
+
     /**
      * Start saving, once.
      *
      * An earlier version of this comment claimed the placement was load-bearing -- that a
      * reaction created in the constructor would fire with `sessions` empty and flatten a real
      * save. Mutation-tested, and it is **not** true: a `reaction` does not run its effect on
-     * creation, and `setBoards` is a MobX action, so the whole hydrate-and-reconcile runs in
+     * creation, and `setDay` is a MobX action, so the whole hydrate-and-reconcile runs in
      * one batch and the effect fires afterwards with the document already loaded. Moving this
      * call to the constructor, or above `readDocument`, breaks nothing.
      *

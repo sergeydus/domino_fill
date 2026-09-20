@@ -1,6 +1,5 @@
 "use client"
 import { useCallback, useEffect, useState } from 'react'
-import { getCurrentActiveBoard } from './Boards'
 import DifficultySlider from './DifficultySlider'
 import ClientBoard from './ClientBoard'
 import DominoPieces from './Pieces/DominoPieces'
@@ -13,29 +12,58 @@ import Tutorial from './Tutorial'
 import { useAvailableBoardBox } from '../hooks/useAvailableBoardBox'
 import { useDayRollover } from '../hooks/useDayRollover'
 import { dayKey } from '../stores/progressStorage'
+import Archive from './Archive'
+import DayBanner from './DayBanner'
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
 
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
-  const { boardsStore } = useStores()
+  const [failed, setFailed] = useState(false)
+  const { boardsStore, corpus } = useStores()
 
   /*
-   * The player's own calendar day is sent to the server, not inferred there.
+   * The day's puzzles are fetched from the published corpus (spec P1-6, row 18d).
    *
-   * `getCurrentActiveBoard` is a Server Action, so an unaided `new Date()` inside it is the
-   * *server's* timezone: a player in Auckland would be handed tomorrow's puzzle before their
-   * own midnight, and one in Los Angeles would still be on yesterday's through the morning --
-   * while the rollover check below, which can only be local, disagreed with both.
+   * Two things changed here. The content no longer comes from a Server Action over two
+   * bundled day-entries selected by `daysSinceEpoch % 2` -- a rotation that re-served the
+   * same puzzles under endlessly many dates, so no date had a stable answer and an archive
+   * had nothing to point at. It is now one static, content-hashed month chunk fetched on
+   * demand, and the date maps to it permanently.
+   *
+   * The day itself is still the player's *local* calendar day, and that part is unchanged
+   * for the same reason as before: a server's `new Date()` answers to the server's timezone,
+   * so a player in Auckland would be handed tomorrow's puzzle before their own midnight
+   * while the rollover check below, which can only be local, disagreed with it.
    */
   const loadBoards = useCallback(async () => {
-    const boards = await getCurrentActiveBoard(dayKey(new Date()))
-    boardsStore.setBoards(boards)
-  }, [boardsStore])
+    const today = dayKey(new Date())
+    const loaded = await corpus.loadDay(today)
+    boardsStore.receiveDay(loaded.day, today)
+  }, [boardsStore, corpus])
+
+  /*
+   * Go to a date because the player said so.
+   *
+   * `setDay` rather than `receiveDay`: the hold-back rule protects someone from having a
+   * board taken away by a *clock*, and there is nothing to protect them from when they are
+   * the one asking. Their position on the day they leave is saved and reachable again from
+   * the archive, which is the whole point of it existing.
+   */
+  const goToDate = useCallback(async (date: string) => {
+    const loaded = await corpus.loadDay(date)
+    boardsStore.setDay(loaded.day)
+  }, [boardsStore, corpus])
 
   useEffect(() => {
-    loadBoards().then(() => setisLoading(false))
+    // The first load is the only one whose failure the player must see: there is no board
+    // behind it to fall back to. Later failures are `useDayRollover`'s business, and it
+    // retries them.
+    loadBoards()
+      .then(() => setFailed(false))
+      .catch(() => setFailed(true))
+      .finally(() => setisLoading(false))
   }, [loadBoards])
 
   /*
@@ -70,7 +98,17 @@ const DominoClient: React.FC = () => {
    * (P1-1). It was bound to the whole wrapper, so right-clicking the difficulty slider or
    * the level arrows rotated the piece too, and Android fired it on long-press (D10-r).
    */
-  if (isLoading || !currentBoard) return <div>no board</div>
+  if (isLoading) return <div>no board</div>
+  if (!currentBoard) {
+    return (
+      <div className='m-auto p-4 text-center' role='alert'>
+        <p className='font-semibold'>Today&apos;s puzzles could not be loaded.</p>
+        <p className='text-sm opacity-70'>
+          {failed ? 'Check your connection and reload the page.' : 'No board'}
+        </p>
+      </div>
+    )
+  }
   return (
     /*
      * `m-auto` rather than `justify-center` on the parent. An auto margin resolves to zero
@@ -105,6 +143,9 @@ const DominoClient: React.FC = () => {
         paddingLeft: `calc(${PAGE_MARGIN_PX}px + var(--safe-left))`,
       }}
     >
+      {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
+          costs the column's gap -- which comes straight out of the board's height budget. */}
+      <DayBanner boardsStore={boardsStore} onGoToDate={goToDate} />
       <div data-chrome>
         <DifficultySlider boardsStore={boardsStore} />
       </div>
@@ -120,9 +161,24 @@ const DominoClient: React.FC = () => {
       <div data-chrome>
         <GameControls boardsStore={currentBoard} />
       </div>
-      <div data-chrome>
+      {/* One row, not two. Every `data-chrome` row is subtracted from the board's height
+          budget, and at 1280x800 an 8x8 board is already within a few pixels of the 38px
+          minimum cell -- measured: a separate row for this button put it exactly on the
+          floor, where a safe-area inset could no longer shrink it at all. */}
+      <div data-chrome className='flex items-center gap-3'>
         <LevelSelector boardsStore={boardsStore} />
+        <button
+          type='button'
+          data-open-archive
+          className='rounded-md border px-3 py-1 text-sm'
+          onClick={() => boardsStore.setArchiveOpen(true)}
+        >
+          Archive
+        </button>
       </div>
+      {/* Mounted only while open: see the note in Archive.tsx. */}
+      {boardsStore.archiveOpen
+        && <Archive boardsStore={boardsStore} corpus={corpus} onPick={goToDate} />}
       <Tutorial />
     </div>
   );

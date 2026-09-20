@@ -10,8 +10,10 @@ import dominoBoards from '@/app/mocks/dominoBoards.json'
  * that looks like a bug in the game, so its output is checked against the rules here rather
  * than trusted.
  *
- * Run over every shipped puzzle, because the board the browser gets is chosen by the
- * server's clock: whichever day the suite runs, that day's puzzle must be solvable.
+ * Run over every puzzle in `app/mocks/dominoBoards.json`. Since row 18d that file is a test
+ * fixture rather than the game's content -- the browser is served the corpus in
+ * `public/puzzles`, which `tests/corpus.test.ts` sweeps with the production solver, and
+ * `e2e/solve.ts` meets in a real browser whichever day the suite happens to run.
  */
 
 type Stored = { board: (number | null)[][], boardHorizontalNumbers: string, boardVerticalNumbers: string }
