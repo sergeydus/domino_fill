@@ -195,27 +195,49 @@ test.describe('the roving tabindex', () => {
 
     test('the square that takes focus is the square the store is on', async ({ page }) => {
         /*
-         * Wherever focus lands, the store is on that square -- so the highlight and the
-         * browser cannot disagree about where the keyboard is. This is a small behaviour
-         * change worth pinning: before row 19 the focus ring appeared only once the
-         * keyboard had been used, and clicking a square left it wherever it was.
+         * The contract: whatever puts DOM focus on a square, the store is on *that*
+         * square -- so the highlight, the arrow keys and the browser cannot disagree
+         * about where the keyboard is.
          *
-         * It deliberately does *not* claim to cover the cell coordinates passed by
-         * `onFocus`. A mutation writing a constant `[0, 0]` there survives this test and
-         * every other, and measurement says why rather than leaving it as a gap:
-         * `pointerDown` assigns `focusedCell` itself, so the pointer routes overwrite
-         * `onFocus` regardless, and the one keyboard route into the board can only reach
-         * the initial stop at `0,0`. The mutant is equivalent; see the note in
-         * `BoardSquare.tsx`.
+         * Driven by a bare `.focus()` on a cell that is not the tab stop, because that is
+         * the only route that isolates this handler. A non-initial gridcell carries
+         * `tabIndex=-1`, which keeps it out of the tab order while leaving it
+         * programmatically focusable -- which is how assistive technology moves focus in
+         * a grid, and how application code would. A `.click()` cannot test it: the click
+         * also fires `pointerDown`, which assigns `focusedCell` itself and would mask any
+         * mistake here. That is exactly the error this test replaces -- an earlier version
+         * clicked, a constant `[0, 0]` survived it, and the survivor was written off as an
+         * equivalent mutant on the strength of reasoning that never checked this route.
+         *
+         * Measured: focus `3,4`, the store reads `3,4`, and the next arrow moves relative
+         * to it rather than from the origin.
+         */
+        await page.locator('[data-cell="3,4"]').focus()
+
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '3,4')
+        await expect(page.locator('[data-cell="3,4"]')).toBeFocused()
+
+        // Moving on from where focus actually is, not from where it started.
+        await page.keyboard.press('ArrowRight')
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '3,5')
+        await expect(page.locator('[data-cell="3,5"]')).toBeFocused()
+    })
+
+    test('and the pointer agrees with it too', async ({ page }) => {
+        /*
+         * A small behaviour change worth pinning separately: before row 19 the focus ring
+         * appeared only once the keyboard had been used, and clicking a square left it
+         * wherever it was. It now follows real DOM focus.
+         *
+         * This one goes through `pointerDown` as well as `onFocus`, so it says the two
+         * agree -- not what either does alone.
          */
         const rock = await page.locator('[data-piece="rock"]').first().getAttribute('data-at')
         test.skip(rock === null, 'the served board has no rocks')
 
+        // A rock, so the click places nothing and there is no move to confuse the ring.
         await page.locator(`[data-cell="${rock}"]`).click()
         await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', rock!)
-
-        await page.locator('[data-cell="3,4"]').click()
-        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '3,4')
     })
 
     test('and it is still one tab stop once a square has the focus', async ({ page }) => {

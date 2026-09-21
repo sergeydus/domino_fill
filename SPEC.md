@@ -1457,6 +1457,21 @@ option. `<MotionConfig reducedMotion="user">` at the root covers every animation
 > square shows it, where before row 19 it appeared only once the keyboard had been used.
 > The highlight and the browser can no longer disagree about where the keyboard is.
 >
+> **The contract that synchronisation has to meet** is that *whatever* focuses a square,
+> the store is on that square — and "whatever" is wider than the pointer and Tab. A
+> non-initial cell carries `tabIndex=-1`, which keeps it out of the tab order while
+> leaving it programmatically focusable, and that is how assistive technology moves focus
+> around a grid. So the test drives a bare `.focus()` on a cell that is not the tab stop:
+> focus `3,4`, the store reads `3,4`, and the next arrow moves to `3,5`.
+>
+> It is worth recording how this was got wrong first, because the mistake is a general
+> one. The original test used `.click()`, which also fires `pointerDown` — and
+> `pointerDown` assigns `focusedCell` itself, so the click masked the handler under test.
+> A mutation replacing the cell's coordinates with a constant `[0, 0]` survived, and that
+> survivor was written off as an equivalent mutant on reasoning that enumerated the
+> pointer and Tab and stopped there. It is not equivalent; the route it is observable
+> through is precisely the one that matters most for this item.
+>
 > Moving DOM focus with the arrow keys — rather than only moving a highlight — is what
 > makes each square announce itself, with no live region in the loop. It also introduced
 > the row's one real hazard: React's `onBlur` is `focusout`, which bubbles, so focus moving

@@ -101,15 +101,19 @@ const BoardSquare: React.FC<Props2> = observer((
              * Guarded so that re-focusing the square the store already knows about does
              * not write, which keeps `focus()` from the effect above out of a render loop.
              *
-             * `[i, j]` is, as it happens, not *observable* today: a mutation writing a
-             * constant `[0, 0]` here survives the whole suite, and that is not a gap in
-             * the tests. `pointerDown` assigns `focusedCell = cell` itself, so every
-             * pointer route overwrites whatever this wrote; the guard skips the write
-             * whenever the store already agrees; and the only remaining route -- a
-             * keyboard Tab -- can land on just one square, the initial stop at `0,0`. So
-             * the two spellings cannot be told apart from outside. The general one stays
-             * because it is what this line means, and because a second tabbable cell
-             * would make the constant silently wrong.
+             * The cell it names is `[i, j]` and that is load-bearing, not decorative. A
+             * non-initial square carries `tabIndex=-1`, which keeps it out of the tab
+             * order while leaving it **programmatically focusable** -- which is how
+             * assistive technology moves focus around a grid, and how any application
+             * code would. Measured: `.focus()` on `3,4` puts the store on `3,4` and the
+             * next arrow key moves to `3,5`; with a constant `[0, 0]` the store would
+             * believe the keyboard is at the origin and the arrow would jump there.
+             *
+             * A `.click()` cannot check this, because `pointerDown` assigns `focusedCell`
+             * itself and masks whatever this handler did. An earlier version of the test
+             * clicked, the constant survived it, and the survivor was wrongly written off
+             * as equivalent -- on reasoning that only considered the pointer and Tab, and
+             * never asked what else can focus a square.
              */
             onFocus={() => { if (!isFocused) boardsStore.setFocusedCell([i, j]) }}
             aria-label={cellDescription([i, j], value, { isAnchor, isCandidate, isHinted })}
