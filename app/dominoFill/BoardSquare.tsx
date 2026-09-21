@@ -84,10 +84,34 @@ const BoardSquare: React.FC<Props2> = observer((
             /*
              * Exactly one cell in the grid is tabbable, so the board is one tab stop
              * rather than 36-64 of them -- the failure mode P1-8 names explicitly. With
-             * no focused cell yet, the top-left square holds the stop so Tab can still
-             * reach the board at all.
+             * no focused cell yet, the top-left square holds the stop, and the grid itself
+             * holds none, so Tab lands on a square and not on the board around it.
              */
             tabIndex={isFocused || (boardsStore.focusedCell === null && i === 0 && j === 0) ? 0 : -1}
+            /*
+             * Taking focus *is* moving the keyboard here (spec P1-8).
+             *
+             * Without this the store learns nothing when Tab puts the keyboard on a
+             * square, so `focusedCell` stays null and the next arrow key is spent
+             * initialising it instead of moving: measured from a cold page, tabbing in and
+             * pressing Right left the player still on `0,0`, and only a second press
+             * reached `0,1`. A keypress that visibly does nothing is the kind of thing a
+             * player reads as the board being broken.
+             *
+             * Guarded so that re-focusing the square the store already knows about does
+             * not write, which keeps `focus()` from the effect above out of a render loop.
+             *
+             * `[i, j]` is, as it happens, not *observable* today: a mutation writing a
+             * constant `[0, 0]` here survives the whole suite, and that is not a gap in
+             * the tests. `pointerDown` assigns `focusedCell = cell` itself, so every
+             * pointer route overwrites whatever this wrote; the guard skips the write
+             * whenever the store already agrees; and the only remaining route -- a
+             * keyboard Tab -- can land on just one square, the initial stop at `0,0`. So
+             * the two spellings cannot be told apart from outside. The general one stays
+             * because it is what this line means, and because a second tabbable cell
+             * would make the constant silently wrong.
+             */
+            onFocus={() => { if (!isFocused) boardsStore.setFocusedCell([i, j]) }}
             aria-label={cellDescription([i, j], value, { isAnchor, isCandidate, isHinted })}
             aria-selected={isAnchor || undefined}
             key={i}

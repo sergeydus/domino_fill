@@ -271,17 +271,21 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     onKeyDown={onKeyDown}
                     onBlur={onBlur}
                     /*
-                     * Exactly one tab stop for the whole board, wherever the keyboard is.
+                     * Never a tab stop. A cell always owns it.
                      *
                      * P1-8 sketches this as "container `tabIndex={0}`, focused cell `0`,
-                     * rest `-1`", which leaves *two* stops once a cell is focused -- the
-                     * container is earlier in document order, so Tab would land on the
-                     * board, then on a square inside it, then leave. Handing the stop over
-                     * to the cell instead is the same rule with the container included in
-                     * the rotation, and `-1` keeps it programmatically focusable, which is
-                     * what `.focus()` on the grid still relies on.
+                     * rest `-1`", which leaves *two* stops -- the container is earlier in
+                     * document order, so Tab lands on the board and then on a square
+                     * inside it. The first attempt at this row only handed the stop over
+                     * once a cell was focused, which fixed the case after the first arrow
+                     * key and left the initial render with both: measured from a cold
+                     * page, the grid and cell `0,0` both reported `tabIndex === 0`.
+                     *
+                     * `-1` rather than absent: the grid stays programmatically focusable,
+                     * which `.focus()` on it still relies on, and which is how a test or a
+                     * skip link can put the keyboard on the board without naming a square.
                      */
-                    tabIndex={boardsStore.focusedCell === null ? 0 : -1}
+                    tabIndex={-1}
                     role="grid"
                     aria-label={`Domino board, ${size} by ${size}`}
                     aria-rowcount={size}

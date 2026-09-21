@@ -1433,9 +1433,29 @@ option. `<MotionConfig reducedMotion="user">` at the root covers every animation
 >
 > **Amendment — the roving tabindex is one stop, not two.** The sketch above leaves the
 > container tabbable alongside the focused cell, and since the container comes first in
-> document order that is two stops for one board. The container takes `-1` once a cell is
-> focused, so there is always exactly one; `-1` keeps it programmatically focusable, which
-> `.focus()` on the grid still relies on.
+> document order that is two stops for one board. The container takes `-1`, always, and a
+> cell owns the stop; `-1` keeps the grid programmatically focusable, which `.focus()` on
+> it still relies on.
+>
+> The first attempt at this only handed the stop over *once a cell was focused*, which
+> fixed the case after the first arrow key and left the untouched board with both —
+> measured cold: `{ gridTabIndex: 0, cellsWithZero: ["0,0"], total: 2 }`. It had a second
+> consequence a player would actually feel. Tab landed on the grid, so `focusedCell` stayed
+> null, and the store spends the first arrow key initialising it (*entering the board is
+> itself the action*): tab in, press Right, and you are on `0,0`; press Right again and
+> only then do you reach `0,1`. A keypress that visibly does nothing reads as a broken
+> board.
+>
+> Both are fixed by a cell telling the store when it takes focus, so arriving somewhere
+> *is* being there. The tests that missed this missed it for instructive reasons — the
+> count looked only at `[data-cell]`, which excludes the grid, and the stronger check ran
+> only after an arrow key had already moved the stop — so the replacements count the grid
+> together with its cells from a cold page, and enter the board through real Tab presses
+> rather than `.focus()`, which is what hid the problem.
+>
+> One knock-on worth stating: the focus ring now follows real DOM focus, so clicking a
+> square shows it, where before row 19 it appeared only once the keyboard had been used.
+> The highlight and the browser can no longer disagree about where the keyboard is.
 >
 > Moving DOM focus with the arrow keys — rather than only moving a highlight — is what
 > makes each square announce itself, with no live region in the loop. It also introduced
@@ -1451,8 +1471,16 @@ option. `<MotionConfig reducedMotion="user">` at the root covers every animation
 > pile new controls should not join. Measured, the page's entire tab order was Easy,
 > Medium, Hard, the board, Check, Hint, Reset, Archive: a keyboard could reach every
 > control in the game except the one that changes which puzzle you play. They are real
-> buttons now, named "Next puzzle, 2 of 3", and `disabled` at the ends of the range rather
-> than merely greyed by a CSS filter over a handler that silently did nothing.
+> buttons now, and `disabled` at the ends of the range rather than merely greyed by a CSS
+> filter over a handler that silently did nothing.
+>
+> They name their **destination** — "Go to puzzle 2 of 3" — and the group carries the
+> position, "Puzzle 1 of 3". The first attempt named them "Next puzzle, 1 of 3", where the
+> number means where you are but reads as where you are going, so the button that takes
+> you to puzzle 2 announces the number 1. A button's name should answer "what happens if I
+> press this"; context about the set belongs on the group, which is where a screen reader
+> looks for it. The destination is clamped, so a disabled arrow names the puzzle you are
+> already on rather than a puzzle 0 or 4.
 >
 > **Difficulty had no state at all** — three buttons, no `aria-pressed`, the current one
 > distinguished only by `background-color`. `aria-pressed` rather than `role="radiogroup"`:
@@ -1465,6 +1493,14 @@ option. `<MotionConfig reducedMotion="user">` at the root covers every animation
 > nothing is a worse control than no control. The defect underneath was real and is fixed:
 > `aria-label` on a role-less `div` is not exposed, so both entries reached the tree as
 > bare unnamed `img` nodes and their explanations were being written and then dropped.
+>
+> **The decorative piece layer was still in the tree.** `pointer-events: none` and the
+> comment calling it decorative were both about the pointer; the accessibility tree had
+> never been asked. Those SVGs were the eight unnamed `img` nodes in the measurement above,
+> and naming the cells did not remove them — it left the noise alongside the signal, so a
+> screen reader walking the board still met a run of anonymous images that say nothing
+> about which square they are on. The layer is `aria-hidden` now, which loses nothing,
+> because the same information is on the cell underneath and comes with coordinates.
 >
 > **The same defect, found twice more.** The row and column targets carry `labelDescription`
 > for exactly this reason — strikethrough and colour reach no screen reader — and the

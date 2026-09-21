@@ -36,6 +36,19 @@ const tabOrder = async (page: Page, limit = 20) => {
     return stops
 }
 
+/** A free cell with a free cell below it, so one downward drag is always legal. */
+const freeRun = async (page: Page) => {
+    const n = Math.sqrt(await page.locator('[data-cell]').count())
+    const rocks = new Set(await page.locator('[data-piece="rock"]').evaluateAll(
+        els => els.map(el => el.getAttribute('data-at')!)))
+    for (let j = 0; j < n; j++) {
+        for (let i = 0; i + 1 < n; i++) {
+            if (!rocks.has(`${i},${j}`) && !rocks.has(`${i + 1},${j}`)) return { i, j }
+        }
+    }
+    throw new Error('the served board has no free vertical run')
+}
+
 test.beforeEach(async ({ page }) => { await openBoard(page) })
 
 test.describe('the board is a grid that actually contains cells', () => {
@@ -58,6 +71,45 @@ test.describe('the board is a grid that actually contains cells', () => {
         // Named, not merely present: an unnamed gridcell is a cell you cannot identify.
         expect(snapshot).toContain('gridcell "Row 1, column 1')
         expect(snapshot).toContain(`gridcell "Row ${size}, column ${size}`)
+    })
+
+    test('and nothing else, before or after a piece is placed', async ({ page }) => {
+        /*
+         * The visual piece layer is `pointer-events: none` and was described as purely
+         * decorative, which was true of the pointer and false of the accessibility tree:
+         * measured, its dominoes and rocks were eight unnamed `img` nodes *inside*
+         * `role="grid"`. Before the cells were named they were the only thing in it. They
+         * say nothing about which square they sit on or what they are, and naming the
+         * cells does not remove them -- it leaves the noise alongside the signal.
+         *
+         * Asserted after a placement as well, because the layer grows a node per domino:
+         * a version of this hiding only what was on screen at load would pass and then
+         * leak a fresh unnamed image on every move.
+         */
+        const unnamedImages = async () =>
+            ((await grid(page).ariaSnapshot()).match(/- img\s*$/gm) ?? []).length
+
+        expect(await unnamedImages(), 'before playing').toBe(0)
+
+        const { i, j } = await freeRun(page)
+        await drag(page, [i, j], [i + 1, j])
+        await expect(page.locator(`[data-piece][data-at="${i},${j}"]`)).toHaveCount(1)
+
+        expect(await unnamedImages(), 'after placing a domino').toBe(0)
+
+        // The signal is still there: rows, cells, and cells that describe what is on them.
+        const snapshot = await grid(page).ariaSnapshot()
+        const size = Math.sqrt(await page.locator('[data-cell]').count())
+        expect((snapshot.match(/- gridcell/g) ?? []).length).toBe(size * size)
+        expect(snapshot).toMatch(new RegExp(`gridcell "Row ${i + 1}, column ${j + 1}, top half`))
+        expect(snapshot).toMatch(new RegExp(`gridcell "Row ${i + 2}, column ${j + 1}, bottom half`))
+
+        // And a rock is described by the square it is on, not by an anonymous picture.
+        const rock = await page.locator('[data-piece="rock"]').first().getAttribute('data-at')
+        if (rock !== null) {
+            const [ri, rj] = rock.split(',').map(Number)
+            expect(snapshot).toContain(`gridcell "Row ${ri + 1}, column ${rj + 1}, rock"`)
+        }
     })
 
     test('a square says where it is and what is on it', async ({ page }) => {
@@ -85,6 +137,85 @@ test.describe('the roving tabindex', () => {
                 .filter(el => (el as HTMLElement).tabIndex === 0).length)
         expect(inBoard).toBeLessThanOrEqual(1)
         expect(stops.filter(s => s.startsWith('gridcell')).length).toBeLessThanOrEqual(1)
+    })
+
+    test('is one tab stop before anything has been touched', async ({ page }) => {
+        /*
+         * Counted over the grid **and** its cells, from a cold page, before any focus or
+         * key event.
+         *
+         * The first version of this row got this wrong and the first version of this
+         * suite could not see it: the grid took `tabIndex={0}` while `focusedCell` was
+         * null and cell `0,0` took it at the same time, so the untouched board held two
+         * stops. The test that was supposed to catch it counted only `[data-cell]`, which
+         * excludes the grid and therefore reported one; the other test ran after an arrow
+         * key, by which point the grid had already given its stop up. Measured on the
+         * shipped build: `{ gridTabIndex: 0, cellsWithZero: ["0,0"], total: 2 }`.
+         */
+        const stops = await page.evaluate(() => {
+            const grid = document.querySelector('[role="grid"]') as HTMLElement
+            const cells = [...grid.querySelectorAll('[data-cell]')] as HTMLElement[]
+            return [
+                ...(grid.tabIndex === 0 ? ['the grid itself'] : []),
+                ...cells.filter(c => c.tabIndex === 0).map(c => `cell ${c.getAttribute('data-cell')}`),
+            ]
+        })
+        expect(stops).toEqual(['cell 0,0'])
+    })
+
+    test('entering by Tab puts the keyboard on a square, and the first arrow moves', async ({ page }) => {
+        /*
+         * The consequence of the two-stop bug that a player would actually feel. Tab
+         * landed on the grid rather than on a square, which left `focusedCell` null, and
+         * the store spends the first arrow key initialising it -- "entering the board is
+         * itself the action". Measured: tab in, press Right, and you are on `0,0`; press
+         * Right again and only then do you reach `0,1`. A keypress that visibly does
+         * nothing reads as a broken board.
+         *
+         * Fixed by having a cell tell the store when it takes focus, so arriving *is*
+         * being somewhere. Driven through real Tab presses rather than `.focus()`,
+         * because `.focus()` is exactly what hid the problem.
+         */
+        await page.locator('body').click({ position: { x: 2, y: 2 } })
+        let landed: string | null = null
+        for (let i = 0; i < 12 && landed === null; i++) {
+            await page.keyboard.press('Tab')
+            landed = await page.evaluate(() =>
+                (document.activeElement as HTMLElement).getAttribute('data-cell'))
+        }
+        expect(landed, 'Tab never reached a square of the board').toBe('0,0')
+
+        // Arriving is being somewhere: the store already agrees before any key is pressed.
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '0,0')
+
+        await page.keyboard.press('ArrowRight')
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '0,1')
+        await expect(page.locator('[data-cell="0,1"]')).toBeFocused()
+    })
+
+    test('the square that takes focus is the square the store is on', async ({ page }) => {
+        /*
+         * Wherever focus lands, the store is on that square -- so the highlight and the
+         * browser cannot disagree about where the keyboard is. This is a small behaviour
+         * change worth pinning: before row 19 the focus ring appeared only once the
+         * keyboard had been used, and clicking a square left it wherever it was.
+         *
+         * It deliberately does *not* claim to cover the cell coordinates passed by
+         * `onFocus`. A mutation writing a constant `[0, 0]` there survives this test and
+         * every other, and measurement says why rather than leaving it as a gap:
+         * `pointerDown` assigns `focusedCell` itself, so the pointer routes overwrite
+         * `onFocus` regardless, and the one keyboard route into the board can only reach
+         * the initial stop at `0,0`. The mutant is equivalent; see the note in
+         * `BoardSquare.tsx`.
+         */
+        const rock = await page.locator('[data-piece="rock"]').first().getAttribute('data-at')
+        test.skip(rock === null, 'the served board has no rocks')
+
+        await page.locator(`[data-cell="${rock}"]`).click()
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', rock!)
+
+        await page.locator('[data-cell="3,4"]').click()
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '3,4')
     })
 
     test('and it is still one tab stop once a square has the focus', async ({ page }) => {
@@ -225,6 +356,14 @@ test.describe('the roving tabindex', () => {
 })
 
 test.describe('the level arrows', () => {
+    /*
+     * They are addressed by their `data-level` marker rather than by name, because the
+     * name is the thing under test and changes with the level. `[data-level="next"]` is
+     * the control; what it calls itself is asserted, not assumed.
+     */
+    const previous = (page: Page) => page.locator('[data-level="previous"]')
+    const next = (page: Page) => page.locator('[data-level="next"]')
+
     test('are buttons, reachable by Tab and named', async ({ page }) => {
         /*
          * The codebase's oldest accessibility complaint, cited by name in P1-5's own
@@ -234,10 +373,31 @@ test.describe('the level arrows', () => {
          * changes which puzzle you play.
          */
         const stops = await tabOrder(page)
-        expect(stops.some(s => /next puzzle/i.test(s))).toBe(true)
+        expect(stops.some(s => /go to puzzle/i.test(s))).toBe(true)
 
-        await expect(page.getByRole('button', { name: /next puzzle/i })).toBeVisible()
-        await expect(page.getByRole('button', { name: /previous puzzle/i })).toBeVisible()
+        await expect(page.getByRole('button', { name: 'Go to puzzle 2 of 3' })).toBeVisible()
+    })
+
+    test('name where they go, not which way they point', async ({ page }) => {
+        /*
+         * "Next puzzle, 1 of 3" was the first attempt at this and reads two ways: the
+         * number is meant to say where you *are*, but on a button that says "next" it
+         * sounds like a destination, so the control that takes you to puzzle 2 announces
+         * the number 1. A button's name should answer "what happens if I press this".
+         *
+         * The position moves to the group, which is where a screen reader looks for the
+         * context around a set of controls.
+         */
+        await expect(page.locator('[role="group"][aria-label^="Puzzle"]'))
+            .toHaveAttribute('aria-label', 'Puzzle 1 of 3')
+        await expect(next(page)).toHaveAttribute('aria-label', 'Go to puzzle 2 of 3')
+
+        await next(page).click()
+
+        await expect(page.locator('[role="group"][aria-label^="Puzzle"]'))
+            .toHaveAttribute('aria-label', 'Puzzle 2 of 3')
+        await expect(next(page)).toHaveAttribute('aria-label', 'Go to puzzle 3 of 3')
+        await expect(previous(page)).toHaveAttribute('aria-label', 'Go to puzzle 1 of 3')
     })
 
     test('and carry nothing else into the tree', async ({ page }) => {
@@ -245,7 +405,7 @@ test.describe('the level arrows', () => {
          * The arrow is one decorative path, drawn twice and rotated. Without
          * `aria-hidden` it is not harmless: measured, the button computes to
          *
-         *     button "Next puzzle, 1 of 3":
+         *     button "Go to puzzle 2 of 3":
          *       - img
          *
          * -- the name is unaffected, because `aria-label` wins, but the button gains an
@@ -254,15 +414,14 @@ test.describe('the level arrows', () => {
          * about: the first version of this row had no test for it and the mutation that
          * removed the attribute survived.
          */
-        const snapshot = await page.locator('[data-level="next"]').ariaSnapshot()
-        expect(snapshot.trim()).toBe('- button "Next puzzle, 1 of 3"')
+        const snapshot = await next(page).ariaSnapshot()
+        expect(snapshot.trim()).toBe('- button "Go to puzzle 2 of 3"')
     })
 
     test('work from the keyboard alone', async ({ page }) => {
-        const next = page.getByRole('button', { name: /next puzzle/i })
-        await next.focus()
+        await next(page).focus()
         await page.keyboard.press('Enter')
-        await expect(page.getByRole('button', { name: /next puzzle, 2 of 3/i })).toBeVisible()
+        await expect(next(page)).toHaveAttribute('aria-label', 'Go to puzzle 3 of 3')
     })
 
     test('say they are unavailable rather than merely looking grey', async ({ page }) => {
@@ -274,19 +433,18 @@ test.describe('the level arrows', () => {
          * from the *next* arrow survived a version of this test that only checked level 1,
          * where next is enabled anyway and the assertion said nothing about it.
          */
-        const previous = page.getByRole('button', { name: /previous puzzle/i })
-        const next = page.getByRole('button', { name: /next puzzle/i })
+        await expect(previous(page)).toBeDisabled()
+        await expect(next(page)).toBeEnabled()
 
-        await expect(previous).toBeDisabled()
-        await expect(next).toBeEnabled()
+        await next(page).click()
+        await expect(previous(page)).toBeEnabled()
+        await expect(next(page)).toBeEnabled()
 
-        await next.click()
-        await expect(previous).toBeEnabled()
-        await expect(next).toBeEnabled()
-
-        await next.click()      // level 3 of 3: the far end
-        await expect(page.getByRole('button', { name: /next puzzle, 3 of 3/i })).toBeDisabled()
-        await expect(previous).toBeEnabled()
+        await next(page).click()      // puzzle 3 of 3: the far end
+        await expect(next(page)).toBeDisabled()
+        await expect(previous(page)).toBeEnabled()
+        // The disabled button names the puzzle you are already on, not a puzzle 4.
+        await expect(next(page)).toHaveAttribute('aria-label', 'Go to puzzle 3 of 3')
     })
 })
 

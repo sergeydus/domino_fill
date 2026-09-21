@@ -302,9 +302,22 @@ describe('ClientBoard event wiring', () => {
         expect(s.pendingAnchor).toBeNull()
     })
 
-    it('is focusable, so the keyboard can reach it', () => {
+    it('the keyboard can reach the board, and lands on a square', () => {
+        /*
+         * The tab stop belongs to a cell, not to the grid (spec P1-8, row 19).
+         *
+         * This used to assert `grid.tabIndex === 0`, which was the same claim while the
+         * grid was the focusable element. Under the roving tabindex that arrangement
+         * gives the untouched board *two* stops -- the grid and cell 0,0 -- so the grid
+         * takes `-1`: still programmatically focusable, never in the tab order.
+         */
         const s = session()
         const { grid } = renderBoard(s)
-        expect(grid.tabIndex).toBe(0)
+        expect(grid.tabIndex).toBe(-1)
+
+        const tabbable = [...grid.querySelectorAll<HTMLElement>('[data-cell]')]
+            .filter(cell => cell.tabIndex === 0)
+            .map(cell => cell.getAttribute('data-cell'))
+        expect(tabbable).toEqual(['0,0'])
     })
 })

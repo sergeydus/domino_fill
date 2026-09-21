@@ -15,10 +15,11 @@ import { PuzzleSession } from "../stores/PuzzleSession"
  * silent and destructive, which is the reason P1-3 exists, and that is just as true under
  * a finger as under a cursor.
  *
- * Real `<button>` elements, deliberately. The level arrows next door are `motion.div`s with
- * an `onClick` -- unreachable by keyboard, invisible to assistive technology, and the
- * reason P1-1's "focus moves to the Next control on completion" had to be deferred. New
- * controls should not add to that pile.
+ * Real `<button>` elements, deliberately. When this was written the level arrows next door
+ * were `motion.div`s with an `onClick` -- unreachable by keyboard, invisible to assistive
+ * technology, and the reason P1-1's "focus moves to the Next control on completion" had to
+ * be deferred. Row 19 (P1-8) converted them, so the pile is gone rather than merely not
+ * added to; the rule that new controls are real buttons stands on its own.
  *
  * **Check and Hint (P1-5, row 18e).** Both are buttons for the same reason Undo is: the
  * game is phone-first and a shortcut is no affordance at all under a finger. Both are

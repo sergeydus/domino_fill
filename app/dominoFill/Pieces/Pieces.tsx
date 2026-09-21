@@ -30,8 +30,18 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
      *
      * Removal now happens on the cell underneath: the pointer handlers resolve a cell and
      * `PuzzleSession.pointerUp` decides what the gesture on it means (P1-1).
+     *
+     * **`aria-hidden` as well as `pointer-events: none` (spec P1-8, row 19).** "Decorative"
+     * was true of the pointer and false of the accessibility tree: measured, these SVGs
+     * were eight unnamed `img` nodes *inside* `role="grid"`, and they were the only thing
+     * in it before the cells were named. A screen reader walking the board met a run of
+     * anonymous images that say nothing about which square they are on or what they are.
+     *
+     * Hiding the layer loses nothing, because the same information is now on the cell
+     * underneath, where it belongs and where it comes with coordinates: "Row 3, column 4,
+     * top half of an upright domino".
      */
-    return <div className="absolute z-20 pointer-events-none">
+    return <div className="absolute z-20 pointer-events-none" aria-hidden="true">
         {/* <AnimatePresence> */}
         {ones.map(([i, j]) =>
             <motion.div key={`one_${i},${j}`} className="absolute" data-piece="one" data-at={`${i},${j}`}

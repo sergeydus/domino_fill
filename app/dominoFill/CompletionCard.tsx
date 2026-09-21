@@ -18,9 +18,11 @@ import { PuzzleSession } from "../stores/PuzzleSession"
  * 1. A visible celebration and a Next/Replay affordance, announced to assistive technology.
  * 2. **P1-1's deferred completion-focus clause.** That clause required focus to move to the
  *    Next control on completion, and was deferred out of row 13 because there was no
- *    focusable control to move to — the level arrows are `motion.div`s with an `onClick`.
- *    This card brings its own real `<button>`, so the clause closes here rather than
- *    waiting on P1-8 to convert the arrows.
+ *    focusable control to move to — at the time the level arrows were `motion.div`s with
+ *    an `onClick`. This card brought its own real `<button>`, so the clause closed here
+ *    rather than waiting on P1-8; row 19 has since converted the arrows too, and the
+ *    card's button remains the right target because it is the one the player is looking
+ *    at when the board is won.
  * 3. The board is made **`inert`**, not `pointerEvents: none` (spec P1-4). They are not
  *    equivalent: `pointer-events` stops the mouse and nothing else, leaving every cell
  *    still tabbable and still announced, so a keyboard or screen-reader user could keep

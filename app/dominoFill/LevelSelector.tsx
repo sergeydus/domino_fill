@@ -56,13 +56,27 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
             boardsStore.setLevel((currentLevel - 1) as 1 | 2 | 3)
         }
     }
-    return <div className="flex flex-row" role="group" aria-label="Puzzle">
+    /*
+     * The buttons name where they *go*, not which way they point (spec P1-8, row 19).
+     *
+     * "Next puzzle, 1 of 3" was the first attempt and reads two ways: the "1 of 3" is
+     * meant to say where you are, but attached to a button that says "next" it sounds like
+     * a destination -- so the control that takes you to puzzle 2 announces the number 1.
+     * The destination is what a player choosing a button needs, and the group carries the
+     * position instead, which is where a screen reader looks for context anyway.
+     *
+     * Clamped, so the disabled button at each end names the puzzle you are already on
+     * rather than a puzzle 0 or 4 that does not exist.
+     */
+    const destination = (delta: number) => Math.min(3, Math.max(1, currentLevel + delta))
+
+    return <div className="flex flex-row" role="group" aria-label={`Puzzle ${currentLevel} of 3`}>
         <motion.button
             type="button"
             onClick={onPreviousLevelClick}
             disabled={!hasPreviousLevel}
             data-level="previous"
-            aria-label={`Previous puzzle, ${currentLevel} of 3`}
+            aria-label={`Go to puzzle ${destination(-1)} of 3`}
             className="rotate-180 cursor-pointer control-surface disabled:cursor-not-allowed"
             initial={{ scale: 1 }}
             whileHover={hasPreviousLevel ? { scale: 1.2 } : undefined}
@@ -75,7 +89,7 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
             onClick={onNextLevelClick}
             disabled={!hasNextLevel}
             data-level="next"
-            aria-label={`Next puzzle, ${currentLevel} of 3`}
+            aria-label={`Go to puzzle ${destination(+1)} of 3`}
             className="cursor-pointer control-surface disabled:cursor-not-allowed"
             initial={{ scale: 1 }}
             whileHover={hasNextLevel ? { scale: 1.2 } : undefined}

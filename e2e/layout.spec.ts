@@ -107,8 +107,10 @@ const labelOverflow = (page: Page, text?: string) => page.evaluate((forced) => {
  */
 const goToLevel = async (page: Page, level: number) => {
     const currentLevel = async () => {
-        const name = await page.locator('[data-level="next"]').getAttribute('aria-label') ?? ''
-        return Number(/(\d+) of 3/.exec(name)?.[1] ?? NaN)
+        // The *group* says where you are; the buttons say where they go (spec P1-8).
+        const name = await page.locator('[role="group"][aria-label^="Puzzle"]')
+            .getAttribute('aria-label') ?? ''
+        return Number(/Puzzle (\d+) of 3/.exec(name)?.[1] ?? NaN)
     }
     for (let guard = 0; guard < 6; guard++) {
         const at = await currentLevel()
