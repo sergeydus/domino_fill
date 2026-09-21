@@ -3,7 +3,9 @@ import {
     MAX_PROBES, checkPosition, hintFor, stepsBackToSolvable, type ReplayMove,
 } from '@/app/stores/advice'
 import { adviceIsProblem, adviceMessage } from '@/app/dominoFill/adviceText'
-import { definitionFrom, type StoredPuzzle } from '@/app/stores/PuzzleDefinition'
+import {
+    definitionFrom, type PuzzleDefinition, type StoredPuzzle,
+} from '@/app/stores/PuzzleDefinition'
 import { solve } from '@/app/stores/solver'
 import { generateDay } from '@/scripts/corpus'
 
@@ -22,7 +24,8 @@ import { generateDay } from '@/scripts/corpus'
  *
  *   - solvable / not solvable / **could not tell**;
  *   - not solvable, and **how far back** to undo;
- *   - solvable but **nothing forced**, which is not a complaint.
+ *   - solvable, but **this search proved nothing** about any square, which is not a
+ *     complaint and is also not a claim that nothing is forced.
  */
 
 /** A 2x2 with its right column rocked out: exactly one downward domino solves it. */
@@ -60,6 +63,10 @@ const pair = (): StoredPuzzle => ({
  * Nothing in the corpus looks like this -- the generator rejects a puzzle with two
  * solutions -- so it has to be built on purpose, and it must exist, because the code claims
  * an answer for it.
+ *
+ * It is also the counterexample that corrected that answer: those two completions agree on
+ * six of the sixteen cells, so "more than one completion" and "no cell is forced" are not
+ * the same statement. Enumerated rather than asserted, below.
  */
 const twoWays = (): StoredPuzzle => ({
     puzzleId: 'two-ways',
@@ -79,6 +86,50 @@ const REMOVE_FLAT_TOP = { cells: [[0, 0], [0, 1]], before: [0, 2] } as const
 
 /** A real 6x6 from the corpus, so the happy paths are not all 2x2 toys. */
 const REAL = definitionFrom(generateDay('2026-09-01').easyBoards[0])
+
+/**
+ * Every completion of a 4x4, by brute force.
+ *
+ * The production solver deliberately stops at two, which is the whole reason a `multiple`
+ * verdict cannot support a claim about the board. To *check* such a claim something has to
+ * count them all, and on sixteen cells that is 36 tilings -- cheap enough to do exhaustively
+ * in a test and out of the question inside a button press on an 8x8.
+ */
+const allCompletionsOf4x4 = (definition: PuzzleDefinition): number[][][] => {
+    const columns = definition.columnTargets.split(',').map(Number)
+    const rows = definition.rowTargets.split(',').map(Number)
+    const EMPTY = -9
+    const grid = Array.from({ length: 4 }, () => Array<number>(4).fill(EMPTY))
+    const found: number[][][] = []
+
+    const walk = () => {
+        let cell: [number, number] | null = null
+        for (let i = 0; i < 4 && cell === null; i++) {
+            for (let j = 0; j < 4 && cell === null; j++) if (grid[i][j] === EMPTY) cell = [i, j]
+        }
+        if (cell === null) {
+            const sum = (values: number[]) => values.reduce((a, b) => a + b, 0)
+            for (let j = 0; j < 4; j++) if (sum(grid.map(row => row[j])) !== columns[j]) return
+            for (let i = 0; i < 4; i++) if (sum(grid[i]) !== rows[i]) return
+            found.push(grid.map(row => [...row]))
+            return
+        }
+        const [i, j] = cell
+        if (j + 1 < 4 && grid[i][j + 1] === EMPTY) {           // flat: 0 then 2
+            grid[i][j] = 0; grid[i][j + 1] = 2
+            walk()
+            grid[i][j] = EMPTY; grid[i][j + 1] = EMPTY
+        }
+        if (i + 1 < 4 && grid[i + 1][j] === EMPTY) {           // upright: 1 over 0
+            grid[i][j] = 1; grid[i + 1][j] = 0
+            walk()
+            grid[i][j] = EMPTY; grid[i + 1][j] = EMPTY
+        }
+    }
+
+    walk()
+    return found
+}
 
 /** The board one step further back: what the walk sees after undoing `move`. */
 const unapply = (board: (number | null)[][], move: ReplayMove) => {
@@ -345,15 +396,41 @@ describe('hinting', () => {
          * The claim a hint makes is that *every* completion fills the cell this way, and
          * only the solver's `solved` verdict establishes that -- it looked for a second
          * completion and there was not one. With `multiple` the solver stopped at two, so
-         * two that happen to agree prove nothing about a third. Saying so is the honest
-         * answer; picking a cell anyway would be a guess dressed as a fact.
+         * two that happen to agree prove nothing about a third. Picking a cell anyway would
+         * be a guess dressed as a fact.
          */
-        expect(hintFor(TWO_WAYS, TWO_WAYS.initialBoard)).toEqual({ kind: 'no-forced-cell' })
+        expect(hintFor(TWO_WAYS, TWO_WAYS.initialBoard)).toEqual({ kind: 'no-proven-hint' })
+    })
+
+    it('does not claim that no cell is forced, because this fixture has six', () => {
+        /*
+         * The verdict used to be called `no-forced-cell` and said so to the player, which is
+         * a claim about the *board*. A search that stopped at two completions has no
+         * standing to make it -- and on this very fixture it is false. Enumerated here
+         * rather than asserted from the two completions named in the fixture comment, so
+         * "exactly two, agreeing on six cells" is measured and not remembered.
+         */
+        const completions = allCompletionsOf4x4(TWO_WAYS)
+        expect(completions).toHaveLength(2)
+
+        const forced: string[] = []
+        for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 4; j++) {
+                if (completions.every(s => s[i][j] === completions[0][i][j])) forced.push(`${i},${j}`)
+            }
+        }
+        expect(forced).toEqual(['2,0', '2,2', '3,0', '3,1', '3,2', '3,3'])
+
+        // So the answer may only be about the search. Anything stronger is a lie here.
+        const message = adviceMessage({ kind: 'no-proven-hint' })
+        expect(message).toMatch(/could not prove/)
+        expect(message).not.toMatch(/\bforced\b/)
+        expect(message).not.toMatch(/no single|nothing is|none of/i)
     })
 
     it('still says an ambiguous position is on track', () => {
-        // Nothing forced is not a complaint: Check and Hint give different answers here on
-        // purpose, and only one of them is about a problem.
+        // "Could not prove a square" is not a complaint: Check and Hint give different
+        // answers here on purpose, and only one of them is about a problem.
         expect(checkPosition(TWO_WAYS, TWO_WAYS.initialBoard)).toEqual({ kind: 'on-track' })
     })
 
@@ -385,16 +462,41 @@ describe('what the player is told', () => {
         expect(adviceIsProblem({ kind: 'wrong', undoSteps: null })).toBe(true)
     })
 
+    it('does not invite the player to repeat a search that cannot change', () => {
+        /*
+         * The solver is deterministic and the budget is fixed, so pressing the same button
+         * on an unchanged board reaches the same limit -- forever. "Try again" was advice
+         * to do exactly that. Asking again is only useful *after* the position changes, so
+         * the message says which comes first.
+         */
+        const message = adviceMessage({ kind: 'undetermined' })
+        expect(message).toMatch(/\b(undo|change)\b/i)
+
+        // Asking again is fine once something has moved, so if a retry is mentioned at all
+        // it comes second. A message that opens with one is the version being corrected.
+        const retry = message.search(/\b(ask|try) again\b/i)
+        if (retry !== -1) expect(message.search(/\b(undo|change)\b/i)).toBeLessThan(retry)
+    })
+
     it('never renders an unknown distance at all', () => {
         /*
-         * Null is not zero and it is not a number. Found by mutation-testing: the first
-         * version of this asserted only that no *digit* appeared, which "Undo null moves"
-         * satisfies perfectly. What has to hold is that no instruction to undo a specific
-         * amount is given when the amount is not known.
+         * Null is not zero and it is not a number. Two versions of this test were wrong
+         * before this one, which is worth recording because both failed *open*:
+         *
+         *   - the first asserted only that no digit appeared, which "Undo null moves"
+         *     satisfies perfectly. Caught by mutation-testing;
+         *   - the second added the word boundaries below via a patch script whose Python
+         *     string was not raw, so `\b` reached the file as two literal backspace
+         *     characters and the regex could never match anything. A `not.toMatch` that
+         *     cannot match passes for free, and passing is what a green test looks like.
+         *
+         * So the guard is mutation-tested against a message that satisfies every *other*
+         * assertion here -- "A piece is wrong. Undo some moves." has no digit, no null and
+         * an `is wrong` -- and is caught only by this line.
          */
         const message = adviceMessage({ kind: 'wrong', undoSteps: null })
         expect(message).not.toMatch(/\d/)
-        expect(message).not.toMatch(/Undo/)
+        expect(message).not.toMatch(/\bUndo\b/)
         expect(message).not.toMatch(/null|undefined|NaN/)
         expect(message).toMatch(/is wrong/)
     })
@@ -404,16 +506,16 @@ describe('what the player is told', () => {
         expect(adviceMessage({ kind: 'wrong', undoSteps: 3 })).toContain('Undo 3 moves to')
     })
 
-    it('does not treat "nothing is forced" as a complaint', () => {
-        const message = adviceMessage({ kind: 'no-forced-cell' })
+    it('does not treat "could not prove a square" as a complaint', () => {
+        const message = adviceMessage({ kind: 'no-proven-hint' })
         expect(message).toMatch(/more than one way/)
-        expect(adviceIsProblem({ kind: 'no-forced-cell' })).toBe(false)
+        expect(adviceIsProblem({ kind: 'no-proven-hint' })).toBe(false)
     })
 
     it('has something to say for every branch', () => {
         // A missing case would render an empty live region, which announces nothing at all.
         const every = [
-            { kind: 'solved' }, { kind: 'on-track' }, { kind: 'no-forced-cell' },
+            { kind: 'solved' }, { kind: 'on-track' }, { kind: 'no-proven-hint' },
             { kind: 'hint', cell: [0, 0] as const, value: 0 },
             { kind: 'wrong', undoSteps: null }, { kind: 'wrong', undoSteps: 2 },
             { kind: 'undetermined' },

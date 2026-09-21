@@ -838,14 +838,26 @@ entire audio channel, so haptics *are* the feel budget.
 > completion* are both "you are still in the game". *Unsolvable* is "a piece you have placed
 > is wrong". *Budget-exhausted* is **"could not tell"**, and is the reason the solver has
 > that verdict at all: reporting a stopped search as a mistake would send a player undoing
-> correct moves.
+> correct moves. "Could not tell" also has to say what would change the answer, because the
+> solver and its budget are deterministic: pressing the same button on the same board
+> reaches the same limit, so the message asks for an undo or a change *first* and an answer
+> second. An unqualified "try again" is an invitation to a guaranteed repeat.
 >
 > **Hint** reveals one cell and leaves the move to the player — it never places anything.
 > "Forced" means every completion fills the cell the same way, which is exactly what the
 > solver's `solved` verdict establishes: it looked for a second completion and found none.
 > A `multiple` verdict cannot support the claim, because the search stops at two and two
-> that agree prove nothing about a third; there the honest answer is "nothing is forced",
-> which is not a complaint. The cell is the first empty one in row-major order, because a
+> that agree prove nothing about a third — **and it cannot support the opposite claim
+> either.** The first version of this said "no single move is forced", which is a statement
+> about the board that a search stopping at two completions has no standing to make, and
+> which is measurably false on the very fixture that exercises it: the `TWO_WAYS` 4x4 has
+> exactly two completions and they agree on six of its sixteen cells, all six forced. The
+> verdict is therefore `no-proven-hint` and reports only what the search did — *this search
+> could not prove what any square holds* — which is not a complaint. Proving otherwise would
+> mean enumerating every completion, unbounded on an 8x8 and needing a budget of its own;
+> it buys the shipped game nothing, because every corpus puzzle is generated unique and
+> rejected otherwise, so `multiple` is unreachable from a valid board and this is a
+> fixture-only path. The cell is the first empty one in row-major order, because a
 > hint that moved between presses would read as the game changing its mind. The value is
 > named as the half it is — "the top half of an upright domino" — since the board shows pips
 > and a bare `1` is a quiz.
@@ -859,8 +871,13 @@ entire audio channel, so haptics *are* the feel budget.
 > is solvable and prefix 3 is unsolvable. The walk is bounded twice, by one budget shared
 > across every probe and by a cap of twenty steps; either limit reports the problem without
 > a number, which is a smaller claim rather than a wrong one. **An unknown distance is never
-> rendered** — found by mutation-testing, where a first version of the test only checked for
-> digits and "Undo null moves" passed it.
+> rendered** — and the test for it was wrong twice, both times failing open. The first
+> version only checked for digits, which "Undo null moves" satisfies; caught by
+> mutation-testing. The second added word boundaries through a patch script whose Python
+> string was not raw, so `\b` reached the file as two literal backspace characters and the
+> regex could never match — a `not.toMatch` that cannot match passes for free, and passing
+> is what a green test looks like. The guard is now mutation-tested against a message that
+> satisfies every other assertion in that test and is caught only by this one.
 >
 > **Neither action touches anything.** Advice is pure and takes the board as an argument;
 > the walk copies before it steps back. Nothing writes to the board, the undo stack or

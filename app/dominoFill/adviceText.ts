@@ -10,8 +10,12 @@ import type { Advice } from "../stores/advice"
  *   - **"wrong" and "could not tell" are different answers.** A budget-exhausted search
  *     has not judged the position; reporting it as a mistake would send a player undoing
  *     correct moves. This is the reason the solver has a `budget-exhausted` verdict at all.
- *   - **"nothing is forced" and "you are wrong" are different answers.** More than one
- *     completion means there is nothing to reveal, not that anything is amiss.
+ *     And "could not tell" has to say what would change the answer: the solver and its
+ *     budget are deterministic, so pressing the same button on the same board reaches the
+ *     same limit. "Try again" would be an invitation to a guaranteed repeat.
+ *   - **"nothing was proved" and "nothing is forced" are different answers.** More than one
+ *     completion means there is nothing to reveal *from this search* — not that no square
+ *     is forced, which a search that stopped at two completions has no standing to say.
  *   - **an unknown distance is not zero.** When the walk back could not establish how far
  *     to undo, the message says a piece is wrong and stops, rather than inventing a number.
  *
@@ -32,8 +36,8 @@ export const adviceMessage = (advice: Advice): string => {
             return 'This puzzle is already finished.'
         case 'on-track':
             return 'Looking good — this position can still be finished.'
-        case 'no-forced-cell':
-            return 'There is more than one way to finish from here, so no single move is forced.'
+        case 'no-proven-hint':
+            return 'This search found more than one way to finish, so it could not prove what any square holds.'
         case 'hint': {
             const [row, column] = advice.cell
             return `Row ${row + 1}, column ${column + 1} holds ${HALF[advice.value] ?? 'a piece'}.`
@@ -44,7 +48,7 @@ export const adviceMessage = (advice: Advice): string => {
                 : `This position cannot be finished. Undo ${advice.undoSteps} `
                 + `${advice.undoSteps === 1 ? 'move' : 'moves'} to get back to one that can.`
         case 'undetermined':
-            return 'The search ran out of time before it could tell. Try again, or undo a move.'
+            return 'The search reached its limit before it could tell. Undo or change a move, then ask again.'
         case 'unavailable':
             return 'Something is wrong with this puzzle, so it cannot be checked.'
     }

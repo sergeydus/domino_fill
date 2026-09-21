@@ -35,8 +35,15 @@ export type Advice =
     | { readonly kind: 'on-track' }
     /** One cell every completion fills the same way, and what it holds. */
     | { readonly kind: 'hint', readonly cell: Cell, readonly value: number }
-    /** Solvable, but more than one way: nothing is forced, so there is nothing to reveal. */
-    | { readonly kind: 'no-forced-cell' }
+    /**
+     * Solvable, and a second completion turned up before anything could be proved.
+     *
+     * **Not a claim that no cell is forced.** The solver stops at two completions, and two
+     * completions can still agree — the `TWO_WAYS` fixture in `tests/advice.test.ts` has
+     * exactly two, and they agree on six of its sixteen cells. All this verdict reports is
+     * that *this* search established nothing. See `hintFor`.
+     */
+    | { readonly kind: 'no-proven-hint' }
     /**
      * No completion from here: something placed is wrong.
      *
@@ -169,9 +176,18 @@ export const checkPosition = (
  *
  * "Forced" means every completion fills it the same way, which is exactly what the solver's
  * `solved` verdict establishes: it searched for a second completion and there was not one.
- * A `multiple` verdict cannot support the claim — the solver stops at two solutions, so two
- * that happen to agree on a cell prove nothing about a third — and saying "no single move is
- * forced" is the honest answer rather than a guess dressed as a hint.
+ *
+ * A `multiple` verdict cannot support the claim, because the solver stops at two and two that
+ * agree prove nothing about a third. **Nor can it support the opposite claim.** Saying "no
+ * single move is forced" there would be just as unfounded, and measurably false on the
+ * `TWO_WAYS` fixture: exhaustive enumeration finds exactly two completions and they agree on
+ * six of sixteen cells, every one of which is forced. So the answer is about the search and
+ * not about the board — nothing was proved, which is all that is known.
+ *
+ * Proving it properly would mean enumerating *every* completion, which is unbounded on an 8x8
+ * and would need a budget and a timeout answer of its own. It buys nothing for the shipped
+ * game: every corpus puzzle is generated unique and rejected otherwise, so `multiple` is
+ * unreachable from a valid board and this is a fixture-only path.
  *
  * The cell is the first empty one in row-major order. Deterministic on purpose: a hint that
  * moved around between presses of the same button would read as the game changing its mind.
@@ -196,7 +212,7 @@ export const hintFor = (
                     definition, board, moves, Math.max(0, budget - result.nodes)).steps,
             }
         case 'multiple':
-            return { kind: 'no-forced-cell' }
+            return { kind: 'no-proven-hint' }
         case 'solved': {
             for (let i = 0; i < board.length; i++) {
                 for (let j = 0; j < board[i].length; j++) {
