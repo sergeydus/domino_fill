@@ -9,6 +9,7 @@ import {
 import {
     Cell, DIRECTIONS, Direction, directionBetween, dominoFrom, neighbourOf, orderedPair, sameCell,
 } from "./placement"
+import { checkPosition, hintFor, type Advice } from "./advice"
 
 /** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
 export const GRID_BORDER_PX = 8
@@ -189,6 +190,49 @@ export class PuzzleSession {
         return outcome
     }
 
+    /**
+     * What Check or Hint last said, and a counter so repeating it is an event (spec P1-5).
+     *
+     * A counter for the same reason `outcomeTick` has one: pressing Check twice on an
+     * unchanged board is two questions and deserves two answers. A live region watching the
+     * value alone would stay silent the second time, which is exactly when a player is
+     * pressing it again because they are not sure it did anything.
+     */
+    advice: Advice | null = null
+    adviceTick = 0
+
+    private say(advice: Advice): Advice {
+        this.advice = advice
+        this.adviceTick++
+        return advice
+    }
+
+    clearAdvice() {
+        this.advice = null
+    }
+
+    /**
+     * Is this position still finishable? (spec P1-5, row 18e)
+     *
+     * Reads the board; writes nothing but `advice`. The board and the undo stack are handed
+     * to `checkPosition` as values and copied before anything walks backwards over them, so
+     * asking the question cannot change the answer to any other question -- including
+     * whether Undo is available, and what persistence is about to save.
+     */
+    check(): Advice {
+        return this.say(checkPosition(this.definition, this.board, { moves: this.moves }))
+    }
+
+    /** One forced cell, if there is one. Reveals; never places. */
+    hint(): Advice {
+        return this.say(hintFor(this.definition, this.board, { moves: this.moves }))
+    }
+
+    /** The cell a hint is pointing at, or null. Drives the marker on the board. */
+    get hintCell(): Cell | null {
+        return this.advice?.kind === 'hint' ? this.advice.cell : null
+    }
+
     /** The cell the keyboard is on. Null until the board is first used from a keyboard. */
     focusedCell: Cell | null = null
 
@@ -231,6 +275,7 @@ export class PuzzleSession {
         // would write dominoes back onto a freshly cleared grid.
         this.moves = []
         this.focusedCell = null
+        this.clearAdvice()
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -467,6 +512,18 @@ export class PuzzleSession {
     private record(move: Move) {
         this.moves.push(move)
         if (this.moves.length > MAX_UNDO) this.moves.shift()
+        /*
+         * Advice describes a position, so a changed position does not make it stale -- it
+         * makes it wrong. A hint would go on pointing at a square the player has just
+         * filled.
+         *
+         * Cleared *here* rather than alongside the outcome signal, and that is the whole
+         * reason this method is the chokepoint: the signal is a notification, and a
+         * placement reached without one -- a keyboard path, a test, whatever is written
+         * next -- would still have to invalidate the answer. Every board write goes
+         * through `record`; none has to remember to.
+         */
+        this.clearAdvice()
     }
 
     /**
@@ -818,6 +875,7 @@ export class PuzzleSession {
         move.cells.forEach(([i, j], index) => { this.board[i][j] = move.before[index] })
         this.completed = this.completedByRules
         this.focusedCell = move.anchor
+        this.clearAdvice()
         // A gesture in flight was aimed at a board that no longer looks like this.
         this.gesture = null
         return true
@@ -897,5 +955,6 @@ export class PuzzleSession {
         this.gesture = null
         this.hover = null
         this.focusedCell = null
+        this.advice = null
     }
 }

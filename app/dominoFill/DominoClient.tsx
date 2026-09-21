@@ -14,6 +14,7 @@ import { useDayRollover } from '../hooks/useDayRollover'
 import { dayKey } from '../stores/progressStorage'
 import Archive from './Archive'
 import DayBanner from './DayBanner'
+import AdviceStrip from './AdviceStrip'
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
@@ -158,6 +159,9 @@ const DominoClient: React.FC = () => {
           <CompletionCard session={currentBoard} levels={boardsStore} />
         </div>
       )}
+      <div data-chrome>
+        <AdviceStrip boardsStore={currentBoard} />
+      </div>
       <div data-chrome>
         <GameControls boardsStore={currentBoard} />
       </div>

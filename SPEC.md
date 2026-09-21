@@ -824,7 +824,62 @@ below.
 Also: `navigator.vibrate(10)` on place, 25 on win — on mobile the hardware mute switch kills the
 entire audio channel, so haptics *are* the feel budget.
 
-> **Implemented in row 16, except Check and Hint — which are deferred, not cut.**
+> **Check and Hint landed in row 18e; the rest of P1-5 in row 16.**
+>
+> ### Check and Hint (18e)
+>
+> Both are built on `app/stores/solver.ts` and nothing else. `e2e/solve.ts` answers one
+> question for a test, from an empty board, where a solution is known to exist; it has no
+> budget, no answer for an unsolvable position and no notion of uniqueness, and it is not a
+> player-facing solver.
+>
+> **Check** runs the solver from the current position and reports what it found, keeping
+> three answers apart that a cheaper version would merge. *Solvable* and *more than one
+> completion* are both "you are still in the game". *Unsolvable* is "a piece you have placed
+> is wrong". *Budget-exhausted* is **"could not tell"**, and is the reason the solver has
+> that verdict at all: reporting a stopped search as a mistake would send a player undoing
+> correct moves.
+>
+> **Hint** reveals one cell and leaves the move to the player — it never places anything.
+> "Forced" means every completion fills the cell the same way, which is exactly what the
+> solver's `solved` verdict establishes: it looked for a second completion and found none.
+> A `multiple` verdict cannot support the claim, because the search stops at two and two
+> that agree prove nothing about a third; there the honest answer is "nothing is forced",
+> which is not a complaint. The cell is the first empty one in row-major order, because a
+> hint that moved between presses would read as the game changing its mind. The value is
+> named as the half it is — "the top half of an upright domino" — since the board shows pips
+> and a bare `1` is a quiz.
+>
+> **How far back to undo.** The spec offers this as optional and it is what makes the advice
+> actionable: "something is wrong" with twenty pieces down is the quit reason restated, not
+> a remedy. It is a **backwards walk over the undo stack**, one move at a time. Binary
+> search over the prefixes is the obvious cheap trick and it is wrong here — the stack holds
+> removals as well as placements, so solvability is not monotone along it, and a test builds
+> exactly that history: place, remove, place again, where prefix 1 is unsolvable, prefix 2
+> is solvable and prefix 3 is unsolvable. The walk is bounded twice, by one budget shared
+> across every probe and by a cap of twenty steps; either limit reports the problem without
+> a number, which is a smaller claim rather than a wrong one. **An unknown distance is never
+> rendered** — found by mutation-testing, where a first version of the test only checked for
+> digits and "Undo null moves" passed it.
+>
+> **Neither action touches anything.** Advice is pure and takes the board as an argument;
+> the walk copies before it steps back. Nothing writes to the board, the undo stack or
+> storage, and the unit tests assert that as byte-identical state rather than as "looks
+> right afterwards" — a hint that nudged the snapshot would write a save the player never
+> made and restamp its retention clock. The answer is cleared in `record`, the single
+> chokepoint every board write already goes through, rather than alongside the outcome
+> signal: the signal is a notification, and a placement reached without one would still have
+> to invalidate the answer.
+>
+> **Reaching it.** Real `<button>`s, operated by Enter and Space and reached by Tab in a
+> browser test with no pointer involved. The answer lands in a `role="status"`
+> `aria-live="polite"` region that is present from the start and empty until asked — a live
+> region created together with its text is a well-known way to have nothing announced — and
+> the view keys on a counter rather than on the text, so pressing Check twice on an
+> unchanged board answers twice. Polite rather than assertive, because it can arrive
+> mid-drag.
+>
+> **The rest of P1-5 was implemented in row 16.**
 >
 > **Line state is honest now (D10-g).** `satisfied` requires the sum to match *and* the line to be
 > full. A column summing to its target with cells still empty — 1+0+2+0 reaches 3 with half the
@@ -1411,7 +1466,7 @@ whole of P0 into one oversized set.)
 | 18b | **P1-6** solver contract — **✅ done**. `app/stores/solver.ts`: a discriminated result union (solved / multiple / unsolvable / budget-exhausted / invalid), an exact node budget, partially-played boards treated as fixed constraints and never mutated, uniqueness stopping at solution two. The generator’s exhaustive `solutionsByTargets` is replaced by it, and the candidate search it feeds carries a **separate** `tilingBudget`; all shipped puzzles are solver-verified by `tests/corpus.test.ts` | unit |
 | 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; no repeated definitions; atomic manifest-rename commit with the previous corpus readable throughout; every puzzle solver-verified before anything is written; horizon guard derived from the last chunk | unit + CI |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
-| 18e | **P1-5's check/hint**, built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
+| 18e | **P1-5's check/hint** — **✅ done**; built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
 | 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |
 | 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |
 

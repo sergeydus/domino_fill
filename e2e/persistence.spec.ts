@@ -85,17 +85,20 @@ test('solving carries over, and the next visit starts on the next puzzle', async
      * empty. The behaviour is the specified one; the expectation was wrong.
      */
     await playSolution(page)
-    await expect(page.locator('[role="status"]')).toContainText(/solved/i)
+    // By its own marker, not by `role="status"`: the advice strip (row 18e) is a live
+    // region too, so the role alone names two elements and says which one it means to
+    // neither the reader nor Playwright.
+    await expect(page.locator('[data-completion-card]')).toContainText(/solved/i)
 
     await reload(page)
 
-    await expect(page.locator('[role="status"]'), 'a fresh puzzle, not the finished one')
+    await expect(page.locator('[data-completion-card]'), 'a fresh puzzle, not the finished one')
         .toHaveCount(0)
     expect(await pieces(page), 'the next puzzle starts empty').toEqual([])
 
     // And the solved one is still solved when the player goes back to it.
     await page.locator('[data-level="previous"]').click()
-    await expect(page.locator('[role="status"]')).toContainText(/solved/i)
+    await expect(page.locator('[data-completion-card]')).toContainText(/solved/i)
 })
 
 test('resetting clears the save, so a reload does not undo the reset', async ({ page }) => {

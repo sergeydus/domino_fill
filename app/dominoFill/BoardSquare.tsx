@@ -12,10 +12,12 @@ type Props2 = {
     i: number,
     j: number
     isRock: boolean,
+    /** This cell is the one a hint is pointing at (spec P1-5, row 18e). */
+    isHinted: boolean,
     boardsStore: PuzzleSession
 }
 
-const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) => {
+const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boardsStore }) => {
     // console.log('square rerender')
     const size = boardsStore.board.length
     const isDark = (i + j) % 2 === 0;
@@ -56,7 +58,24 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
         return {}
     }, [i, j, size])
     return (
-        <div className="relative" data-cell={`${i},${j}`} key={i} style={{ ...style, ...cornerStyle }}>
+        <div
+            className="relative"
+            data-cell={`${i},${j}`}
+            data-hinted={isHinted || undefined}
+            key={i}
+            style={{ ...style, ...cornerStyle }}
+        >
+            {/*
+              * An outline rather than a border or a background, for the reason row 11
+              * settled for the line states: outlines take no layout space, and a border
+              * here would reopen the gutter overflow P0-3 closed. Inset so it reads as
+              * marking the cell rather than the gap beside it.
+              */}
+            {isHinted && (
+                <div
+                    className="pointer-events-none absolute inset-[2px] rounded-[4px] outline-3 outline-[#15661a]"
+                />
+            )}
             {/* {isHighlighted && <div className="absolute top-0 left-0 right-0 bottom-0 z-1 bg-white opacity-70 pointer-events-none"></div>} */}
             {/* <div>{`i:${i},j:${j}`}({currentBoard.board[i][j]})</div> */}
         </div>)
@@ -66,8 +85,10 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, i, j, boardsStore }) =
 const SquareWrapper: React.FC<Props> = ({ i, j, boardsStore }) => {
     // console.log('wrapper rerender')
     const isRock = boardsStore.board[i][j] == -1
+    const hint = boardsStore.hintCell
+    const isHinted = hint?.[0] === i && hint[1] === j
     // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false
-    return <BoardSquare i={i} j={j} isRock={isRock} boardsStore={boardsStore} />
+    return <BoardSquare i={i} j={j} isRock={isRock} isHinted={isHinted} boardsStore={boardsStore} />
 }
 
 export default observer(SquareWrapper)
