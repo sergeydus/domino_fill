@@ -46,9 +46,22 @@ export const labelPresentation = (state: LineState): LabelPresentation => ({
     token: state,
 })
 
-/** What a screen reader should hear, since strikethrough and colour reach neither. */
-export const labelDescription = (target: string, state: LineState): string => {
-    if (state === 'satisfied') return `${target}, complete`
-    if (state === 'over') return `${target}, over target`
-    return target
+/**
+ * What a screen reader should hear, since strikethrough and colour reach neither.
+ *
+ * The line is named as well as its target (spec P1-8, row 19). Heard on its own, "7,
+ * complete" does not say *which* line is complete, and these labels sit outside the grid
+ * so no row or column context comes with them.
+ *
+ * Note that this string only reaches anyone because the element carrying it now has a role
+ * that supports naming. Measured in Chrome before that change: the whole label strip
+ * reached the accessibility tree as one anonymous text run, `3 2 2 2 3 2 3 3 2 2 4 0`, and
+ * every one of these descriptions was computed and then discarded -- `aria-label` on a
+ * role-less `div` is ignored.
+ */
+export const labelDescription = (line: string, target: string, state: LineState): string => {
+    const named = `${line}, target ${target}`
+    if (state === 'satisfied') return `${named}, complete`
+    if (state === 'over') return `${named}, over target`
+    return named
 }

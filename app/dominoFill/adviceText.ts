@@ -1,4 +1,5 @@
 import type { Advice } from "../stores/advice"
+import { HALF } from "./cellLabel"
 
 /**
  * What Check and Hint actually say (spec P1-5, row 18e).
@@ -23,12 +24,13 @@ import type { Advice } from "../stores/advice"
  * "the top half of an upright domino" is something a player can act on where "1" is a quiz.
  */
 
-/** Vertical is 1 over 0; horizontal is 0 then 2. A cell's value says which half it is. */
-const HALF: Record<number, string> = {
-    1: 'the top half of an upright domino',
-    0: 'the bottom half of an upright domino, or the left half of a flat one',
-    2: 'the right half of a flat domino',
-}
+/*
+ * The names of the halves come from `cellLabel.ts`, which is also what the board's own
+ * squares announce (spec P1-8, row 19). A hint that says "the top half of an upright
+ * domino" must not point at a square that calls itself something else; heard one after the
+ * other, two names for one thing are two things. They disagreed by an article within a day
+ * of being written twice, so now they are written once.
+ */
 
 export const adviceMessage = (advice: Advice): string => {
     switch (advice.kind) {
@@ -40,7 +42,7 @@ export const adviceMessage = (advice: Advice): string => {
             return 'This search found more than one way to finish, so it could not prove what any square holds.'
         case 'hint': {
             const [row, column] = advice.cell
-            return `Row ${row + 1}, column ${column + 1} holds ${HALF[advice.value] ?? 'a piece'}.`
+            return `Row ${row + 1}, column ${column + 1} holds the ${HALF[advice.value] ?? 'piece'}.`
         }
         case 'wrong':
             return advice.undoSteps === null

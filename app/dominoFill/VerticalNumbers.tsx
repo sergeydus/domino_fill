@@ -35,7 +35,8 @@ const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore
                     key={index}
                     data-row-label={index}
                     data-line-state={presentation.token}
-                    aria-label={labelDescription(el, states[index])}
+                    role="img"
+                    aria-label={labelDescription(`Row ${index + 1}`, el, states[index])}
                     style={{
                         ...{ width: `${gutter}px`, height: `${size}px` },
                         textDecoration: presentation.textDecoration,

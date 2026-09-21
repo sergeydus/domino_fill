@@ -309,7 +309,11 @@ test.describe('hit-testing does not depend on the store agreeing with the layout
                 const resolved = await page.evaluate(() => {
                     const hover = document.querySelector('.z-10.pointer-events-none') as HTMLElement
                     if (!hover) return null
-                    const grid = document.querySelector('[data-cell="0,0"]')!.parentElement!
+                    // By role, not `parentElement`: a cell's parent is its `role="row"`
+                    // wrapper (spec P1-8), which is `display: contents` and therefore has
+                    // no box at all -- its rect is all zeros and every offset below came
+                    // out measured from the viewport instead of from the board.
+                    const grid = document.querySelector('[data-cell="0,0"]')!.closest('[role="grid"]')!
                     const h = hover.getBoundingClientRect()
                     const g = grid.getBoundingClientRect()
                     const cell = document.querySelector('[data-cell="0,0"]')!.getBoundingClientRect()

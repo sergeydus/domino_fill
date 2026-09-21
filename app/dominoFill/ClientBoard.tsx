@@ -154,6 +154,25 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     }
 
     /*
+     * "The board lost focus" now has to mean the *board*, not a cell (spec P1-8).
+     *
+     * Under the roving tabindex, focus moves from cell to cell inside the grid, and React's
+     * `onBlur` is `focusout`, which bubbles. Measured before this guard existed: moving
+     * focus from `0,0` to `0,1` fired `focusout` on the grid with `relatedTarget` set to
+     * the sibling cell -- so every single arrow key would have run `cancelGesture` and
+     * thrown away the anchor the player had just set, one keystroke before the arrow that
+     * was going to use it.
+     *
+     * `relatedTarget` is null when focus leaves for nothing at all (a click on the page
+     * background, the window losing focus), which is the case this handler is really for.
+     */
+    const onBlur = (e: React.FocusEvent<HTMLDivElement>) => {
+        const next = e.relatedTarget as Node | null
+        if (next !== null && e.currentTarget.contains(next)) return
+        boardsStore.cancelGesture()
+    }
+
+    /*
      * `inert`, not `pointerEvents: none` (spec P1-4).
      *
      * They are not equivalent and the difference is the whole point: `pointer-events`
@@ -250,10 +269,23 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     onLostPointerCapture={onLostPointerCapture}
                     onPointerLeave={onPointerLeave}
                     onKeyDown={onKeyDown}
-                    onBlur={() => boardsStore.cancelGesture()}
-                    tabIndex={0}
+                    onBlur={onBlur}
+                    /*
+                     * Exactly one tab stop for the whole board, wherever the keyboard is.
+                     *
+                     * P1-8 sketches this as "container `tabIndex={0}`, focused cell `0`,
+                     * rest `-1`", which leaves *two* stops once a cell is focused -- the
+                     * container is earlier in document order, so Tab would land on the
+                     * board, then on a square inside it, then leave. Handing the stop over
+                     * to the cell instead is the same rule with the container included in
+                     * the rotation, and `-1` keeps it programmatically focusable, which is
+                     * what `.focus()` on the grid still relies on.
+                     */
+                    tabIndex={boardsStore.focusedCell === null ? 0 : -1}
                     role="grid"
-                    aria-label="Domino board"
+                    aria-label={`Domino board, ${size} by ${size}`}
+                    aria-rowcount={size}
+                    aria-colcount={size}
                     draggable={false}
                     style={gridStyle}
                     className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-blue-500"
@@ -261,11 +293,30 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     <Hover boardsStore={boardsStore} />
                     <Selection boardsStore={boardsStore} />
                     <Pieces boardsStore={boardsStore} />
-                    {boardsStore.board.flat().map((_el: number | null, index: number) => {
-                        const i = Math.floor(index / size)
-                        const j = index % size
-                        return (<BoardSquare key={`${i}_${j}`} i={i} j={j} boardsStore={boardsStore} />)
-                    })}
+                    {/*
+                      * `role="row"` wrappers with `display: contents` (spec P1-8).
+                      *
+                      * A grid needs rows between it and its cells, and the cells have to
+                      * stay direct children of the CSS grid or `grid-template-columns`
+                      * stops applying to them. `display: contents` is what satisfies both,
+                      * and its reputation for dropping elements out of the accessibility
+                      * tree is why it was measured before it was used: in the browser this
+                      * suite runs, the probe returned `grid > row > gridcell` with every
+                      * row present, and the cells laid out in their columns unchanged.
+                      */}
+                    {boardsStore.board.map((_row, i) => (
+                        <div
+                            key={`row_${i}`}
+                            role="row"
+                            aria-rowindex={i + 1}
+                            data-row={i}
+                            style={{ display: 'contents' }}
+                        >
+                            {boardsStore.board[i].map((_cell, j) => (
+                                <BoardSquare key={`${i}_${j}`} i={i} j={j} boardsStore={boardsStore} />
+                            ))}
+                        </div>
+                    ))}
                 </motion.div>
             </div>
         </div>

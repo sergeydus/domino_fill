@@ -1,7 +1,8 @@
 "use client"
-import React, { CSSProperties, useMemo } from "react";
+import React, { CSSProperties, useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
+import { cellDescription } from "./cellLabel";
 
 type Props = {
     i: number
@@ -11,21 +12,22 @@ type Props = {
 type Props2 = {
     i: number,
     j: number
-    isRock: boolean,
     /** This cell is the one a hint is pointing at (spec P1-5, row 18e). */
     isHinted: boolean,
+    /** The keyboard is on this cell, so it is the grid's single tab stop (spec P1-8). */
+    isFocused: boolean,
+    /** The anchor of a half-made move, and the squares it could pair with. */
+    isAnchor: boolean,
+    isCandidate: boolean,
     boardsStore: PuzzleSession
 }
 
-const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boardsStore }) => {
-    // console.log('square rerender')
+const BoardSquare: React.FC<Props2> = observer((
+    { isHinted, isFocused, isAnchor, isCandidate, i, j, boardsStore },
+) => {
     const size = boardsStore.board.length
     const isDark = (i + j) % 2 === 0;
     const color = isDark ? '#cbcbcb' : '#ababab'
-    //ignore now
-    if (isRock) {
-        // color = '#000000'
-    }
     const squareStyle: CSSProperties = useMemo(() => {
         return {
             aspectRatio: 1,
@@ -33,12 +35,6 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boards
             width: `${boardsStore.squareSize}px`
         }
     }, [boardsStore.squareSize])
-    // const onHover = useCallback(() => {
-    //     // boardsStore.setHoveredSquare([i, j])
-    // }, [boardsStore, i, j])
-    // const onHoverLeave = useCallback(() => {
-    //     // boardsStore.setHoveredSquare(null)
-    // }, [boardsStore])
     const style = useMemo(() => ({ ...squareStyle, backgroundColor: color }), [color, squareStyle])
     /*
      * No click handler any more (spec D10-f).
@@ -48,7 +44,6 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boards
      * built a new `Audio` per click. Sound now follows the *outcome*, in feedback.ts,
      * driven from the session so the keyboard is treated identically.
      */
-    // const isHighlighted = boardsStore.highlightedSquares?.some(([i, j]) => i === row && j === col) ?? false
     // if is in corner, round the corner
     const cornerStyle = useMemo(() => {
         if (i === 0 && j === 0) return { borderTopLeftRadius: '12px' }
@@ -57,11 +52,44 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boards
         if (i === size - 1 && j === size - 1) return { borderBottomRightRadius: '12px' }
         return {}
     }, [i, j, size])
+
+    /*
+     * The roving tabindex, made real (spec P1-8).
+     *
+     * A tabindex alone only decides where Tab lands. What a screen reader *announces* is
+     * driven by where DOM focus actually is, so the focused cell has to be focused -- and
+     * that is the whole reason this is worth doing: arrowing around the board then reads
+     * out each square with no live region involved, because the browser is doing it.
+     *
+     * Only ever *moves* focus that is already inside the board. Calling `focus()` because
+     * the store changed would otherwise yank the page away from whatever the player was
+     * doing -- a restored session sets `focusedCell`, and so does undo.
+     */
+    const ref = useRef<HTMLDivElement>(null)
+    useEffect(() => {
+        const el = ref.current
+        if (!isFocused || el === null || el === document.activeElement) return
+        const grid = el.closest('[role="grid"]')
+        if (grid?.contains(document.activeElement) === true) el.focus()
+    }, [isFocused])
+
+    const value = boardsStore.board[i][j]
     return (
         <div
-            className="relative"
+            ref={ref}
+            className="relative outline-none"
             data-cell={`${i},${j}`}
             data-hinted={isHinted || undefined}
+            role="gridcell"
+            /*
+             * Exactly one cell in the grid is tabbable, so the board is one tab stop
+             * rather than 36-64 of them -- the failure mode P1-8 names explicitly. With
+             * no focused cell yet, the top-left square holds the stop so Tab can still
+             * reach the board at all.
+             */
+            tabIndex={isFocused || (boardsStore.focusedCell === null && i === 0 && j === 0) ? 0 : -1}
+            aria-label={cellDescription([i, j], value, { isAnchor, isCandidate, isHinted })}
+            aria-selected={isAnchor || undefined}
             key={i}
             style={{ ...style, ...cornerStyle }}
         >
@@ -76,19 +104,24 @@ const BoardSquare: React.FC<Props2> = observer(({ isRock, isHinted, i, j, boards
                     className="pointer-events-none absolute inset-[2px] rounded-[4px] outline-3 outline-[#15661a]"
                 />
             )}
-            {/* {isHighlighted && <div className="absolute top-0 left-0 right-0 bottom-0 z-1 bg-white opacity-70 pointer-events-none"></div>} */}
-            {/* <div>{`i:${i},j:${j}`}({currentBoard.board[i][j]})</div> */}
         </div>)
 
 })
 //prevent all squares from rerendering
 const SquareWrapper: React.FC<Props> = ({ i, j, boardsStore }) => {
-    // console.log('wrapper rerender')
-    const isRock = boardsStore.board[i][j] == -1
+    // No `isRock` prop any more: a rock is `-1` on the board, and that is the same value
+    // `cellDescription` reads to name the square. Two sources for one fact is one too many.
     const hint = boardsStore.hintCell
     const isHinted = hint?.[0] === i && hint[1] === j
-    // const isHighlighted = boardsStore.highlightedSquares?.some(([index, jndex]) => index === i && jndex === j) ?? false
-    return <BoardSquare i={i} j={j} isRock={isRock} isHinted={isHinted} boardsStore={boardsStore} />
+    const focus = boardsStore.focusedCell
+    const isFocused = focus?.[0] === i && focus[1] === j
+    const anchor = boardsStore.pendingAnchor
+    const isAnchor = anchor?.[0] === i && anchor[1] === j
+    const isCandidate = boardsStore.candidateCells.some(([ci, cj]) => ci === i && cj === j)
+    return <BoardSquare
+        i={i} j={j} isHinted={isHinted} isFocused={isFocused}
+        isAnchor={isAnchor} isCandidate={isCandidate} boardsStore={boardsStore}
+    />
 }
 
 export default observer(SquareWrapper)

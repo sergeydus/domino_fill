@@ -277,8 +277,15 @@ test('a refusal does not steal focus from the board', async ({ page }) => {
     await page.keyboard.press('ArrowUp')   // off the top edge: refused
 
     await expect(grid).toHaveAttribute('data-rejected', /\d+/)
-    // Focus, the anchor and the offer all survive the shake.
-    await expect(grid).toBeFocused()
+    /*
+     * Focus, the anchor and the offer all survive the shake.
+     *
+     * Focus now sits on the *cell* rather than on the grid container -- that is the point
+     * of P1-8's roving tabindex, and it is what makes a screen reader announce each square
+     * as the player arrows onto it. The property this test is about is unchanged: focus is
+     * still inside the board and still on the square the player is working from.
+     */
+    await expect(page.locator(`[data-cell="0,${j}"]`)).toBeFocused()
     await expect(page.locator(`[data-anchor="0,${j}"]`)).toHaveCount(1)
     expect(await page.locator('[data-candidate]').count()).toBe(candidatesBefore)
 })

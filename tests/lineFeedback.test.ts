@@ -119,9 +119,22 @@ describe('state reaches more than one channel', () => {
     })
 
     it('and a screen reader hears the state, which neither colour nor strikethrough reaches', () => {
-        expect(labelDescription('7', 'satisfied')).toMatch(/complete/i)
-        expect(labelDescription('7', 'over')).toMatch(/over/i)
-        expect(labelDescription('7', 'neutral')).toBe('7')
+        expect(labelDescription('Row 3', '7', 'satisfied')).toMatch(/complete/i)
+        expect(labelDescription('Row 3', '7', 'over')).toMatch(/over/i)
+        expect(labelDescription('Row 3', '7', 'neutral')).toBe('Row 3, target 7')
+    })
+
+    it('says which line it is, because these labels are heard out of context', () => {
+        /*
+         * The labels sit outside the grid, so nothing else announces the row or column
+         * they belong to. "7, complete" identifies no line at all, and three of them in a
+         * row are indistinguishable (spec P1-8, row 19).
+         */
+        for (const state of ['satisfied', 'over', 'neutral'] as const) {
+            expect(labelDescription('Column 4', '7', state)).toMatch(/^Column 4,/)
+        }
+        expect(labelDescription('Row 1', '7', 'neutral'))
+            .not.toBe(labelDescription('Row 2', '7', 'neutral'))
     })
 })
 

@@ -26,7 +26,8 @@ const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsSto
                     key={index}
                     data-col-label={index}
                     data-line-state={presentation.token}
-                    aria-label={labelDescription(el, states[index])}
+                    role="img"
+                    aria-label={labelDescription(`Column ${index + 1}`, el, states[index])}
                     style={{
                         ...{ width: `${size}px`, height: `${gutter}px` },
                         textDecoration: presentation.textDecoration,

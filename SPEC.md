@@ -1415,6 +1415,74 @@ children and a **roving tabindex** (container `tabIndex={0}`, focused cell `0`, 
 focusable cells is otherwise 64 tab stops; a `role="group"` of labelled buttons is the simpler
 option. `<MotionConfig reducedMotion="user">` at the root covers every animation in one line.
 
+> **Implemented in row 19.** Every claim below was measured in Chrome's computed
+> accessibility tree before anything was changed, because the attribute and what reaches a
+> screen reader are not the same thing — and here they differed in three places.
+>
+> **The board's `role="grid"` was empty.** Not partially implemented: the whole 6x6
+> computed to `grid "Domino board": img × 8` — eight unnamed pictures for the pieces on
+> it and **not one of the thirty-six squares**. The role promises a table to navigate and
+> delivered nothing. Cells are now `role="gridcell"`, named "Row 3, column 4, empty" and so
+> on, inside `role="row"` wrappers, with `aria-rowcount`/`aria-colcount` on the grid.
+>
+> The rows are `display: contents`, since the cells must stay direct children of the CSS
+> grid for `grid-template-columns` to apply to them. That property has a reputation for
+> dropping elements out of the accessibility tree, so it was probed before it was used: in
+> this browser the tree came back `grid > row > gridcell` complete, with the cells still
+> laid out in their columns.
+>
+> **Amendment — the roving tabindex is one stop, not two.** The sketch above leaves the
+> container tabbable alongside the focused cell, and since the container comes first in
+> document order that is two stops for one board. The container takes `-1` once a cell is
+> focused, so there is always exactly one; `-1` keeps it programmatically focusable, which
+> `.focus()` on the grid still relies on.
+>
+> Moving DOM focus with the arrow keys — rather than only moving a highlight — is what
+> makes each square announce itself, with no live region in the loop. It also introduced
+> the row's one real hazard: React's `onBlur` is `focusout`, which bubbles, so focus moving
+> between two cells fires it on the grid, whose handler cancels the gesture. Removing the
+> containment guard and running the suite **failed nineteen tests** across board,
+> completion, feedback, persistence and undo — every placement that moved focus was
+> cancelling the gesture that was making it. The guard was written from reasoning, and then
+> kept because measurement contradicted the follow-up reasoning that called it merely
+> defensive.
+>
+> **The level arrows were unreachable**, which P1-5's source had already recorded as the
+> pile new controls should not join. Measured, the page's entire tab order was Easy,
+> Medium, Hard, the board, Check, Hint, Reset, Archive: a keyboard could reach every
+> control in the game except the one that changes which puzzle you play. They are real
+> buttons now, named "Next puzzle, 2 of 3", and `disabled` at the ends of the range rather
+> than merely greyed by a CSS filter over a handler that silently did nothing.
+>
+> **Difficulty had no state at all** — three buttons, no `aria-pressed`, the current one
+> distinguished only by `background-color`. `aria-pressed` rather than `role="radiogroup"`:
+> the spec offers either, and pressed buttons leave the keyboard contract of three working
+> controls alone where a radio group would take over the arrow keys. The selected button
+> also gets a ring and bold text, for the reason D10-g gave for the line labels.
+>
+> **Amendment — `DominoPieces` gets `role="img"`, not `<button>`.** This item was written
+> when the tray was a mode selector; P1-1 made it a legend, and a button that selects
+> nothing is a worse control than no control. The defect underneath was real and is fixed:
+> `aria-label` on a role-less `div` is not exposed, so both entries reached the tree as
+> bare unnamed `img` nodes and their explanations were being written and then dropped.
+>
+> **The same defect, found twice more.** The row and column targets carry `labelDescription`
+> for exactly this reason — strikethrough and colour reach no screen reader — and the
+> whole strip computed to one anonymous text run, `3 2 2 2 3 2 3 3 2 2 4 0`, with every
+> description discarded. They now have a role that supports naming, and they say which line
+> they are: "Row 3, target 7, complete" rather than "7, complete", because these labels sit
+> outside the grid and nothing else identifies them.
+>
+> **Nothing honoured `prefers-reduced-motion`** — searched for across every component and
+> stylesheet, and absent — while the board shakes on a refusal, the arrows scale, the
+> labels tween and the completion card animates in. `<MotionConfig reducedMotion="user">`
+> sits at the client boundary in `provider.tsx`, the one wrapper every `motion` component
+> in the tree is inside.
+>
+> **One shared vocabulary.** A square names a piece with the same words the hint does,
+> checked by a test that compares the two real strings. They had already drifted by an
+> article when the phrases were written twice, so they are written once.
+
 **P1-9. Tests — Playwright, explicit and not optional.**
 
 > **Carried in from P0-9a:** add a **360×640 tutorial check** — no horizontal overflow, the
@@ -1484,7 +1552,7 @@ whole of P0 into one oversized set.)
 | 18c | **P1-6** content pipeline — **✅ done**. Ten-year horizon in monthly content-hashed chunks under `public/puzzles/`, out of the JS import graph; every puzzle a pure function of version/seed/date/slot; append-only enforced against the committed index; no repeated definitions; atomic manifest-rename commit with the previous corpus readable throughout; every puzzle solver-verified before anything is written; horizon guard derived from the last chunk | unit + CI |
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint** — **✅ done**; built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
-| 19 | **P1-8** accessibility: roles, roving tabindex, `MotionConfig` | E2E |
+| 19 | **P1-8** accessibility — **✅ done**: the grid's cells reach assistive technology at all, one tab stop with focus that follows the arrow keys, the level arrows reachable and named, difficulty state carried in more than colour, three dropped `aria-label`s exposed, and `prefers-reduced-motion` honoured | unit + E2E |
 | 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |
 
 Rows 1–2 are the gate: nothing else starts until the build is green and the unit harness exists.

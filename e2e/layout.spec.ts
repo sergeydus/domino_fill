@@ -93,9 +93,29 @@ const labelOverflow = (page: Page, text?: string) => page.evaluate((forced) => {
     return { x, y }
 }, text)
 
-/** Move to a level by clicking the next arrow, from level 1. */
+/**
+ * Move to a level, from wherever the page currently is.
+ *
+ * This used to click Next `level - 1` times and was documented "from level 1", which its
+ * only caller does not do -- it walks 1, 2, 3 in a loop without going back, so the last
+ * call asked for two more clicks when only one was left. It passed because the old level
+ * arrows were `div`s that silently ignored a click past the end. P1-8 made them real
+ * buttons that disable at the ends, and the dead click became a 30-second timeout.
+ *
+ * Absolute now, and it reads where it is from the arrow's own accessible name rather than
+ * from a counter the helper keeps.
+ */
 const goToLevel = async (page: Page, level: number) => {
-    for (let k = 1; k < level; k++) await page.locator('[data-level="next"]').click()
+    const currentLevel = async () => {
+        const name = await page.locator('[data-level="next"]').getAttribute('aria-label') ?? ''
+        return Number(/(\d+) of 3/.exec(name)?.[1] ?? NaN)
+    }
+    for (let guard = 0; guard < 6; guard++) {
+        const at = await currentLevel()
+        if (at === level) return
+        await page.locator(`[data-level="${at < level ? 'next' : 'previous'}"]`).click()
+    }
+    throw new Error(`could not reach level ${level}`)
 }
 
 /** The two-digit targets the shipped content actually contains are 10, 11 and 13. */
