@@ -1732,13 +1732,42 @@ whole of P0 into one oversized set.)
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint** — **✅ done**; built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
 | 19 | **P1-8** accessibility — **✅ done**: the grid's cells reach assistive technology at all, one tab stop with focus that follows the arrow keys, the level arrows reachable and named, difficulty state carried in more than colour, three dropped `aria-label`s exposed, and `prefers-reduced-motion` honoured | unit + E2E |
-| 20 | **P2** polish — **✅ done**, one commit per item: **20a** dead code and the duplicate route; **20b** real metadata, a manifest, and generated icons; **20c** the half-theme dropped after measuring what it cost; **20d** audio that resolves, unlocks on the first gesture, and can be muted; **20e** the gate itself, as CI (D10-s) | unit + E2E |
+| 20 | **P2** polish — **✅ done**, one commit per item: **20a** dead code and the duplicate route; **20b** real metadata, a manifest, and generated icons; **20c** the half-theme dropped after measuring what it cost; **20d** audio that resolves, unlocks on the first gesture, and can be muted; **20e** the gate itself, as CI (D10-s); and five corrections after review — **20f** production metadata that points at production, **20g** no portrait lock, **20h** a maskable icon that is actually mask-safe, **20i** priming that can be retried and can start from a key, **20j** current action majors | unit + E2E |
 
 ### Where this leaves the spec
 
 Every row is done. What follows is what is deliberately **not**, recorded here rather than
 left for someone to rediscover — an unwritten exclusion is indistinguishable from an
 oversight.
+
+**Corrected after review (row 20f–j).** Row 20 was accepted only after five fixes, and
+they share a shape worth naming: each was a claim that read as done and was false in the one
+environment nobody here runs.
+
+- **Metadata pointed at localhost.** `metadataBase` fell back to `http://localhost:3000`,
+  which is *worse* than leaving it unset — Next's own default consults `VERCEL_URL` first,
+  so naming localhost suppressed that. Every deployed link preview advertised an image on
+  somebody's laptop. The fallback is the canonical origin, and the resolver is a pure
+  function so the unset case can be tested at all: the browser suite always sets the
+  variable, which is exactly why it could not see this.
+- **The manifest locked the installed app to portrait.** Unasked-for, contradicted by the
+  800×400 landscape test, and a WCAG 1.3.4 regression. Invisible to every test here,
+  because a browser tab rotates whatever the manifest says — it bit only once the game was
+  on a home screen.
+- **The maskable icon could not be masked.** One file was declared both `any` and
+  `maskable`, with a comment asserting it had enough margin. Measured, its mark reaches
+  0.527 of the icon from the centre against a guaranteed safe radius of 0.4, so a round
+  launcher clipped it. There is a separate 70% drawing now, checked pixel by pixel.
+- **Audio priming could fail permanently, and excluded keyboard play.** The pool was marked
+  unlocked before any `play()` resolved, so one refusal was forever, and the listener was
+  `pointerdown` only — in a game whose whole P1-8 claim is that it is playable without a
+  pointer.
+- **The CI workflow ran deprecated actions.** Green, with a warning nobody had read.
+
+The common factor is that all five were *asserted* by a comment and none was *measured*.
+The rule the rest of this spec follows — a claim in a comment is a claim a test owes —
+applies to the parts that only exist in production, which are the parts hardest to test and
+easiest to write confidently about.
 
 **Cut, with a reason.**
 
@@ -1761,7 +1790,7 @@ oversight.
 **Open, and known.**
 
 - **iOS Safari is unverified.** `touch-action: pinch-zoom` and `-webkit-touch-callout: none`
-  (P1-1), and the audio unlocking of row 20d, are written to WebKit's documented behaviour
+  (P1-1), and the audio unlocking of rows 20d and 20i, are written to WebKit's documented behaviour
   and tested in Chromium, which is the only engine this harness drives. They need a real
   device. Nothing here should be read as a claim that they were observed working.
 - **Reset has no confirmation.** It discards a board in one press. The argument for leaving

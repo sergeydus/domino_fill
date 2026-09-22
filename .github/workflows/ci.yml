@@ -27,8 +27,12 @@ jobs:
     # The browser suite is the long pole; the whole gate takes a couple of minutes locally.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      # Majors kept current deliberately (row 20j). The first remote run of this workflow
+      # passed with a deprecation annotation: the v4 actions target Node 20, which the
+      # runner no longer provides and was silently forcing onto Node 24. A warning that is
+      # ignored is a warning nobody reads when it turns into a failure.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -68,7 +72,7 @@ jobs:
 
       - name: Keep the report from a failed run
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: |
