@@ -308,17 +308,45 @@ test.describe('the roving tabindex', () => {
         const candidate = await page.locator('[data-candidate]').first().getAttribute('data-candidate')
         test.skip(candidate === null, 'the served board offers nothing from 0,0')
 
+        /*
+         * Now move the focus, which is what this test is named for and what it did not
+         * previously do: while anchored, arrow keys *complete* the move rather than
+         * travelling, so the original sequence never moved focus at all and the guard was
+         * never exercised. Focusing another cell directly is the movement a screen-reader
+         * user makes, and measured, removing the containment guard clears the anchor here.
+         */
+        await page.locator('[data-cell="2,2"]').focus()
+        await expect(page.locator('[data-anchor]'), 'the half-made move was cancelled by a focus move')
+            .toHaveCount(1)
+
+        await page.locator('[data-cell="0,0"]').focus()
         const [ci] = candidate!.split(',').map(Number)
         await page.keyboard.press(ci === 1 ? 'ArrowDown' : 'ArrowRight')
 
         /*
          * The move completed, so the anchor was still there when the arrow arrived.
          *
-         * A domino is one overlay element carrying the `data-at` of its *anchor* -- the
-         * top-left of the pair -- not of the cell it grew into, which is why this looks
-         * for a piece at 0,0 and not at the candidate.
+         * Asserted on the two cells, not on the overlay. `data-at` is **not** the anchor:
+         * one element is rendered per domino and it carries the half holding the pips, so
+         * an upright piece is marked at its top cell and a flat one at its *right* cell --
+         * which is what `e2e/board.spec.ts` says and what this test used to contradict.
+         * It only ever met boards offering a downward move from 0,0; the day one offered a
+         * rightward move instead, it failed against correct code, with the piece sitting
+         * at `0,1` exactly as it should.
+         *
+         * The cells' own names are better evidence in any case. Row 19 made them the
+         * source of truth for what a square holds, and they are what a screen reader
+         * actually reads out.
          */
-        await expect(page.locator('[data-piece][data-at="0,0"]')).toHaveCount(1)
+        const nameOf = (cell: string) =>
+            page.locator(`[data-cell="${cell}"]`).getAttribute('aria-label')
+        // Matched positively rather than as "no longer empty": a mistyped selector returns
+        // null, and `null` does not match /empty/ either, so the negative form would pass
+        // while testing nothing. Every half of every domino says "half of"; a rock and an
+        // empty square say neither.
+        expect(await nameOf('0,0'), 'the anchor square holds no piece').toMatch(/half of/)
+        expect(await nameOf(candidate!), 'the square it grew into holds no piece')
+            .toMatch(/half of/)
         await expect(page.locator('[data-anchor]')).toHaveCount(0)
     })
 
