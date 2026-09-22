@@ -16,6 +16,10 @@ import Archive from './Archive'
 import DayBanner from './DayBanner'
 import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import {
+  RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
+} from './composition'
 
 /**
  * Keys that cannot prime audio: a modifier press on its own is not user activation, so
@@ -129,12 +133,34 @@ const DominoClient: React.FC = () => {
   // A callback ref in state, not `useRef`: the column is not mounted on the first render
   // (the board is still loading), and a ref would leave the hook with nothing to observe.
   const [column, setColumn] = useState<HTMLDivElement | null>(null)
-  const box = useAvailableBoardBox(column, PAGE_MARGIN_PX)
+
+  /*
+   * One column or two (graphics spec P0-1, row 1).
+   *
+   * In the wide composition the secondary controls move into a rail beside the board, so
+   * they stop costing the board *height* and start costing it *width* -- which is the
+   * trade that pays, because the desktop has width to spare and the stacked chrome had
+   * left an 8x8 board on 41px cells in a 1280x800 window.
+   */
+  const wide = useMediaQuery(WIDE_LAYOUT_QUERY)
+  const box = useAvailableBoardBox(
+    column, PAGE_MARGIN_PX, wide ? RAIL_WIDTH_PX + STAGE_GAP_PX : 0)
 
   const currentBoard = boardsStore.currentBoard
   useEffect(() => {
     currentBoard?.setAvailableBox(box)
   }, [currentBoard, box])
+
+  /*
+   * The cap, and only in the wide layout.
+   *
+   * Below the breakpoint the budget is already doing the capping -- a phone has nothing
+   * spare to give away -- so an unconditional cap would be a constant that never fires and
+   * could not be trusted to. `Infinity` is the session's own default.
+   */
+  useEffect(() => {
+    currentBoard?.setMaxBoardSize(wide ? WIDE_BOARD_CAP_PX : Infinity)
+  }, [currentBoard, wide])
 
   /*
    * No `onContextMenu` any more.
@@ -154,6 +180,104 @@ const DominoClient: React.FC = () => {
       </div>
     )
   }
+  /*
+   * The pieces of the page, named once and arranged twice.
+   *
+   * Two compositions from one set of elements, rather than two trees: a second tree is how
+   * a control ends up fixed in one layout and not the other, and how `data-chrome` markers
+   * drift apart. What changes between the compositions is *where* these go, and nothing
+   * else -- the same components, the same props, the same markers.
+   */
+  const banner = <DayBanner boardsStore={boardsStore} onGoToDate={goToDate} />
+
+  const difficulty = (
+    <div data-chrome>
+      <DifficultySlider boardsStore={boardsStore} />
+    </div>
+  )
+
+  /* The scoring key stays with the board in both compositions (graphics spec 2.3). It is
+     not chrome: it explains what is *on* the board, and P1-1 of SPEC.md is explicit that
+     it is a legend rather than a control. */
+  const legend = (
+    <div data-chrome>
+      <DominoPieces boardsStore={currentBoard} />
+    </div>
+  )
+
+  const completion = currentBoard.completed && (
+    <div data-chrome>
+      <CompletionCard session={currentBoard} levels={boardsStore} />
+    </div>
+  )
+
+  /* Also board-adjacent, in both: it is a sentence about this board's current state, and
+     reading it a column away from the squares it describes would be worse than the
+     stacking it replaces. */
+  const advice = (
+    <div data-chrome>
+      <AdviceStrip boardsStore={currentBoard} />
+    </div>
+  )
+
+  const controls = (
+    <div data-chrome>
+      <GameControls boardsStore={currentBoard} />
+    </div>
+  )
+
+  /*
+   * One row, not two. Every `data-chrome` row is subtracted from the board's height
+   * budget, and at 1280x800 an 8x8 board was already within a few pixels of the 38px
+   * minimum cell -- measured: a separate row for this button put it exactly on the floor,
+   * where a safe-area inset could no longer shrink it at all.
+   *
+   * The grouping is kept in the rail too. There the height reason no longer applies, but
+   * these three are one thing -- where you are, and how you get elsewhere -- and the row
+   * count the sound suite budgets against stays the same in both compositions.
+   */
+  const navigation = (
+    <div data-chrome className={wide ? 'flex flex-wrap items-center gap-3' : 'flex items-center gap-3'}>
+      <LevelSelector boardsStore={boardsStore} />
+      <button
+        type='button'
+        data-open-archive
+        className='rounded-md border px-3 py-1 text-sm'
+        onClick={() => boardsStore.setArchiveOpen(true)}
+      >
+        Archive
+      </button>
+      {/*
+        * Muting is a real requirement, not a nicety: a daily puzzle is played on a train,
+        * in a queue, in a meeting -- and a game that cannot be silenced gets closed
+        * instead (spec P2-4).
+        *
+        * `aria-pressed` says the state, the text says it again for everyone else, and
+        * the label names what the control *is* rather than what pressing it does, which
+        * is what `aria-pressed` is for.
+        */}
+      <button
+        type='button'
+        data-mute
+        aria-pressed={sound.muted}
+        aria-label='Sound'
+        className='control-surface rounded-md border px-3 py-1 text-sm'
+        onClick={() => sound.toggle()}
+      >
+        {sound.muted ? 'Sound off' : 'Sound on'}
+      </button>
+    </div>
+  )
+
+  const overlays = (
+    <>
+      {/* Mounted only while open: see the note in Archive.tsx. */}
+      {boardsStore.archiveOpen
+        && <Archive boardsStore={boardsStore} corpus={corpus} onPick={goToDate} />}
+      <Tutorial />
+    </>
+  )
+
   return (
     /*
      * `m-auto` rather than `justify-center` on the parent. An auto margin resolves to zero
@@ -166,19 +290,16 @@ const DominoClient: React.FC = () => {
      * because the container simply grows. Swap the `min-h` for `h-svh` and it clips at
      * once. The auto margin is what makes that distinction stop mattering.
      *
-     * The redundant nested `min-h-screen` wrapper that used to be here is gone as simple
-     * cleanup. It was *not* making the document two viewports tall: nested `min-height`
-     * elements do not add up, and a browser probe showed two nested 800px boxes, not
-     * 1600px. The 1095px document measured at the time was content overflow (spec D10-b,
-     * recorded there as a false diagnosis).
-     *
-     * `data-chrome` marks everything that is not the board. `useAvailableBoardBox` sums
-     * those heights and gives the board what is left, so the board is budgeted against the
-     * space it actually has rather than against the viewport width alone.
+     * The margin and the padding live on this wrapper in both compositions, so the
+     * arithmetic `useAvailableBoardBox` does -- viewport minus margin minus insets -- is
+     * the same arithmetic whichever one is showing.
      */
     <div
-      ref={setColumn}
-      className='m-auto flex flex-col gap-4 items-center justify-center'
+      data-stage
+      data-wide={wide ? '' : undefined}
+      className={wide
+        ? 'm-auto flex flex-row items-start justify-center'
+        : 'm-auto'}
       style={{
         // The page margin plus whatever the device's safe area asks for, so the board is
         // never laid out under a notch or a home indicator.
@@ -186,68 +307,47 @@ const DominoClient: React.FC = () => {
         paddingRight: `calc(${PAGE_MARGIN_PX}px + var(--safe-right))`,
         paddingBottom: `calc(${PAGE_MARGIN_PX}px + var(--safe-bottom))`,
         paddingLeft: `calc(${PAGE_MARGIN_PX}px + var(--safe-left))`,
+        gap: wide ? `${STAGE_GAP_PX}px` : undefined,
       }}
     >
-      {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
-          costs the column's gap -- which comes straight out of the board's height budget. */}
-      <DayBanner boardsStore={boardsStore} onGoToDate={goToDate} />
-      <div data-chrome>
-        <DifficultySlider boardsStore={boardsStore} />
+      {/*
+        * The measured column: the board and everything that must stay beside it.
+        *
+        * `data-chrome` marks everything in here that is not the board.
+        * `useAvailableBoardBox` sums those heights and gives the board what is left, so
+        * the board is budgeted against the space it actually has. Anything in the rail is
+        * outside this element and therefore outside that sum -- which is the entire point
+        * of the wide composition.
+        */}
+      <div
+        ref={setColumn}
+        className='flex flex-col gap-4 items-center justify-center'
+      >
+        {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
+            costs the column's gap -- which comes straight out of the board's height
+            budget. */}
+        {banner}
+        {!wide && difficulty}
+        <ClientBoard boardsStore={currentBoard} />
+        {legend}
+        {completion}
+        {advice}
+        {!wide && controls}
+        {!wide && navigation}
+        {overlays}
       </div>
-      <ClientBoard boardsStore={currentBoard} />
-      <div data-chrome>
-        <DominoPieces boardsStore={currentBoard} />
-      </div>
-      {currentBoard.completed && (
-        <div data-chrome>
-          <CompletionCard session={currentBoard} levels={boardsStore} />
+
+      {wide && (
+        <div
+          data-rail
+          className='flex flex-col gap-4 items-stretch'
+          style={{ width: `${RAIL_WIDTH_PX}px` }}
+        >
+          {difficulty}
+          {controls}
+          {navigation}
         </div>
       )}
-      <div data-chrome>
-        <AdviceStrip boardsStore={currentBoard} />
-      </div>
-      <div data-chrome>
-        <GameControls boardsStore={currentBoard} />
-      </div>
-      {/* One row, not two. Every `data-chrome` row is subtracted from the board's height
-          budget, and at 1280x800 an 8x8 board is already within a few pixels of the 38px
-          minimum cell -- measured: a separate row for this button put it exactly on the
-          floor, where a safe-area inset could no longer shrink it at all. */}
-      <div data-chrome className='flex items-center gap-3'>
-        <LevelSelector boardsStore={boardsStore} />
-        <button
-          type='button'
-          data-open-archive
-          className='rounded-md border px-3 py-1 text-sm'
-          onClick={() => boardsStore.setArchiveOpen(true)}
-        >
-          Archive
-        </button>
-        {/*
-          * Muting is a real requirement, not a nicety: a daily puzzle is played on a train,
-          * in a queue, in a meeting -- and a game that cannot be silenced gets closed
-          * instead (spec P2-4). It shares this row rather than taking one of its own
-          * because every `data-chrome` row comes out of the board's height budget.
-          *
-          * `aria-pressed` says the state, the text says it again for everyone else, and
-          * the label names what the control *is* rather than what pressing it does, which
-          * is what `aria-pressed` is for.
-          */}
-        <button
-          type='button'
-          data-mute
-          aria-pressed={sound.muted}
-          aria-label='Sound'
-          className='control-surface rounded-md border px-3 py-1 text-sm'
-          onClick={() => sound.toggle()}
-        >
-          {sound.muted ? 'Sound off' : 'Sound on'}
-        </button>
-      </div>
-      {/* Mounted only while open: see the note in Archive.tsx. */}
-      {boardsStore.archiveOpen
-        && <Archive boardsStore={boardsStore} corpus={corpus} onPick={goToDate} />}
-      <Tutorial />
     </div>
   );
 }

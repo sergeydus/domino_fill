@@ -35,6 +35,16 @@ export const useAvailableBoardBox = (
     el: HTMLElement | null,
     /** Page margin to keep clear on each side, in CSS px. */
     margin = 0,
+    /**
+     * Width claimed by something beside the board, in CSS px (graphics spec P0-1).
+     *
+     * The desktop composition puts the secondary controls in a side rail, which costs the
+     * board width rather than height. Passed in as a number rather than measured from the
+     * DOM for the same reason the height is measured from chrome and not from the board:
+     * a reserve that depended on layout could depend on the board, and the board is laid
+     * out *from* this answer. `RAIL_WIDTH_PX` is a constant, so it cannot.
+     */
+    reserveWidth = 0,
 ): Box | null => {
     const [box, setBox] = useState<Box | null>(null)
 
@@ -92,7 +102,7 @@ export const useAvailableBoardBox = (
             const safe = insets()
             return {
                 width: Math.max(0, document.documentElement.clientWidth
-                    - margin * 2 - safe.left - safe.right),
+                    - margin * 2 - safe.left - safe.right - reserveWidth),
                 height: Math.max(0, window.innerHeight
                     - used - margin * 2 - safe.top - safe.bottom),
             }
@@ -133,7 +143,7 @@ export const useAvailableBoardBox = (
             window.removeEventListener('resize', schedule)
             window.visualViewport?.removeEventListener('resize', schedule)
         }
-    }, [el, margin])
+    }, [el, margin, reserveWidth])
 
     return box
 }
