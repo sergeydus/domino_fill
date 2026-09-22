@@ -66,7 +66,8 @@ them across nine files, in three vocabularies:
 
 Two of these have already drifted: the pip is `black` on the board and `#1a1a1a` in the
 generated icon, and the accent blue and the arrow blues are three different blues doing one
-job.
+job. Note the last two rows: a literal audit that looks only for `#rrggbb` would miss both
+a CSS named colour and a Tailwind utility.
 
 ### 1.3 Everything reads as one grey object
 
@@ -85,8 +86,6 @@ cell); the picture does not.
 
 ### 1.5 Layout and rendering details
 
-- **Half-pixel origins.** The board shell lands at `x = 458.5` (6×6) and `x = 489.98` (8×8)
-  at 1280×800. At dpr 1 every cell edge and every stroke then straddles a device pixel.
 - **28.4% of the width.** The shell is 363px in a 1280px viewport. The desktop view is
   mostly empty ground.
 - **Zero CSS transitions on the page.** All motion is `motion/react`: piece entry, the
@@ -96,6 +95,10 @@ cell); the picture does not.
 - **Type has two sources.** `body` sets `Arial, Helvetica, sans-serif` while `page.tsx`
   sets `font-sans` → Geist, so the app renders Geist and the body rule is a vestige that
   applies to whatever escapes that div.
+- **Fractional shell origins**, recorded as an observation and *not* as a defect: the shell
+  lands at `x = 458.5` (6×6) and `x = 489.98` (8×8) at 1280×800. Integer CSS coordinates are
+  not synonymous with crisp rendering, and no crop here demonstrates visible blur. If the
+  pinned baselines show it, it earns a row then; until then it is a number, not a problem.
 
 ---
 
@@ -114,8 +117,8 @@ What that means, concretely:
   38px without swallowing the tile.
 - **Slightly exaggerated depth.** Playful dimensional pieces with soft extrusion and
   shadow. Depth is a toy's depth, not a render's.
-- **A warm, saturated-but-not-neon palette**, including a warmer checkerboard. The board
-  should feel like a surface you would put pieces down on.
+- **A warm, saturated-but-not-neon palette**, including a warmer checkerboard and a subtly
+  warm off-white ground (P1-3).
 - **Irregular, faceted rocks** — expressive, and visibly not dominoes (§1.4).
 - **Clear pip faces and divider lines at 38px.** The phone is the design target, not the
   place the design degrades to.
@@ -131,19 +134,23 @@ and ornament that does not carry information.
 difficulty selector in particular stops being the loudest element on the page.
 
 Completion and error feedback **may use their own semantic colours** rather than being
-forced through a single accent. One accent for interactive chrome; separate, named
-semantic colours for success, problem and hint. This supersedes the earlier draft's "one
-accent, everywhere" rule, which would have flattened meaning into decoration.
+forced through a single accent. One accent for interactive chrome; separate, named semantic
+colours for success, problem and hint. This supersedes an earlier draft's "one accent,
+everywhere", which would have flattened meaning into decoration.
 
 ### 2.3 Desktop
 
-Use the available space confidently. At a suitable breakpoint, **enlarge the board and
-arrange secondary controls in a compact side rail or adjacent panel**; below that
-breakpoint, keep the simple single-column composition.
+Above roughly `min-width: 1024px` **and** with enough height for it, the board grows and the
+secondary controls move into a compact side rail or adjacent panel. Below that, the existing
+single-column composition is kept in its existing order.
 
-This is a composition decision, so it lands **before** any visual baseline is captured —
-otherwise every baseline is taken against a layout that is about to change. It is the first
-row of this spec.
+**The rail holds** the difficulty selector, puzzle navigation and Archive, the
+Check / Hint / Undo / Reset group, and Sound. **The domino legend stays visually associated
+with the board** — it is the scoring key for what is on the board, not chrome, and P1-1 of
+`SPEC.md` is explicit that it is a legend.
+
+This is a composition decision, so it lands **before** any baseline is captured — otherwise
+every baseline is taken against a layout that is about to change. It is row 1.
 
 ### 2.4 Mobile
 
@@ -190,6 +197,9 @@ says so rather than quietly retuning it.
 | state is never signalled by colour alone | — | P1-8 |
 | icons are a pure function of `scripts/icon.ts`, maskable mark inside r = 0.4 | 0.368 | rows 20b, 20h |
 
+Note that the ground is an input to four of these and to the manifest. P1-3 changes it
+deliberately and pays the whole bill in one commit; see that row.
+
 ---
 
 ## 5. P0 — the foundation
@@ -199,23 +209,27 @@ the art tunable. No art row starts until all of P0 is in.
 
 ### P0-1 · The desktop composition (§2.3)
 
-**Problem.** §1.5: the shell is 363px in a 1280px viewport — 28.4% of the width — and the
-chrome is stacked in one column under it, which is the phone's answer given to a desktop.
+**Problem.** §1.5: the shell is 363px in a 1280px viewport, and the chrome is stacked in one
+column beneath it — the phone's answer given to a desktop.
 
-**Shape.** A breakpoint; above it, a larger board and a compact side rail or adjacent panel
-for secondary controls; below it, today's single column, unchanged.
+**Shape.** A breakpoint at approximately `min-width: 1024px`, qualified by available height
+so a short landscape window does not get a layout it cannot hold. Above it: a larger board
+and the rail of §2.3. Below it: today's composition, in today's order.
 
 **Acceptance.**
 
-- At ≥1024px wide, the 8×8 board's cell is **≥56px** (today: 41), and the composition —
-  board plus rail — occupies **≥60%** of the viewport width.
-- Below the breakpoint the composition is single-column and the chrome row count is
-  unchanged, so `e2e/sound.spec.ts`'s budget assertion still holds.
+- Measured **at 1280×800**, which is the desktop viewport this suite already uses: the 8×8
+  board's cell is **≥56px** (today: 41), and board-plus-rail occupies **≥60%** of the
+  viewport width.
+- Larger viewports may **cap** at a deliberate, named maximum rather than growing without
+  limit; the cap is a constant with its own test, not an emergent number.
+- Below the breakpoint the composition is single-column in the current order, and the chrome
+  row count is unchanged, so `e2e/sound.spec.ts`'s budget assertion still holds.
+- The legend remains adjacent to the board at every size (§2.3).
 - Every existing layout guarantee passes untouched: 8×8 at 360×640, 800×400 landscape,
   50%–200% zoom, no horizontal overflow, the safe-area cases.
 - No change to `MIN_CELL_PX`, `GUTTER_FRACTION`, `LABEL_FONT_FRACTION` or the shell
-  arithmetic. If the board cap needs raising, that is a named constant changed in this row
-  with its own test, not an edit to the budget.
+  arithmetic.
 
 ### P0-2 · Geometry assertions for the art as it stands
 
@@ -229,26 +243,40 @@ has something to move deliberately.
 **Acceptance.** Each of the six constants in §1.1 is asserted at two cell sizes, so the
 table above is reproduced by the suite rather than by this document.
 
-### P0-3 · A component sheet that does not depend on the day
+### P0-3 · A component sheet built from the real components
 
-**Problem.** The day's puzzle comes from the player's local date. Any baseline taken from a
-live board rots overnight, and no arrangement of pinned clocks makes a *component* sheet
-worth maintaining that way.
+**Problem.** The day's puzzle comes from the player's local date, so any sheet taken from a
+live board rots overnight. But a sheet assembled out of copied markup proves nothing about
+what ships: it would be a second implementation of the art, passing while the real one
+broke.
 
-**Shape.** A sheet rendered from **fixtures**, not from the day's board: both domino
-orientations, a rock, an empty cell of each checker tone, the three target states, and the
-hover / focus / candidate / hint states, plus representative controls. It is composed in the
-test — server-rendered markup handed to the page, styled by the application's own
-stylesheet from the running e2e server — so **no production route exists** for it and
-nothing ships to players.
+**Shape.** A **test-only route** that imports the production components — `BoardSquare`,
+the three piece components, the label and control components — and renders them over
+fixtures: both domino orientations, a rock, an empty cell of each checker tone, the three
+target states, the anchor / candidate / hint / focus states, and one of each control
+variant. The route is compiled out of a normal build:
 
-**Acceptance.** The sheet renders with the clock un-pinned and passes identically on two
-different dates. Every state in §5/P0-4's list appears on it exactly once, asserted by count
-rather than by eye.
+- It renders only when a build-time flag is set. `e2e/server.ts` already builds with
+  `NEXT_PUBLIC_SITE_URL` set for the metadata tests (row 20f), so a second build-time flag
+  follows an established path.
+- A test asserts a **default** build does not serve it. Players never receive it.
+
+Because it is the real route in the real build, it carries the real Tailwind output, the
+real client components, and real hydration — the three things a hand-assembled sheet would
+quietly fake.
+
+**Rejected alternative:** Playwright component testing
+(`@playwright/experimental-ct-react`). It would need a second bundler and its own Tailwind
+pipeline, so the styling it proves is not the styling that ships — which is the whole
+question a visual baseline exists to answer.
+
+**Acceptance.** The sheet renders with the clock un-pinned and is identical on two different
+dates. Every state named above appears exactly once, asserted by count rather than by eye.
+The production build 404s the route.
 
 ### P0-4 · Four deterministic baselines
 
-**Shape.** Exactly four, and no more without an argument:
+**Shape.** Exactly four. This is settled, not a starting point:
 
 | # | Baseline | Depends on the day? |
 | --- | --- | --- |
@@ -257,8 +285,8 @@ rather than by eye.
 | 3 | complete **360px phone** composition | yes — clock pinned |
 | 4 | complete **desktop** composition | yes — clock pinned |
 
-The full-page pair pins the date with `page.clock.install`, as `e2e/archive.spec.ts`
-already does. The sheets must not.
+The full-page pair pins the date with `page.clock.install`, as `e2e/archive.spec.ts` already
+does. The sheets must not.
 
 **The pinned environment.** Rasterisation differs between the Windows machine this is
 developed on and the Linux container CI runs in, so the comparison environment is part of
@@ -273,36 +301,51 @@ the test, not a detail of it:
 - `npm run visual:update` runs the same container. Baselines are never regenerated on a
   developer's host.
 - `maxDiffPixelRatio` is justified by a measured flake rate — run the unchanged suite N
-  times and record the observed maximum — not chosen to make the suite pass.
+  times, record the observed maximum — not chosen to make the suite pass.
 
-**Acceptance.** Two consecutive runs of the unchanged suite produce zero diff. Deleting any
-one row's art change fails a *named* geometry assertion as well as a pixel diff.
+**Acceptance.** Two consecutive runs of the unchanged suite produce zero diff. And for every
+row in §6 and §7: reverting that row's change fails **a named targeted assertion appropriate
+to what it changed** — a geometry assertion, a computed-token assertion, an accessibility
+state, or a motion contract — *as well as* its relevant screenshot. A screenshot is never the
+only thing standing behind a row, and no row is asked for a geometry assertion it has no
+geometry to make.
 
 ### P0-5 · The palette, in one place and in every consumer
 
 **Problem.** §1.2: twenty literals, nine files, three blues, one already-drifted pip.
 
 **Shape.** One TypeScript module of role-named tokens (`tileFace`, not `cream`), consumed by
-three different kinds of consumer, which is the part that needs designing rather than
-declaring:
+four kinds of consumer — the fourth is the one that already exists and is easy to forget:
 
 1. **SVG components** import it directly.
 2. **`scripts/icon.ts`** imports it directly — it runs in Node at build time, which is why
    the palette must be plain TypeScript with no React or CSS dependency.
 3. **CSS and Tailwind** cannot import TypeScript, so `globals.css`'s custom properties are
-   **generated** from the tokens by `npm run tokens`, and the generated file is committed —
-   the same pattern rows 20b/20h used for the icons, and it fails the same way: a test
-   asserts the committed CSS is byte-identical to what the generator produces.
+   **generated** by `npm run tokens` and committed — the pattern rows 20b/20h used for the
+   icons, failing the same way: a test asserts the committed CSS is byte-identical to what
+   the generator produces.
+4. **`siteMetadata.ts`** — `GROUND` feeds the viewport `themeColor` and the manifest's
+   `theme_color` and `background_color`. It stops holding its own copy and reads the token,
+   so a palette change reaches the browser chrome and the installed splash screen without
+   anyone remembering to go and look.
 
 Semantic colours are named for meaning (`success`, `problem`, `hint`) and are separate from
 the interactive accent, per §2.2. `lineLabel.ts` keeps its semantics and sources its values
 from here.
 
-**Acceptance.** No colour literal survives outside the palette module and the generated CSS
-— enforced by a test that greps the tracked source. `tests/lineFeedback.test.ts` already
-computes contrast from a luminance function and asserts the *old* palette would fail it;
-that check widens to every pair in §4, computed **from the tokens**, so the guarantee
-survives a palette change instead of being re-typed beside it.
+**Acceptance.**
+
+- A literal audit **scoped to visual source** — `app/**/*.{ts,tsx}`, `app/globals.css`,
+  `scripts/icon.ts` — and **blind to nothing that carries colour**: `#rgb`/`#rrggbb`,
+  `rgb()`/`rgba()`/`hsl()`, CSS named colours including `black` and `white`, and Tailwind
+  colour utilities in both forms (`bg-red-700`, `text-amber-100`, `bg-[#419dc8]`). The scope
+  keeps content hashes and corpus data elsewhere in the repository from raising false
+  positives; the breadth keeps `black` and `red-700` — both of which are live today — from
+  escaping through a hex-only pattern.
+- `tests/lineFeedback.test.ts` already computes contrast from a luminance function and
+  asserts the *old* palette would fail it; that check widens to every pair in §4 and §6,
+  computed **from the tokens**, so the guarantee survives a palette change instead of being
+  re-typed beside it.
 
 ### P0-6 · One geometry module, in cell units
 
@@ -310,33 +353,27 @@ survives a palette change instead of being re-typed beside it.
 
 **Shape.** The pieces draw in a **normalised coordinate system** — a `viewBox` in cell units
 — scaled once at the outer element by `squareSize`. The drawing is then expressed in the
-units the design actually thinks in, and the only pixel values in a piece are the outer
-`width`/`height`.
+units the design thinks in, and the only pixel values in a piece are the outer `width` and
+`height`.
 
-This row changes no proportions. Its success condition is that baselines 1–4 **do not move**
-at 53px, where today's constants were evidently chosen.
+**What this does to the baselines**, stated precisely, because the obvious claim is false.
+Today's constants were chosen at roughly 53px. Turning them into fractions *of the cell*
+therefore leaves 53px alone and necessarily changes every other size — the 38px sheet, the
+phone page, and the desktop page at its new ≥56px cell. "All four baselines unchanged" would
+be a contradiction, not a standard.
 
 **Acceptance.**
 
-- The geometry-literal rule, stated narrowly so it is enforceable: *no literal denominated
-  in CSS pixels may appear in the drawing.* Literals inside the normalised `viewBox` are the
-  design and are expected; the rule is about units, not about numbers.
+- **Baseline 2 (53px) stays pixel-identical.** If sub-pixel rounding makes that impossible,
+  the row names the attribute and the arithmetic rather than widening the diff budget.
+- **Baselines 1, 3 and 4 change**, and each change is *predicted before it is taken*: the new
+  value of every constant equals the old one times the cell ratio, within rounding, and the
+  geometry assertions from P0-2 are rewritten to assert the ratio rather than the pixel.
 - A unit test renders each piece at 38, 53 and 75 and asserts every geometric attribute
   scales linearly within rounding.
-
-### P0-7 · Device-pixel alignment
-
-**Problem.** §1.5: `x = 458.5`, `x = 489.98`. At dpr 1 every edge straddles a device pixel.
-
-**Shape.** Fix the centring that produces the fraction, not the drawing. SVG strokes are
-centred on their path, so a stroke of odd device-pixel width lands half-on — the drawing
-offsets by half a stroke where it matters.
-
-**Acceptance.** At every viewport in the layout matrix, at `deviceScaleFactor` **1 and 2**,
-the shell's `x`, `y`, `width`, `height` and every cell rect are integers in device pixels.
-Fractional ratios (1.25, 1.5 — common on Windows) are **out of scope and said so**: they
-cannot be made integral for all elements at once, and pretending otherwise would be the kind
-of claim this repository keeps catching.
+- The geometry-literal rule, stated narrowly enough to enforce: *no literal denominated in
+  CSS pixels may appear in the drawing.* Literals inside the normalised `viewBox` are the
+  design and are expected — the rule is about units, not about numbers.
 
 ---
 
@@ -344,8 +381,8 @@ of claim this repository keeps catching.
 
 ### P1-1 · Proportions that hold at 38px
 
-Retune the fractions from P0-6 against the **38px** rendering, per §2.1. Values are the
-row's to choose; these bounds are not:
+Retune the fractions from P0-6 against the **38px** rendering, per §2.1. The values are the
+row's to choose; these bounds are not.
 
 - Every fraction is constant across cell sizes (±1px rounding) — P0-6's test still passes.
 - **Divider span ≥ 0.55 of the tile's width** at every cell size (today: 0.158 at 38px).
@@ -354,8 +391,16 @@ row's to choose; these bounds are not:
 - **Outline weight ≤ 0.12 of the cell**, constant.
 - **Extrusion depth 0.10–0.18 of the cell**, constant — "slightly exaggerated", not half a
   cell (today: 0.421 at 38px).
-- Tile face against **both** checker tones ≥ **3:1** (WCAG 1.4.11, non-text), computed from
-  the tokens.
+- **Contrast, computed from the tokens, every pair that carries information:**
+
+  | Pair | Minimum | Why |
+  | --- | --- | --- |
+  | tile face : each checker tone | 3:1 | the piece against the board |
+  | pip : tile face | 3:1 | the pip *is* the score |
+  | divider : tile face | 3:1 | it is what makes a domino a domino |
+  | outline : tile face | 3:1 | the silhouette's own edge |
+  | outline : each checker tone | 3:1 | the same edge, seen from outside |
+
 - The cell's hit area is untouched: art may not change what `pointerUp` resolves.
 
 ### P1-2 · An irregular, faceted rock (§1.4, §2.1)
@@ -367,82 +412,150 @@ row's to choose; these bounds are not:
 - Legible at 38px; ≥3:1 against both checker tones and against the tile face.
 - `cellDescription`'s wording from row 19 is unchanged — the picture changes, the name does
   not.
-- Covered by baselines 1 and 2, which is exactly the kind of silhouette question geometry
-  alone cannot settle.
+- Covered by baselines 1 and 2, which is the kind of silhouette question geometry alone
+  cannot settle.
 
-### P1-3 · A warmer board that is the loudest thing on its page
+### P1-3 · A warmer board, on a warmer ground
 
 The checkerboard tones, the frame — whose 16px radius does not match the cells' 12px corner
-— and the target labels, which float beside their lines with no visual tie.
+— the target labels, which float beside their lines with no visual tie, and **the ground
+itself**: `#e8e7e7` becomes a subtly warm off-white.
+
+The ground is the expensive part, and it is deliberately all in this one commit. Every
+contrast ratio in §4 and §6 is measured *against* it; `siteMetadata.GROUND` feeds the
+browser chrome's `themeColor` and the manifest's `theme_color` and `background_color`; and
+`scripts/icon.ts` paints its background with it, so the committed icons stop matching their
+generator the moment it moves.
 
 **Acceptance.**
 
+- The ground changes and **every** contrast guarantee in §4 and §6 is recomputed from the
+  tokens in the same commit. A ratio that no longer clears its bar is fixed here, not
+  deferred.
+- `npm run icons` is rerun in this commit and rows 20b/20h's tests pass unaltered —
+  byte identity, PNG header, same drawing at every size, maskable mark inside r = 0.4.
+- The manifest and the page still agree, which row 20f's served-against-served test already
+  checks; it must pass without being edited.
 - Frame inner radius and cell corner radius agree **by construction**, from one token.
 - The two checker tones differ by a stated ratio, and both clear ≥3:1 against the tile face
   and the rock.
 - The target-to-line tie is a measurable geometric or tonal relationship, asserted as such.
-- Every ratio in §4 re-proven from the tokens.
 
 ### P1-4 · Quieter controls, louder meaning (§2.2)
 
 **Acceptance.**
 
 - The accent token appears on interactive chrome only; `success`, `problem` and `hint` are
-  their own tokens and appear only on the states they name — asserted by computed style,
-  per control.
-- The difficulty selector and the level arrows no longer carry the page's strongest colour:
-  the board region's maximum chroma exceeds every chrome control's, measured.
+  their own tokens and appear only on the states they name — asserted by computed style, per
+  control, per state.
 - Three blues become one accent. `LevelSelector`'s labels, roles and destination wording are
   untouched.
+- Hierarchy is evidenced by the token-role assertions above **and** by baselines 3 and 4.
+  There is deliberately no "the board's maximum chroma exceeds the controls'" test: one
+  saturated pixel would satisfy it while the controls still dominated the page, and a test
+  that can be satisfied without the claim being true is worse than no test.
 
-### P1-5 · States legible at the floor
+### P1-5 · The persistent cell states, legible at the floor
 
-Anchor, candidate, hint and rejection are what the player reads while thinking. The hint is
-a 3px `#15661a` outline inset 2px today — a tenth of a 38px cell, competing with a 6px piece
-outline.
+Anchor, candidate, hint and focus — the states a player reads while thinking, all of which
+hold still long enough to sit on a static sheet. The hint is a 3px `#15661a` outline inset
+2px today: a tenth of a 38px cell, competing with a 6px piece outline.
+
+Rejection is **not** here. It is motion, and it belongs to P1-6.
 
 **Acceptance.**
 
 - Each state is distinguishable from every other at 38px, **and from every other without
   colour** — P1-8's requirement, not a new one, so each carries a second channel.
 - Each state's indicator is a fraction of the cell, not a pixel constant.
-- ≥3:1 against both checker tones. All four states appear on baselines 1 and 2.
+- ≥3:1 against both checker tones. All four appear on baselines 1 and 2.
 
-### P1-6 · Bounce, squash, and a surface that answers (§2.1)
+### P1-6 · Motion, and the states a control owes
 
-The entry offset is 26px — 68% of a phone cell. And with zero CSS transitions, nothing
-acknowledges a press before its result arrives.
+The entry offset is 26px — 68% of a phone cell. There are zero CSS transitions, so nothing
+acknowledges a press before its result arrives. And rejection is currently a shake and
+nothing else.
 
 **Acceptance.**
 
 - Motion offsets and squash amplitudes are fractions of the cell; **amplitude ≤0.12**,
   **duration ≤200ms** for placement feedback.
-- Press and hover states exist for every control.
-- **Reduced motion covers CSS too.** `MotionConfig reducedMotion="user"` governs
-  `motion/react` only; any new CSS transition or animation needs its own
-  `@media (prefers-reduced-motion: reduce)` rule. Asserted under
-  `emulateMedia({ reducedMotion: 'reduce' })`: computed `transition-duration` and
-  `animation-duration` are `0s` on every element that has one — and non-zero without it, or
-  the assertion proves nothing.
+- **Rejection has a static equivalent, defined here and then tested.** Row 13 first
+  *measures* whether `MotionConfig reducedMotion="user"` suppresses the imperative shake; if
+  it does, a player who asked for reduced motion currently gets no visual answer to a refused
+  move at all, and this row owes them one that does not animate. Only once that equivalent
+  exists may rejection appear on a reduced-motion screenshot.
+- **The control-state contract**, complete rather than "hover and press":
+  - `:focus-visible` on every interactive control, meeting the same non-colour requirement
+    as the cell states;
+  - an active/pressed treatment on every control;
+  - a disabled treatment that keeps its current contrast (`Undo` is disabled on arrival);
+  - **hover only under `@media (hover: hover) and (pointer: fine)`** — a hover style that
+    latches on a touch device is a control that looks pressed until you press something
+    else.
+- **Reduced motion covers CSS too.** `MotionConfig` governs `motion/react` only; any new CSS
+  transition or animation needs its own `@media (prefers-reduced-motion: reduce)` rule.
+  Asserted under `emulateMedia({ reducedMotion: 'reduce' })`: computed `transition-duration`
+  and `animation-duration` are `0s` on every element that has one — and non-zero without it,
+  or the assertion proves nothing.
 
 ---
 
 ## 7. P2 — polish
 
-- **P2-1 · One type source.** Drop the vestigial `Arial` body rule; state the type scale
-  once, as `LABEL_FONT_FRACTION` already does for the board labels. *Acceptance:* one
-  declaration of the family; every text surface resolves to it, asserted by computed style.
-- **P2-2 · One control vocabulary.** `Check`/`Hint`/`Undo`/`Reset` are flat grey; `Archive`
-  and `Sound on` are bordered white. *Acceptance:* every control of the same class shares
-  surface, radius, padding and press treatment, from tokens; disabled states keep their
-  current contrast.
-- **P2-3 · The completion card**, the game's one celebration — semantic success colour per
-  §2.2, bounded by P1-6's motion limits. *Acceptance:* covered by baseline 4; the card's
-  copy, roles and focus behaviour are unchanged.
-- **P2-4 · Icons regenerated from the palette.** `scripts/icon.ts` shares the ground and
-  tile tokens. *Acceptance:* `npm run icons` regenerates; rows 20b/20h's tests — byte
-  identity, PNG header, same drawing at every size, maskable mark inside r = 0.4 — pass
-  **unaltered**.
+### P2-1 · Typography, as roles
+
+One declaration of the family (the vestigial `Arial` body rule goes), and a named role per
+text surface rather than `text-sm` scattered across components. The board's labels already
+derive from the cell via `LABEL_FONT_FRACTION` and keep doing so.
+
+| Role | Size | Line height | Used by |
+| --- | --- | --- | --- |
+| board label | `LABEL_FONT_FRACTION` × cell | 1 | `HorizontalNumbers`, `VerticalNumbers` |
+| card title | 24px | 1.25 | `CompletionCard` |
+| control | 16px | 1.25 | every button and toggle |
+| body | 14px | 1.5 | `AdviceStrip`, `Tutorial`, `DayBanner` |
+| meta | 12px | 1.5 | archive dates, secondary notes |
+
+**Acceptance.** Every text surface resolves to one of these five roles and to one family,
+asserted by computed style; no component declares a size outside the table.
+
+### P2-2 · One control vocabulary
+
+`Check`/`Hint`/`Undo`/`Reset` are flat grey; `Archive` and `Sound on` are bordered white.
+Same class of control, two designs. The variants, enumerated:
+
+| Variant | Who | Treatment |
+| --- | --- | --- |
+| primary | `Check` | accent surface, strongest weight |
+| secondary | `Hint`, `Undo`, `Reset` | neutral surface, accent on focus/press |
+| quiet | `Archive`, `Sound` | bordered, no fill until interacted with |
+| toggle | difficulty, `Sound`'s pressed state | `aria-pressed` reflected by a non-colour channel as well |
+| icon | `LevelSelector`'s arrows | accent stroke, label unchanged |
+
+**Acceptance.** Surface, radius, padding and the four states from P1-6 come from tokens per
+variant; every control belongs to exactly one variant, asserted by computed style; disabled
+contrast is unchanged from today's measurement.
+
+### P2-3 · The completion card
+
+The game's one celebration, and currently a blue box. Its hierarchy, specified: the outcome
+line is the loudest thing in the card (`card title` role, `success` token), the detail line
+is `body`, and the actions are `secondary` controls beneath both. Motion stays inside P1-6's
+limits.
+
+**Acceptance.** The three levels are distinguishable by size *and* weight, asserted by
+computed style; the card's copy, `role="status"` and focus behaviour are unchanged from row 15; it
+appears on baseline 4.
+
+### P2-4 · The rest of the icon palette
+
+P1-3 already moved the ground and regenerated the icons with it. This row finishes the job
+— the tile and pip tokens — so `scripts/icon.ts` holds no colour of its own, which is what
+closes the drift recorded in §1.2.
+
+**Acceptance.** `npm run icons` regenerates; rows 20b/20h's tests pass **unaltered**; no
+colour literal remains in `scripts/icon.ts`.
 
 ---
 
@@ -455,41 +568,41 @@ written into it, never carried silently.
 
 | # | Row | Proves it |
 | --- | --- | --- |
-| 1 | **P0-1** desktop composition: breakpoint, larger board, side rail | E2E |
+| 1 | **P0-1** desktop composition: breakpoint, larger board, the rail of §2.3 | E2E |
 | 2 | **P0-2** geometry assertions for the art as it stands | unit + E2E |
-| 3 | **P0-3** fixture component sheet, independent of the day's puzzle | E2E |
+| 3 | **P0-3** test-only sheet route over the real components; absent from a normal build | unit + E2E |
 | 4 | **P0-4** four baselines; container pinned by digest; diff budget measured | E2E |
-| 5 | **P0-5** palette module; generated CSS tokens; contrast computed from tokens | unit |
-| 6 | **P0-6** normalised `viewBox` geometry; baselines must not move | unit + E2E |
-| 7 | **P0-7** device-pixel alignment at dpr 1 and 2 | E2E |
-| 8 | **P1-1** proportions retuned against the 38px rendering | unit + E2E |
-| 9 | **P1-2** the irregular, faceted rock | unit + E2E |
-| 10 | **P1-3** warmer board, matched radii, target association | E2E |
-| 11 | **P1-4** quieter controls; semantic colours for meaning | E2E |
-| 12 | **P1-5** states legible at 38px, and without colour | unit + E2E |
-| 13 | **P1-6** bounce and squash; press states; CSS reduced-motion | unit + E2E |
-| 14 | **P2-1** one type source | E2E |
-| 15 | **P2-2** one control vocabulary | E2E |
-| 16 | **P2-3** the completion card | E2E |
-| 17 | **P2-4** icons regenerated; rows 20b/20h tests unaltered | unit + E2E |
+| 5 | **P0-5** palette module; generated CSS tokens; metadata consumer; scoped literal audit | unit |
+| 6 | **P0-6** normalised `viewBox` geometry; baseline 2 fixed, 1/3/4 predicted | unit + E2E |
+| 7 | **P1-1** proportions retuned against the 38px rendering | unit + E2E |
+| 8 | **P1-2** the irregular, faceted rock | unit + E2E |
+| 9 | **P1-3** warm ground and warmer board; every ratio recomputed; icons regenerated | unit + E2E |
+| 10 | **P1-4** quieter controls; semantic colours for meaning | E2E |
+| 11 | **P1-5** persistent cell states, legible at 38px and without colour | unit + E2E |
+| 12 | **P1-6** motion limits; rejection's static equivalent; the control-state contract | unit + E2E |
+| 13 | **P2-1** typography roles | E2E |
+| 14 | **P2-2** one control vocabulary | E2E |
+| 15 | **P2-3** the completion card | E2E |
+| 16 | **P2-4** the rest of the icon palette | unit + E2E |
 
-Rows 1–7 are the gate. Row 1 comes first because baselines taken against a composition that
+Rows 1–6 are the gate. Row 1 comes first because baselines taken against a composition that
 is about to change are baselines taken twice.
 
 ---
 
-## 9. Open questions
+## 9. Decisions taken
 
-Recorded rather than answered, because each is a decision rather than a defect. The art
-direction is **not** among them — §2 settles it.
+Recorded so nobody re-opens them by accident, and so the reasoning survives the decision.
 
-1. **Where is the desktop breakpoint, and does the rail hold Archive and Sound, or more?**
-   Row 1 proposes and measures; it is the one row whose shape is not pinned by this document.
-2. **Is four baselines the right number?** The argument for fewer: they are binaries, and
-   §5/P0-4 is honest that nobody reviews them. The argument for more: silhouette and palette
-   are what geometry cannot assert. Four is the starting point, and the number should be
-   argued down rather than up.
-3. **Does the warmer palette want a warmer ground?** `--background: #e8e7e7` is the one
-   colour every contrast ratio in §4 is measured against, so moving it re-opens all of them
-   in a single row. Possible, but it must be deliberate and it must be row 10's decision,
-   not a side effect of row 5.
+- **The art direction is settled** (§2.1): a cartoony evolution of the existing identity, not
+  a redesign and not a new aesthetic.
+- **Four baselines, final** (P0-4). Not a starting point to be argued up or down.
+- **The rail's contents are settled** (§2.3): difficulty, navigation and Archive, the
+  Check/Hint/Undo/Reset group, and Sound. The legend stays with the board.
+- **The ground becomes a subtly warm off-white in P1-3**, and every contrast guarantee is
+  recomputed in that same commit rather than trailing behind it.
+- **Device-pixel alignment is not a row.** An earlier draft made whole-pixel geometry a P0
+  requirement on the strength of §1.5's fractional origins. Integer CSS coordinates are not
+  synonymous with crisp rendering, no crop here demonstrates blur, and the pinned baselines
+  are the right instrument for deciding whether any exists. If one shows up, it earns a row
+  then — on evidence, which is the standard every other row in this document is held to.
