@@ -106,6 +106,108 @@ test('the pool is primed by the first gesture, not left for iOS to refuse', asyn
     expect(await played()).toEqual(['/snap.mp3:1', '/win.mp3:1'])
 })
 
+/**
+ * Install a recording `Audio` before the page loads.
+ *
+ * The pool is module-private by design, so this is the only way its behaviour is
+ * observable from outside. `refuse` is read at call time so a test can decide, mid-run,
+ * that the browser has started allowing playback -- which is what the autoplay policy
+ * does once it decides an interaction was real.
+ */
+const recordAudio = async (page: Page, { refuse = false } = {}) => {
+    await page.addInitScript((startRefusing: boolean) => {
+        const w = window as unknown as {
+            __audio: { src: string, plays: number, pauses: number, muted: boolean }[]
+            __refuse: boolean
+        }
+        w.__audio = []
+        w.__refuse = startRefusing
+        class Recorder {
+            src: string
+            preload = ''
+            currentTime = 0
+            record: { src: string, plays: number, pauses: number, muted: boolean }
+            constructor(src: string) {
+                this.src = src
+                this.record = { src, plays: 0, pauses: 0, muted: false }
+                w.__audio.push(this.record)
+            }
+            get muted() { return this.record.muted }
+            set muted(value: boolean) { this.record.muted = value }
+            play() {
+                this.record.plays++
+                return w.__refuse
+                    ? Promise.reject(new Error('NotAllowedError'))
+                    : Promise.resolve()
+            }
+            pause() { this.record.pauses++ }
+        }
+        ;(window as unknown as { Audio: unknown }).Audio = Recorder
+    }, refuse)
+}
+
+const audioState = (page: Page) => page.evaluate(() =>
+    (window as unknown as {
+        __audio: { src: string, plays: number, pauses: number, muted: boolean }[]
+    }).__audio.map(a => `${a.src} plays=${a.plays} pauses=${a.pauses} muted=${a.muted}`).sort())
+
+test('a keyboard player gets sound too', async ({ page }) => {
+    /*
+     * Row 20d listened for `pointerdown` alone (fixed in row 20i). The whole of P1-8 is
+     * that this game is playable without a pointer -- the board is a grid with roving
+     * focus, every control is a real button -- so someone playing that way would have had
+     * no sound at all for the entire session, including the win they were playing for.
+     */
+    await recordAudio(page)
+    await page.goto('/')
+    await page.locator('[data-board-shell]').waitFor()
+
+    // A modifier on its own is not an activating gesture, so priming on one would spend
+    // the attempt on a refusal.
+    await page.keyboard.down('Shift')
+    await page.keyboard.up('Shift')
+    expect(await audioState(page)).toEqual([
+        '/snap.mp3 plays=0 pauses=0 muted=false',
+        '/win.mp3 plays=0 pauses=0 muted=false',
+    ])
+
+    // A real key, and no pointer event anywhere in this test.
+    await page.keyboard.press('Tab')
+    await expect.poll(() => audioState(page)).toEqual([
+        '/snap.mp3 plays=1 pauses=1 muted=false',
+        '/win.mp3 plays=1 pauses=1 muted=false',
+    ])
+})
+
+test('a refused priming is retried, not remembered forever', async ({ page }) => {
+    /*
+     * Row 20d marked the pool primed *before* any `play()` resolved, so a refusal was
+     * recorded as a success and no later gesture ever tried again: the player's first tap
+     * decided permanently whether the game had audio. A refusal is the ordinary case here
+     * -- it is what a browser does to a gesture it does not consider activating.
+     */
+    await recordAudio(page, { refuse: true })
+    await page.goto('/')
+    await page.locator('[data-board-shell]').waitFor()
+
+    await page.mouse.move(5, 5)
+    await page.mouse.down()
+    await page.mouse.up()
+    await expect.poll(() => audioState(page), { message: 'refused, and left muted' }).toEqual([
+        '/snap.mp3 plays=1 pauses=0 muted=false',
+        '/win.mp3 plays=1 pauses=0 muted=false',
+    ])
+
+    // The browser changes its mind, as it does once it accepts an interaction as real.
+    await page.evaluate(() => { (window as unknown as { __refuse: boolean }).__refuse = false })
+    await page.keyboard.press('Tab')
+
+    await expect.poll(() => audioState(page), { message: 'the next gesture must retry' }).toEqual([
+        '/snap.mp3 plays=2 pauses=1 muted=false',
+        '/win.mp3 plays=2 pauses=1 muted=false',
+    ])
+})
+
 test('the control does not cost the board any height', async ({ page }) => {
     /*
      * It shares the Archive row deliberately. Every `data-chrome` row is subtracted from

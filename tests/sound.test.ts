@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { MUTE_KEY, SoundStore } from '@/app/stores/SoundStore'
 import {
     SOUND_FILES, acceptedFeedback, feedbackFor, preloadSounds, resetSoundsForTest,
-    unlockSounds, winFeedback,
+    soundsUnlocked, unlockSounds, winFeedback,
 } from '@/app/dominoFill/feedback'
 
 /**
@@ -34,15 +34,7 @@ beforeEach(() => {
     built = []
     localStorage.clear()
     originalAudio = globalThis.Audio
-    globalThis.Audio = vi.fn().mockImplementation((src: string) => {
-        const audio: FakeAudio = {
-            src, preload: '', muted: false, currentTime: 0, plays: 0, pauses: 0,
-            play() { this.plays++; return Promise.resolve() },
-            pause() { this.pauses++ },
-        }
-        built.push(audio)
-        return audio
-    }) as unknown as typeof globalThis.Audio
+    globalThis.Audio = fakeAudio(() => Promise.resolve())
 })
 
 afterEach(() => { globalThis.Audio = originalAudio })
@@ -138,8 +130,7 @@ describe('priming the pool for iOS', () => {
      * while the snap -- played straight out of a tap -- worked perfectly.
      */
     it('plays and stops every element, not just the one that is used first', async () => {
-        unlockSounds()
-        await settled()
+        await unlockSounds()
 
         expect(built).toHaveLength(Object.keys(SOUND_FILES).length)
         for (const audio of built) {
@@ -149,8 +140,7 @@ describe('priming the pool for iOS', () => {
     })
 
     it('primes silently, and leaves the elements as it found them', async () => {
-        unlockSounds()
-        await settled()
+        await unlockSounds()
         for (const audio of built) {
             expect(audio.muted, 'a primed element must not stay muted').toBe(false)
             expect(audio.currentTime).toBe(0)
@@ -158,21 +148,89 @@ describe('priming the pool for iOS', () => {
     })
 
     it('does nothing the second time', async () => {
-        unlockSounds()
-        unlockSounds()
-        await settled()
+        await unlockSounds()
+        await unlockSounds()
         for (const audio of built) expect(audio.plays).toBe(1)
+        expect(soundsUnlocked()).toBe(true)
+    })
+
+    it('lets a later gesture retry after a refusal', async () => {
+        /*
+         * The defect row 20i fixes. Row 20d set a single `unlocked` flag *before* any
+         * `play()` resolved, so a refused priming was recorded as a success and every
+         * later gesture returned immediately -- the player's first tap permanently
+         * deciding whether the game has audio, which is the opposite of what priming is
+         * for. A refusal is the ordinary case, not an exotic one: it is what the autoplay
+         * policy does to a gesture it does not consider activating.
+         */
+        let refuse = true
+        globalThis.Audio = fakeAudio(() => refuse
+            ? Promise.reject(new Error('NotAllowedError'))
+            : Promise.resolve())
+
+        expect(await unlockSounds(), 'nothing primed yet').toBe(false)
+        expect(soundsUnlocked()).toBe(false)
+        for (const audio of built) {
+            expect(audio.pauses, 'a refused play is not paused').toBe(0)
+            // Left as it was found: an element stuck muted would play silently for
+            // the rest of the session even once the browser allowed it.
+            expect(audio.muted, `${audio.src} was left muted`).toBe(false)
+        }
+
+        refuse = false
+        expect(await unlockSounds(), 'the next gesture gets it').toBe(true)
+        for (const audio of built) {
+            expect(audio.plays, `${audio.src} was not retried`).toBe(2)
+            expect(audio.pauses).toBe(1)
+            expect(audio.muted, 'a refused element must not be left muted').toBe(false)
+        }
+    })
+
+    it('does not let one element that succeeds cover for one that did not', async () => {
+        /*
+         * iOS unlocks elements individually, so "the snap worked" says nothing about the
+         * win sound -- and a single flag cannot represent the difference. Which one is
+         * refused here is the one whose first real play is minutes away, so it is also the
+         * one whose failure nobody would notice until a board was finished.
+         */
+        let refuseWin = true
+        globalThis.Audio = fakeAudio(src =>
+            src === SOUND_FILES.win && refuseWin
+                ? Promise.reject(new Error('NotAllowedError'))
+                : Promise.resolve())
+
+        expect(await unlockSounds()).toBe(false)
+        const of = (src: string) => built.find(a => a.src === src)!
+        expect(of(SOUND_FILES.snap).plays).toBe(1)
+        expect(of(SOUND_FILES.snap).pauses, 'the snap primed').toBe(1)
+        expect(of(SOUND_FILES.win).pauses, 'the win sound did not').toBe(0)
+
+        refuseWin = false
+        expect(await unlockSounds()).toBe(true)
+        // The one that worked is not played again; the one that did not is retried.
+        expect(of(SOUND_FILES.snap).plays, 'the snap was replayed').toBe(1)
+        expect(of(SOUND_FILES.win).plays).toBe(2)
+        expect(of(SOUND_FILES.win).pauses).toBe(1)
     })
 })
 
 /**
- * Let the priming `then` run.
+ * An `Audio` whose `play()` answers however the test says, per source.
  *
- * `unlockSounds` pauses and unmutes each element in a `.then` on the promise `play()`
- * returns, so everything after the play itself lands a microtask later. Two turns, because
- * the handler itself queues nothing but the assertion reads state it wrote.
+ * Priming is the one part of this module whose contract is about *failure*: which element
+ * was refused, whether it is retried, and whether one succeeding speaks for another. A
+ * constructor that always resolves cannot express any of that.
  */
-const settled = async () => { await Promise.resolve(); await Promise.resolve() }
+const fakeAudio = (play: (src: string) => Promise<void>) =>
+    vi.fn().mockImplementation((src: string) => {
+        const audio: FakeAudio = {
+            src, preload: '', muted: false, currentTime: 0, plays: 0, pauses: 0,
+            play() { this.plays++; return play(src) },
+            pause() { this.pauses++ },
+        }
+        built.push(audio)
+        return audio
+    }) as unknown as typeof globalThis.Audio
 
 describe('muting', () => {
     it('is off by default', () => {

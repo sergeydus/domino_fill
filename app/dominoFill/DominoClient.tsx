@@ -17,6 +17,12 @@ import DayBanner from './DayBanner'
 import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
 
+/**
+ * Keys that cannot prime audio: a modifier press on its own is not user activation, so
+ * calling `play()` from one spends an attempt and records a refusal.
+ */
+const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
+
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
 
@@ -91,13 +97,33 @@ const DominoClient: React.FC = () => {
    * different element plays perfectly. The win sound is the case that suffers: its first
    * play is minutes after any tap, so without this it is silent on exactly the occasion it
    * exists for. `pointerdown` rather than `click`, because it is the earliest gesture the
-   * board itself acts on, and `once` because priming twice does nothing.
+   * board itself acts on -- and `keydown` beside it, because the whole of P1-8 is that this
+   * game is playable without a pointer at all, and a keyboard player would otherwise have
+   * had no sound for the entire session.
+   *
+   * Not `once` (row 20i). Priming can be *refused*, and a listener that removes itself on
+   * the first gesture would make that permanent: the player's first tap would decide
+   * whether the game ever makes a sound again. The listeners stay until every element has
+   * actually been primed, and `unlockSounds` skips the ones that already are.
    */
   useEffect(() => {
     preloadSounds()
-    const prime = () => unlockSounds()
-    document.addEventListener('pointerdown', prime, { once: true })
-    return () => document.removeEventListener('pointerdown', prime)
+
+    // Idempotent, and it is both the success path and the effect's cleanup.
+    const stop = () => {
+      document.removeEventListener('pointerdown', prime)
+      document.removeEventListener('keydown', prime)
+    }
+    const prime = (event: Event) => {
+      // A modifier on its own is not an activating gesture in any browser, so priming on
+      // one would spend the attempt and record a refusal.
+      if (event instanceof KeyboardEvent && MODIFIERS.has(event.key)) return
+      void unlockSounds().then(done => { if (done) stop() })
+    }
+
+    document.addEventListener('pointerdown', prime)
+    document.addEventListener('keydown', prime)
+    return stop
   }, [])
 
   // A callback ref in state, not `useRef`: the column is not mounted on the first render

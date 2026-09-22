@@ -20,7 +20,8 @@ import type { PlacementOutcome } from "../stores/PuzzleSession"
  *     outside a gesture is refused the first time it is played, even while another element
  *     plays fine — which is exactly how the win sound was built, constructed in a store
  *     constructor and first played minutes later when a board was solved. The pool is
- *     primed inside the first `pointerdown` instead.
+ *     primed inside the player's first gesture instead -- per element, retryably, and
+ *     from a key as well as a pointer. See `unlockedNames` for what row 20d missed.
  *   - **Every `play()` is caught.** The autoplay policy rejects the returned promise, and
  *     an uncaught rejection is a console error in the middle of a move.
  *
@@ -76,45 +77,67 @@ export const preloadSounds = () => {
     for (const name of Object.keys(SOUND_FILES) as SoundName[]) element(name)
 }
 
-let unlocked = false
+/**
+ * Which elements have actually been primed -- per element, and only on success.
+ *
+ * A single `unlocked` flag was the shape row 20d shipped, and it was set *before* any
+ * `play()` resolved. Two things followed from that, both silent:
+ *
+ *   - A gesture whose priming was refused still marked the pool as done, so every later
+ *     gesture returned immediately and the sound could never come back. The player's first
+ *     tap deciding permanently whether the game has audio is the opposite of what priming
+ *     is for.
+ *   - iOS unlocks elements *individually*, so one succeeding says nothing about another.
+ *     One flag cannot represent "the snap is primed and the win sound was refused", which
+ *     is precisely the case this whole mechanism exists to handle.
+ */
+const unlockedNames = new Set<SoundName>()
+
+/** Whether every sound has been primed, and there is nothing left to retry. */
+export const soundsUnlocked = (): boolean =>
+    typeof Audio === 'undefined'
+    || (Object.keys(SOUND_FILES) as SoundName[]).every(name => unlockedNames.has(name))
 
 /**
- * Prime every element inside a real gesture, so iOS will let them play later.
+ * Prime the elements that are not primed yet, inside a real gesture.
  *
- * Each element is played and immediately paused while muted. That is the only way to mark
- * an element as user-initiated on iOS, and it has to happen to *each* of them — the win
- * sound is the one that suffers otherwise, because it is the one whose first play is
- * minutes away from any tap.
+ * Each one is played and immediately paused while muted. That is the only way to mark an
+ * element as user-initiated on iOS, and it has to happen to *each* of them -- the win sound
+ * is the one that suffers otherwise, because it is the one whose first play is minutes away
+ * from any tap.
  *
- * Idempotent, and it restores mute and position afterwards so a primed element is
- * indistinguishable from an untouched one.
+ * An element is recorded as unlocked only once its `play()` has resolved. One that is
+ * refused is left out, so the next gesture tries it again, and the ones that succeeded are
+ * not replayed. Resolves to whether anything is still outstanding, which is what lets the
+ * caller stop listening rather than guess at it.
+ *
+ * Mute and position are restored afterwards, so a primed element is indistinguishable from
+ * an untouched one.
  */
-export const unlockSounds = () => {
-    if (unlocked) return
-    unlocked = true
-    for (const name of Object.keys(SOUND_FILES) as SoundName[]) {
+export const unlockSounds = async (): Promise<boolean> => {
+    await Promise.all((Object.keys(SOUND_FILES) as SoundName[]).map(async name => {
+        if (unlockedNames.has(name)) return
         const audio = element(name)
-        if (!audio) continue
+        if (!audio) return
         try {
             audio.muted = true
-            const started = audio.play()
-            const settle = () => {
-                audio.pause()
-                audio.currentTime = 0
-                audio.muted = false
-            }
-            if (started && typeof started.then === 'function') {
-                void started.then(settle).catch(() => { audio.muted = false })
-            } else {
-                settle()
-            }
-        } catch { /* an element that will not prime is not worth failing a gesture over */ }
-    }
+            await audio.play()
+            audio.pause()
+            audio.currentTime = 0
+            audio.muted = false
+            unlockedNames.add(name)
+        } catch {
+            // Refused, or an element that throws outright. Unmute it so it is left as it
+            // was found, and leave it out of the set so a later gesture can try again.
+            audio.muted = false
+        }
+    }))
+    return soundsUnlocked()
 }
 
 /** For tests: forget that the pool was primed. */
 export const resetSoundsForTest = () => {
-    unlocked = false
+    unlockedNames.clear()
     pool.clear()
 }
 
