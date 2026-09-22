@@ -28,12 +28,29 @@ const PIP = [0x1a, 0x1a, 0x1a]
 type Rgb = readonly number[]
 
 /**
+ * The fraction of an icon's half-width a maskable mark may occupy (spec row 20h).
+ *
+ * A maskable icon is cropped to whatever shape the launcher uses, and the only region the
+ * manifest specification guarantees survives is a centred circle of radius 40%. The mark
+ * at full size does not fit: its outline spans 0.57 by 0.89 of the icon, so its own corners
+ * sit 0.528 from the centre -- outside the circle, and liable to be clipped by a round
+ * launcher.
+ *
+ * 0.70 puts them at 0.370, inside the safe radius with room to spare, and
+ * `tests/icons.test.ts` measures every painted pixel rather than trusting this arithmetic.
+ */
+export const MASKABLE_SCALE = 0.70
+
+/**
  * One domino, upright, centred, with a pip in the top half.
  *
  * Deliberately blunt shapes: an icon is rendered at 48 CSS px on a home screen, where fine
  * detail becomes mud. The pip is what makes it read as a domino rather than as a door.
+ *
+ * `scale` shrinks the mark without moving it, so a maskable icon is the same drawing with
+ * more ground around it rather than a second picture that can drift from this one.
  */
-const draw = (size: number): Uint8Array => {
+const draw = (size: number, scale = 1): Uint8Array => {
     const pixels = new Uint8Array(size * size * 4)
     const put = (x: number, y: number, [r, g, b]: Rgb) => {
         if (x < 0 || y < 0 || x >= size || y >= size) return
@@ -59,9 +76,9 @@ const draw = (size: number): Uint8Array => {
     rect(0, 0, size, size, BACKGROUND)
 
     // Proportions as fractions of the icon, so every size is the same picture.
-    const edge = size * 0.055
-    const width = size * 0.46
-    const height = size * 0.78
+    const edge = size * 0.055 * scale
+    const width = size * 0.46 * scale
+    const height = size * 0.78 * scale
     const x = (size - width) / 2
     const y = (size - height) / 2
 
@@ -70,7 +87,7 @@ const draw = (size: number): Uint8Array => {
     // The dividing bar: what separates the two halves of a domino.
     rect(x, y + height / 2 - edge / 2, width, edge, OUTLINE)
     // One pip in the top half. The top half is worth 1 in this game, which is the joke.
-    disc(size / 2, y + height / 4, size * 0.075, PIP)
+    disc(size / 2, y + height / 4, size * 0.075 * scale, PIP)
 
     return pixels
 }
@@ -103,9 +120,13 @@ const chunk = (type: string, data: Uint8Array): Buffer => {
     return Buffer.concat([length, body, crc])
 }
 
-/** A PNG of the icon at `size`, as bytes. Deterministic: same size, same file. */
-export const renderIcon = (size: number): Buffer => {
-    const pixels = draw(size)
+/**
+ * A PNG of the icon at `size`, as bytes. Deterministic: same arguments, same file.
+ *
+ * `maskable` draws the same mark smaller, so all of it survives a launcher's crop.
+ */
+export const renderIcon = (size: number, { maskable = false } = {}): Buffer => {
+    const pixels = draw(size, maskable ? MASKABLE_SCALE : 1)
 
     // Every scanline is prefixed with filter type 0 ("none"). Filtering would compress
     // better; four flat rectangles compress well enough that it is not worth the code.
@@ -134,8 +155,19 @@ export const renderIcon = (size: number): Buffer => {
 }
 
 /** Where each size is written, and what needs it. */
-export const ICONS: ReadonlyArray<{ path: string, size: number, why: string }> = [
+export const ICONS: ReadonlyArray<
+    { path: string, size: number, why: string, maskable?: boolean }
+> = [
     { path: 'public/icon-192.png', size: 192, why: 'the manifest; the minimum Chrome installs from' },
     { path: 'public/icon-512.png', size: 512, why: 'the manifest; splash screens and store listings' },
+    {
+        path: 'public/icon-512-maskable.png',
+        size: 512,
+        maskable: true,
+        // A separate file, because it is a different drawing. Row 20b declared the icon
+        // above as `maskable` as well, which was wrong: an Android launcher crops to its
+        // own shape, and this mark's corners lie outside the guaranteed safe circle.
+        why: 'the manifest; Android crops it to the launcher shape',
+    },
     { path: 'app/apple-icon.png', size: 180, why: 'iOS home screen; Safari ignores the manifest here' },
 ]

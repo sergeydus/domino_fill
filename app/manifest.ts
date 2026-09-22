@@ -51,10 +51,23 @@ const manifest = (): MetadataRoute.Manifest => ({
     icons: [
         { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
         { src: ICON_512, sizes: '512x512', type: 'image/png', purpose: 'any' },
-        // `maskable` is a separate declaration, not a flag on the ones above: Android
-        // crops a maskable icon to whatever shape the launcher uses, and this drawing has
-        // enough margin around the domino to survive that.
-        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        /*
+         * A separate *file*, not just a separate declaration (spec row 20h).
+         *
+         * Row 20b pointed this at the icon above and said it had "enough margin around the
+         * domino to survive" a crop. Measured, it does not: an Android launcher crops a
+         * maskable icon to its own shape, the manifest specification guarantees only a
+         * centred circle of radius 40%, and that drawing's corners sit at 0.528 of the
+         * icon from its centre -- so a round launcher would clip the domino's edges. The
+         * maskable file draws the same mark at 70%, which `tests/icons.test.ts` checks
+         * pixel by pixel rather than by arithmetic.
+         */
+        {
+            src: '/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+        },
     ],
 })
 

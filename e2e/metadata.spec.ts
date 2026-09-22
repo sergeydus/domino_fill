@@ -75,9 +75,19 @@ test('the manifest is served, and names icons that exist', async ({ page, reques
         expect(response.headers()['content-type']).toContain('image/png')
     }
 
-    // Android crops a maskable icon to the launcher's shape; without one declared it gets
-    // a white box with the icon shrunk inside it.
-    expect((parsed.icons as { purpose?: string }[]).some(i => i.purpose === 'maskable')).toBe(true)
+    /*
+     * Android crops a maskable icon to the launcher's shape; without one declared it gets
+     * a white box with the icon shrunk inside it. It has to be its *own* file: row 20b
+     * declared the full-bleed icon maskable, whose mark reaches 0.527 of the icon from the
+     * centre against a guaranteed safe radius of 0.4, so a round launcher clipped it.
+     * `tests/icons.test.ts` measures the pixels; this checks the served manifest names two
+     * different files and that both of them exist.
+     */
+    const icons = parsed.icons as { src: string, purpose?: string }[]
+    const maskable = icons.find(i => i.purpose === 'maskable')
+    expect(maskable, 'no maskable icon is declared').toBeTruthy()
+    expect(icons.filter(i => i.purpose === 'any').map(i => i.src))
+        .not.toContain(maskable!.src)
 })
 
 test('the installed app is not locked to one orientation', async ({ page, request }) => {

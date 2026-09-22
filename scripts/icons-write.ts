@@ -9,8 +9,8 @@ import { runCli } from './args'
  * writes to the repository as a side effect of being loaded.
  */
 runCli(async () => {
-    for (const { path, size, why } of ICONS) {
-        writeFileSync(path, renderIcon(size))
-        console.log(`${path}  ${size}x${size}  -- ${why}`)
+    for (const { path, size, why, maskable } of ICONS) {
+        writeFileSync(path, renderIcon(size, { maskable }))
+        console.log(`${path}  ${size}x${size}${maskable ? '  maskable' : ''}  -- ${why}`)
     }
 })

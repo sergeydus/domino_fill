@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
-import { ICONS, renderIcon } from '@/scripts/icon'
+import { ICONS, MASKABLE_SCALE, renderIcon } from '@/scripts/icon'
+import manifest from '@/app/manifest'
 
 /**
  * The icons are a pure function of their generator (spec P2-2, row 20b).
@@ -13,11 +14,71 @@ import { ICONS, renderIcon } from '@/scripts/icon'
  */
 
 describe('every committed icon matches what the generator produces', () => {
-    for (const { path, size } of ICONS) {
-        it(`${path} is the drawing at ${size}px`, () => {
-            expect(readFileSync(path).equals(renderIcon(size))).toBe(true)
+    for (const { path, size, maskable } of ICONS) {
+        it(`${path} is the drawing at ${size}px${maskable ? ', masked' : ''}`, () => {
+            expect(readFileSync(path).equals(renderIcon(size, { maskable }))).toBe(true)
         })
     }
+})
+
+describe('the maskable icon survives a launcher crop', () => {
+    /*
+     * Row 20b declared the ordinary 512 icon as `maskable` too, with a comment claiming it
+     * had "enough margin around the domino to survive" the crop. It did not, and nothing
+     * here measured it -- which is the whole reason this row exists.
+     *
+     * An Android launcher crops a maskable icon to its own shape; the manifest
+     * specification guarantees only a centred circle of radius 40% of the icon. So the
+     * test is not "is there a separate file" but "does every painted pixel fall inside
+     * that circle", measured on the bytes the manifest actually points at.
+     */
+    const SAFE_RADIUS = 0.4
+
+    /** How far the furthest non-background pixel sits from the centre, as a fraction. */
+    const markReach = (size: number, options: { maskable?: boolean }): number => {
+        const raw = scanlines(renderIcon(size, options), size)
+        const centre = (size - 1) / 2
+        let furthest = 0
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                const at = y * (size * 4 + 1) + 1 + x * 4
+                const isBackground = raw[at] === 0xe8 && raw[at + 1] === 0xe7 && raw[at + 2] === 0xe7
+                if (isBackground) continue
+                const distance = Math.hypot(x - centre, y - centre) / size
+                if (distance > furthest) furthest = distance
+            }
+        }
+        return furthest
+    }
+
+    it('keeps the whole mark inside the guaranteed safe circle', () => {
+        expect(markReach(512, { maskable: true })).toBeLessThan(SAFE_RADIUS)
+    })
+
+    it('and the manifest points at that file, not the full-bleed one', () => {
+        // The pairing is the thing that broke: the right declaration on the wrong bytes.
+        const declared = ICONS.find(icon => icon.maskable)
+        expect(declared?.path).toBe('public/icon-512-maskable.png')
+        expect(manifest().icons?.find(icon => icon.purpose === 'maskable')?.src)
+            .toBe('/icon-512-maskable.png')
+    })
+
+    it('which the ordinary icon does not, or there would be no second file', () => {
+        /*
+         * The check above proves nothing on its own unless this fails -- a mark small
+         * enough for a crop would make both files identical and the whole row pointless.
+         * The ordinary icon fills its frame on purpose: it is shown uncropped, where
+         * margin is wasted space.
+         */
+        expect(markReach(512, {})).toBeGreaterThan(SAFE_RADIUS)
+    })
+
+    it('is the same drawing, only smaller', () => {
+        // Not a second picture that can drift: the mark is scaled, the ground is not, so
+        // the reach shrinks by exactly the scale factor.
+        const ratio = markReach(512, { maskable: true }) / markReach(512, {})
+        expect(ratio).toBeCloseTo(MASKABLE_SCALE, 2)
+    })
 })
 
 describe('and they are PNGs a browser will accept', () => {
@@ -73,8 +134,13 @@ describe('and they are PNGs a browser will accept', () => {
     })
 })
 
-/** Decode one pixel out of a PNG this module wrote, to compare drawings across sizes. */
-const sample = (png: Buffer, size: number, x: number, y: number): string => {
+/**
+ * The decoded scanlines of a PNG this module wrote: filter byte, then RGBA per pixel.
+ *
+ * Only correct for these files, which is the point of keeping it here -- it assumes filter
+ * type 0 on every row, which is what the encoder writes and nothing else needs to be true.
+ */
+const scanlines = (png: Buffer, size: number): Buffer => {
     const chunks: Buffer[] = []
     let at = 8
     while (at < png.length) {
@@ -84,7 +150,15 @@ const sample = (png: Buffer, size: number, x: number, y: number): string => {
         at += length + 12
     }
     const raw = inflateSync(Buffer.concat(chunks))
-    const stride = size * 4 + 1
-    const offset = y * stride + 1 + x * 4
+    for (let y = 0; y < size; y++) {
+        expect(raw[y * (size * 4 + 1)], `row ${y} is filtered`).toBe(0)
+    }
+    return raw
+}
+
+/** Decode one pixel out of a PNG this module wrote, to compare drawings across sizes. */
+const sample = (png: Buffer, size: number, x: number, y: number): string => {
+    const raw = scanlines(png, size)
+    const offset = y * (size * 4 + 1) + 1 + x * 4
     return [...raw.subarray(offset, offset + 3)].join(',')
 }
