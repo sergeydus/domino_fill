@@ -269,6 +269,12 @@ Because it is the real route in the real build, it carries the real Tailwind out
 real client components, and real hydration — the three things a hand-assembled sheet would
 quietly fake.
 
+**A caution carried from review.** Custom `pageExtensions` has had App Router edge cases in
+Next's own history, so row 3 exercises **both** build modes against the installed version
+rather than trusting the configuration, and mutation-tests removing the conditional
+extension. If Next behaves differently than expected, the production-bundle absence contract
+above is what holds and the mechanism is what changes — not the other way round.
+
 **Rejected alternative:** Playwright component testing
 (`@playwright/experimental-ct-react`). It would need a second bundler and its own Tailwind
 pipeline, so the styling it proves is not the styling that ships — which is the whole
