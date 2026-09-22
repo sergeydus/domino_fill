@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import dominoBoards from '@/app/mocks/dominoBoards.json'
+import dominoBoards from '@/tests/fixtures/dominoBoards.json'
 import { definitionFrom, type StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import { solve, DEFAULT_NODE_BUDGET } from '@/app/stores/solver'
 import {
@@ -23,7 +23,7 @@ import {
  * Deliberately the *production* solver, and deliberately every puzzle rather than a sample.
  *
  * **These eighteen are no longer what ships.** Since row 18d the game serves the corpus in
- * `public/puzzles`, which the block below sweeps in full; `app/mocks/dominoBoards.json` is
+ * `public/puzzles`, which the block below sweeps in full; `tests/fixtures/dominoBoards.json` is
  * now the fixture the store and session tests are written against, and keeping it under the
  * solver is worth the second it costs -- a fixture that the rules could not produce makes
  * every test built on it meaningless.

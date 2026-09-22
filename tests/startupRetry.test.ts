@@ -38,7 +38,7 @@ describe('which requests can stop the page booting', () => {
         expect(isCriticalRequest({ url: document_, resourceType: 'document' })).toBe(true)
         expect(isCriticalRequest({ url: chunk, resourceType: 'script' })).toBe(true)
         expect(isCriticalRequest({
-            url: 'http://127.0.0.1:3100/dominoFill', resourceType: 'document',
+            url: 'http://127.0.0.1:3100/', resourceType: 'document',
         })).toBe(true)
     })
 

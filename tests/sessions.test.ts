@@ -5,7 +5,7 @@ import { definitionFrom, cloneInitialBoard } from '@/app/stores/PuzzleDefinition
 import { PuzzleSession } from '@/app/stores/PuzzleSession'
 import type { DayEntry } from '@/app/stores/corpus'
 import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
-import sourceData from '@/app/mocks/dominoBoards.json'
+import sourceData from '@/tests/fixtures/dominoBoards.json'
 
 /**
  * P0-5: immutable puzzle definitions, mutable per-puzzle sessions.

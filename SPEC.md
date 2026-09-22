@@ -1555,6 +1555,29 @@ jsdom has no layout, so
 blocks that outnumber live code in `BoardsStore.ts` and `BoardSquare.tsx`. Fix `Boards.ts`'s
 `"use server"` export (D10-d) and SSR the board as a prop (D10-c).
 
+> **Done in row 20a.** Deleted: `app/constants.ts` (an enum nothing imported),
+> `app/dominoFill/SkibidiBoard.ts` (183 lines, referenced only by itself),
+> `app/dominoFill/page.tsx` (a second route rendering the same component as `/`, so the
+> build shipped two copies of the game), `app/faviconOld.ico`, and the five `create-next-app`
+> SVGs in `public/`. Verified unreferenced before removal rather than after, and the build
+> now reports exactly two routes, `/` and `/_not-found`.
+>
+> The remaining commented-out markup went with them: a dead preview `<div>` pair in
+> `Hover.tsx`, an `AnimatePresence` wrapper commented out around the pieces, a superseded
+> `<rect>` in `Rock.tsx`, and the `console.log('wrapper rerender')` lines. Explanatory
+> comments are not what this item is about and none were touched.
+>
+> `app/mocks/dominoBoards.json` moved to `tests/fixtures/`. Row 18d made it a test fixture
+> and left it under `app/`, where it read as application data and sat one careless import
+> away from being bundled again.
+>
+> **D10-c and D10-d were closed earlier and are struck here.** `Boards.ts` and its
+> `"use server"` export were deleted in row 18d, and "SSR the board as a prop" is moot for
+> the same reason: the day's puzzles are fetched from a static content-hashed chunk in the
+> client, because the served day depends on the *player's* clock. D10-t (the board load
+> having no `.catch`) was filed against D10-c and is **not** moot -- it is closed in row
+> 18d's `DominoClient`, which catches the first load and shows a real error state.
+
 **P2-2. Metadata/PWA.** Real title/description/OG, `viewport` export with `viewportFit: 'cover'` +
 safe-area insets and `userScalable` left **enabled** (do not "fix" zoom by banning it), manifest,
 apple-touch icons. Note Next 16 already injects a sane default viewport meta, so the 300ms tap

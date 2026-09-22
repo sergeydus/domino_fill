@@ -6,7 +6,6 @@ import Rock from "./Rock"
 import { PuzzleSession } from "@/app/stores/PuzzleSession"
 
 const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
-    // console.log('wrapper rerender')
     const size = boardsStore.squareSize
     const board = boardsStore.board
     const ones: [number, number][] = []
@@ -42,7 +41,6 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
      * top half of an upright domino".
      */
     return <div className="absolute z-20 pointer-events-none" aria-hidden="true">
-        {/* <AnimatePresence> */}
         {ones.map(([i, j]) =>
             <motion.div key={`one_${i},${j}`} className="absolute" data-piece="one" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
@@ -69,7 +67,6 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
                 />
             </div>
         )}
-        {/* </AnimatePresence> */}
     </div>
 }
 export default observer(Hover)
