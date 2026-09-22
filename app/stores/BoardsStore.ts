@@ -125,14 +125,15 @@ export class LevelStore {
 
     constructor(rootStore: RootStore) {
         this.rootStore = rootStore
-        // `win.mp3`, not `winSilent.mp3` (spec P1-4). The silent file shipped alongside a
-        // real one that was never referenced, so winning made no sound at all -- which,
-        // together with the board going inert, is why the game appeared to *freeze* at the
-        // moment it should celebrate.
-        let audio: HTMLAudioElement | null = null
-        if (typeof Audio != 'undefined') {
-            audio = new Audio('win.mp3')
-        }
+        /*
+         * The win sound lives in the audio pool now (spec P2-4, row 20d).
+         *
+         * It used to be an `Audio` constructed right here and first played minutes later,
+         * when a board was finally solved -- which is precisely the shape iOS refuses, as
+         * it unlocks media elements individually and only inside a gesture. `feedback.ts`
+         * primes the whole pool on the first `pointerdown` instead, and owns the file
+         * names, the preloading and the rejected-promise handling for both sounds.
+         */
         // Definitions are frozen value objects: observe the *reference*, never the
         // contents. Deep conversion would replace each frozen definition with an
         // observable copy, silently undoing definitionFrom's immutability guarantee.
@@ -178,11 +179,10 @@ export class LevelStore {
             (session) => {
                 if (!session) return
                 session.setCompleted(true)
-                audio?.play()
                 // Haptics are not decoration: the hardware mute switch silences the whole
                 // audio channel on iOS, so for many players this is the only feel budget
-                // there is (spec P1-5).
-                winFeedback()
+                // there is (spec P1-5). Muting the game takes the sound and leaves them.
+                winFeedback(this.rootStore.sound.muted)
             },
         )
     }

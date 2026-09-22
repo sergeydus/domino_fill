@@ -15,6 +15,7 @@ import { dayKey } from '../stores/progressStorage'
 import Archive from './Archive'
 import DayBanner from './DayBanner'
 import AdviceStrip from './AdviceStrip'
+import { preloadSounds, unlockSounds } from './feedback'
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
@@ -22,7 +23,7 @@ const PAGE_MARGIN_PX = 8
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
   const [failed, setFailed] = useState(false)
-  const { boardsStore, corpus } = useStores()
+  const { boardsStore, corpus, sound } = useStores()
 
   /*
    * The day's puzzles are fetched from the published corpus (spec P1-6, row 18d).
@@ -81,6 +82,23 @@ const DominoClient: React.FC = () => {
    * it here is what made the retry impossible.
    */
   useDayRollover(loadBoards)
+
+  /*
+   * Prime the audio pool inside the player's first gesture (spec P2-4, row 20d).
+   *
+   * iOS unlocks media elements one at a time and only from a real user gesture, so an
+   * element constructed outside one is refused the first time it plays -- even while a
+   * different element plays perfectly. The win sound is the case that suffers: its first
+   * play is minutes after any tap, so without this it is silent on exactly the occasion it
+   * exists for. `pointerdown` rather than `click`, because it is the earliest gesture the
+   * board itself acts on, and `once` because priming twice does nothing.
+   */
+  useEffect(() => {
+    preloadSounds()
+    const prime = () => unlockSounds()
+    document.addEventListener('pointerdown', prime, { once: true })
+    return () => document.removeEventListener('pointerdown', prime)
+  }, [])
 
   // A callback ref in state, not `useRef`: the column is not mounted on the first render
   // (the board is still loading), and a ref would leave the hook with nothing to observe.
@@ -178,6 +196,26 @@ const DominoClient: React.FC = () => {
           onClick={() => boardsStore.setArchiveOpen(true)}
         >
           Archive
+        </button>
+        {/*
+          * Muting is a real requirement, not a nicety: a daily puzzle is played on a train,
+          * in a queue, in a meeting -- and a game that cannot be silenced gets closed
+          * instead (spec P2-4). It shares this row rather than taking one of its own
+          * because every `data-chrome` row comes out of the board's height budget.
+          *
+          * `aria-pressed` says the state, the text says it again for everyone else, and
+          * the label names what the control *is* rather than what pressing it does, which
+          * is what `aria-pressed` is for.
+          */}
+        <button
+          type='button'
+          data-mute
+          aria-pressed={sound.muted}
+          aria-label='Sound'
+          className='control-surface rounded-md border px-3 py-1 text-sm'
+          onClick={() => sound.toggle()}
+        >
+          {sound.muted ? 'Sound off' : 'Sound on'}
         </button>
       </div>
       {/* Mounted only while open: see the note in Archive.tsx. */}

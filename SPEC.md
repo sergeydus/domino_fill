@@ -1659,6 +1659,44 @@ constructed at import and never played inside a gesture, so its first `play()` c
 though `snap.mp3` works. Unlock the pool on first `pointerdown`. This also means P1-4's completion
 overlay must not move the win `play()` behind a `setTimeout`, debounce, or transition.
 
+> **Done in row 20d.** Row 16 had already fixed the first half — one element per sound,
+> `.catch()` on `play()`, and snapping only on *accepted* placements. What was left was
+> every part that fails invisibly.
+>
+> **The paths were relative.** `new Audio('snap.mp3')` resolves against the document's URL,
+> so the sound was only correct at the root and 404'd on any deeper route — and the
+> repository shipped a second route at `/dominoFill` until row 20a, where this was live.
+> A 404 on a media element is silent in every sense: nothing throws, nothing logs, the game
+> simply stops making noise. Absolute now, and the browser test fetches each file and
+> requires a 200 with an `audio` content type.
+>
+> **The win sound was built exactly the way iOS refuses.** It was an `Audio` constructed in
+> `LevelStore`'s constructor and first played minutes later, when a board was finally
+> solved. iOS unlocks media elements *individually* and only from inside a gesture, so it
+> could be rejected while the snap — played straight out of a tap — worked perfectly. It
+> lives in the pool now, and `DominoClient` primes **every** element on the first
+> `pointerdown`, muted and immediately paused, restoring mute and position afterwards. The
+> browser test replaces `Audio` before the page loads and asserts both elements go from 0
+> plays to 1 across a single gesture: priming only the first sound is the failure mode, so
+> "both" is the assertion.
+>
+> **Muting is persisted, and silences sound without silencing haptics.** A daily puzzle is
+> played on a train, in a queue, in a meeting; a game that cannot be silenced gets closed
+> rather than muted, and a setting that resets each morning is one the player has to find
+> each morning. Haptics stay on purpose — iOS's hardware switch already kills the audio
+> channel, which is why P1-5 treats vibration as the real feel budget, and removing it too
+> would leave a muted player with no answer at all to a refused move. The control shares
+> the Archive row, because every `data-chrome` row comes out of the board's height budget.
+>
+> **Four of the twenty-five row-20 mutations survived their first sweep**, and each named a
+> gap rather than noise: a `play()` that *throws* is not the same as one that **rejects**,
+> which is what the autoplay policy actually does and what the missing `.catch` would leak;
+> the first-gesture listener was wired but untested; the win path reached the mute
+> preference by its own route and nothing checked it; and `metadataBase` was invisible while
+> the test server was itself on localhost — the harness now builds with
+> `NEXT_PUBLIC_SITE_URL` set to the test origin so Next's `http://localhost:3000` fallback
+> is distinguishable from the real value.
+
 ---
 
 ## 4. Sequencing

@@ -183,7 +183,22 @@ export const startServer = async () => {
 
     // Build first, synchronously, with output surfaced on failure. `stdio: 'ignore'` here
     // turns a broken build into an unexplained timeout further down.
-    const build = spawnSync(process.execPath, [NEXT_BIN, 'build'], { cwd: ROOT, encoding: 'utf8' })
+    /*
+     * The build is told where the site lives (spec P2-2, row 20b).
+     *
+     * `metadataBase` decides the absolute URLs in the Open Graph tags, and when it is
+     * unset Next falls back to `http://localhost:3000` with only a build *warning* -- so a
+     * real deployment ships a preview image pointing at somebody's laptop. Nothing in a
+     * test can see that while the test server is itself on localhost, which is exactly why
+     * a mutation removing `metadataBase` survived the first version of this suite.
+     * Building against `127.0.0.1:3100` makes the fallback and the real value differ, and
+     * `e2e/metadata.spec.ts` then checks the tag against the origin it was served from.
+     */
+    const build = spawnSync(process.execPath, [NEXT_BIN, 'build'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, NEXT_PUBLIC_SITE_URL: BASE_URL },
+    })
     if (build.status !== 0) {
         throw new Error(
             `next build failed (status ${build.status}).\n` +

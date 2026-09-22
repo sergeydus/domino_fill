@@ -214,7 +214,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         const seen = lastHandled.current
         lastHandled.current = { session: boardsStore, count: tick }
         if (seen.session !== boardsStore || seen.count === tick) return
-        feedbackFor(boardsStore.lastOutcome)
+        feedbackFor(boardsStore.lastOutcome, boardsStore.rootStore.sound.muted)
     }, [tick, boardsStore])
 
     /*

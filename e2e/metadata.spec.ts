@@ -41,6 +41,16 @@ test('a shared link previews as the game', async ({ page }) => {
     const image = await page.locator('meta[property="og:image"]').getAttribute('content')
     expect(image).toMatch(/^https?:\/\//)
     expect(image).toMatch(/icon-512\.png$/)
+
+    /*
+     * And built from the *configured* site URL, not from Next's fallback. With
+     * `metadataBase` unset Next uses `http://localhost:3000` and only warns at build time,
+     * so a deployed page advertises a preview image on somebody's laptop -- valid,
+     * absolute, and wrong. The harness builds with `NEXT_PUBLIC_SITE_URL` set to the test
+     * server's own origin so the two are distinguishable at all; without that, a mutation
+     * deleting `metadataBase` is invisible.
+     */
+    expect(new URL(image!).origin).toBe(new URL(page.url()).origin)
 })
 
 test('the manifest is served, and names icons that exist', async ({ page, request }) => {

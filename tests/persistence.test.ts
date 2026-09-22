@@ -240,8 +240,20 @@ describe('loading never destroys what is saved', () => {
 
         new RootStore()
 
-        expect(getItem).not.toHaveBeenCalled()
-        expect(setItem).not.toHaveBeenCalled()
+        /*
+         * Scoped to the progress keys, which is what this test is about (spec P2-4, row
+         * 20d). It used to assert that construction touched `localStorage` at *all*, and
+         * that became too strong when the root store gained a persisted mute preference:
+         * a one-key read of `dominoFill.muted.v1` is not "destroying what is saved", and
+         * a preference the player set is exactly the sort of thing a store should know at
+         * construction. The claim that matters -- no saved board is read or written before
+         * one has arrived -- is unchanged and now stated precisely.
+         */
+        const progressKeys = (spy: typeof getItem) =>
+            spy.mock.calls.map(([key]) => key).filter(key => String(key).includes('progress'))
+
+        expect(progressKeys(getItem)).toEqual([])
+        expect(progressKeys(setItem)).toEqual([])
         getItem.mockRestore()
         setItem.mockRestore()
     })
