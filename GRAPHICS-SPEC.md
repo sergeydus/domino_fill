@@ -253,13 +253,17 @@ broke.
 **Shape.** A **test-only route** that imports the production components — `BoardSquare`,
 the three piece components, the label and control components — and renders them over
 fixtures: both domino orientations, a rock, an empty cell of each checker tone, the three
-target states, the anchor / candidate / hint / focus states, and one of each control
-variant. The route is compiled out of a normal build:
+target states, the anchor / candidate / hint / focus states, the completion card, and one
+of each control variant.
 
-- It renders only when a build-time flag is set. `e2e/server.ts` already builds with
-  `NEXT_PUBLIC_SITE_URL` set for the metadata tests (row 20f), so a second build-time flag
-  follows an established path.
-- A test asserts a **default** build does not serve it. Players never receive it.
+The route is **excluded from compilation**, not merely from routing. A guard that renders
+`notFound()` behind a runtime flag would still compile the sheet, its fixtures and every
+component they pull in into the production bundle — the code would ship and only the URL
+would be shut. Instead the fixture file carries its own extension (`page.visual.tsx`) and
+`next.config.ts` adds `visual.tsx` to `pageExtensions` **only when the build flag is set**.
+With the flag off the file is not a route, nothing imports it, and it is not compiled at
+all. `e2e/server.ts` already builds with `NEXT_PUBLIC_SITE_URL` set for the metadata tests
+(row 20f), so a build-time flag follows an established path.
 
 Because it is the real route in the real build, it carries the real Tailwind output, the
 real client components, and real hydration — the three things a hand-assembled sheet would
@@ -270,9 +274,18 @@ quietly fake.
 pipeline, so the styling it proves is not the styling that ships — which is the whole
 question a visual baseline exists to answer.
 
-**Acceptance.** The sheet renders with the clock un-pinned and is identical on two different
-dates. Every state named above appears exactly once, asserted by count rather than by eye.
-The production build 404s the route.
+**Acceptance.**
+
+- The sheet renders with the clock un-pinned and is identical on two different dates. Every
+  state named above appears exactly once, asserted by count rather than by eye.
+- **Absence from the production bundle is proven, not inferred from a 404.** A 404 says the
+  router declined to serve it; it says nothing about whether the code was shipped. So,
+  against a build made without the flag:
+  - a sentinel string declared **only** in the fixture module appears **zero** times across
+    the emitted server and client output under `.next`, searched as bytes;
+  - the fixture route is absent from the build's route output — the same listing
+    `npm run build` prints, which row 20a already used to prove a duplicate route was gone;
+  - and it 404s, which is necessary and by itself would prove nothing.
 
 ### P0-4 · Four deterministic baselines
 
@@ -284,6 +297,11 @@ The production build 404s the route.
 | 2 | component/state sheet at **53px** | no |
 | 3 | complete **360px phone** composition | yes — clock pinned |
 | 4 | complete **desktop** composition | yes — clock pinned |
+
+Baselines 3 and 4 are the **ordinary** compositions — a board mid-play, not a board
+mid-celebration. Transient surfaces belong on the sheets, where they can be rendered
+deliberately and one at a time: the completion card is a fixture in P0-3, not a state the
+full-page baseline has to be manoeuvred into.
 
 The full-page pair pins the date with `page.clock.install`, as `e2e/archive.spec.ts` already
 does. The sheets must not.
@@ -309,6 +327,12 @@ to what it changed** — a geometry assertion, a computed-token assertion, an ac
 state, or a motion contract — *as well as* its relevant screenshot. A screenshot is never the
 only thing standing behind a row, and no row is asked for a geometry assertion it has no
 geometry to make.
+
+**The generated icons are exempt from the screenshot half**, and deliberately: they never
+appear on a page. Their visual gate is stronger than a baseline already — rows 20b and 20h
+assert the committed bytes are identical to the generator's output, that the same drawing is
+produced at every size, and that the maskable mark's furthest painted pixel lies inside
+r = 0.4. A page screenshot could not see any of that.
 
 ### P0-5 · The palette, in one place and in every consumer
 
@@ -489,6 +513,9 @@ nothing else.
   - `:focus-visible` on every interactive control, meeting the same non-colour requirement
     as the cell states;
   - an active/pressed treatment on every control;
+  - a **toggle state** — `aria-pressed` reflected visually by a non-colour channel as well
+    as a coloured one, on every control that can be pressed *into* a state rather than
+    merely pressed (the difficulty selector, `Sound`);
   - a disabled treatment that keeps its current contrast (`Undo` is disabled on arrival);
   - **hover only under `@media (hover: hover) and (pointer: fine)`** — a hover style that
     latches on a touch device is a control that looks pressed until you press something
@@ -528,13 +555,24 @@ Same class of control, two designs. The variants, enumerated:
 | Variant | Who | Treatment |
 | --- | --- | --- |
 | primary | `Check` | accent surface, strongest weight |
-| secondary | `Hint`, `Undo`, `Reset` | neutral surface, accent on focus/press |
+| secondary | `Hint`, `Undo` | neutral surface, accent on focus and press |
+| caution | `Reset` | the `problem` token as an edge, not a fill |
 | quiet | `Archive`, `Sound` | bordered, no fill until interacted with |
-| toggle | difficulty, `Sound`'s pressed state | `aria-pressed` reflected by a non-colour channel as well |
 | icon | `LevelSelector`'s arrows | accent stroke, label unchanged |
 
-**Acceptance.** Surface, radius, padding and the four states from P1-6 come from tokens per
-variant; every control belongs to exactly one variant, asserted by computed style; disabled
+**Pressed is a state, not a variant.** The difficulty selector and `Sound` are toggles, but
+so could any control be; `aria-pressed` is something a control *is*, alongside focus,
+hover and disabled, and it belongs in P1-6's state contract where those live. A row of the
+table for it would have made one control's state another control's identity.
+
+**Why `Reset` leaves the secondary group.** It is the only control that destroys work, and
+`SPEC.md` leaves its lack of a confirmation step open. A cautionary treatment makes the
+button look like what it does; it does **not** answer that open question, and this row must
+not be read as having closed it.
+
+**Acceptance.** Surface, radius, padding and the states from P1-6 come from tokens per
+variant; every control belongs to exactly one variant, asserted by computed style; `Reset`
+is visually distinct from `Hint` and `Undo` by a named property, not by fill alone; disabled
 contrast is unchanged from today's measurement.
 
 ### P2-3 · The completion card
@@ -545,17 +583,30 @@ is `body`, and the actions are `secondary` controls beneath both. Motion stays i
 limits.
 
 **Acceptance.** The three levels are distinguishable by size *and* weight, asserted by
-computed style; the card's copy, `role="status"` and focus behaviour are unchanged from row 15; it
-appears on baseline 4.
+computed style; the card's copy, `role="status"` and focus behaviour are unchanged from
+row 15; it appears on **baselines 1 and 2**, as a fixture on the component sheet, because it
+is a transient surface and the desktop baseline is the ordinary composition.
 
-### P2-4 · The rest of the icon palette
+### P2-4 · The icon, brought up to the new art
 
-P1-3 already moved the ground and regenerated the icons with it. This row finishes the job
-— the tile and pip tokens — so `scripts/icon.ts` holds no colour of its own, which is what
-closes the drift recorded in §1.2.
+The colours are already done: P0-5 took every literal out of `scripts/icon.ts`, and P1-3
+moved the ground and regenerated the files with it. What is left is the *drawing*. The icon
+is a domino in the game's own palette, and after rows 7 through 12 the game's domino is a
+different shape — different outline weight, different corner radius, different pip, a
+divider that spans the tile. An icon that keeps the old proportions is the same drift as the
+pip, one step further out: the launcher would show a game that no longer exists.
 
-**Acceptance.** `npm run icons` regenerates; rows 20b/20h's tests pass **unaltered**; no
-colour literal remains in `scripts/icon.ts`.
+**Acceptance.**
+
+- The icon's mark uses the same fractions as the board's piece where they apply — outline
+  weight, corner radius, pip diameter, divider span — so parity is asserted against P1-1's
+  constants rather than judged by eye.
+- `npm run icons` regenerates every file, including the maskable variant.
+- Rows 20b and 20h's tests pass **unaltered**: byte identity with the generator, the PNG
+  header, the same drawing at every size, and the maskable mark's reach inside r = 0.4 —
+  which is the constraint the new proportions have to live within, and the reason this row
+  measures rather than assumes.
+- No page screenshot is owed; see the exemption under P0-4.
 
 ---
 
@@ -570,7 +621,7 @@ written into it, never carried silently.
 | --- | --- | --- |
 | 1 | **P0-1** desktop composition: breakpoint, larger board, the rail of §2.3 | E2E |
 | 2 | **P0-2** geometry assertions for the art as it stands | unit + E2E |
-| 3 | **P0-3** test-only sheet route over the real components; absent from a normal build | unit + E2E |
+| 3 | **P0-3** test-only sheet route over the real components; proven absent from the bundle | unit + E2E |
 | 4 | **P0-4** four baselines; container pinned by digest; diff budget measured | E2E |
 | 5 | **P0-5** palette module; generated CSS tokens; metadata consumer; scoped literal audit | unit |
 | 6 | **P0-6** normalised `viewBox` geometry; baseline 2 fixed, 1/3/4 predicted | unit + E2E |
@@ -583,7 +634,7 @@ written into it, never carried silently.
 | 13 | **P2-1** typography roles | E2E |
 | 14 | **P2-2** one control vocabulary | E2E |
 | 15 | **P2-3** the completion card | E2E |
-| 16 | **P2-4** the rest of the icon palette | unit + E2E |
+| 16 | **P2-4** the icon's drawing brought to parity with the new piece art | unit |
 
 Rows 1–6 are the gate. Row 1 comes first because baselines taken against a composition that
 is about to change are baselines taken twice.
@@ -601,6 +652,12 @@ Recorded so nobody re-opens them by accident, and so the reasoning survives the 
   Check/Hint/Undo/Reset group, and Sound. The legend stays with the board.
 - **The ground becomes a subtly warm off-white in P1-3**, and every contrast guarantee is
   recomputed in that same commit rather than trailing behind it.
+- **Transient surfaces live on the component sheet, not on the page baselines** (P0-4).
+  Baselines 3 and 4 are the ordinary compositions; the completion card is rendered
+  deliberately as a fixture rather than by manoeuvring a full page into celebrating.
+- **The generated icons owe no screenshot** (P0-4, P2-4). They never appear on a page, and
+  rows 20b/20h already hold them to byte identity with their generator and to a measured
+  maskable safe radius — a stricter gate than a baseline, not a weaker one.
 - **Device-pixel alignment is not a row.** An earlier draft made whole-pixel geometry a P0
   requirement on the strength of §1.5's fractional origins. Integer CSS coordinates are not
   synonymous with crisp rendering, no crop here demonstrates blur, and the pinned baselines
