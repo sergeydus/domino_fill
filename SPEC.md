@@ -1622,6 +1622,36 @@ is nothing to retain a player with until the content exists.
 **P2-3. Theming.** Implement a real dark palette or drop the `prefers-color-scheme` block; the
 current half-state is worse than either.
 
+> **Done in row 20c: the block is dropped, and the game is honestly light-only.**
+>
+> "Worse than either" turned out to be measurably harmful rather than merely untidy.
+> Measured in Chrome under `prefers-color-scheme: dark`, every surface stayed light --
+> board cells `rgb(203,203,203)`, controls `rgb(171,171,171)`, targets `rgb(95,95,95)`,
+> identical to light mode, because each is hardcoded -- while `body`'s inherited text
+> colour flipped to `#ededed`. The advice strip, the entire deliverable of P1-5, was then
+> near-white text on the `#e8e7e7` page: **1.05:1**, against 14.53:1 in light. Turning on
+> dark mode did not darken the game; it deleted the sentence telling a stuck player why
+> their board could not be finished.
+>
+> A real dark palette was rejected on the same evidence. Every colour here is measured
+> against this one ground -- the target states at 5.17, 5.77 and 6.76:1 (D10-g), the hint
+> outline, the problem red, the piece and rock fills -- so a second palette means
+> re-measuring every pair to keep row 11's WCAG guarantee. That is a design project, and
+> this is the cleanup row.
+>
+> `--background` is now the board's own `#e8e7e7` rather than `#ffffff`, and `page.tsx`
+> reads it instead of repeating the literal: the two used to disagree, so the variable was
+> decorative and only the hardcoded value was ever seen. `color-scheme: light` is declared,
+> so the browser does not auto-darken scrollbars and controls over a page staying light
+> regardless.
+>
+> `e2e/theme.spec.ts` runs the palette in **both** schemes, which is the only way to see
+> any of this -- every other test runs in one and passes either way. It pins the advice
+> contrast at 4.5:1 or better in both, the ground matching `body` in both, and finally that
+> the two schemes render *identically*. Reverting to the half-state fails six of its seven
+> tests. A future real dark palette would fail the last one, which is the right way for it
+> to arrive: deliberately, with the contrast pairs re-measured.
+
 **P2-4. Audio.** One preloaded element per sound (or swap `src` on one), absolute `/snap.mp3`
 paths, `.catch(() => {})` on every `play()`, a persisted mute toggle, and snap only on *accepted*
 placements. **iOS unlocks audio elements individually, not globally** — `winSilent.mp3` is

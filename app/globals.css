@@ -1,7 +1,20 @@
 @import "tailwindcss";
 
+/*
+ * One light palette, stated once (spec P2-3, row 20c).
+ *
+ * `--background` is the board's own ground rather than white, because that is the colour
+ * the game is actually drawn on: `page.tsx` used to hardcode `bg-[#e8e7e7]` next to a
+ * `--background` of `#ffffff`, so the two disagreed and only the hardcoded one was ever
+ * seen.
+ *
+ * `color-scheme: light` is a declaration, not a preference. It tells the browser this page
+ * is light, so scrollbars, form controls and any UA-supplied surface match the page instead
+ * of being auto-darkened over it.
+ */
 :root {
-  --background: #ffffff;
+  color-scheme: light;
+  --background: #e8e7e7;
   --foreground: #171717;
 
   /*
@@ -26,12 +39,25 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/*
+ * There is no dark block any more, and that is the whole of P2-3.
+ *
+ * The spec offered "implement a real dark palette or drop it; the current half-state is
+ * worse than either", and the half-state was measurably harmful rather than merely untidy.
+ * Measured in Chrome with `prefers-color-scheme: dark`: every surface stayed light --
+ * board cells `rgb(203,203,203)`, controls `rgb(171,171,171)`, targets `rgb(95,95,95)`,
+ * identical to light mode, because all of them are hardcoded -- while `body`'s inherited
+ * text colour flipped to `#ededed`. The advice strip, which is the entire deliverable of
+ * P1-5, was then near-white text on the `#e8e7e7` page: **1.05:1**, against 14.53:1 in
+ * light mode. Turning on dark mode did not darken the game; it deleted the sentence
+ * telling you why your board cannot be finished.
+ *
+ * A real dark palette is not polish. Every colour in this game is measured against this
+ * ground -- the target states at 5.17, 5.77 and 6.76:1 (D10-g), the hint outline, the
+ * problem red, the piece and rock fills -- so a second palette means re-measuring every
+ * pair to keep row 11's guarantee. That is a design project, and P2 is the cleanup row.
+ * Light-only and honest beats two-thirds of a theme.
+ */
 
 /*
  * The board's touch policy (spec P1-1), static and in CSS on purpose.
