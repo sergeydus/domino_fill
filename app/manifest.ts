@@ -30,7 +30,20 @@ const manifest = (): MetadataRoute.Manifest => ({
     description: SHORT_DESCRIPTION,
     start_url: '/',
     display: 'standalone',
-    orientation: 'portrait',
+    /*
+     * No `orientation` member, deliberately (spec row 20g).
+     *
+     * Row 20b locked the installed app to portrait, which nothing in the spec asked for
+     * and which the layout work directly contradicts: `e2e/layout.spec.ts` proves the
+     * board fits at 800x400 landscape, and P0-3's whole budget is about surviving the
+     * space a device actually offers. A lock also takes the choice away from someone
+     * whose phone is mounted, or who holds it landscape because that is what their grip
+     * allows -- WCAG 1.3.4 asks that content not restrict orientation unless the
+     * orientation is essential, and a square grid of dominoes is not.
+     *
+     * Omitted rather than set to `any` because `any` is already the default, and a member
+     * that restates a default is a member someone edits.
+     */
     // The board's own ground, so the splash screen does not flash white before the game
     // appears on top of it.
     background_color: GROUND,

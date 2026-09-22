@@ -80,6 +80,22 @@ test('the manifest is served, and names icons that exist', async ({ page, reques
     expect((parsed.icons as { purpose?: string }[]).some(i => i.purpose === 'maskable')).toBe(true)
 })
 
+test('the installed app is not locked to one orientation', async ({ page, request }) => {
+    /*
+     * Row 20b shipped `orientation: 'portrait'` (removed in row 20g). Nothing in the spec
+     * asked for it, the layout suite proves the board fits at 800x400 landscape, and WCAG
+     * 1.3.4 asks that content not restrict orientation unless the orientation is essential
+     * -- a square grid is not. Installing the app is exactly where a lock bites: a browser
+     * tab rotates with the phone whatever the manifest says, so this would have looked
+     * fine in every test here and only failed for someone who had put it on a home screen.
+     */
+    await page.goto('/')
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href')
+    const parsed = await (await request.get(new URL(href!, page.url()).toString())).json()
+
+    expect(parsed.orientation ?? 'any').toBe('any')
+})
+
 test('the manifest and the page agree about what this is', async ({ page, request }) => {
     /*
      * Served against served, which is the only comparison worth making (spec row 20f).
