@@ -9,8 +9,9 @@
 # hundred and twenty chunks are ten years of runway on the day they are built and none at all
 # ten years later.
 #
-# This repository has no general CI pipeline yet (spec D10-s); adding one is P2 work. This
-# workflow is deliberately narrow.
+# There is a general CI pipeline now (`ci.yml`, spec D10-s, row 20e). This workflow stays
+# separate and deliberately narrow: it is scheduled rather than commit-driven, because what
+# it guards against is the passage of time rather than a change.
 name: corpus horizon
 
 on:
@@ -36,8 +37,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Verify before asking about the horizon. The guard now validates structure itself, but
-      # this repository has no general CI (spec D10-s), so a corpus change would otherwise
+      # Verify before asking about the horizon. The guard validates structure itself, but
+      # nothing else here solves the puzzles, so a corpus change would otherwise
       # reach the branch with nothing having solved a single one of its puzzles.
       - name: Does the corpus hold together?
         run: npm run corpus:verify

@@ -1,0 +1,78 @@
+# The gate, run for everyone (spec D10-s, row 20e).
+#
+# Every row of this spec has been gated the same way by hand -- typecheck, lint, unit tests,
+# build, browser tests -- and until now that discipline lived entirely in whoever was doing
+# the work. A gate nobody can run but the author is a convention, not a guarantee: the first
+# contributor, or the first tired afternoon, is the end of it.
+#
+# The steps are deliberately the same commands in the same order, rather than a tidier CI-only
+# arrangement, so a failure here is reproducible locally by reading the log and typing what it
+# says.
+name: ci
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run's answer obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    # The browser suite is the long pole; the whole gate takes a couple of minutes locally.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      # `npm test` is Vitest in run mode. Unit stderr is expected to be empty -- a noisy
+      # suite has hidden real failures in this repository before -- so it is captured and
+      # checked rather than merged into the log.
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          npm test 2> >(tee /tmp/unit-stderr.txt >&2)
+          if [ -s /tmp/unit-stderr.txt ]; then
+            echo "::error::the unit suite wrote to stderr:"
+            cat /tmp/unit-stderr.txt
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      # Chromium only, matching `playwright.config.ts`: every project there is Chromium with
+      # a different viewport or device descriptor.
+      - name: Install Playwright's browser
+        run: npx playwright install --with-deps chromium
+
+      # The harness builds and starts its own production server (e2e/server.ts), so this
+      # does not reuse the build above -- deliberately, since that is what runs locally.
+      - name: Browser tests
+        run: npm run test:e2e
+
+      - name: Keep the report from a failed run
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

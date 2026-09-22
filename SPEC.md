@@ -1223,9 +1223,11 @@ chunk's hash, but nothing tied the manifest's summary to the chunks, so editing 
 guard that can be silenced by editing the thing it guards is not a guard. An unparseable
 `--today` is rejected rather than subtracted into `NaN months left` with a zero exit.
 
-The workflow runs `corpus:verify` before the guard, since this repository still has no
-general CI pipeline (D10-s — that remains P2) and a corpus change would otherwise reach the
-branch with nothing having solved any of its puzzles.
+The workflow runs `corpus:verify` before the guard, because nothing else in it solves the
+puzzles and a corpus change would otherwise reach the branch with nothing having checked
+any of them. (When this was written there was no general CI at all; **row 20e added one**,
+and this workflow stays separate because what it guards against is the passage of time
+rather than a change.)
 
 **P1-7. Persist progress.** `{board, completed, elapsedMs}` under a versioned namespace, keyed by
 the **`puzzleId`** from P0-5 — one identity across cache, persistence and archive — with the
@@ -1730,7 +1732,45 @@ whole of P0 into one oversized set.)
 | 18d | **P1-6** runtime loader + archive: load one chunk, explicit date index instead of modulo rotation, **and P1-7's rollover obligation** — an unfinished board stays reachable and is never silently swapped | unit + E2E |
 | 18e | **P1-5's check/hint** — **✅ done**; built only on the production solver, honest about unsolvable versus budget-exhausted, mutating nothing and bypassing neither undo nor persistence | unit + E2E |
 | 19 | **P1-8** accessibility — **✅ done**: the grid's cells reach assistive technology at all, one tab stop with focus that follows the arrow keys, the level arrows reachable and named, difficulty state carried in more than colour, three dropped `aria-label`s exposed, and `prefers-reduced-motion` honoured | unit + E2E |
-| 20 | **P2** polish: dead code, metadata/PWA, theming, audio | — |
+| 20 | **P2** polish — **✅ done**, one commit per item: **20a** dead code and the duplicate route; **20b** real metadata, a manifest, and generated icons; **20c** the half-theme dropped after measuring what it cost; **20d** audio that resolves, unlocks on the first gesture, and can be muted; **20e** the gate itself, as CI (D10-s) | unit + E2E |
+
+### Where this leaves the spec
+
+Every row is done. What follows is what is deliberately **not**, recorded here rather than
+left for someone to rediscover — an unwritten exclusion is indistinguishable from an
+oversight.
+
+**Cut, with a reason.**
+
+- **`elapsedMs`** (P1-7). Cut from row 17 because there was no clock to save: nothing in the
+  game measures elapsed time, so persisting the field would have stored a zero under a name
+  that promised otherwise. Adding a timer is a product decision — a daily puzzle that times
+  you is a different game from one that does not — and it was never in scope.
+- **A real dark palette** (P2-3, row 20c). Rejected on measurement, not on effort: every
+  colour here is proven against one ground, so a second palette means re-measuring every
+  contrast pair. `e2e/theme.spec.ts` asserts the two schemes render identically, so that
+  work would arrive deliberately rather than by a stylesheet block nobody checked.
+- **Real `<button>`s for `DominoPieces`** (P1-8, row 19). The clause predates P1-1 making
+  the tray a legend; a button that selects nothing is worse than none. The defect underneath
+  — an `aria-label` on a role-less `div`, dropped by the accessibility tree — was real and
+  is fixed.
+- **SSR the board as a prop** (D10-c, P2-1). Moot since row 18d: the served day depends on
+  the *player's* clock, so the content is fetched client-side from a static hashed chunk.
+  D10-t, filed against it, is closed — the first load has a `.catch` and a real error state.
+
+**Open, and known.**
+
+- **iOS Safari is unverified.** `touch-action: pinch-zoom` and `-webkit-touch-callout: none`
+  (P1-1), and the audio unlocking of row 20d, are written to WebKit's documented behaviour
+  and tested in Chromium, which is the only engine this harness drives. They need a real
+  device. Nothing here should be read as a claim that they were observed working.
+- **Reset has no confirmation.** It discards a board in one press. The argument for leaving
+  it is that Undo is unlimited within a session, so the destructive case is narrow; the
+  argument against is that it is the one control that cannot be taken back after a reload.
+  It was raised against P1-3 and never resolved, and it is a product decision rather than a
+  defect.
+- **The corpus runs out in 2035.** By construction (P1-6). `corpus-horizon.yml` warns twelve
+  months ahead, monthly, measuring from the last indexed date rather than from a file count.
 
 Rows 1–2 are the gate: nothing else starts until the build is green and the unit harness exists.
 **Row 9 is placed before row 10 deliberately** — rows 10 and 11 are the first changes whose
