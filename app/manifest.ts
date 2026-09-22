@@ -1,4 +1,5 @@
 import type { MetadataRoute } from 'next'
+import { GROUND, ICON_512, NAME, SHORT_DESCRIPTION } from './siteMetadata'
 
 /**
  * The web app manifest (spec P2-2, row 20b).
@@ -9,8 +10,13 @@ import type { MetadataRoute } from 'next'
  * not a true statement. A ten-year corpus makes the promise real, and only then is asking
  * someone to put the game on their home screen worth anything.
  *
- * A route rather than a static `manifest.json` so the icon paths and the name cannot drift
- * from the app's own metadata without TypeScript noticing.
+ * A route rather than a static `manifest.json` so the values are computed from the same
+ * module the page's metadata is (`siteMetadata.ts`) rather than typed out twice. Row 20b
+ * claimed the route itself prevented drift "without TypeScript noticing", which was not
+ * true -- these were duplicated string literals, and TypeScript has no opinion about
+ * whether two literals are equal. Sharing the constants is what prevents it, and
+ * `e2e/metadata.spec.ts` checks the served manifest against the served page in case someone
+ * unshares them again.
  *
  * `display: 'standalone'` rather than `fullscreen`: the board is budgeted against the
  * space its chrome leaves (P0-3) and the browser's own UI is part of that budget, but the
@@ -19,20 +25,19 @@ import type { MetadataRoute } from 'next'
  * playing a *daily* puzzle.
  */
 const manifest = (): MetadataRoute.Manifest => ({
-    name: 'Domino Fill',
-    short_name: 'Domino Fill',
-    description:
-        'A daily domino logic puzzle. Fill the board so every row and column adds up.',
+    name: NAME,
+    short_name: NAME,
+    description: SHORT_DESCRIPTION,
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait',
     // The board's own ground, so the splash screen does not flash white before the game
     // appears on top of it.
-    background_color: '#e8e7e7',
-    theme_color: '#e8e7e7',
+    background_color: GROUND,
+    theme_color: GROUND,
     icons: [
         { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: ICON_512, sizes: '512x512', type: 'image/png', purpose: 'any' },
         // `maskable` is a separate declaration, not a flag on the ones above: Android
         // crops a maskable icon to whatever shape the launcher uses, and this drawing has
         // enough margin around the domino to survive that.

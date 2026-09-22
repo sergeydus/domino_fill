@@ -80,6 +80,32 @@ test('the manifest is served, and names icons that exist', async ({ page, reques
     expect((parsed.icons as { purpose?: string }[]).some(i => i.purpose === 'maskable')).toBe(true)
 })
 
+test('the manifest and the page agree about what this is', async ({ page, request }) => {
+    /*
+     * Served against served, which is the only comparison worth making (spec row 20f).
+     *
+     * Row 20b claimed a manifest *route* kept these from drifting from the page's metadata
+     * "without TypeScript noticing". It did not -- they were duplicated string literals in
+     * two files, and identical literals are not a type error. They read from
+     * `app/siteMetadata.ts` now, and this checks the two documents a browser actually
+     * receives, so unsharing them again fails here rather than shipping an install dialog
+     * that disagrees with the page it installs.
+     */
+    await page.goto('/')
+    const href = await page.locator('link[rel="manifest"]').getAttribute('href')
+    const parsed = await (await request.get(new URL(href!, page.url()).toString())).json()
+
+    const meta = (selector: string) => page.locator(selector).getAttribute('content')
+    expect(parsed.name).toBe(await meta('meta[property="og:site_name"]'))
+    expect(parsed.description).toBe(await meta('meta[property="og:description"]'))
+
+    // The splash screen and the browser chrome are the same colour as the board's ground,
+    // or the installed app flashes a white band before the game appears on it.
+    const themeColor = await meta('meta[name="theme-color"]')
+    expect(parsed.theme_color).toBe(themeColor)
+    expect(parsed.background_color).toBe(themeColor)
+})
+
 test('iOS gets an icon it will actually use', async ({ page, request }) => {
     // Safari ignores the manifest for home-screen icons and reads this link instead.
     await page.goto('/')
