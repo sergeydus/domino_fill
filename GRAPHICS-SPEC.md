@@ -39,6 +39,30 @@ same drawing is a different picture at each end.
 Measured cells, by difficulty: 6×6 → 53 / 7×7 → 46 / 8×8 → 41 at 1280×800; all three land
 on the 38px floor at 360×640.
 
+> **Amendment (row 2) — the range is 38–106px now, not 38–53.** The table above was
+> measured before P0-1 existed. Row 1 gave the desktop a board of its own, and re-measured
+> against that build the cells are 6×6 → 85 / 7×7 → 74 / 8×8 → 66 at 1280×800, and
+> 106 / 92 / 81 at 2560×1440, where the 720px cap holds them. The phone is unchanged: all
+> three still land on 38 at 360×640.
+>
+> The constants did not move, so every swing in the table got wider:
+>
+> | Drawing constant | at **38px** | at **106px** | swing |
+> | --- | --- | --- | --- |
+> | outline stroke (6px) | 0.158 | 0.057 | 2.79× |
+> | corner radius (8px) | 0.211 | 0.075 | 2.79× |
+> | pip diameter (16px) | 0.421 | 0.151 | 2.79× |
+> | divider span (`size − 32`) | 0.158 | 0.698 | **4.42×** |
+> | extrusion depth (16px) | 0.421 | 0.151 | 2.79× |
+> | entry animation offset (26px) | 0.684 | 0.245 | 2.79× |
+>
+> This is the direct cost of P0-1, recorded rather than smoothed over: making the board
+> bigger on the desktop made an absolute-pixel drawing *less* consistent, because the same
+> 6px outline now has to read on a cell nearly three times the phone's. It is the argument
+> for P0-6 made stronger, not a new problem — but it means "the widest shipped
+> configuration" in this section is 106px from here on, and the original table stays as
+> what the suite reproduces at the two sizes it was measured at.
+
 Read the table the way a player meets it. **The phone gets the worst of it in every row**:
 the outline is 40% heavier, the pip swells to 42% of the cell, and the divider — the line
 that says "this is a domino and not a tile" — collapses to 16% of the width, a stub. The
@@ -243,6 +267,23 @@ has something to move deliberately.
 **Acceptance.** Each of the six constants in §1.1 is asserted at two cell sizes, so the
 table above is reproduced by the suite rather than by this document.
 
+> **Amendment (row 2) — which two sizes, and where each is proven.** "Two cell sizes"
+> became two different pairs once row 1 moved the top of the range, and the row asserts
+> both rather than choosing:
+>
+> - **38 and 53, in a unit test** (`tests/pieceGeometry.test.tsx`), which reproduces §1.1's
+>   table exactly — pixel value and fraction, every instance on every piece. It renders the
+>   real piece layer to a string, because the entry offset is `motion`'s initial state and
+>   exists only in a render whose effects have not run.
+> - **38 and 106, in the real build** (`e2e/art.spec.ts`), the actual ends of today's range:
+>   the cell is measured where the layout decides it, then the art is read off the board
+>   with the same reader the unit test uses (`e2e/artGeometry.ts`). The entry offset is
+>   caught by a `MutationObserver` at insertion, before any frame can move it. Fixture-
+>   derived — the dominoes go wherever today's board has room — so it runs every day.
+>
+> The unit test also pins the widened swings of the §1.1 amendment at 38 and 106, as the
+> size of the problem the art rows inherit.
+
 ### P0-3 · A component sheet built from the real components
 
 **Problem.** The day's puzzle comes from the player's local date, so any sheet taken from a
@@ -399,8 +440,10 @@ be a contradiction, not a standard.
 - **Baselines 1, 3 and 4 change**, and each change is *predicted before it is taken*: the new
   value of every constant equals the old one times the cell ratio, within rounding, and the
   geometry assertions from P0-2 are rewritten to assert the ratio rather than the pixel.
-- A unit test renders each piece at 38, 53 and 75 and asserts every geometric attribute
-  scales linearly within rounding.
+- A unit test renders each piece at 38, 53, 75 and **106** and asserts every geometric
+  attribute scales linearly within rounding. *(106 amended in row 2: it is the widest
+  shipped cell since P0-1, and a scaling test that stops at 75 would leave nearly half of
+  the real range unproven.)*
 - The geometry-literal rule, stated narrowly enough to enforce: *no literal denominated in
   CSS pixels may appear in the drawing.* Literals inside the normalised `viewBox` are the
   design and are expected — the rule is about units, not about numbers.
