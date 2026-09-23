@@ -337,6 +337,80 @@ question a visual baseline exists to answer.
     `npm run build` prints, which row 20a already used to prove a duplicate route was gone;
   - and it 404s, which is necessary and by itself would prove nothing.
 
+> **Amendment (row 3) — the mechanism as built, and what building it measured.**
+>
+> **One flag, three effects.** `DOMINO_VISUAL_SHEET=1` adds `visual.tsx` to
+> `pageExtensions`, moves the build to `.next-visual`, and gives that build its own
+> `tsconfig.visual.json`. Without the flag the config spreads nothing: a unit test holds the
+> production config to its one pre-existing key. The browser suite builds both and serves
+> both — production on 3100 exactly as before, the sheet on 3101 — so no existing spec moved
+> off the build that ships, and `/visual` is `/visual?cell=38` or `?cell=53` on the second.
+>
+> - **The separate distDir** is what lets both builds coexist. The E2E setup empties it
+>   before building: measured, with the distDir removed the sheet build overwrote
+>   production, and while the absence checks caught that, every positive control passed
+>   against a `.next-visual` left from an earlier run.
+> - **The separate tsconfig** answers two measurements that pull opposite ways. Next rewrites
+>   the tsconfig it builds with to include any unfamiliar `distDir`'s types, reformatting the
+>   whole file — so they must be declared up front. Declared in `tsconfig.json`, a stale
+>   sheet build (a route renamed since) failed `tsc --noEmit` *and* the production build.
+>   Only the build that generates those types now reads them.
+>
+> **Both build modes, against the installed Next 16.0.10.** Flag on and flag off are
+> exercised by every browser run. The builder was probed by hand as well, because Turbopack is
+> this version's default and custom `pageExtensions` edge cases are historically webpack's:
+>
+> | | route listed | files containing the sentinel |
+> | --- | --- | --- |
+> | Turbopack, flag on | `/visual` | 6 |
+> | Turbopack, flag off | — | 0 |
+> | webpack, flag on | `/visual` | 6 |
+> | webpack, flag off | — | 0 |
+> | Turbopack, extension unconditional (the mutation) | `/visual` | 6 |
+>
+> The gate runs Turbopack only, which is what `npm run build` ships.
+>
+> **Positive controls.** Each absence check is first made of the sheet build, where the
+> sentinel *must* be: the sentinel is rendered, not merely declared, so a build that compiled
+> the module keeps it; and the test reads it from its one declaration rather than restating
+> it, with a check that no other file in the repository contains it.
+>
+> **"Exactly once", made precise.** A 2×2 board is the smallest that can show each state, and
+> every board also shows both cell tones and some neutral labels, so the count is taken two
+> ways. Interaction states, the two non-neutral target states, the completion card and every
+> control appear **exactly once on the whole sheet** — anywhere else is a leak. Pieces, cell
+> tones and the neutral target are counted **within the specimen that exists to show them**,
+> because they are necessarily context elsewhere (a satisfied line needs something on it).
+> Candidates count two: a tap anchors only where there are two ways to finish.
+>
+> **Two components extracted, one constant moved.** `Archive` and `Sound` were inline JSX in
+> `DominoClient`; the sheet cannot import JSX, and copying it is what the row forbids. They
+> are `PageButtons.tsx` now, with unchanged markup. `MIN_CELL_PX` moved to `cellFloor.ts`:
+> `PuzzleSession.ts` is `"use client"`, and a server component importing a value from a
+> client module receives a client reference — measured, `?cell=37` passed the floor check
+> and was served.
+>
+> **"Identical on two dates" is judged on markup and layout, not pixels** — for a measured
+> reason P0-4 inherits. On this development host, two at-rest screenshots of the sheet *on
+> the same date* differed in 4 of 10 pairs: at most 4 pixels, at most 13 levels of one
+> channel, at the edge of an animated piece, with or without `reducedMotion: 'reduce'`. A
+> pixel comparison fails as often with the dates equal as with them apart, so it cannot
+> answer the date question. What a date could change — text, attributes, inline style,
+> layout — is compared instead, at rest, which is itself a state waited for (every inline
+> opacity 1, every inline transform `none`), not a pause.
+>
+> **The clock is shifted, not pinned.** With `page.clock.setFixedTime`, the completion
+> card's fade-in never finished in 7 of 360 loads (stuck at `opacity: 0`); with the clock
+> untouched, 0 of 360. `performance.now()`, the document timeline and `requestAnimationFrame`
+> all kept advancing under the pinned clock, so the mechanism is not established. The date
+> test moves only the calendar, with a `Date` shim that keeps time flowing.
+>
+> **For P0-4, therefore:** the diff budget has two sources to measure rather than one — the
+> Linux-vs-Windows difference the section below anticipates, *and* same-machine
+> nondeterminism at rest, measured here on Windows only. And `page.clock.install`, which
+> P0-4 plans for the full-page pair, is not the method measured here; it should be measured
+> for the stuck-card failure before a baseline depends on it.
+
 ### P0-4 · Four deterministic baselines
 
 **Shape.** Exactly four. This is settled, not a starting point:

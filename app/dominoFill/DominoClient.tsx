@@ -18,6 +18,7 @@ import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { FocusAcrossComposition } from './FocusAcrossComposition'
+import { ArchiveButton, SoundButton } from './PageButtons'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
 } from './composition'
@@ -245,33 +246,8 @@ const DominoClient: React.FC = () => {
   const navigation = (
     <div data-chrome className={wide ? 'flex flex-wrap items-center gap-3' : 'flex items-center gap-3'}>
       <LevelSelector boardsStore={boardsStore} />
-      <button
-        type='button'
-        data-open-archive
-        className='rounded-md border px-3 py-1 text-sm'
-        onClick={() => boardsStore.setArchiveOpen(true)}
-      >
-        Archive
-      </button>
-      {/*
-        * Muting is a real requirement, not a nicety: a daily puzzle is played on a train,
-        * in a queue, in a meeting -- and a game that cannot be silenced gets closed
-        * instead (spec P2-4).
-        *
-        * `aria-pressed` says the state, the text says it again for everyone else, and
-        * the label names what the control *is* rather than what pressing it does, which
-        * is what `aria-pressed` is for.
-        */}
-      <button
-        type='button'
-        data-mute
-        aria-pressed={sound.muted}
-        aria-label='Sound'
-        className='control-surface rounded-md border px-3 py-1 text-sm'
-        onClick={() => sound.toggle()}
-      >
-        {sound.muted ? 'Sound off' : 'Sound on'}
-      </button>
+      <ArchiveButton levels={boardsStore} />
+      <SoundButton sound={sound} />
     </div>
   )
 

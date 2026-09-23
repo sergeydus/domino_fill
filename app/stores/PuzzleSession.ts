@@ -1,6 +1,7 @@
 "use client"
 import { makeAutoObservable } from "mobx"
 import { RootStore } from "./RootStore"
+import { MIN_CELL_PX } from "./cellFloor"
 import { PuzzleDefinition, cloneInitialBoard } from "./PuzzleDefinition"
 import {
     columnSums, rowSums, isBoardFull, targetsMatch, columnComplete, rowComplete, lineState,
@@ -39,16 +40,12 @@ export const GUTTER_FRACTION = 0.7
 export const LABEL_FONT_FRACTION = 0.5
 
 /**
- * Cell floor, in CSS px, below which the board stops shrinking to fit the viewport
- * *height* and the page scrolls vertically instead.
- *
- * This is the same 38px the acceptance criteria pin, and it is deliberately one-sided:
- * the width budget is never overridden, because overflowing horizontally is forbidden
- * outright, while a page that scrolls vertically is merely a page that scrolls. Without
- * the floor, a 400px-tall landscape phone produces ~11px cells once the chrome above and
- * below the board is counted -- arithmetically correct and completely unplayable.
+ * Cell floor, in CSS px. Declared in `cellFloor.ts`, which is not a client module, so a
+ * server component can read its *value*: imported from here, it would be a client reference,
+ * and `cell < MIN_CELL_PX` would compare a number against a reference. Re-exported so that
+ * everything which imported it from here still does.
  */
-export const MIN_CELL_PX = 38
+export { MIN_CELL_PX }
 
 /**
  * Where the pointer is: a cell, and nothing else (spec P1-2).

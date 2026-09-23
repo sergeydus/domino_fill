@@ -39,7 +39,12 @@ export default defineConfig({
         {
             // The phone size the spec's layout criteria are written against.
             name: 'phone-360',
-            testIgnore: [/layout\.spec\.ts/, /touch\.spec\.ts/, /keyboard\.spec\.ts/],
+            // The sheet and the bundle are not viewport questions: the sheet sets its own
+            // size, and the bundle is a property of the build.
+            testIgnore: [
+                /layout\.spec\.ts/, /touch\.spec\.ts/, /keyboard\.spec\.ts/,
+                /sheet\.spec\.ts/, /bundle\.spec\.ts/,
+            ],
             use: { ...devices['Desktop Chrome'], viewport: { width: 360, height: 640 } },
         },
         {

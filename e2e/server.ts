@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
+import fs from 'node:fs'
 import net from 'node:net'
 import path from 'node:path'
 
@@ -17,12 +18,30 @@ import path from 'node:path'
 export const PORT = 3100
 export const BASE_URL = `http://127.0.0.1:${PORT}`
 
+/**
+ * The component sheet's server (graphics spec P0-3, row 3).
+ *
+ * A second build, made with `DOMINO_VISUAL_SHEET=1`, which is the only kind of build in
+ * which `/visual` exists. It is served beside the production build rather than instead of
+ * it: every other spec keeps testing exactly what ships, and e2e/bundle.spec.ts has the
+ * production build to prove the sheet absent from.
+ */
+export const VISUAL_PORT = 3101
+export const VISUAL_URL = `http://127.0.0.1:${VISUAL_PORT}`
+
+/**
+ * The "Route (app)" listing each build printed, handed to the specs through the
+ * environment -- Playwright's documented channel from global setup to its workers.
+ */
+export const ROUTES_ENV = { production: 'E2E_ROUTES_PRODUCTION', visual: 'E2E_ROUTES_VISUAL' } as const
+
 const ROOT = path.resolve(__dirname, '..')
 const NEXT_BIN = path.join(ROOT, 'node_modules', 'next', 'dist', 'bin', 'next')
 
 type ExitInfo = { code: number | null, signal: NodeJS.Signals | null }
 
 type Managed = {
+    port: number
     child: ChildProcess
     /** Resolves when the child exits; never rejects. */
     exited: Promise<ExitInfo>
@@ -48,9 +67,9 @@ const waitFor = async (predicate: () => Promise<boolean>, timeoutMs: number, lab
     throw new Error(`Timed out after ${timeoutMs}ms waiting for ${label}`)
 }
 
-const responds = async () => {
+const responds = (url: string) => async () => {
     try {
-        const res = await fetch(BASE_URL, { signal: AbortSignal.timeout(2000) })
+        const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
         return res.status < 500
     } catch {
         return false
@@ -74,15 +93,15 @@ const settle = async (predicate: () => Promise<boolean>, timeoutMs: number) => {
 }
 
 /** Which pids currently hold the port, for diagnostics when something lingers. */
-const portHolders = (): string[] => {
+const portHolders = (port: number): string[] => {
     try {
         const res = process.platform === 'win32'
             ? spawnSync('netstat', ['-ano'], { encoding: 'utf8' })
-            : spawnSync('lsof', ['-ti', `tcp:${PORT}`], { encoding: 'utf8' })
+            : spawnSync('lsof', ['-ti', `tcp:${port}`], { encoding: 'utf8' })
         const lines = (res.stdout ?? '').split(/\r?\n/)
         if (process.platform !== 'win32') return lines.map(l => l.trim()).filter(Boolean)
         return [...new Set(lines
-            .filter(l => new RegExp(`:${PORT}\\s`).test(l) && /LISTENING/i.test(l))
+            .filter(l => new RegExp(`:${port}\\s`).test(l) && /LISTENING/i.test(l))
             .map(l => l.trim().split(/\s+/).pop()!)
             .filter(Boolean))]
     } catch {
@@ -117,9 +136,10 @@ const describe = (m: Managed) => {
     return out ? `\n--- server output ---\n${out}\n---------------------` : ' (no output captured)'
 }
 
-const start = (): Managed => {
-    const child = spawn(process.execPath, [NEXT_BIN, 'start', '--port', String(PORT)], {
+const start = (port: number, env: NodeJS.ProcessEnv = process.env): Managed => {
+    const child = spawn(process.execPath, [NEXT_BIN, 'start', '--port', String(port)], {
         cwd: ROOT,
+        env,
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: process.platform !== 'win32', // own process group, for the group kill
         windowsHide: true,
@@ -136,7 +156,7 @@ const start = (): Managed => {
         child.once('error', (err) => { done = true; buffer += `\nspawn error: ${err.message}`; resolve({ code: null, signal: null }) })
     })
 
-    return { child, exited, hasExited: () => done, output: () => buffer }
+    return { port, child, exited, hasExited: () => done, output: () => buffer }
 }
 
 const terminate = async (m: Managed) => {
@@ -164,25 +184,72 @@ const terminate = async (m: Managed) => {
     // Note there is deliberately no tree-kill here. Escalation happens above, while we still
     // own the parent; signalling a pid after its process has exited is the reused-pid hazard
     // this function is written to avoid, and a dead parent cannot be walked for children.
-    if (await settle(() => isPortFree(PORT), 20_000)) return
+    if (await settle(() => isPortFree(m.port), 20_000)) return
 
     throw new Error(
-        `Server process ${pid} exited, but port ${PORT} is still accepting connections -- ` +
+        `Server process ${pid} exited, but port ${m.port} is still accepting connections -- ` +
         `an orphaned listener survived teardown. Holder pid(s): ` +
-        `${portHolders().join(', ') || 'unknown'}.${describe(m)}`
+        `${portHolders(m.port).join(', ') || 'unknown'}.${describe(m)}`
     )
 }
 
-export const startServer = async () => {
-    if (!await isPortFree(PORT)) {
+/** The route listing a build printed: the "Route (app)" block, up to the blank line. */
+const routeListing = (stdout: string) => {
+    const lines = stdout.split(/\r?\n/)
+    const from = lines.findIndex(l => l.startsWith('Route (app)'))
+    if (from < 0) throw new Error(`next build printed no route listing:\n${stdout}`)
+    const to = lines.findIndex((l, i) => i > from && l.trim() === '')
+    return lines.slice(from, to < 0 ? undefined : to).join('\n')
+}
+
+/** Build, synchronously, with output surfaced on failure. */
+const build = (what: string, env: NodeJS.ProcessEnv) => {
+    // `stdio: 'ignore'` here would turn a broken build into an unexplained timeout further
+    // down, so the output is kept and shown.
+    const result = spawnSync(process.execPath, [NEXT_BIN, 'build'], { cwd: ROOT, encoding: 'utf8', env })
+    if (result.status !== 0) {
         throw new Error(
-            `Port ${PORT} is already in use. The e2e suite starts its own production server ` +
-            `and will not test an unknown one -- stop the other process and re-run.`
+            `next build (${what}) failed (status ${result.status}).\n` +
+            `${result.stdout ?? ''}\n${result.stderr ?? ''}`
         )
     }
+    return result.stdout ?? ''
+}
 
-    // Build first, synchronously, with output surfaced on failure. `stdio: 'ignore'` here
-    // turns a broken build into an unexplained timeout further down.
+/** Start one server and wait until it answers, or report why it never did. */
+const serve = async (port: number, url: string, env: NodeJS.ProcessEnv) => {
+    const m = start(port, env)
+
+    // Race readiness against the child dying. Without this, a bind failure leaves us polling
+    // the port until timeout -- and if anything else grabs it in the meantime, we would
+    // happily run the whole suite against an unrelated server.
+    const died = m.exited.then((info) => {
+        throw new Error(
+            `Server on ${port} exited before becoming ready (code=${info.code}, signal=${info.signal}).` +
+            describe(m)
+        )
+    })
+    died.catch(() => { /* handled below; prevents an unhandled rejection if readiness wins */ })
+
+    try {
+        await Promise.race([waitFor(responds(url), 120_000, `${url} to respond`), died])
+    } catch (err) {
+        await terminate(m).catch(e => console.error(`[e2e] cleanup after failed start: ${e.message}`))
+        throw err
+    }
+    return m
+}
+
+export const startServer = async () => {
+    for (const port of [PORT, VISUAL_PORT]) {
+        if (!await isPortFree(port)) {
+            throw new Error(
+                `Port ${port} is already in use. The e2e suite starts its own production server ` +
+                `and will not test an unknown one -- stop the other process and re-run.`
+            )
+        }
+    }
+
     /*
      * The build is told where the site lives (spec P2-2, row 20b).
      *
@@ -193,41 +260,40 @@ export const startServer = async () => {
      * a mutation removing `metadataBase` survived the first version of this suite.
      * Building against `127.0.0.1:3100` makes the fallback and the real value differ, and
      * `e2e/metadata.spec.ts` then checks the tag against the origin it was served from.
+     *
+     * The production build is made with the sheet flag explicitly *removed*, not merely
+     * unset by us: an ambient `DOMINO_VISUAL_SHEET` in the shell would otherwise put the
+     * sheet into the build this suite treats as production.
      */
-    const build = spawnSync(process.execPath, [NEXT_BIN, 'build'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-        env: { ...process.env, NEXT_PUBLIC_SITE_URL: BASE_URL },
-    })
-    if (build.status !== 0) {
-        throw new Error(
-            `next build failed (status ${build.status}).\n` +
-            `${build.stdout ?? ''}\n${build.stderr ?? ''}`
-        )
-    }
+    const ambient = { ...process.env }
+    delete ambient.DOMINO_VISUAL_SHEET
+    const productionEnv = { ...ambient, NEXT_PUBLIC_SITE_URL: BASE_URL }
+    const visualEnv = { ...ambient, NEXT_PUBLIC_SITE_URL: VISUAL_URL, DOMINO_VISUAL_SHEET: '1' }
 
-    const m = start()
+    process.env[ROUTES_ENV.production] = routeListing(build('production', productionEnv))
+    /*
+     * Emptied first, so it can only hold what this run built. e2e/bundle.spec.ts reads it as
+     * the positive control for the absence checks, and a control that passes on a previous
+     * run's output is no control: measured, with the flag's `distDir` removed the sheet
+     * build overwrote production -- which the absence checks caught -- while every positive
+     * control passed against a `.next-visual` left from an earlier run.
+     */
+    fs.rmSync(path.join(ROOT, '.next-visual'), { recursive: true, force: true })
+    process.env[ROUTES_ENV.visual] = routeListing(build('visual sheet', visualEnv))
 
-    // Race readiness against the child dying. Without this, a bind failure leaves us polling
-    // the port until timeout -- and if anything else grabs it in the meantime, we would
-    // happily run the whole suite against an unrelated server.
-    const died = m.exited.then((info) => {
-        throw new Error(
-            `Server exited before becoming ready (code=${info.code}, signal=${info.signal}).` +
-            describe(m)
-        )
-    })
-    died.catch(() => { /* handled below; prevents an unhandled rejection if readiness wins */ })
-
+    const production = await serve(PORT, BASE_URL, productionEnv)
+    let visual: Managed
     try {
-        await Promise.race([
-            waitFor(responds, 120_000, `${BASE_URL} to respond`),
-            died,
-        ])
+        visual = await serve(VISUAL_PORT, VISUAL_URL, visualEnv)
     } catch (err) {
-        await terminate(m).catch(e => console.error(`[e2e] cleanup after failed start: ${e.message}`))
+        await terminate(production).catch(e => console.error(`[e2e] cleanup after failed start: ${e.message}`))
         throw err
     }
 
-    return async () => { await terminate(m) }
+    // Both are stopped even if one fails to, and every failure is reported.
+    return async () => {
+        const results = await Promise.allSettled([terminate(production), terminate(visual)])
+        const failures = results.flatMap(r => r.status === 'rejected' ? [r.reason as Error] : [])
+        if (failures.length > 0) throw new Error(failures.map(f => f.message).join('\n\n'))
+    }
 }

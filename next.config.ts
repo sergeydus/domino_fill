@@ -23,7 +23,39 @@ import type { NextConfig } from "next";
  *     lifetime still allows a conditional request, so the common case is a 304 and not a
  *     30 KB download.
  */
+/**
+ * The component sheet, compiled only when asked for (graphics spec P0-3, row 3).
+ *
+ * `app/visual/page.visual.tsx` is a route only when `visual.tsx` is a page extension, and it
+ * is one only in a build made with `DOMINO_VISUAL_SHEET=1`. Without the flag the file is
+ * not a route, nothing imports it, and it is never compiled -- which is a stronger thing
+ * than a route that exists and answers 404, whose code would still ship. e2e/bundle.spec.ts
+ * proves that from the bytes of the production build, not from the status code.
+ *
+ * The same flag moves the build to `.next-visual`, so a sheet build can never land where
+ * production is served from, and the browser suite can serve both side by side.
+ *
+ * And it gives that build its own `tsconfig.visual.json`, for two measured reasons that
+ * pull in opposite directions. Next rewrites the tsconfig it builds with to include the
+ * route types of any `distDir` it has not seen -- reformatting the whole file as it goes --
+ * so those types must be declared up front. But declared in `tsconfig.json`, they are
+ * type-checked by `tsc --noEmit` and by the *production* build as well, and a sheet
+ * build's types go stale the moment a sheet route is renamed: measured, a leftover
+ * `.next-visual` failed both, unable to find `app/visual/page.js`. Only the build that
+ * produces those types reads them now.
+ *
+ * With the flag unset, this spreads nothing: the production config is exactly what it was.
+ */
+const VISUAL_SHEET = process.env.DOMINO_VISUAL_SHEET === '1'
+
 const nextConfig: NextConfig = {
+  ...(VISUAL_SHEET
+    ? {
+      distDir: '.next-visual',
+      pageExtensions: ['tsx', 'ts', 'jsx', 'js', 'visual.tsx'],
+      typescript: { tsconfigPath: 'tsconfig.visual.json' },
+    }
+    : {}),
   async headers() {
     return [
       {
