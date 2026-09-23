@@ -81,7 +81,7 @@ const measure = (cell: number) => {
     return { ...readArt(host), entry }
 }
 
-type Constant = keyof ReturnType<typeof measure>
+type Constant = Exclude<keyof ReturnType<typeof measure>, 'counts'>
 
 /**
  * §1.1's table, as data.
@@ -119,6 +119,8 @@ describe('the six constants of §1.1, at the two cell sizes it measured', () => 
                 const { label, count, px, fraction } = TABLE[name]
 
                 it(`${label} is ${px(cell)}px on every piece, ${fraction[cell]} of the cell`, () => {
+                    // One of each piece, so the lengths below are the per-piece counts.
+                    expect(measured.counts).toEqual({ ones: 1, twos: 1, rocks: 1 })
                     expect(measured[name], `${label}: one per instance`).toHaveLength(count)
                     for (const value of measured[name]) {
                         expect(value, label).toBe(px(cell))

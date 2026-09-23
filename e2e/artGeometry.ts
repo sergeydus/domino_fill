@@ -9,10 +9,12 @@
  * text, so this may not close over anything: no imports, no module-level helpers. It takes
  * the root to search so the same code runs over a detached jsdom host and over `document`.
  *
- * Lists, not single values. A constant is one number only if every piece agrees on it, and
- * the one-in-three case -- the rock's outline changed and the dominoes' did not -- is the
- * drift this exists to catch. Callers check the lengths too, so a piece that stopped
- * drawing a pip cannot pass by contributing nothing.
+ * **Every piece on the board, not a sample.** An earlier version read the first piece of each
+ * kind, which pinned the shared components but said nothing about the other rocks on a live
+ * board -- and "every instance on every piece" was claimed of it anyway. A constant is
+ * one number only if every piece agrees on it, so all of them are read, and the counts come
+ * back with the values so a caller can say how long each list must be: a piece that
+ * stopped drawing a pip cannot pass by contributing nothing.
  *
  * The entry offset is not here: it is an animation's starting frame rather than markup at
  * rest, and each suite has its own way to catch it.
@@ -24,27 +26,31 @@ export const readArt = (root: ParentNode) => {
         if (raw === null) throw new Error(`${el.tagName} has no ${name}`)
         return Number(raw)
     }
-    const piece = (kind: string) => {
-        const el = root.querySelector(`[data-piece="${kind}"]`)
-        if (el === null) throw new Error(`no ${kind} on the board`)
-        return el
+    const all = (kind: string) => {
+        const found = Array.from(root.querySelectorAll(`[data-piece="${kind}"]`))
+        if (found.length === 0) throw new Error(`no ${kind} on the board`)
+        return found
     }
-    const kinds = ['one', 'two', 'rock'].map(piece)
-    const [upright, flat] = kinds.map(el => el.querySelector('line'))
+    const ones = all('one')
+    const twos = all('two')
+    const rocks = all('rock')
+    const pieces = [...ones, ...twos, ...rocks]
 
     return {
-        outline: kinds.map(el => num(el.querySelector('[data-outline]'), 'stroke-width')),
-        // Every rect of the three sample pieces, not of the whole board: a real board has as
-        // many rocks as the day's puzzle does, and the count has to be one this can state.
-        radius: kinds.flatMap(el => Array.from(el.querySelectorAll('rect'), r => num(r, 'rx'))),
-        pip: kinds.flatMap(el => Array.from(el.querySelectorAll('circle'), c => 2 * num(c, 'r'))),
-        divider: [num(upright, 'x2') - num(upright, 'x1'), num(flat, 'y2') - num(flat, 'y1')],
+        counts: { ones: ones.length, twos: twos.length, rocks: rocks.length },
+        outline: pieces.map(el => num(el.querySelector('[data-outline]'), 'stroke-width')),
+        radius: pieces.flatMap(el => Array.from(el.querySelectorAll('rect'), r => num(r, 'rx'))),
+        pip: pieces.flatMap(el => Array.from(el.querySelectorAll('circle'), c => 2 * num(c, 'r'))),
+        divider: [
+            ...ones.map(el => num(el.querySelector('line'), 'x2') - num(el.querySelector('line'), 'x1')),
+            ...twos.map(el => num(el.querySelector('line'), 'y2') - num(el.querySelector('line'), 'y1')),
+        ],
         /*
          * The side, then the face: each piece draws its extruded side first, lower down,
          * and the face over it. Located by drawing order rather than by fill, because the
          * fills are P0-5's to turn into tokens and this should not break when they are.
          */
-        extrusion: kinds.map(el => {
+        extrusion: pieces.map(el => {
             const [side, face] = Array.from(el.querySelectorAll('rect:not([data-outline])'))
             return num(side, 'y') - num(face, 'y')
         }),

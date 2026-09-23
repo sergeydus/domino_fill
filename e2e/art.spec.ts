@@ -14,9 +14,16 @@ import { readArt } from './artGeometry'
  * phone floor and at the desktop cap -- and reads the art off the board at both ends with
  * the same reader the unit test uses.
  *
- * Fixture-derived throughout, so it runs every day: the dominoes go wherever today's board
- * has room, and the rock is today's own. Every published puzzle has one -- the corpus
- * validator holds each slot to an exact rock count, the smallest of which is 4.
+ * Fixture-derived throughout: the dominoes go wherever today's board has room, and the
+ * rocks are today's own. What that is known to cover, precisely:
+ *
+ *   - **A rock on every day, by construction.** The corpus validator holds each slot to an
+ *     exact rock count, the smallest of which is 4.
+ *   - **Room for both dominoes on every published day, by measurement only.** The same
+ *     search, run over the corpus files at row 2, succeeds on all 10,959 easy boards --
+ *     every level of all 3,653 published days. The generator promises nothing of the
+ *     kind for puzzles appended later. If one ever has no room, `freeRuns` throws -- a
+ *     loud failure on that day, never a skip.
  */
 
 const ENDS = [
@@ -91,13 +98,21 @@ for (const end of ENDS) {
         await expect(page.locator('[data-piece="one"]')).toHaveCount(1)
         await expect(page.locator('[data-piece="two"]')).toHaveCount(1)
 
+        /*
+         * Every piece on the board, including all of today's rocks -- not one of each. So
+         * the expected lengths come from what is there: three rects and one outline per
+         * piece, a pip on an upright and two on a flat, a divider per domino.
+         */
         const art = await page.locator('body').evaluate(readArt)
+        const { ones, twos, rocks } = art.counts
+        expect({ ones, twos }, 'exactly the two dominoes this test placed').toEqual({ ones: 1, twos: 1 })
+        const pieces = ones + twos + rocks
 
-        expect(art.outline, 'outline stroke').toEqual([6, 6, 6])
-        expect(art.radius, 'corner radius').toEqual(Array(9).fill(8))
-        expect(art.pip, 'pip diameter').toEqual([16, 16, 16])
-        expect(art.divider, 'divider span').toEqual([end.cell - 32, end.cell - 32])
-        expect(art.extrusion, 'extrusion depth').toEqual([16, 16, 16])
+        expect(art.outline, 'outline stroke').toEqual(Array(pieces).fill(6))
+        expect(art.radius, 'corner radius').toEqual(Array(3 * pieces).fill(8))
+        expect(art.pip, 'pip diameter').toEqual(Array(ones + 2 * twos).fill(16))
+        expect(art.divider, 'divider span').toEqual(Array(ones + twos).fill(end.cell - 32))
+        expect(art.extrusion, 'extrusion depth').toEqual(Array(pieces).fill(16))
 
         const offsets = (await entries(page)).map(t => [
             /translateX\((-?[\d.]+)px\)/.exec(t)?.[1],

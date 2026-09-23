@@ -272,14 +272,17 @@ table above is reproduced by the suite rather than by this document.
 > both rather than choosing:
 >
 > - **38 and 53, in a unit test** (`tests/pieceGeometry.test.tsx`), which reproduces §1.1's
->   table exactly — pixel value and fraction, every instance on every piece. It renders the
->   real piece layer to a string, because the entry offset is `motion`'s initial state and
+>   table exactly — pixel value and fraction, every instance on a fixture holding one piece
+>   of each kind. It renders the real piece layer to a string, because the entry offset is `motion`'s initial state and
 >   exists only in a render whose effects have not run.
 > - **38 and 106, in the real build** (`e2e/art.spec.ts`), the actual ends of today's range:
->   the cell is measured where the layout decides it, then the art is read off the board
->   with the same reader the unit test uses (`e2e/artGeometry.ts`). The entry offset is
->   caught by a `MutationObserver` at insertion, before any frame can move it. Fixture-
->   derived — the dominoes go wherever today's board has room — so it runs every day.
+>   the cell is measured where the layout decides it, then **every piece on the live
+>   board** — both placed dominoes and all of the day's rocks — is read with the same reader
+>   the unit test uses (`e2e/artGeometry.ts`). The entry offset is caught by a
+>   `MutationObserver` at insertion, before any frame can move it. Fixture-derived: the
+>   dominoes go wherever today's board has room. That room exists on all 10,959 easy boards
+>   of the 3,653 published days, measured at row 2; the generator does not promise it for
+>   days appended later, and a day without it fails loudly rather than skipping.
 >
 > The unit test also pins the widened swings of the §1.1 amendment at 38 and 106, as the
 > size of the problem the art rows inherit.
