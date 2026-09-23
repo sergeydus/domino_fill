@@ -545,13 +545,21 @@ geometry to make.
 > and `sheet-53` differs in **22 pixels**, scattered over three specimens, almost all by one
 > level of one channel and at most by 13. Nothing the page draws differs; it has the look of
 > rasterisation rounding that depends on the machine — GitHub's pool mixes CPU models, and
-> Chromium rasterises in software on these runners — and each comparison now prints the CPU
-> it ran on so that can be confirmed or ruled out. Whether it matters depends on whether
-> pixelmatch counts those pixels, and that is measured by comparing on other instances, not
-> assumed: every comparison run compares twice, and re-running one draws a new machine. If
-> noise shows, a tolerance is set at its measured size, with what it would then fail to see
-> stated beside it — a pixel budget that forgives 22 pixels would also forgive the 4-pixel
-> divider change in the table above.
+> Chromium rasterises in software on these runners.
+>
+> **Measured across machines: no tolerance needed.** Part 4 (`ea0244f`, CI run 35934186079)
+> compared against these baselines in six runs — the original and five re-runs, each on a
+> newly drawn machine — at `threshold` 0 and `maxDiffPixels` 0: **48 comparisons, all zero
+> diff**, on four CPU models (AMD EPYC 9V74, 7763 and 9V45; Intel Xeon Platinum 8573C) and
+> both runner images then in GitHub's pool (`20260920.314.1` and `20260907.300.1`). And the
+> 22 pixels that differ between the two baseline sets are themselves not counted: part 2's
+> `sheet-53` checked against part 4's with `toMatchSnapshot` at `threshold` 0 passes, so
+> pixelmatch classifies them as anti-aliasing. The variation between machines seen so far
+> lives entirely in what the comparator is built to ignore.
+>
+> So the budget stays at zero, with no tolerance to justify. What that does *not* prove is
+> that a future image cannot move a pixel pixelmatch counts; the environment record is
+> there to say so the day one does.
 >
 > Row 3's same-date noise (4 of 10 pairs differing on the Windows host) is a raw
 > `page.screenshot()` measurement; `toHaveScreenshot` also waits for two identical frames and
