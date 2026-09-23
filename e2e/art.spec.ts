@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
-import { drag, readBoard } from './play'
+import { drag } from './play'
 import { readArt } from './artGeometry'
 
 /**
@@ -31,10 +31,26 @@ const ENDS = [
     { name: 'the desktop cap', viewport: { width: 2560, height: 1440 }, cell: 106 },
 ] as const
 
+/**
+ * Where today's rocks are, according to the squares -- not the overlay.
+ *
+ * The squares' labels are built from the store's board; the rock drawings are the thing
+ * under test. Reading rocks from the drawings (as `play.ts`'s `readBoard` does, reasonably,
+ * for suites that are not about the drawings) would let a missing rock drawing corrupt the
+ * test's own bookkeeping: measured, it sent a domino onto the undrawn rock, the placement
+ * failed, and the test died before reaching the comparison meant to catch it -- a kill for
+ * the wrong reason, and only on days the missing rock lay on the chosen run.
+ */
+const rockSquares = (page: Page) => page.locator('[data-cell]').evaluateAll(els => els
+    .filter(el => /, rock(,|$)/.test(el.getAttribute('aria-label') ?? ''))
+    .map(el => el.getAttribute('data-cell')!)
+    .sort())
+
 /** An upright and a flat run of two free squares, not overlapping, on today's board. */
-const freeRuns = async (page: Page) => {
-    const { size, board } = await readBoard(page)
-    const free = (i: number, j: number) => i < size && j < size && board[i][j] === null
+const freeRuns = async (page: Page, rocks: readonly string[]) => {
+    const size = Math.sqrt(await page.locator('[data-cell]').count())
+    const rock = new Set(rocks)
+    const free = (i: number, j: number) => i < size && j < size && !rock.has(`${i},${j}`)
 
     let upright: [number, number] | null = null
     for (let j = 0; j < size && !upright; j++) {
@@ -91,8 +107,11 @@ for (const end of ENDS) {
         const cell = (await page.locator('[data-cell]').first().boundingBox())!.width
         expect(cell, `${end.name} is not where §1.1 says the range ends`).toBe(end.cell)
 
+        const labelled = await rockSquares(page)
+        expect(labelled.length, 'the board has no rock squares to compare against').toBeGreaterThan(0)
+
         await watchEntries(page)
-        const { upright, flat } = await freeRuns(page)
+        const { upright, flat } = await freeRuns(page, labelled)
         await drag(page, upright, [upright[0] + 1, upright[1]])
         await drag(page, flat, [flat[0], flat[1] + 1])
         await expect(page.locator('[data-piece="one"]')).toHaveCount(1)
@@ -107,6 +126,19 @@ for (const end of ENDS) {
         const { ones, twos, rocks } = art.counts
         expect({ ones, twos }, 'exactly the two dominoes this test placed').toEqual({ ones: 1, twos: 1 })
         const pieces = ones + twos + rocks
+
+        /*
+         * Which rocks there *should* be, from a source the overlay does not control.
+         *
+         * `rocks` above is counted from the overlay, and so are the lengths it sets -- so a
+         * rock whose drawing vanished would shrink both together and pass. The squares'
+         * labels are built from the store's board, not from the overlay, so they say
+         * independently where the rocks are. Compared as positions rather than as a count:
+         * a rock drawn on the wrong square is as wrong as a missing one.
+         */
+        const drawn = await page.locator('[data-piece="rock"]').evaluateAll(
+            els => els.map(el => el.getAttribute('data-at')!).sort())
+        expect(drawn, 'the rocks drawn are not the rocks on the board').toEqual(labelled)
 
         expect(art.outline, 'outline stroke').toEqual(Array(pieces).fill(6))
         expect(art.radius, 'corner radius').toEqual(Array(3 * pieces).fill(8))
