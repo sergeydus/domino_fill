@@ -80,3 +80,60 @@ jobs:
             test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  # The four visual baselines (graphics spec P0-4, row 4).
+  #
+  # Pixels depend on the machine, so the baselines are taken on this runner and compared on
+  # this runner, and nowhere else. A plain GitHub-hosted runner, not a container: this project
+  # uses no Docker anywhere. The label is pinned to a release rather than `ubuntu-latest`, so
+  # an Ubuntu version change is a commit here and not a surprise -- but GitHub still updates
+  # the image within a release, which is why every baseline set records the environment it
+  # was taken in and every comparison reports any difference from it.
+  #
+  # The commit message chooses the mode, because a manually-dispatched workflow must exist on
+  # the default branch and this one does not:
+  #   [visual update]   regenerate the baselines, upload them as `visual-baselines`, then
+  #                     compare against them 25 times on the same runner -- the measurement
+  #                     the diff budget is set from
+  #   [visual measure]  compare 25 times against the committed baselines
+  #   (otherwise)       compare twice -- two consecutive runs must both be zero diff
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MESSAGE: ${{ github.event.head_commit.message }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright's browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Regenerate the baselines
+        if: contains(github.event.head_commit.message, '[visual update]')
+        run: npm run visual:update
+      - name: Hand the baselines back for committing
+        if: contains(github.event.head_commit.message, '[visual update]')
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-baselines
+          path: visual-tests/__screenshots__/
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Compare with the baselines
+        run: |
+          node scripts/visual-environment.mjs check
+          case "$MESSAGE" in *'[visual update]'*|*'[visual measure]'*) repeat=25 ;; *) repeat=2 ;; esac
+          npm run test:visual -- --repeat-each="$repeat"
+      - name: Keep the diffs from a failed comparison
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-diffs
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore

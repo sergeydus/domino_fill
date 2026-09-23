@@ -459,6 +459,66 @@ state, or a motion contract — *as well as* its relevant screenshot. A screensh
 only thing standing behind a row, and no row is asked for a geometry assertion it has no
 geometry to make.
 
+> **Amendment (row 4) — no container; a plain Ubuntu runner, and what that costs.**
+>
+> **No Docker, anywhere.** The project owner does not want Docker used in this project — not
+> on the development machine, and not as a `container:` job in GitHub Actions either. The
+> pinned-image environment above is therefore replaced, not approximated: baselines are taken
+> and compared on a GitHub-hosted runner with Playwright's browser installed directly
+> (`npx playwright install --with-deps chromium`), the same way the existing gate job runs.
+>
+> **What is still pinned.** Playwright's version, and with it Chromium's exact build, by the
+> lockfile. The runner label (`ubuntu-24.04`, not `ubuntu-latest`), so an Ubuntu release change
+> is a deliberate commit. `deviceScaleFactor: 1`, `reducedMotion: 'reduce'`, `colorScheme`,
+> locale, and a UTC timezone, in `playwright.visual.config.ts`.
+>
+> **What is not, and the trade-off stated plainly.** GitHub updates the runner *image* within
+> a release — system libraries, fonts, drivers — and a digest-pinned container existed to make
+> that impossible. Without one, an unchanged commit can in principle fail its comparison
+> after an image update; Playwright's own guidance is to take and compare baselines in the
+> same environment, and this is the same environment only up to GitHub's image version.
+> Two mitigations, neither of which removes the risk:
+>
+> - **Every baseline set records its environment** — runner image version, OS, Playwright,
+>   Chromium build, and a fingerprint of the installed system fonts — in
+>   `visual-tests/__screenshots__/environment.json`, and every comparison prints any
+>   difference from it as a warning. A failure after an image update says so, instead of
+>   looking like a regression.
+> - **System fonts are proven not to draw anything.** `e2e/fonts.spec.ts` asks Chromium
+>   which font drew every text node on both baseline pages and on the sheet, and requires
+>   the self-hosted Geist files for all of them — with a positive control that a system-font
+>   span *is* reported as one. It is not a pixel test, so it runs on every host.
+>
+> If image drift turns out to make the comparison unreliable, the fallback is the one this
+> spec already leans on: geometry, computed tokens, accessibility state and motion contracts,
+> which do not depend on the rasteriser. Baselines would then be advisory rather than gating.
+> That is a decision for the owner, not something to slide into.
+>
+> **Baselines are never taken on a developer's host,** now enforced: `npm run visual:update`
+> refuses to run anywhere but the CI runner, and the config sets `updateSnapshots: 'none'`, so
+> a missing baseline fails instead of being written. `npm run test:e2e` never runs the
+> visual suite; `npm run test:visual` does, and only CI's result counts.
+>
+> **Regenerating, without a dispatch button.** A manually-triggered workflow must live on the
+> default branch, and no workflow does. So a commit message chooses the mode: `[visual update]`
+> regenerates on the runner, uploads the set as the `visual-baselines` artifact, and then
+> compares against it 25 times on the same machine; the set is downloaded
+> (`gh run download`) and committed from the host. **This splits a pixel-changing row into two
+> commits** — the change, whose run produces the baselines, and the baselines, whose run
+> compares them. Keeping one atomic commit would mean pushing temporary branches to the
+> repository, which has not been asked for.
+>
+> **The full-page day is shifted, not pinned.** `page.clock.install`, planned above, was never
+> measured for the completion-card failure row 3 found under `setFixedTime`. The baselines use
+> the calendar shift row 3 did measure (`e2e/calendar.ts`): the page believes it is
+> 2026-10-15, in UTC, and its animation clocks run untouched.
+>
+> **A row-1 defect the baselines now show.** In the desktop rail, the difficulty selector's
+> content is 268px wide in a 260px rail at every desktop width, so "Hard 8x8" runs 8px past
+> the rail and its own grey background. Row 1's tests did not catch it. It is recorded here,
+> pinned by the desktop baseline as it stands, and left for the owner to decide — widening
+> the rail changes row 1's measured board size, and wrapping changes the control.
+
 **The generated icons are exempt from the screenshot half**, and deliberately: they never
 appear on a page. Their visual gate is stronger than a baseline already — rows 20b and 20h
 assert the committed bytes are identical to the generator's output, that the same drawing is

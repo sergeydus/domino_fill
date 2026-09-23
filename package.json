@@ -11,6 +11,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "test:visual": "playwright test -c playwright.visual.config.ts",
+    "visual:update": "node scripts/visual-environment.mjs guard && playwright test -c playwright.visual.config.ts --update-snapshots=all && node scripts/visual-environment.mjs write",
     "corpus:build": "tsx scripts/build-corpus.ts",
     "corpus:verify": "tsx scripts/verify-corpus.ts",
     "corpus:horizon": "tsx scripts/check-horizon.ts",

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
-import { drag } from './play'
+import { drag, freeRuns, rockSquares } from './play'
 import { readArt } from './artGeometry'
 
 /**
@@ -30,47 +30,6 @@ const ENDS = [
     { name: 'the phone floor', viewport: { width: 360, height: 640 }, cell: 38 },
     { name: 'the desktop cap', viewport: { width: 2560, height: 1440 }, cell: 106 },
 ] as const
-
-/**
- * Where today's rocks are, according to the squares -- not the overlay.
- *
- * The squares' labels are built from the store's board; the rock drawings are the thing
- * under test. Reading rocks from the drawings (as `play.ts`'s `readBoard` does, reasonably,
- * for suites that are not about the drawings) would let a missing rock drawing corrupt the
- * test's own bookkeeping: measured, it sent a domino onto the undrawn rock, the placement
- * failed, and the test died before reaching the comparison meant to catch it -- a kill for
- * the wrong reason, and only on days the missing rock lay on the chosen run.
- */
-const rockSquares = (page: Page) => page.locator('[data-cell]').evaluateAll(els => els
-    .filter(el => /, rock(,|$)/.test(el.getAttribute('aria-label') ?? ''))
-    .map(el => el.getAttribute('data-cell')!)
-    .sort())
-
-/** An upright and a flat run of two free squares, not overlapping, on today's board. */
-const freeRuns = async (page: Page, rocks: readonly string[]) => {
-    const size = Math.sqrt(await page.locator('[data-cell]').count())
-    const rock = new Set(rocks)
-    const free = (i: number, j: number) => i < size && j < size && !rock.has(`${i},${j}`)
-
-    let upright: [number, number] | null = null
-    for (let j = 0; j < size && !upright; j++) {
-        for (let i = 0; i + 1 < size && !upright; i++) {
-            if (free(i, j) && free(i + 1, j)) upright = [i, j]
-        }
-    }
-    if (!upright) throw new Error('today\'s board has no free upright run')
-    const [ui, uj] = upright
-    const taken = (i: number, j: number) => j === uj && (i === ui || i === ui + 1)
-
-    for (let i = 0; i < size; i++) {
-        for (let j = 0; j + 1 < size; j++) {
-            if (free(i, j) && free(i, j + 1) && !taken(i, j) && !taken(i, j + 1)) {
-                return { upright, flat: [i, j] as [number, number] }
-            }
-        }
-    }
-    throw new Error('today\'s board has no free flat run beside the upright one')
-}
 
 /**
  * The transform each domino is inserted with -- the entry animation's first frame.

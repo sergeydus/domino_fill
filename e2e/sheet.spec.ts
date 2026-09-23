@@ -1,5 +1,7 @@
 import { test, expect, type Browser, type Page } from '@playwright/test'
 import { VISUAL_URL } from './server'
+import { onDate } from './calendar'
+import { waitForRest } from './rest'
 
 /**
  * The component sheet (graphics spec P0-3, row 3).
@@ -117,13 +119,6 @@ test('the cells are the size asked for, and only sizes that exist are served', a
  * The sheet at rest, as everything a date could change: its markup, and where every element
  * of it was laid out.
  *
- * **At rest is a state, not a pause.** Pieces enter with an animation and the completion
- * card fades in. "Two consecutive screenshots agree" was the first definition of settled,
- * and it was flaky for a reason worth keeping: the server-rendered page shows every piece at
- * `motion`'s starting state -- `opacity: 0`, offset -- and nothing moves until hydration, so
- * two identical frames can arrive before the animations have begun. So: wait until every
- * inline opacity `motion` wrote is 1 and every inline transform is `none`.
- *
  * **Not pixels.** Measured at rest, two screenshots of this sheet on the *same* date, same
  * browser, same viewport, differ in 4 of 10 pairs: a handful of anti-aliased pixels
  * (4 px, at most 13 levels of one channel) at the edge of an animated piece, with or without
@@ -133,15 +128,7 @@ test('the cells are the size asked for, and only sizes that exist are served', a
  * could act: text, attributes, inline style, and layout.
  */
 const atRest = async (page: Page) => {
-    // Polled as the list of elements still moving, so a sheet that never settles names them.
-    await expect.poll(() => page.locator('main').evaluate(main =>
-        [...main.querySelectorAll<HTMLElement>('[style]')]
-            .filter(el => !((el.style.opacity === '' || el.style.opacity === '1')
-                && (el.style.transform === '' || el.style.transform === 'none')))
-            .map(el => `${el.closest('[data-specimen]')?.getAttribute('data-specimen')}: ` +
-                `${el.tagName} style="${el.getAttribute('style')}"`)),
-    { message: 'the sheet never came to rest', timeout: 15_000 }).toEqual([])
-
+    await waitForRest(page, 'main')
     return page.locator('main').evaluate(main => ({
         markup: main.outerHTML,
         boxes: [main, ...main.querySelectorAll('*')].map(el => {
@@ -149,30 +136,6 @@ const atRest = async (page: Page) => {
             return [r.x, r.y, r.width, r.height].map(v => Math.round(v * 100) / 100).join(',')
         }),
     }))
-}
-
-/**
- * Move the page's calendar to `target`, and leave its clock running.
- *
- * Not `page.clock.setFixedTime`, which stops `Date` dead, and measured: with it the
- * completion card's fade-in never finished in 7 of 360 loads, stuck at `opacity: 0`; with
- * the clock left alone, 0 of 360. The mechanism is not established -- `performance.now()`,
- * the document timeline and `requestAnimationFrame` all kept advancing under the pinned
- * clock -- but the spec asks for the sheet with the clock *un-pinned* in any case. So only
- * the calendar moves: `Date` reads as `target` plus the time elapsed since the page began,
- * and every clock the animations run on is untouched.
- */
-const onDate = (target: number) => {
-    const Real = Date
-    const offset = target - Real.now()
-    const shifted = () => Real.now() + offset
-    globalThis.Date = new Proxy(Real, {
-        construct: (to, args, newTarget) =>
-            Reflect.construct(to, args.length === 0 ? [shifted()] : args, newTarget),
-        // `Date()` called without `new` returns a string.
-        apply: () => new Real(shifted()).toString(),
-        get: (to, prop, receiver) => prop === 'now' ? shifted : Reflect.get(to, prop, receiver),
-    })
 }
 
 const sheetOn = async (browser: Browser, date: string) => {
