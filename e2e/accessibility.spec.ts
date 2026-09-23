@@ -292,21 +292,27 @@ test.describe('the roving tabindex', () => {
          * `onBlur` is `focusout`, which bubbles, so moving focus between two cells fires
          * it on the grid -- measured, with `relatedTarget` set to the sibling cell -- and
          * the grid's blur handler cancels the gesture. Removing the containment guard and
-         * running the suite failed **nineteen** tests across board, completion, feedback,
-         * persistence and undo: with focus now living on the cells, every placement that
-         * moves it was cancelling the gesture that was making it.
+         * running the suite fails about thirty tests across board, completion, feedback,
+         * persistence, undo, advice and touch: with focus living on the cells, every
+         * placement that moves it was cancelling the gesture that was making it.
          *
-         * The direction is read off the served board rather than assumed. The first
-         * version of this test pressed ArrowRight from 0,0, where today's puzzle happens
-         * to have a rock -- so the key was legitimately refused and the test failed
-         * against correct code.
+         * **The pair comes from `freeRun`, not from 0,0.** Two earlier versions of this
+         * test hard-coded that corner and paid for it twice: once when the served board
+         * put a rock there, and once when it offered only a rightward move, which places
+         * a flat domino whose overlay is marked at its *right* half. The second version
+         * papered over it with `test.skip`, which is worse than the failure -- a
+         * regression test that silently stops running on an inconvenient puzzle is not a
+         * regression test. `freeRun` returns a vertical pair that is free on today's
+         * board, whatever today's board is, so this runs every day.
          */
-        await grid(page).focus()
-        await page.keyboard.press('ArrowDown')       // focus 0,0
-        await page.keyboard.press('Enter')           // anchor it
+        const { i, j } = await freeRun(page)
+        const anchor = `${i},${j}`
+        const below = `${i + 1},${j}`
 
-        const candidate = await page.locator('[data-candidate]').first().getAttribute('data-candidate')
-        test.skip(candidate === null, 'the served board offers nothing from 0,0')
+        await page.locator(`[data-cell="${anchor}"]`).focus()
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', anchor)
+        await page.keyboard.press('Enter')
+        await expect(page.locator('[data-anchor]'), 'Enter did not anchor').toHaveCount(1)
 
         /*
          * Now move the focus, which is what this test is named for and what it did not
@@ -314,14 +320,18 @@ test.describe('the roving tabindex', () => {
          * travelling, so the original sequence never moved focus at all and the guard was
          * never exercised. Focusing another cell directly is the movement a screen-reader
          * user makes, and measured, removing the containment guard clears the anchor here.
+         *
+         * Somewhere that is neither half of the pair, and a rock will do -- every cell is
+         * focusable, and the guard is about where focus went, not what is on it.
          */
-        await page.locator('[data-cell="2,2"]').focus()
-        await expect(page.locator('[data-anchor]'), 'the half-made move was cancelled by a focus move')
+        const n = Math.sqrt(await page.locator('[data-cell]').count())
+        const elsewhere = anchor === '0,0' ? `${n - 1},${n - 1}` : '0,0'
+        await page.locator(`[data-cell="${elsewhere}"]`).focus()
+        await expect(page.locator('[data-anchor]'), 'a focus move cancelled the half-made move')
             .toHaveCount(1)
 
-        await page.locator('[data-cell="0,0"]').focus()
-        const [ci] = candidate!.split(',').map(Number)
-        await page.keyboard.press(ci === 1 ? 'ArrowDown' : 'ArrowRight')
+        await page.locator(`[data-cell="${anchor}"]`).focus()
+        await page.keyboard.press('ArrowDown')
 
         /*
          * The move completed, so the anchor was still there when the arrow arrived.
@@ -330,23 +340,17 @@ test.describe('the roving tabindex', () => {
          * one element is rendered per domino and it carries the half holding the pips, so
          * an upright piece is marked at its top cell and a flat one at its *right* cell --
          * which is what `e2e/board.spec.ts` says and what this test used to contradict.
-         * It only ever met boards offering a downward move from 0,0; the day one offered a
-         * rightward move instead, it failed against correct code, with the piece sitting
-         * at `0,1` exactly as it should.
          *
          * The cells' own names are better evidence in any case. Row 19 made them the
          * source of truth for what a square holds, and they are what a screen reader
-         * actually reads out.
+         * actually reads out. Matched positively rather than as "no longer empty": a
+         * mistyped selector returns null, and `null` does not match /empty/ either, so the
+         * negative form would pass while testing nothing.
          */
         const nameOf = (cell: string) =>
             page.locator(`[data-cell="${cell}"]`).getAttribute('aria-label')
-        // Matched positively rather than as "no longer empty": a mistyped selector returns
-        // null, and `null` does not match /empty/ either, so the negative form would pass
-        // while testing nothing. Every half of every domino says "half of"; a rock and an
-        // empty square say neither.
-        expect(await nameOf('0,0'), 'the anchor square holds no piece').toMatch(/half of/)
-        expect(await nameOf(candidate!), 'the square it grew into holds no piece')
-            .toMatch(/half of/)
+        expect(await nameOf(anchor), 'the anchor square holds no piece').toMatch(/top half/)
+        expect(await nameOf(below), 'the square below holds no piece').toMatch(/bottom half/)
         await expect(page.locator('[data-anchor]')).toHaveCount(0)
     })
 
