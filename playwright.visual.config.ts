@@ -33,9 +33,17 @@ export default defineConfig({
     globalSetup: './e2e/globalSetup.ts',
     expect: {
         toHaveScreenshot: {
-            // Measured, not chosen: 100 comparisons (4 baselines x 25) on the runner that
-            // took them, every one zero pixels different. See the spec's P0-4 amendment.
+            /*
+             * Both set explicitly, because the defaults hid the question. The comparator is
+             * pixelmatch, which forgives each pixel a colour difference below `threshold`
+             * (0.2 by default, in YIQ) and ignores pixels it judges anti-aliasing. Measured at
+             * 0.2, a tile-face colour change and a three-level darker cell both passed; at 0
+             * both fail. Anti-aliased edges still cannot be counted -- a half-pixel outline
+             * change passes either way -- and the geometry assertions of row 2 exist for
+             * exactly that. See the spec's P0-4 amendment for the table and the runs.
+             */
             maxDiffPixels: 0,
+            threshold: 0,
             // Stops CSS animations and transitions; `motion`'s JavaScript animations are
             // waited out by `waitForRest` instead, because this cannot see them.
             animations: 'disabled',

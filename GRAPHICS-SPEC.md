@@ -508,21 +508,44 @@ geometry to make.
 > compares them. Keeping one atomic commit would mean pushing temporary branches to the
 > repository, which has not been asked for.
 >
-> **The diff budget, measured: zero.** The regenerate run at `bdff2ae` (CI run 35930878780)
-> took the four baselines and then compared against them 25 times on the same runner: 100
-> comparisons, every one zero pixels different, so `maxDiffPixels` is 0 and not a tolerance
-> picked to pass. The environment it recorded is image `ubuntu24 20260907.300.1`, Ubuntu
-> 24.04.5, Playwright 1.63.0, Chromium 153.0.8010.12. That is same-machine evidence only. A
-> different runner *instance* — GitHub's pool mixes CPU models, and Chromium rasterises in
-> software here — is exercised by every later comparison run, which compares twice against
-> baselines taken elsewhere; if instance-to-instance noise exists, that is where it will
-> show, and the budget is re-measured rather than raised to hide it.
+> **What "zero diff" means here — corrected.** Part 2 (`5338d0f`) recorded that the regenerate
+> run at `bdff2ae` made "100 comparisons, every one zero pixels different". That overstated it.
+> `toHaveScreenshot` counts differences with **pixelmatch**, which (a) ignores any pixel it
+> classifies as anti-aliasing, and Playwright exposes no way to include them, and (b) forgives
+> each pixel a colour difference below `threshold`, which defaulted to 0.2 in YIQ space — a
+> tolerance nobody had chosen or measured. Those 100 comparisons were zero *as pixelmatch
+> counts at 0.2*, which is much less than zero pixels.
 >
-> Row 3's same-date noise (4 of 10 pairs differing on the Windows host) does not appear
-> here, and the likely reason is the capture rather than the machine: row 3 compared raw
-> `page.screenshot()` pairs, while `toHaveScreenshot` also waits for two identical frames
-> and disables CSS animation, on top of the at-rest wait. Locally, the same four baselines
-> matched 20 of 20 on Windows too.
+> **Measured, what the comparison can and cannot see.** Six small changes to the art, each
+> compared against baselines taken just before it (on the development host: this is a
+> property of the comparator, not of the rasteriser):
+>
+> | change | at `threshold` 0.2 (the default) | at `threshold` 0 |
+> | --- | --- | --- |
+> | rock outline 6 → 7px (half a pixel each side) | passes | passes |
+> | rock outline 6 → 8px | fails, 399–3,901 px | fails, 400–3,901 px |
+> | pip radius 8 → 9 | passes | passes |
+> | divider one pixel longer | fails, 4 px | fails, 4 px |
+> | tile face `#FFF3D6` → `#FFF0D0` | passes | fails, 2,618–12,986 px |
+> | dark cell `#cbcbcb` → `#c8c8c8` | passes | fails, 17,452–86,587 px |
+>
+> So `threshold` is **0**: at the default, the screenshots could not see a colour change of
+> the size the palette rows (P0-5, P1-3) will make. The two changes that pass at 0 alter only
+> anti-aliased edge pixels, and pixelmatch cannot be made to count those — which is why they
+> are not the screenshots' job: row 2's geometry assertions fail on exactly those two
+> (mutations A1 and A3 there). The division of labour the acceptance above asks for is now a
+> measured one rather than an assumed one.
+>
+> **The budget at `threshold` 0** is re-measured by the regenerate run of the commit that
+> sets it — baselines retaken on the runner, then compared 25 times — and recorded with the
+> baselines it produced. A tolerance is introduced only if that run shows noise, and then at
+> the measured size.
+>
+> Row 3's same-date noise (4 of 10 pairs differing on the Windows host) is a raw
+> `page.screenshot()` measurement; `toHaveScreenshot` also waits for two identical frames and
+> disables CSS animation, on top of the at-rest wait, and locally the four baselines matched
+> 20 of 20 at 0.2 and 12 of 12 at 0 — while two regenerations of `sheet-38` still produced
+> different bytes, so the host is not byte-stable even where the comparison passes.
 >
 > **The full-page day is shifted, not pinned.** `page.clock.install`, planned above, was never
 > measured for the completion-card failure row 3 found under `setFixedTime`. The baselines use
