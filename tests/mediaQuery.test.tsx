@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { useMediaQuery } from '@/app/hooks/useMediaQuery'
 import { WIDE_LAYOUT_QUERY } from '@/app/dominoFill/composition'
 
@@ -61,13 +62,27 @@ describe('useMediaQuery', () => {
         expect(result.current).toBe(true)
     })
 
-    it('says no while it does not know', () => {
-        // There is no `window` during SSR and no honest answer before the first effect, so
-        // the first render is the single column everywhere. Deliberately this way round: a
-        // desktop that starts narrow re-measures once, while a phone that starts wide
-        // would lay a 260px rail beside a 360px board.
-        const { result } = renderHook(() => useMediaQuery(WIDE_LAYOUT_QUERY))
-        expect(result.current).toBe(false)
+    it('says no while it does not know, where that is actually observable', () => {
+        /*
+         * The pre-effect render, tested by server rendering -- which is the only way to
+         * see it. `renderHook` flushes effects before handing back a result, so the value
+         * it reports is always the post-effect one: an initial state of `true` passes
+         * there whenever `matchMedia` happens to report false, and the assertion proves
+         * nothing about the first render at all.
+         *
+         * `renderToString` cannot run effects, so what it returns *is* the initial value.
+         * The query is made to match first, which makes this strictly stronger: the hook
+         * must still render the compact answer even when the wide one is the truth,
+         * because on the server there is no window to ask.
+         *
+         * Deliberately this way round. A desktop that starts narrow re-measures once; a
+         * phone that started wide would lay a 260px rail beside a 360px board, and a
+         * hydration mismatch is the least of what that looks like.
+         */
+        currentlyMatches = true
+
+        const Probe = () => <span>{String(useMediaQuery(WIDE_LAYOUT_QUERY))}</span>
+        expect(renderToString(<Probe />)).toContain('false')
     })
 
     it('follows the window across the breakpoint, in both directions', () => {
