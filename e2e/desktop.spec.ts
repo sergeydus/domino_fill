@@ -123,6 +123,104 @@ test('the rail takes the controls, and the legend stays with the board', async (
     expect(legend.x + legend.width).toBeLessThanOrEqual(shell.x + shell.width + 1)
 })
 
+/** Which control has the keyboard, by the attribute that identifies it. */
+const focusedControl = (page: Page) => page.evaluate(() => {
+    const el = document.activeElement as HTMLElement | null
+    if (el === null || el === document.body) return null
+    for (const name of ['data-reset', 'data-mute', 'data-check', 'data-open-archive']) {
+        if (el.hasAttribute(name)) return name
+    }
+    return el.tagName
+})
+
+test('the keyboard keeps its place across the breakpoint', async ({ page }) => {
+    /*
+     * Crossing the breakpoint moves a control between the column and the rail, and React
+     * reparents by unmounting and rebuilding -- so the focused node is destroyed. Measured
+     * before the fix: focus fell to `<body>` in both directions. A keyboard player
+     * resizing a window, or a tablet being rotated, lost their place entirely.
+     *
+     * Both directions, because they are different code paths in the composition and only
+     * one of them was ever going to be tried by hand.
+     */
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openBoard(page)
+
+    await page.locator('[data-reset]').focus()
+    expect(await focusedControl(page)).toBe('data-reset')
+
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+    expect(await focusedControl(page), 'narrowing dropped the keyboard').toBe('data-reset')
+    await expect(page.locator('[data-reset]'), 'and left a second Reset behind').toHaveCount(1)
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(1)
+    expect(await focusedControl(page), 'widening dropped the keyboard').toBe('data-reset')
+    await expect(page.locator('[data-reset]')).toHaveCount(1)
+
+    // A second crossing with the same control focused, which is the case a naive
+    // implementation loses: the remembered target is identical, React skips the render,
+    // and nothing restores anything.
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+    expect(await focusedControl(page), 'the second crossing dropped it').toBe('data-reset')
+})
+
+test('the rail control that moves is the one that comes back', async ({ page }) => {
+    // Not merely "something is focused": the key has to identify the control, or a
+    // restoration that lands on the first button of the group would pass.
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await openBoard(page)
+
+    await page.locator('[data-mute]').focus()
+    expect(await focusedControl(page)).toBe('data-mute')
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(1)
+    expect(await focusedControl(page)).toBe('data-mute')
+    await expect(page.locator('[data-mute]')).toHaveCount(1)
+})
+
+test('the control that comes back is the exact one, not its first sibling', async ({ page }) => {
+    /*
+     * Found by mutation. `data-reset` is a bare marker, so a key that dropped attribute
+     * *values* still found the right button and every test passed. The difficulty selector
+     * is three buttons distinguished only by their value: with the value dropped, the
+     * keyboard comes back on "Easy" no matter which option it left from.
+     */
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openBoard(page)
+
+    await page.locator('[data-difficulty="hard"]').focus()
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+
+    expect(await page.evaluate(() =>
+        (document.activeElement as HTMLElement | null)?.getAttribute('data-difficulty')))
+        .toBe('hard')
+})
+
+test('a player who clicked away is not dragged back', async ({ page }) => {
+    /*
+     * The other half of the contract, and the reason the target is captured at the moment
+     * of the change rather than remembered from the last `focusin`. Someone who has
+     * clicked the page background has no focus on purpose; handing it to a control they
+     * last used minutes ago is a jump they did not ask for.
+     */
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openBoard(page)
+
+    await page.locator('[data-reset]').focus()
+    await page.mouse.click(4, 4)
+    expect(await focusedControl(page), 'clicking the background should focus nothing').toBeNull()
+
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+    expect(await focusedControl(page), 'focus was restored to a control nobody asked for')
+        .toBeNull()
+})
+
 test('the board stops growing, and the cap is what stops it', async ({ page }) => {
     /*
      * A board that grows with the window is not better at 2560px; it is a board whose
