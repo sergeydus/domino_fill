@@ -221,6 +221,32 @@ test('a player who clicked away is not dragged back', async ({ page }) => {
         .toBeNull()
 })
 
+test('focus already on the board is not taken away by the rearrangement', async ({ page }) => {
+    /*
+     * The restoration must be able to say no. A player reading the board with the keyboard
+     * has their focus on a square, and squares do not move between the compositions --
+     * they are in the column in both. Resizing the window must leave them exactly where
+     * they were rather than handing the keyboard to whichever button the rail shuffled.
+     *
+     * This is what makes the capture's answer of "nothing to restore" load-bearing: a key
+     * that fell back to *some* control for anything focused, or a restore that ran
+     * regardless, would drag the player off the board here and pass everywhere else.
+     */
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openBoard(page)
+
+    await page.locator('[data-cell="3,3"]').focus()
+    expect(await page.evaluate(() =>
+        document.activeElement?.getAttribute('data-cell'))).toBe('3,3')
+
+    await page.setViewportSize({ width: 1000, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+
+    expect(await page.evaluate(() =>
+        document.activeElement?.getAttribute('data-cell')), 'the board lost the keyboard')
+        .toBe('3,3')
+})
+
 test('the board stops growing, and the cap is what stops it', async ({ page }) => {
     /*
      * A board that grows with the window is not better at 2560px; it is a board whose

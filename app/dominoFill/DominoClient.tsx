@@ -17,6 +17,7 @@ import DayBanner from './DayBanner'
 import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { FocusAcrossComposition } from './FocusAcrossComposition'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
 } from './composition'
@@ -29,30 +30,6 @@ const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
 
 /** Page margin kept clear on each side, in CSS px. Part of the fit budget. */
 const PAGE_MARGIN_PX = 8
-
-/**
- * The attributes that identify a control well enough to find it again (row 1, follow-up).
- *
- * Every control that changes place between the compositions already carries one of these,
- * so nothing is added to the markup for the sake of the tests or of this mechanism.
- */
-const CONTROL_ATTRIBUTES = [
-  'data-check', 'data-hint', 'data-undo', 'data-reset',
-  'data-difficulty', 'data-level', 'data-open-archive', 'data-mute',
-] as const
-
-/** A selector that will find this control again after it has been rebuilt, or null. */
-const controlKey = (node: Element | null): string | null => {
-  if (!(node instanceof HTMLElement)) return null
-  for (const attribute of CONTROL_ATTRIBUTES) {
-    const value = node.getAttribute(attribute)
-    if (value === null) continue
-    // Boolean markers (`data-reset`) render as an empty value; valued ones
-    // (`data-difficulty="hard"`) have to keep theirs, or the key finds a sibling.
-    return value === '' ? `[${attribute}]` : `[${attribute}="${value}"]`
-  }
-  return null
-}
 
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
@@ -187,70 +164,6 @@ const DominoClient: React.FC = () => {
   }, [currentBoard, wide])
 
   /*
-   * Keep the keyboard's place across the breakpoint (row 1, follow-up).
-   *
-   * Crossing it moves a control from the column to the rail or back, and React reparents
-   * by unmounting and rebuilding: the focused element is destroyed and focus falls to
-   * `<body>`. Measured in both directions before this fix -- focus Reset at 1280x800,
-   * narrow the window, and focus is on the body; the same again widening. A keyboard
-   * player resizing a window, or a tablet being rotated, loses their place entirely.
-   *
-   * **Captured during render, not from a listener.** The obvious shape -- remember the
-   * last focused control on `focusin`, restore it afterwards -- was built first and does
-   * not work: React's unmount fires `focusout` on the control it is removing, so the
-   * listener that was supposed to remember the target clears it a moment before the
-   * restore runs. Measured, with the key reliably `null` at exactly the point it was
-   * needed.
-   *
-   * The render phase is before the commit, so `document.activeElement` here is still the
-   * old tree's -- the last instant at which the answer exists. Reading the DOM during
-   * render is not free of sin, but it is idempotent, it is guarded for the server, and a
-   * double render in strict mode takes the same reading twice.
-   *
-   * The single-DOM alternative -- one tree arranged by CSS -- is tidier and was also built
-   * and measured. It costs more than it saves: with one tree the rail's children straddle
-   * the board in the phone's visual order, so `order` has to lift the difficulty selector
-   * above the board while it sits after it in the DOM. That is a focus-order mismatch
-   * (WCAG 2.4.3) on every phone, to fix an occasional one on desktop. This keeps DOM order
-   * and visual order identical in both compositions.
-   */
-  const [wasWide, setWasWide] = useState(wide)
-  const [pendingFocus, setPendingFocus] = useState<{ key: string | null }>({ key: null })
-  if (wasWide !== wide) {
-    // React's documented shape for adjusting state while rendering: it re-renders
-    // immediately without committing, so this runs once per change. Refs would be the
-    // obvious home for it and are not allowed to be read here -- `react-hooks/refs`
-    // rejects it, and is right to.
-    setWasWide(wide)
-    setPendingFocus({
-      key: typeof document === 'undefined' ? null : controlKey(document.activeElement),
-    })
-  }
-
-  /*
-   * Wrapped in an object so that every crossing is a distinct value.
-   *
-   * A bare string would deduplicate: cross back with the same control focused, React sees
-   * the same state and skips the render, and the effect never runs -- so the *second*
-   * crossing would lose the focus the first one saved. Clearing it from inside the effect
-   * instead is what `react-hooks/set-state-in-effect` exists to prevent.
-   */
-  useEffect(() => {
-    const key = pendingFocus.key
-    /*
-     * `key` is null unless a control that moves had the focus, which is the whole of the
-     * condition. An earlier version also required `document.activeElement` to be `<body>`
-     * -- "only restore if the rebuild really dropped it" -- and mutation testing could not
-     * kill it, because there is no reachable case: every control `controlKey` recognises
-     * is one that changes parent at the breakpoint, and everything that survives the
-     * crossing, the board's cells included, has no key. An unreachable guard is a branch
-     * no test can defend, so it is gone rather than left to look careful.
-     */
-    if (key === null) return
-    document.querySelector<HTMLElement>(key)?.focus()
-  }, [pendingFocus])
-
-  /*
    * No `onContextMenu` any more.
    *
    * Right-click used to flip the selected piece, which the drag verb removes entirely
@@ -373,75 +286,84 @@ const DominoClient: React.FC = () => {
 
   return (
     /*
-     * `m-auto` rather than `justify-center` on the parent. An auto margin resolves to zero
-     * when there is no free space, so an overflowing column stays anchored at the top and
-     * every part of it can be scrolled to.
+     * Wrapped so the keyboard survives the rearrangement.
      *
-     * To be precise about what that does and does not fix: centring only strands content
-     * above the scroll origin when the container has a *definite* height. Measured, with
-     * the board overflowing at 800x400: `min-h-svh` plus `justify-center` clips nothing,
-     * because the container simply grows. Swap the `min-h` for `h-svh` and it clips at
-     * once. The auto margin is what makes that distinction stop mattering.
-     *
-     * The margin and the padding live on this wrapper in both compositions, so the
-     * arithmetic `useAvailableBoardBox` does -- viewport minus margin minus insets -- is
-     * the same arithmetic whichever one is showing.
+     * Everything below is rebuilt when `wide` flips -- React reparents by unmounting --
+     * so whichever control had focus is destroyed. `FocusAcrossComposition` reads the
+     * focus in the instant before the commit and writes it back in the instant after.
      */
-    <div
-      data-stage
-      data-wide={wide ? '' : undefined}
-      className={wide
-        ? 'm-auto flex flex-row items-start justify-center'
-        : 'm-auto'}
-      style={{
-        // The page margin plus whatever the device's safe area asks for, so the board is
-        // never laid out under a notch or a home indicator.
-        paddingTop: `calc(${PAGE_MARGIN_PX}px + var(--safe-top))`,
-        paddingRight: `calc(${PAGE_MARGIN_PX}px + var(--safe-right))`,
-        paddingBottom: `calc(${PAGE_MARGIN_PX}px + var(--safe-bottom))`,
-        paddingLeft: `calc(${PAGE_MARGIN_PX}px + var(--safe-left))`,
-        gap: wide ? `${STAGE_GAP_PX}px` : undefined,
-      }}
-    >
+    <FocusAcrossComposition composition={wide ? 'rail' : 'column'}>
       {/*
-        * The measured column: the board and everything that must stay beside it.
-        *
-        * `data-chrome` marks everything in here that is not the board.
-        * `useAvailableBoardBox` sums those heights and gives the board what is left, so
-        * the board is budgeted against the space it actually has. Anything in the rail is
-        * outside this element and therefore outside that sum -- which is the entire point
-        * of the wide composition.
-        */}
+       * `m-auto` rather than `justify-center` on the parent. An auto margin resolves to zero
+       * when there is no free space, so an overflowing column stays anchored at the top and
+       * every part of it can be scrolled to.
+       *
+       * To be precise about what that does and does not fix: centring only strands content
+       * above the scroll origin when the container has a *definite* height. Measured, with
+       * the board overflowing at 800x400: `min-h-svh` plus `justify-center` clips nothing,
+       * because the container simply grows. Swap the `min-h` for `h-svh` and it clips at
+       * once. The auto margin is what makes that distinction stop mattering.
+       *
+       * The margin and the padding live on this wrapper in both compositions, so the
+       * arithmetic `useAvailableBoardBox` does -- viewport minus margin minus insets -- is
+       * the same arithmetic whichever one is showing.
+       */}
       <div
-        ref={setColumn}
-        className='flex flex-col gap-4 items-center justify-center'
+        data-stage
+        data-wide={wide ? '' : undefined}
+        className={wide
+          ? 'm-auto flex flex-row items-start justify-center'
+          : 'm-auto'}
+        style={{
+          // The page margin plus whatever the device's safe area asks for, so the board is
+          // never laid out under a notch or a home indicator.
+          paddingTop: `calc(${PAGE_MARGIN_PX}px + var(--safe-top))`,
+          paddingRight: `calc(${PAGE_MARGIN_PX}px + var(--safe-right))`,
+          paddingBottom: `calc(${PAGE_MARGIN_PX}px + var(--safe-bottom))`,
+          paddingLeft: `calc(${PAGE_MARGIN_PX}px + var(--safe-left))`,
+          gap: wide ? `${STAGE_GAP_PX}px` : undefined,
+        }}
       >
-        {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
-            costs the column's gap -- which comes straight out of the board's height
-            budget. */}
-        {banner}
-        {!wide && difficulty}
-        <ClientBoard boardsStore={currentBoard} />
-        {legend}
-        {completion}
-        {advice}
-        {!wide && controls}
-        {!wide && navigation}
-        {overlays}
-      </div>
-
-      {wide && (
+        {/*
+          * The measured column: the board and everything that must stay beside it.
+          *
+          * `data-chrome` marks everything in here that is not the board.
+          * `useAvailableBoardBox` sums those heights and gives the board what is left, so
+          * the board is budgeted against the space it actually has. Anything in the rail is
+          * outside this element and therefore outside that sum -- which is the entire point
+          * of the wide composition.
+          */}
         <div
-          data-rail
-          className='flex flex-col gap-4 items-stretch'
-          style={{ width: `${RAIL_WIDTH_PX}px` }}
+          ref={setColumn}
+          className='flex flex-col gap-4 items-center justify-center'
         >
-          {difficulty}
-          {controls}
-          {navigation}
+          {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
+              costs the column's gap -- which comes straight out of the board's height
+              budget. */}
+          {banner}
+          {!wide && difficulty}
+          <ClientBoard boardsStore={currentBoard} />
+          {legend}
+          {completion}
+          {advice}
+          {!wide && controls}
+          {!wide && navigation}
+          {overlays}
         </div>
-      )}
-    </div>
+
+        {wide && (
+          <div
+            data-rail
+            className='flex flex-col gap-4 items-stretch'
+            style={{ width: `${RAIL_WIDTH_PX}px` }}
+          >
+            {difficulty}
+            {controls}
+            {navigation}
+          </div>
+        )}
+      </div>
+    </FocusAcrossComposition>
   );
 }
 
