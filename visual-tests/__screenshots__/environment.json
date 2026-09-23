@@ -1,5 +1,5 @@
 {
-  "runnerImage": "ubuntu24 20260907.300.1",
+  "runnerImage": "ubuntu24 20260920.314.1",
   "os": "Ubuntu 24.04.5 LTS",
   "playwright": "1.63.0",
   "chromium": "153.0.8010.12 (revision 1243)",

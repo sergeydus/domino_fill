@@ -67,6 +67,10 @@ if (command === 'guard') {
 } else if (command === 'check') {
     const now = current()
     console.log(`this environment:\n${JSON.stringify(now, null, 2)}`)
+    // Printed, not recorded or compared: GitHub's pool mixes CPU models, Chromium rasterises
+    // in software here, and a CPU-dependent rounding difference is the leading suspect for
+    // any instance-to-instance noise. The log is where to correlate it.
+    console.log(`cpu: ${run("lscpu | grep '^Model name' | sed 's/^Model name:[[:space:]]*//'") ?? '?'}`)
     if (!fs.existsSync(RECORD)) {
         console.log('::warning::no environment.json beside the baselines')
     } else {

@@ -536,10 +536,22 @@ geometry to make.
 > (mutations A1 and A3 there). The division of labour the acceptance above asks for is now a
 > measured one rather than an assumed one.
 >
-> **The budget at `threshold` 0** is re-measured by the regenerate run of the commit that
-> sets it — baselines retaken on the runner, then compared 25 times — and recorded with the
-> baselines it produced. A tolerance is introduced only if that run shows noise, and then at
-> the measured size.
+> **The budget at `threshold` 0, measured.** The regenerate run of part 3 (`63ef5d9`, CI run
+> 35933599943, image `ubuntu24 20260920.314.1`) retook the baselines and compared against them
+> 25 times on the same runner: 100 of 100 passed. That is one machine agreeing with itself.
+>
+> Across machines it is not quite zero. Compared with part 2's set — taken on image
+> `20260907.300.1`, on a different runner — three of the four baselines are **byte-identical**,
+> and `sheet-53` differs in **22 pixels**, scattered over three specimens, almost all by one
+> level of one channel and at most by 13. Nothing the page draws differs; it has the look of
+> rasterisation rounding that depends on the machine — GitHub's pool mixes CPU models, and
+> Chromium rasterises in software on these runners — and each comparison now prints the CPU
+> it ran on so that can be confirmed or ruled out. Whether it matters depends on whether
+> pixelmatch counts those pixels, and that is measured by comparing on other instances, not
+> assumed: every comparison run compares twice, and re-running one draws a new machine. If
+> noise shows, a tolerance is set at its measured size, with what it would then fail to see
+> stated beside it — a pixel budget that forgives 22 pixels would also forgive the 4-pixel
+> divider change in the table above.
 >
 > Row 3's same-date noise (4 of 10 pairs differing on the Windows host) is a raw
 > `page.screenshot()` measurement; `toHaveScreenshot` also waits for two identical frames and
