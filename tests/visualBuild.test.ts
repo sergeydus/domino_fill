@@ -45,12 +45,17 @@ describe('with the flag', () => {
 })
 
 describe('the sheet build\'s generated types', () => {
-    it('are type-checked by the sheet build only', () => {
+    it('are not declared in the tsconfig production and `tsc` use', () => {
         /*
          * Measured: with `.next-visual`'s types in `tsconfig.json`, a leftover sheet build
          * whose route had been renamed failed `tsc --noEmit` and the *production* build,
          * both unable to find `app/visual/page.js`. Stale output from a test-only build
          * must not be able to break the one that ships.
+         *
+         * Necessary, not sufficient: `next-env.d.ts` imports whichever build's route types
+         * came last, and that is a generated file this test cannot see before any build has
+         * run. e2e/bundle.spec.ts checks what an ordinary `tsc` actually reads after the
+         * suite's builds.
          */
         expect(includes('tsconfig.json').filter(p => p.startsWith('.next-visual'))).toEqual([])
     })

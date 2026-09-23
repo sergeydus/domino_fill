@@ -41,8 +41,14 @@ import type { NextConfig } from "next";
  * so those types must be declared up front. But declared in `tsconfig.json`, they are
  * type-checked by `tsc --noEmit` and by the *production* build as well, and a sheet
  * build's types go stale the moment a sheet route is renamed: measured, a leftover
- * `.next-visual` failed both, unable to find `app/visual/page.js`. Only the build that
- * produces those types reads them now.
+ * `.next-visual` failed both, unable to find `app/visual/page.js`.
+ *
+ * That keeps the sheet's types out of every tsconfig but its own. It does **not** keep them
+ * out of an ordinary `tsc` on its own, because there is a second route in: every build
+ * rewrites the untracked `next-env.d.ts` to import *its* route types, and `tsc` follows the
+ * import. So whichever build ran last decides. The browser suite builds the sheet first and
+ * production last, and checks what it leaves behind; a sheet build run by hand points
+ * `next-env.d.ts` at `.next-visual` until the next production build points it back.
  *
  * With the flag unset, this spreads nothing: the production config is exactly what it was.
  */

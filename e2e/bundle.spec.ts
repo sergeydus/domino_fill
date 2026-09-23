@@ -86,6 +86,42 @@ test.describe('the sheet build carries the sheet (positive control)', () => {
     })
 })
 
+/**
+ * Every file an ordinary type-check reads, via `tsconfig.json` or another project file.
+ *
+ * `--listFilesOnly` rather than a look at the configs, because the sheet's types can arrive
+ * without being named in any tsconfig: `next-env.d.ts` imports whichever route types the
+ * last build wrote, and `tsc` follows it.
+ */
+const typeChecked = (project: string) => {
+    const tsc = path.join(ROOT, 'node_modules', 'typescript', 'bin', 'tsc')
+    const res = spawnSync(process.execPath, [tsc, '-p', project, '--listFilesOnly'],
+        { cwd: ROOT, encoding: 'utf8' })
+    if (res.status !== 0) throw new Error(`tsc -p ${project} failed:\n${res.stdout}\n${res.stderr}`)
+    return res.stdout.split(/\r?\n/).filter(Boolean).map(f => path.relative(ROOT, f).replace(/\\/g, '/'))
+}
+
+test.describe('the type environment the run leaves behind is production\'s', () => {
+    /*
+     * The suite builds the sheet and then production, and the order is the fix. Each build
+     * points the untracked `next-env.d.ts` at its own route types; production built last
+     * leaves it where a developer's next `tsc` expects it. Found in review: with the order
+     * reversed, an ordinary `tsc` after an E2E run read `.next-visual/types/routes.d.ts`.
+     */
+    test('next-env.d.ts imports production\'s route types', () => {
+        const env = fs.readFileSync(path.join(ROOT, 'next-env.d.ts'), 'utf8')
+        expect(env).toContain('import "./.next/types/routes.d.ts"')
+        expect(env).not.toContain('.next-visual')
+    })
+
+    test('and an ordinary tsc reads nothing the sheet build generated', () => {
+        // Positive control: the listing can see those files, from the config meant to read them.
+        expect(typeChecked('tsconfig.visual.json').filter(f => f.startsWith('.next-visual/')))
+            .not.toEqual([])
+        expect(typeChecked('tsconfig.json').filter(f => f.startsWith('.next-visual/'))).toEqual([])
+    })
+})
+
 test.describe('the production build does not', () => {
     test('no emitted file contains the sentinel, searched as bytes', () => {
         const found = filesContaining(path.join(ROOT, '.next'))

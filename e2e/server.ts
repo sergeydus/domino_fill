@@ -270,16 +270,27 @@ export const startServer = async () => {
     const productionEnv = { ...ambient, NEXT_PUBLIC_SITE_URL: BASE_URL }
     const visualEnv = { ...ambient, NEXT_PUBLIC_SITE_URL: VISUAL_URL, DOMINO_VISUAL_SHEET: '1' }
 
-    process.env[ROUTES_ENV.production] = routeListing(build('production', productionEnv))
     /*
-     * Emptied first, so it can only hold what this run built. e2e/bundle.spec.ts reads it as
-     * the positive control for the absence checks, and a control that passes on a previous
-     * run's output is no control: measured, with the flag's `distDir` removed the sheet
-     * build overwrote production -- which the absence checks caught -- while every positive
-     * control passed against a `.next-visual` left from an earlier run.
+     * The sheet first, production last -- and the order is load-bearing.
+     *
+     * Every `next build` rewrites the shared, untracked `next-env.d.ts` to import *its own*
+     * `distDir`'s route types, and an ordinary `tsc --noEmit` follows that import. The
+     * separate `tsconfig.visual.json` keeps the sheet's types out of `tsconfig.json`, but it
+     * cannot reach this file. Measured, with production built first: the run ended with
+     * `next-env.d.ts` importing `.next-visual/types/routes.d.ts`, and a developer's next
+     * `tsc` type-checked the sheet build's output. Built last, production leaves it pointing
+     * where it should; e2e/bundle.spec.ts checks that it does.
+     *
+     * The sheet's directory is emptied first, so it can only hold what this run built.
+     * e2e/bundle.spec.ts reads it as the positive control for the absence checks, and a
+     * control that passes on a previous run's output is no control: measured, with the
+     * flag's `distDir` removed the sheet build overwrote production -- which the absence
+     * checks caught -- while every positive control passed against a `.next-visual` left
+     * from an earlier run.
      */
     fs.rmSync(path.join(ROOT, '.next-visual'), { recursive: true, force: true })
     process.env[ROUTES_ENV.visual] = routeListing(build('visual sheet', visualEnv))
+    process.env[ROUTES_ENV.production] = routeListing(build('production', productionEnv))
 
     const production = await serve(PORT, BASE_URL, productionEnv)
     let visual: Managed

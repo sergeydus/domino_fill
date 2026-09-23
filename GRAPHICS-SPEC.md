@@ -354,7 +354,14 @@ question a visual baseline exists to answer.
 >   the tsconfig it builds with to include any unfamiliar `distDir`'s types, reformatting the
 >   whole file — so they must be declared up front. Declared in `tsconfig.json`, a stale
 >   sheet build (a route renamed since) failed `tsc --noEmit` *and* the production build.
->   Only the build that generates those types now reads them.
+> - **The build order** closes the second route in, found in review. Every build rewrites the
+>   untracked `next-env.d.ts` to import its own route types, and an ordinary `tsc` follows
+>   that import, which no tsconfig can prevent. So whichever build runs last decides what a
+>   developer's next `tsc` reads. The suite builds the sheet first and production last, and
+>   checks the result: `next-env.d.ts` imports `.next/types/routes.d.ts`, and
+>   `tsc --listFilesOnly` lists nothing under `.next-visual` (while the sheet's own tsconfig,
+>   as the control, does). Reversing the order fails both. A sheet build run by hand still
+>   points `next-env.d.ts` at the sheet until the next production build.
 >
 > **Both build modes, against the installed Next 16.0.10.** Flag on and flag off are
 > exercised by every browser run. The builder was probed by hand as well, because Turbopack is
