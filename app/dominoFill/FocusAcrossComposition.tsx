@@ -41,8 +41,9 @@ type Props = {
  * keyboard player resizing a window, or a tablet being rotated, lost their place entirely.
  *
  * **Why a class, in a codebase with no other class components.** The answer has to be read
- * out of the DOM in the last instant before React mutates it and written back in the first
- * instant after, and `getSnapshotBeforeUpdate` is the only API that offers that pair. Two
+ * out of the DOM in the last instant before React mutates it and written back within the
+ * same commit, and `getSnapshotBeforeUpdate` with `componentDidUpdate` is the only API that
+ * offers that pair. Two
  * shapes were built and rejected first, both for reasons that only showed up when measured:
  *
  *   - A `focusin` listener remembering the last control, restored afterwards. React's
@@ -57,8 +58,14 @@ type Props = {
  *
  * The before-mutation phase has neither problem: it runs once per commit, after React has
  * decided what to do and before it has done any of it, and the restore in
- * `componentDidUpdate` lands in the same commit -- synchronously, before paint, with no
- * window for anything else to place focus in between.
+ * `componentDidUpdate` lands in the same commit, synchronously and before paint. Nothing
+ * outside React can intervene -- no event, no timer, no passive effect.
+ *
+ * Something *inside* the commit can. The layout phase runs from the leaves upwards, so
+ * every child's layout effect has already run by the time `componentDidUpdate` does, and
+ * any of them may have placed focus deliberately. That is not a window this closes; it is
+ * one the guard in `componentDidUpdate` answers, by standing down when focus is already
+ * somewhere other than `<body>`.
  *
  * The single-DOM alternative -- one tree arranged by CSS -- is tidier and was also built
  * and measured. It costs more than it saves: with one tree the rail's children straddle

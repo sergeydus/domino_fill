@@ -290,7 +290,8 @@ const DominoClient: React.FC = () => {
      *
      * Everything below is rebuilt when `wide` flips -- React reparents by unmounting --
      * so whichever control had focus is destroyed. `FocusAcrossComposition` reads the
-     * focus in the instant before the commit and writes it back in the instant after.
+     * focus in the instant before the commit and writes it back within the same commit --
+     * unless a child's layout effect has already put it somewhere on purpose.
      */
     <FocusAcrossComposition composition={wide ? 'rail' : 'column'}>
       {/*
