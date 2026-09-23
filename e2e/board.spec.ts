@@ -285,7 +285,25 @@ test.describe('hit-testing does not depend on the store agreeing with the layout
             for (const el of document.querySelectorAll('[data-cell^="0,"]')) {
                 (el as HTMLElement).style.height = `${tall}px`
             }
+            /*
+             * And let the shell grow with it. The shell's height is fixed from the store's
+             * uniform arithmetic, so the taller grid overflowed it and the chrome below --
+             * the scoring key -- sat over the bottom rows. Measured on 2026-09-24, whose
+             * board put the free run at rows 4-5: the drag's end point hit the legend, the
+             * release resolved to no cell, and nothing was placed. The test only ever passed
+             * on days whose run sat high enough to stay clear of it.
+             */
+            (document.querySelector('[data-board-shell]') as HTMLElement).style.height = 'auto'
         })
+
+        // The premise, checked rather than assumed: the browser puts both drag points on
+        // the cells the test means. Anything laid over them fails here, saying so.
+        for (const [ci, cj] of [[i, j], [i + 1, j]] as const) {
+            const { x, y } = await centreOf(page, ci, cj)
+            expect(await page.evaluate(({ x, y }) =>
+                document.elementFromPoint(x, y)?.closest('[data-cell]')?.getAttribute('data-cell'),
+            { x, y }), `something covers cell ${ci},${cj}`).toBe(`${ci},${cj}`)
+        }
 
         await dragCells(page, [i, j], [i + 1, j])
 
