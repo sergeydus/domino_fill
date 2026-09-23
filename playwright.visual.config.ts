@@ -33,7 +33,8 @@ export default defineConfig({
     globalSetup: './e2e/globalSetup.ts',
     expect: {
         toHaveScreenshot: {
-            // Measured, not chosen: see the spec's P0-4 amendment for the runs behind it.
+            // Measured, not chosen: 100 comparisons (4 baselines x 25) on the runner that
+            // took them, every one zero pixels different. See the spec's P0-4 amendment.
             maxDiffPixels: 0,
             // Stops CSS animations and transitions; `motion`'s JavaScript animations are
             // waited out by `waitForRest` instead, because this cannot see them.

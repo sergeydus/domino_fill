@@ -508,6 +508,22 @@ geometry to make.
 > compares them. Keeping one atomic commit would mean pushing temporary branches to the
 > repository, which has not been asked for.
 >
+> **The diff budget, measured: zero.** The regenerate run at `bdff2ae` (CI run 35930878780)
+> took the four baselines and then compared against them 25 times on the same runner: 100
+> comparisons, every one zero pixels different, so `maxDiffPixels` is 0 and not a tolerance
+> picked to pass. The environment it recorded is image `ubuntu24 20260907.300.1`, Ubuntu
+> 24.04.5, Playwright 1.63.0, Chromium 153.0.8010.12. That is same-machine evidence only. A
+> different runner *instance* — GitHub's pool mixes CPU models, and Chromium rasterises in
+> software here — is exercised by every later comparison run, which compares twice against
+> baselines taken elsewhere; if instance-to-instance noise exists, that is where it will
+> show, and the budget is re-measured rather than raised to hide it.
+>
+> Row 3's same-date noise (4 of 10 pairs differing on the Windows host) does not appear
+> here, and the likely reason is the capture rather than the machine: row 3 compared raw
+> `page.screenshot()` pairs, while `toHaveScreenshot` also waits for two identical frames
+> and disables CSS animation, on top of the at-rest wait. Locally, the same four baselines
+> matched 20 of 20 on Windows too.
+>
 > **The full-page day is shifted, not pinned.** `page.clock.install`, planned above, was never
 > measured for the completion-card failure row 3 found under `setFixedTime`. The baselines use
 > the calendar shift row 3 did measure (`e2e/calendar.ts`): the page believes it is

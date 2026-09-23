@@ -100,8 +100,6 @@ jobs:
   visual:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      MESSAGE: ${{ github.event.head_commit.message }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -125,6 +123,10 @@ jobs:
           if-no-files-found: error
 
       - name: Compare with the baselines
+        # Scoped to this step: set on the job, the whole multi-line message was echoed into
+        # the log ahead of every step.
+        env:
+          MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           node scripts/visual-environment.mjs check
           case "$MESSAGE" in *'[visual update]'*|*'[visual measure]'*) repeat=25 ;; *) repeat=2 ;; esac
