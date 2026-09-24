@@ -53,6 +53,20 @@ export default defineConfig({
     },
     use: {
         ...devices['Desktop Chrome'],
+        /*
+         * Raster whole tiles, every time (found at graphics row 7).
+         *
+         * By default Chromium re-rasterises only the invalidated part of a tile, and the
+         * anti-aliasing where a partial raster meets the old one depends on what was
+         * invalidated before the screenshot -- on timing, not on the page. Rows 3 and 6 saw
+         * it as a few-pixel cluster that toggled between runs of unchanged code, always
+         * classed as anti-aliasing until row 7's art put one counted pixel in it: 7 of 25
+         * same-runner comparisons of the 53px sheet failed by that one pixel. Measured on
+         * the development host, ten shots of the sheet came out as three different images
+         * by default and as one with this switch; five of each baseline, one image each.
+         * The page is the same; the rasteriser just stops depending on its own history.
+         */
+        launchOptions: { args: ['--disable-partial-raster'] },
         baseURL: BASE_URL,
         deviceScaleFactor: 1,
         reducedMotion: 'reduce',
