@@ -649,17 +649,30 @@ from here.
 
 **Acceptance.**
 
-- A literal audit **scoped to visual source** — `app/**/*.{ts,tsx}`, `app/globals.css`,
-  `scripts/icon.ts` — and **blind to nothing that carries colour**: `#rgb`/`#rrggbb`,
-  `rgb()`/`rgba()`/`hsl()`, CSS named colours including `black` and `white`, and Tailwind
-  colour utilities in both forms (`bg-red-700`, `text-amber-100`, `bg-[#419dc8]`). The scope
-  keeps content hashes and corpus data elsewhere in the repository from raising false
-  positives; the breadth keeps `black` and `red-700` — both of which are live today — from
-  escaping through a hex-only pattern.
-- `tests/lineFeedback.test.ts` already computes contrast from a luminance function and
-  asserts the *old* palette would fail it; that check widens to every pair in §4 and §6,
-  computed **from the tokens**, so the guarantee survives a palette change instead of being
-  re-typed beside it.
+- A literal audit (`tests/palette.test.ts`) **scoped to visual source**:
+  `app/**/*.{ts,tsx,css}`, `scripts/icon.ts` and `scripts/palette-css.ts`. It is **blind to
+  nothing that carries colour**:
+  - `#rgb`/`#rrggbb` (with alpha forms);
+  - colour functions: `rgb()`, `rgba()`, `hsl()`, `oklch()` and the rest;
+  - the CSS named colours, including `black` and `white`;
+  - Tailwind colour utilities in both forms (`bg-red-700`, `text-amber-100`,
+    `bg-[#419dc8]`), under any variant;
+  - arrays of three or four integers in 0–255, the form the icon held its palette in.
+
+  The scope keeps content hashes and corpus data elsewhere in the repository from raising
+  false positives. The breadth keeps `black`, `red-700` and `[0xe8, 0xe7, 0xe7]` — all live
+  before row 5 — from escaping a hex-only pattern. Comments are not colour and are not
+  reported.
+
+  Only `app/palette.ts` and the byte-checked `app/palette.css` may hold a colour. Every token
+  must be read by code, not merely named in a comment.
+- **Contrast is computed from the tokens** (`tests/contrast.test.ts`) for every pair in §4 and
+  §6, so the guarantee survives a palette change instead of being re-typed beside it.
+  - §4's pairs must hold, at the values §4 quotes.
+  - §6's pairs record whether they hold today. A row that makes one hold has to mark it
+    held, and a held pair that breaks fails.
+  - `tests/lineFeedback.test.ts` keeps its label checks, including that the *old* palette
+    fails, and now reads the ground from the token.
 
 > **Amendment (row 5) — what was built, and what it measured.**
 >
