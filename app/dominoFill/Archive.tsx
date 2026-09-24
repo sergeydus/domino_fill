@@ -42,10 +42,10 @@ type Props = {
 }
 
 const MARK_CLASS: Record<DayMark, string> = {
-    none: 'bg-white',
-    started: 'bg-amber-200',
-    partial: 'bg-amber-400',
-    complete: 'bg-emerald-400',
+    none: 'bg-mark-none',
+    started: 'bg-mark-started',
+    partial: 'bg-mark-partial',
+    complete: 'bg-mark-complete',
 }
 
 const MARK_LABEL: Record<DayMark, string> = {
@@ -127,9 +127,9 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
             role='dialog'
             aria-modal='true'
             aria-label='Puzzle archive'
-            className='fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4'
+            className='fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 p-4'
         >
-            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-white p-4'>
+            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-panel p-4'>
                 <div className='mb-3 flex items-center justify-between gap-2'>
                     <button
                         type='button'
@@ -154,7 +154,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     </button>
                 </div>
 
-                {error && <p role='alert' className='mb-2 text-sm text-red-700'>{error}</p>}
+                {error && <p role='alert' className='mb-2 text-sm text-alert'>{error}</p>}
 
                 <div className='grid grid-cols-7 gap-1' role='group' aria-label={`Days in ${month}`}>
                     {days.map(date => {
@@ -177,7 +177,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                                 // a guess. The day is still selectable: picking it fetches
                                 // the month anyway.
                                 className={`rounded-md border p-1 text-xs ${MARK_CLASS[mark]} `
-                                    + (date === viewingDate ? 'ring-2 ring-sky-600' : '')}
+                                    + (date === viewingDate ? 'ring-2 ring-archive-current' : '')}
                                 onClick={() => { void pick(date) }}
                             >
                                 {Number(date.slice(8))}
@@ -189,7 +189,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                 <button
                     type='button'
                     data-archive-close
-                    className='mt-4 w-full rounded-md bg-slate-800 px-3 py-2 font-semibold text-white'
+                    className='mt-4 w-full rounded-md bg-strong-surface px-3 py-2 font-semibold text-on-strong'
                     onClick={() => boardsStore.setArchiveOpen(false)}
                 >
                     Close

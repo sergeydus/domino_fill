@@ -5,6 +5,8 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { lineState, columnComplete, rowComplete } from '@/app/stores/boardRules'
 import { labelPresentation, labelDescription, LABEL_COLORS } from '@/app/dominoFill/lineLabel'
+import { PALETTE } from '@/app/palette'
+import { contrast } from './colour'
 
 /**
  * Honest line feedback (spec P1-5, D10-g).
@@ -139,21 +141,8 @@ describe('state reaches more than one channel', () => {
 })
 
 describe('the palette meets WCAG 1.4.3 on the board background', () => {
-    const BACKGROUND = '#e8e7e7'
-
-    const luminance = (hex: string) => {
-        const channel = (value: number) => {
-            const c = value / 255
-            return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-        }
-        const h = hex.replace('#', '')
-        const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))
-        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-    }
-    const contrast = (a: string, b: string) => {
-        const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
-        return (hi + 0.05) / (lo + 0.05)
-    }
+    // The ground by token (graphics row 5), so this re-checks itself when P1-3 moves it.
+    const BACKGROUND = PALETTE.ground
 
     it('every label colour clears 4.5:1', () => {
         // Measured, and worse than the spec first recorded: the old neutral was 1.86:1 and

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { inflateSync } from 'node:zlib'
 import { ICONS, MASKABLE_SCALE, renderIcon } from '@/scripts/icon'
 import manifest from '@/app/manifest'
+import { rgbBytes } from '@/app/palette'
 
 /**
  * The icons are a pure function of their generator (spec P2-2, row 20b).
@@ -33,6 +34,7 @@ describe('the maskable icon survives a launcher crop', () => {
      * that circle", measured on the bytes the manifest actually points at.
      */
     const SAFE_RADIUS = 0.4
+    const GROUND = rgbBytes('ground')
 
     /** How far the furthest non-background pixel sits from the centre, as a fraction. */
     const markReach = (size: number, options: { maskable?: boolean }): number => {
@@ -42,7 +44,9 @@ describe('the maskable icon survives a launcher crop', () => {
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
                 const at = y * (size * 4 + 1) + 1 + x * 4
-                const isBackground = raw[at] === 0xe8 && raw[at + 1] === 0xe7 && raw[at + 2] === 0xe7
+                // The ground by token, not by bytes (graphics row 5): P1-3 moves the ground, and
+                // this has to keep measuring the mark rather than start measuring the page.
+                const isBackground = raw[at] === GROUND[0] && raw[at + 1] === GROUND[1] && raw[at + 2] === GROUND[2]
                 if (isBackground) continue
                 const distance = Math.hypot(x - centre, y - centre) / size
                 if (distance > furthest) furthest = distance

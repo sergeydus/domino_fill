@@ -16,7 +16,8 @@
     "corpus:build": "tsx scripts/build-corpus.ts",
     "corpus:verify": "tsx scripts/verify-corpus.ts",
     "corpus:horizon": "tsx scripts/check-horizon.ts",
-    "icons": "tsx scripts/icons-write.ts"
+    "icons": "tsx scripts/icons-write.ts",
+    "tokens": "tsx scripts/tokens-write.ts"
   },
   "dependencies": {
     "@vercel/speed-insights": "^1.3.1",

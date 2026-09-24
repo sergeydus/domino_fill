@@ -16,7 +16,7 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const startI = Math.min(i1, i2)
     const startJ = Math.min(j1, j2)
     return <>
-        <div className="z-10 pointer-events-none absolute opacity-70 bg-white" style={{ top: `${startI * size}px`, left: `${startJ * size}px`, height: `${size * (Math.abs(i1 - i2) + 1)}px`, width: `${size * (Math.abs(j1 - j2) + 1)}px`, borderTopLeftRadius: '12px', borderTopRightRadius: '12px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}></div>
+        <div className="z-10 pointer-events-none absolute opacity-70 bg-drag-wash" style={{ top: `${startI * size}px`, left: `${startJ * size}px`, height: `${size * (Math.abs(i1 - i2) + 1)}px`, width: `${size * (Math.abs(j1 - j2) + 1)}px`, borderTopLeftRadius: '12px', borderTopRightRadius: '12px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}></div>
     </>
 }
 export default observer(Hover)

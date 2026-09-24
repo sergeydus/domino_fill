@@ -35,7 +35,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                 <span
                     key={adviceTick}
                     data-advice-kind={advice.kind}
-                    className={adviceIsProblem(advice) ? 'font-semibold text-[#a10000]' : ''}
+                    className={adviceIsProblem(advice) ? 'font-semibold text-problem' : ''}
                 >
                     {adviceMessage(advice)}
                 </span>

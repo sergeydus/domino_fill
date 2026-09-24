@@ -255,7 +255,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
             <div />
             <HorizontalNumbers boardsStore={boardsStore} />
             <VerticalNumbers boardsStore={boardsStore} />
-            <div className="border-[#666666] border-4 rounded-2xl">
+            <div className="border-board-frame border-4 rounded-2xl">
                 {/* `cursor-pointer` lives here now: it used to be on the piece overlay,
                     which no longer takes pointer events and so no longer sets a cursor. */}
                 {/* `board-grid` carries the static touch policy; see globals.css. */}
@@ -292,7 +292,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     aria-colcount={size}
                     draggable={false}
                     style={gridStyle}
-                    className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-blue-500"
+                    className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-focus-ring"
                 >
                     <Hover boardsStore={boardsStore} />
                     <Selection boardsStore={boardsStore} />

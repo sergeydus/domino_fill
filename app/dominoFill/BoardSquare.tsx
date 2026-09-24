@@ -3,6 +3,7 @@ import React, { CSSProperties, useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
 import { cellDescription } from "./cellLabel";
+import { PALETTE } from "../palette";
 
 type Props = {
     i: number
@@ -26,8 +27,9 @@ const BoardSquare: React.FC<Props2> = observer((
     { isHinted, isFocused, isAnchor, isCandidate, i, j, boardsStore },
 ) => {
     const size = boardsStore.board.length
-    const isDark = (i + j) % 2 === 0;
-    const color = isDark ? '#cbcbcb' : '#ababab'
+    // Named for what it tests: it was `isDark`, and it picks the lighter tone.
+    const isEven = (i + j) % 2 === 0;
+    const color = isEven ? PALETTE.checkerLight : PALETTE.checkerDark
     const squareStyle: CSSProperties = useMemo(() => {
         return {
             aspectRatio: 1,
@@ -129,7 +131,7 @@ const BoardSquare: React.FC<Props2> = observer((
               */}
             {isHinted && (
                 <div
-                    className="pointer-events-none absolute inset-[2px] rounded-[4px] outline-3 outline-[#15661a]"
+                    className="pointer-events-none absolute inset-[2px] rounded-[4px] outline-3 outline-hint"
                 />
             )}
         </div>)

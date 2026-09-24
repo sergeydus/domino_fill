@@ -653,6 +653,127 @@ from here.
   computed **from the tokens**, so the guarantee survives a palette change instead of being
   re-typed beside it.
 
+> **Amendment (row 5) — what was built, and what it measured.**
+>
+> **The scope was three times §1.2's estimate.** The audit, run over the tree as it stood
+> before this row, finds **71 colour literals in 20 files**, not "roughly twenty across nine":
+> 29 hex, 30 Tailwind palette utilities (`bg-amber-200`, `ring-sky-600`, `bg-white/20`),
+> 8 CSS named colours, and 4 byte triples — `scripts/icon.ts` held its palette as
+> `[0xe8, 0xe7, 0xe7]`, which no string pattern sees. §1.2's table covered the hex and
+> missed most of the rest: the archive, the day banner, the tutorial and every selection
+> overlay were Tailwind's palette.
+>
+> **The palette.** `app/palette.ts`: 45 role-named tokens, plain TypeScript with no imports.
+> 31 are the hex their use sites held. 14 came from Tailwind's palette and carry Tailwind's
+> own `oklch()` definitions, so they render as they did; their doc comments name what they
+> replaced, as provenance for P1-4, which folds the blues into one accent. `success`,
+> `problem` and `hint` are their own tokens, separate from `accent` (§2.2); `hint` and
+> `success` share a value today and not a role. The archive's error text is `alert`
+> (Tailwind `red-700`), not yet `problem` — merging them changes a colour, which this row
+> does not do.
+>
+> **Deviation: the generated CSS is its own file,** `app/palette.css`, imported by
+> `globals.css`, rather than a generated region inside `globals.css`. The byte-identity check
+> is then whole-file, exactly as for the icons, with no markers inside a hand-edited file.
+> `globals.css` now holds no colour at all. `npm run tokens` writes it
+> (`scripts/palette-css.ts` renders, `scripts/tokens-write.ts` writes — the icons' split, for
+> the icons' reason). It declares each token twice: `--tile-face` in `:root`, and
+> `--color-tile-face: var(--tile-face)` in `@theme inline`, so Tailwind utilities
+> (`bg-tile-face`, `bg-on-accent/20`) read the property instead of copying the value.
+> `.gitattributes` marks the file `-text`: under `core.autocrlf=true` a checkout would
+> rewrite its LF endings and fail the byte check on every Windows clone, as happened to the
+> corpus.
+>
+> **The four consumers:** the SVG pieces, `LevelSelector` and `BoardSquare` import
+> `PALETTE`; `scripts/icon.ts` reads bytes through `rgbBytes`; CSS and Tailwind read the
+> generated file; `siteMetadata.GROUND` is `PALETTE.ground`. `lineLabel`'s three states read
+> `lineNeutral`, `success` and `problem`.
+>
+> **The pip drift, resolved toward the board.** The board's `black` won over the icon's
+> `#1a1a1a`: the icon is a picture of the board, not the reverse, and so no page pixel
+> moves. The four icons were regenerated. Decoded and compared, the only pixels that changed
+> are pip pixels, `#1a1a1a` to `#000000`: 646, 4,639, 2,259 and 571 at 192, 512, maskable 512
+> and 180. The icon test's maskable-reach check found "background" by the literal bytes
+> `e8 e7 e7`; it now uses the `ground` token, because P1-3 requires that test to pass
+> *unaltered* after the ground moves, and with the literal it could not have. Recorded, not
+> fixed: the icon's tile body is `tileSide`, the extrusion colour, not `tileFace`. It always
+> was, and P2-4 redraws the icon.
+>
+> **Nothing on screen changed — measured, beyond the four baselines.** The baselines
+> cover the board, the controls and the sheet, but not the archive, the day banner or the
+> tutorial, which is where most of the Tailwind colours were. So a harness read the computed
+> `color`, `background-color`, `background-image`, all four border colours, `outline-color`
+> and `outline-style`, `fill`, `stroke`, `box-shadow`, `text-decoration-color`,
+> `caret-color` and `opacity` from **every element** in 40 states:
+> - the phone and desktop game, fresh, mid-play with an anchor and keyboard focus, with a
+>   hint, after Check, and with a difficulty hovered;
+> - the archive open, and the day banner;
+> - the tutorial, with its disabled button hovered, which tests `cn`'s merge of the renamed
+>   classes;
+> - both sheets, with each of their 11 buttons hovered.
+>
+> That is 10,735 elements, compared before and after. Two runs before the change were
+> identical to each other, once the harness waited out `motion`'s colour animations (the
+> row-4 rest check covers opacity and transform, not colour). The run after the change was
+> identical to them. As a positive control, shifting `tileFace` by one level in one channel,
+> and two `oklch()` tokens in their last digits, changed all 40 dumps. The harness is a
+> measurement, kept out of the repository like row 4's sensitivity harness. The visual job
+> is the second witness: this row regenerates no baseline, and they must still match at
+> threshold 0.
+>
+> **The audit** (`tests/palette.test.ts`, scanner in `tests/colourAudit.ts`). It reads
+> TypeScript as a syntax tree, not as text. Comments are not colour — this codebase's
+> comments quote old literals on purpose, as the record — and only the tree can tell a
+> comment from a string. Every string literal, template piece and JSX attribute value is
+> scanned for hex, colour functions, the 148 CSS named colours and Tailwind palette
+> utilities under any variant. So is every array literal of three or four integers in
+> 0–255. JSX text is copy a player reads, and is skipped. CSS is scanned with its comments
+> removed. `transparent` and `currentColor` carry no colour and are not reported.
+>
+> The scope is `app/**/*.{ts,tsx,css}`, `scripts/icon.ts` and `scripts/palette-css.ts`.
+> Only `app/palette.ts` and the byte-checked `app/palette.css` may hold a colour. Two more
+> checks go with it:
+> - Every token must be read by something. An unread token can drift as silently as a
+>   literal.
+> - The palette itself must import nothing, because `npm run icons` loads it in Node.
+>
+> **Contrast** (`tests/contrast.test.ts`, maths in `tests/colour.ts`). The maths reads hex
+> and `oklch()`, and composites translucent colours. It is checked against white, CSS
+> Color 4's reference red, and 21:1 for black on white. §4's four text pairs are asserted
+> at 4.5:1 and at the values §4 quotes (5.17, 5.77, 6.76, 14.53), which the tokens
+> reproduce exactly. §6's pairs are the art rows' bars, and most do not hold yet. So each
+> records whether it holds now, and the test requires exactly that. A pair its row fixes
+> fails until the row marks it held; a held pair that breaks fails as a regression.
+>
+> | pair (3:1 bar) | today | owed by |
+> | --- | --- | --- |
+> | tile face on light / dark checker | 1.47 / 2.08 | P1-1, P1-3 |
+> | rock face on light / dark checker | 2.24 / 1.59 | P1-2, P1-3 |
+> | anchor on dark checker | 2.29 (light: 3.24, holds) | P1-5 |
+> | candidate edge on light / dark checker | 1.63 / 1.15 | P1-5 |
+> | outline on either checker; pip, divider, outline on the face; rock on the face; hint; focus at 70% | 3.10–19.04 | holds |
+>
+> `tests/lineFeedback.test.ts` now reads the ground from the token as well.
+>
+> **Mutations,** each run against `tests/{palette,contrast,icons,lineFeedback,siteMetadata}`
+> and each failing it:
+> - a literal reinserted in each vocabulary: hex in a JSX attribute, a Tailwind utility,
+>   `stroke="black"`, hex in `globals.css`, a byte triple in the icon, `hover:bg-white/30`,
+>   and `rgb()` in an inline style;
+> - `palette.css` edited by hand;
+> - a token edited without regenerating;
+> - an unread token;
+> - `GROUND` as its own literal;
+> - a line label reading the wrong token;
+> - an invariant's value moved;
+> - an owed pair made to hold without being claimed;
+> - a held pair broken.
+>
+> The negative control: comments quoting a colour in all four forms are not reported.
+>
+> Also: `BoardSquare`'s local `isDark` was the test for `(i + j)` even, and it picked the
+> *lighter* tone. Beside token names it read as a bug, so it is `isEven` now.
+
 ### P0-6 · One geometry module, in cell units
 
 **Problem.** §1.1: pixel constants inside scalable art.

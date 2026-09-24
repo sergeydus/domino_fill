@@ -41,7 +41,7 @@ const Tutorial = () => {
         // box -- so it fails to cover a page that has scrolled or overflowed. `fixed` is
         // anchored to the viewport itself and cannot come apart from it.
         <div className="fixed inset-0 z-[999] backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
-            <div className="bg-white rounded-2xl text-black w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
+            <div className="bg-panel rounded-2xl text-panel-ink w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
                 <h2 className="text-3xl font-bold mb-2">How to play</h2>
 
                 {/*
@@ -90,8 +90,8 @@ const Tutorial = () => {
                         disabled={!solved}
                         onClick={dismiss}
                         className={cn(
-                            "px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 cursor-pointer",
-                            !solved && "opacity-50 cursor-not-allowed hover:bg-blue-500",
+                            "px-4 py-2 bg-tutorial-action text-on-tutorial-action rounded hover:bg-tutorial-action-hover cursor-pointer",
+                            !solved && "opacity-50 cursor-not-allowed hover:bg-tutorial-action",
                         )}
                     >
                         Got it!

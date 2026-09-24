@@ -2,6 +2,7 @@
 import { motion } from "motion/react"
 import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
+import { PALETTE } from "../palette"
 
 /**
  * Difficulty (spec P1-8, row 19).
@@ -39,7 +40,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row bg-[#ababab] rounded gap-2 text-2xl p-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row bg-control-surface rounded gap-2 text-2xl p-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
@@ -49,9 +50,9 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-[#0b3c52]' : ''}`}
-                        animate={{ backgroundColor: selected ? '#419dc8' : undefined }}
-                        whileHover={{ backgroundColor: '#419dc8' }}
+                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-accent-edge' : ''}`}
+                        animate={{ backgroundColor: selected ? PALETTE.accent : undefined }}
+                        whileHover={{ backgroundColor: PALETTE.accent }}
                         onClick={onClick(key)}
                     >
                         {label}

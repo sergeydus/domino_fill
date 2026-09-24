@@ -145,7 +145,7 @@ const Sheet = ({ cell }: { cell: number }) => {
         <main
             data-sheet={SHEET_SENTINEL}
             data-cell-size={cell}
-            className='flex flex-wrap items-start gap-8 p-6 bg-background font-sans'
+            className='flex flex-wrap items-start gap-8 p-6 bg-ground font-sans'
         >
             {BOARD_SPECIMENS.map(name => (
                 <Specimen key={name} name={name}>

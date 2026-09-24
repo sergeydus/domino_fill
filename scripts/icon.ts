@@ -1,4 +1,5 @@
 import { deflateSync } from 'node:zlib'
+import { rgbBytes } from '../app/palette'
 
 /**
  * The app's icon, drawn rather than pasted (spec P2-2, row 20b).
@@ -19,11 +20,23 @@ import { deflateSync } from 'node:zlib'
  * library is a large thing to add for four flat rectangles.
  */
 
-/** The game's own colours, so the icon is recognisably this board and not a stock tile. */
-const BACKGROUND = [0xe8, 0xe7, 0xe7]
-const TILE = [0x8d, 0x87, 0x78]
-const OUTLINE = [0x00, 0x00, 0x00]
-const PIP = [0x1a, 0x1a, 0x1a]
+/**
+ * The game's own colours, so the icon is recognisably this board and not a stock tile --
+ * from the palette since graphics row 5, so they cannot drift from the board's again.
+ *
+ * They had: the pip was `#1a1a1a` here and `black` on every piece. The board's value won,
+ * because the board is what a player looks at and the icon is a picture of it; the icons
+ * were regenerated, and no page pixel moved.
+ *
+ * The tile's body is `tileSide`, the extrusion colour, not `tileFace`. That was already so,
+ * is left alone here because this row moves no colour, and is P2-4's to reconsider along
+ * with the rest of the drawing.
+ */
+const BACKGROUND = rgbBytes('ground')
+const TILE = rgbBytes('tileSide')
+const OUTLINE = rgbBytes('pieceOutline')
+const DIVIDER = rgbBytes('divider')
+const PIP = rgbBytes('pip')
 
 type Rgb = readonly number[]
 
@@ -85,7 +98,7 @@ const draw = (size: number, scale = 1): Uint8Array => {
     rect(x - edge, y - edge, width + edge * 2, height + edge * 2, OUTLINE)
     rect(x, y, width, height, TILE)
     // The dividing bar: what separates the two halves of a domino.
-    rect(x, y + height / 2 - edge / 2, width, edge, OUTLINE)
+    rect(x, y + height / 2 - edge / 2, width, edge, DIVIDER)
     // One pip in the top half. The top half is worth 1 in this game, which is the joke.
     disc(size / 2, y + height / 4, size * 0.075 * scale, PIP)
 

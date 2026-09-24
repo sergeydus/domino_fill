@@ -28,7 +28,7 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
         {anchor && (
             <div
                 data-anchor={`${anchor[0]},${anchor[1]}`}
-                className="z-20 pointer-events-none absolute rounded-xl border-4 border-blue-600"
+                className="z-20 pointer-events-none absolute rounded-xl border-4 border-anchor"
                 style={at(anchor[0], anchor[1])}
             />
         )}
@@ -36,14 +36,14 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
             <div
                 key={`candidate_${i},${j}`}
                 data-candidate={`${i},${j}`}
-                className="z-20 pointer-events-none absolute rounded-xl border-4 border-dashed border-blue-400 bg-blue-200/40"
+                className="z-20 pointer-events-none absolute rounded-xl border-4 border-dashed border-candidate-edge bg-candidate-wash/40"
                 style={at(i, j)}
             />
         ))}
         {focused && (
             <div
                 data-focus={`${focused[0]},${focused[1]}`}
-                className="z-20 pointer-events-none absolute rounded-xl outline-4 outline-offset-[-4px] outline-black/70"
+                className="z-20 pointer-events-none absolute rounded-xl outline-4 outline-offset-[-4px] outline-cell-focus/70"
                 style={at(focused[0], focused[1])}
             />
         )}

@@ -33,7 +33,7 @@ const TRAY_CELL_PX = 44;
 const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: currentBoard }) => {
     return (
         <div
-            className="flex flex-row bg-[#ababab] rounded-4xl gap-4 text-2xl pt-6 px-4 items-center"
+            className="flex flex-row bg-control-surface rounded-4xl gap-4 text-2xl pt-6 px-4 items-center"
             data-legend
             role="group"
             aria-label="Scoring key"

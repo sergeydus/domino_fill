@@ -9,6 +9,8 @@
  * *served* page, which is the only place drift would actually hurt.
  */
 
+import { PALETTE } from './palette'
+
 /**
  * Where the game is deployed, and what an absolute URL in a meta tag has to point at.
  *
@@ -65,12 +67,14 @@ export const SHORT_DESCRIPTION =
     'Fill the board with dominoes so every row and column adds up to its target.'
 
 /**
- * The board's own ground (`--background` in `globals.css`).
+ * The board's own ground: the palette's `ground` token (graphics spec P0-5), which is also
+ * `--ground` in the generated `palette.css` and the icon's background.
  *
  * Shared by the browser chrome's theme colour and the installed app's splash screen, so
- * neither flashes a white band above a grey page.
+ * neither flashes a white band above a grey page. Read from the palette rather than copied,
+ * so a change to the ground reaches both without anyone remembering to look.
  */
-export const GROUND = '#e8e7e7'
+export const GROUND: string = PALETTE.ground
 
 /** The icon the manifest, the splash screen and the link preview all use. */
 export const ICON_512 = '/icon-512.png'

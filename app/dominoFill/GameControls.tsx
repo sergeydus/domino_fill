@@ -46,7 +46,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-check
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-[#ababab] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => boardsStore.check()}
             disabled={boardsStore.completed}
         >
@@ -55,7 +55,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-hint
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-[#ababab] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => boardsStore.hint()}
             disabled={boardsStore.completed}
         >
@@ -64,7 +64,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-undo
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-[#ababab] disabled:opacity-40 disabled:cursor-not-allowed"
+            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => boardsStore.undo()}
             disabled={!boardsStore.canUndo}
         >
@@ -73,7 +73,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-reset
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-[#ababab]"
+            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface"
             onClick={() => boardsStore.reset()}
         >
             Reset

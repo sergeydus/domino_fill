@@ -1,4 +1,5 @@
 import type { LineState } from "../stores/boardRules"
+import { PALETTE } from "../palette"
 
 /**
  * How a target label presents its state (spec P1-5, D10-g).
@@ -32,11 +33,16 @@ export type LabelPresentation = {
     token: 'satisfied' | 'over' | 'neutral'
 }
 
-/** Measured against `#e8e7e7`; see the note above before changing any of these. */
+/**
+ * Measured against the ground; see the note above before changing any of these. The values
+ * live in the palette (graphics spec P0-5): a finished line is `success` and an overshot one
+ * is `problem`, the same tokens the rest of the game uses for those meanings, and
+ * `tests/contrast.test.ts` recomputes every ratio from the tokens.
+ */
 export const LABEL_COLORS: Record<LineState, string> = {
-    neutral: '#5f5f5f',
-    satisfied: '#15661a',
-    over: '#a10000',
+    neutral: PALETTE.lineNeutral,
+    satisfied: PALETTE.success,
+    over: PALETTE.problem,
 }
 
 export const labelPresentation = (state: LineState): LabelPresentation => ({

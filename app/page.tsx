@@ -10,7 +10,7 @@ import DominoClient from './dominoFill/DominoClient';
  */
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-svh bg-background font-sans">
+    <div className="flex flex-col min-h-svh bg-ground font-sans">
       <DominoClient />
     </div >
   );

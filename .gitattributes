@@ -9,3 +9,8 @@
 #
 # `-text` means git stores and restores these byte for byte, in both directions.
 public/puzzles/** -text
+
+# The generated stylesheet (graphics spec P0-5) is checked byte for byte against its
+# generator, which writes LF. Under `core.autocrlf=true` a checkout would turn it into CRLF
+# and fail that check on every Windows clone, for the same reason the corpus did above.
+app/palette.css -text

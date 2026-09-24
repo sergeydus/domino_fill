@@ -39,7 +39,7 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
         <div
             data-chrome
             data-day-banner
-            className='flex items-center gap-3 rounded-lg bg-amber-100 px-3 py-2 text-sm'
+            className='flex items-center gap-3 rounded-lg bg-banner-surface px-3 py-2 text-sm'
             // Polite, not assertive: this can appear while someone is placing a piece, and
             // interrupting a screen reader mid-move to say a new puzzle exists would be
             // exactly the kind of "taking the board away" the hold-back rule prevents.
@@ -61,7 +61,7 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
                 <button
                     type='button'
                     data-go-to-today
-                    className='rounded-md bg-amber-700 px-2 py-1 font-semibold text-white'
+                    className='rounded-md bg-banner-action px-2 py-1 font-semibold text-on-banner-action'
                     /*
                      * Two routes to the same place. A held-back day is already fetched, so
                      * adopting it is instant and cannot fail; an archive day was chosen
