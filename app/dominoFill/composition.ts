@@ -43,7 +43,13 @@ export const WIDE_LAYOUT_QUERY = '(min-width: 1024px) and (min-height: 640px)'
  * already (see the hook's own note). A constant cannot participate in a loop.
  *
  * 260 fits the widest control the rail holds — the difficulty selector's three options —
- * without stretching short ones across a gulf.
+ * without stretching short ones across a gulf. Measured, not assumed, since row 4: this
+ * comment claimed the fit from row 1 on, and the desktop baseline showed "Hard 8x8" running
+ * 8px past the rail. The selector's buttons gave up horizontal padding rather than the rail
+ * growing: the rail is subtracted from the board's width budget, and row 1's measured board
+ * sizes stand on this number. Its narrowest arrangement is now 253.9px (with the bold
+ * "Medium 7x7" selected), which leaves 6px, and `e2e/desktop.spec.ts` fails the day that
+ * is gone.
  */
 export const RAIL_WIDTH_PX = 260
 

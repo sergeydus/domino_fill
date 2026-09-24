@@ -123,6 +123,58 @@ test('the rail takes the controls, and the legend stays with the board', async (
     expect(legend.x + legend.width).toBeLessThanOrEqual(shell.x + shell.width + 1)
 })
 
+test('the difficulty selector fits inside the rail, whichever option is selected', async ({ page }) => {
+    /*
+     * Found by row 4's desktop baseline, not by a test: the selector's content was 268px in
+     * the 260px rail, and "Hard 8x8" ran 8px past the rail and off its own grey background.
+     * Nothing here measured it, because every assertion above is about where a control is,
+     * not whether it is inside what holds it.
+     *
+     * Each option in turn, because the selected one is bold and bold is wider -- the widest
+     * arrangement is whichever the player happens to be on. The rail's width is a constant,
+     * so one viewport answers for every desktop width.
+     */
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await openBoard(page)
+
+    const group = page.getByRole('group', { name: 'Difficulty' })
+
+    for (const key of ['easy', 'normal', 'hard']) {
+        await page.locator(`[data-difficulty="${key}"]`).click()
+        await expect(page.locator(`[data-difficulty="${key}"]`)).toHaveAttribute('aria-pressed', 'true')
+
+        // Read afresh: a different board size moves the rail.
+        const rail = (await page.locator('[data-rail]').boundingBox())!
+        const box = (await group.boundingBox())!
+        expect(box.x, `${key}: the selector starts left of the rail`).toBeGreaterThanOrEqual(rail.x)
+        expect(box.x + box.width, `${key}: the selector is wider than the rail`)
+            .toBeLessThanOrEqual(rail.x + rail.width)
+        /*
+         * The group stretches to the rail whatever its content, so its own box passes an
+         * overflow. The options have to sit inside its *content* box: found by mutation, a
+         * 250px rail pushed the last option 2px into the group's padding, which neither
+         * `scrollWidth` nor the border box reports -- and the padding is 8px, the size of
+         * the defect this test exists for.
+         */
+        const inner = await group.evaluate(el => {
+            const r = el.getBoundingClientRect()
+            const s = getComputedStyle(el)
+            return {
+                left: r.left + parseFloat(s.borderLeftWidth) + parseFloat(s.paddingLeft),
+                right: r.right - parseFloat(s.borderRightWidth) - parseFloat(s.paddingRight),
+            }
+        })
+        for (const option of await group.getByRole('button').all()) {
+            const b = (await option.boundingBox())!
+            const name = await option.textContent()
+            expect(b.x, `${key}: "${name}" starts outside the selector`)
+                .toBeGreaterThanOrEqual(inner.left)
+            expect(b.x + b.width, `${key}: "${name}" runs past the selector`)
+                .toBeLessThanOrEqual(inner.right)
+        }
+    }
+})
+
 /** Which control has the keyboard, by the attribute that identifies it. */
 const focusedControl = (page: Page) => page.evaluate(() => {
     const el = document.activeElement as HTMLElement | null

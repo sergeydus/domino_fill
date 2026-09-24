@@ -426,31 +426,46 @@ question a visual baseline exists to answer.
 | --- | --- | --- |
 | 1 | component/state sheet at **38px** | no |
 | 2 | component/state sheet at **53px** | no |
-| 3 | complete **360px phone** composition | yes — clock pinned |
-| 4 | complete **desktop** composition | yes — clock pinned |
+| 3 | complete **360px phone** composition | yes — calendar shifted to a fixed day |
+| 4 | complete **desktop** composition | yes — calendar shifted to a fixed day |
 
 Baselines 3 and 4 are the **ordinary** compositions — a board mid-play, not a board
 mid-celebration. Transient surfaces belong on the sheets, where they can be rendered
 deliberately and one at a time: the completion card is a fixture in P0-3, not a state the
 full-page baseline has to be manoeuvred into.
 
-The full-page pair pins the date with `page.clock.install`, as `e2e/archive.spec.ts` already
-does. The sheets must not.
+The full-page pair fixes the day with the calendar shift of `e2e/calendar.ts`: the page
+believes it is a fixed date, in UTC, and its animation clocks run untouched. Not
+`page.clock` — see the amendment below for why. The sheets shift nothing; they are proven
+date-independent (P0-3).
 
-**The pinned environment.** Rasterisation differs between the Windows machine this is
-developed on and the Linux container CI runs in, so the comparison environment is part of
-the test, not a detail of it:
+**The comparison environment.** Rasterisation differs between the Windows machine this is
+developed on and the Linux machines CI runs on, so the comparison environment is part of
+the test, not a detail of it. **No Docker, anywhere** — not on the development machine and
+not as a `container:` job, service or image in GitHub Actions; the project owner's
+requirement, and not to be reintroduced without asking. So:
 
-- Comparisons run **only** in the official Playwright container, pinned by **image digest**,
-  at the Playwright version in `package.json` — updating either is a deliberate commit that
+- Baselines are taken and compared **only** on a GitHub-hosted **`ubuntu-24.04`** runner (a
+  release label, never `ubuntu-latest`), with Playwright's Chromium installed directly
+  (`npx playwright install --with-deps chromium`) — the `visual` job in
+  `.github/workflows/ci.yml`. Playwright's version, and with it Chromium's build, is pinned
+  by the lockfile; changing it, or the runner label, is a deliberate commit that
   regenerates baselines.
-- `deviceScaleFactor` is fixed explicitly; fonts are `next/font`-self-hosted, so no network
-  font can vary a frame.
-- `reducedMotion: 'reduce'` and a pinned clock, so no animation mid-flight decides a frame.
-- `npm run visual:update` runs the same container. Baselines are never regenerated on a
-  developer's host.
-- `maxDiffPixelRatio` is justified by a measured flake rate — run the unchanged suite N
-  times, record the observed maximum — not chosen to make the suite pass.
+- The runner **image** is not pinned: GitHub updates it within a release. Every baseline set
+  records the environment it was taken in (`visual-tests/__screenshots__/environment.json`)
+  and every comparison warns on any difference from it. This is the accepted trade-off of
+  having no container; the amendment below records it and what was measured against it.
+- `deviceScaleFactor: 1`, `reducedMotion: 'reduce'`, light scheme, `en-US`, UTC — in
+  `playwright.visual.config.ts`. Fonts are `next/font`-self-hosted, and `e2e/fonts.spec.ts`
+  proves every glyph on the baseline pages is drawn from them rather than from a system
+  font. That establishes the font *selection*; it does not make rasterisation identical
+  across runner images, which is what the environment record is for.
+- Baselines are never taken on a developer's host: `npm run visual:update` refuses to run
+  anywhere but the CI runner, and a commit message containing `[visual update]` is how CI
+  is asked to regenerate them (see **Sequencing** in §8).
+- The budget is **zero**: `maxDiffPixels: 0` at pixelmatch `threshold: 0`, justified by a
+  measured flake rate across machines rather than chosen to make the suite pass — see the
+  amendment for the runs, and for what pixelmatch cannot count at any setting.
 
 **Acceptance.** Two consecutive runs of the unchanged suite produce zero diff. And for every
 row in §6 and §7: reverting that row's change fails **a named targeted assertion appropriate
@@ -462,10 +477,12 @@ geometry to make.
 > **Amendment (row 4) — no container; a plain Ubuntu runner, and what that costs.**
 >
 > **No Docker, anywhere.** The project owner does not want Docker used in this project — not
-> on the development machine, and not as a `container:` job in GitHub Actions either. The
-> pinned-image environment above is therefore replaced, not approximated: baselines are taken
-> and compared on a GitHub-hosted runner with Playwright's browser installed directly
-> (`npx playwright install --with-deps chromium`), the same way the existing gate job runs.
+> on the development machine, and not as a `container:` job in GitHub Actions either. This
+> spec originally asked for the official Playwright container pinned by image digest; that
+> plan is replaced, not approximated, and the environment above is already the replacement:
+> baselines are taken and compared on a GitHub-hosted runner with Playwright's browser
+> installed directly (`npx playwright install --with-deps chromium`), the same way the
+> existing gate job runs.
 >
 > **What is still pinned.** Playwright's version, and with it Chromium's exact build, by the
 > lockfile. The runner label (`ubuntu-24.04`, not `ubuntu-latest`), so an Ubuntu release change
@@ -567,16 +584,28 @@ geometry to make.
 > 20 of 20 at 0.2 and 12 of 12 at 0 — while two regenerations of `sheet-38` still produced
 > different bytes, so the host is not byte-stable even where the comparison passes.
 >
-> **The full-page day is shifted, not pinned.** `page.clock.install`, planned above, was never
+> **The full-page day is shifted, not pinned.** `page.clock.install`, the original plan, was never
 > measured for the completion-card failure row 3 found under `setFixedTime`. The baselines use
 > the calendar shift row 3 did measure (`e2e/calendar.ts`): the page believes it is
 > 2026-10-15, in UTC, and its animation clocks run untouched.
 >
-> **A row-1 defect the baselines now show.** In the desktop rail, the difficulty selector's
-> content is 268px wide in a 260px rail at every desktop width, so "Hard 8x8" runs 8px past
-> the rail and its own grey background. Row 1's tests did not catch it. It is recorded here,
-> pinned by the desktop baseline as it stands, and left for the owner to decide — widening
-> the rail changes row 1's measured board size, and wrapping changes the control.
+> **A row-1 defect the baselines showed, now fixed.** In the desktop rail, the difficulty
+> selector could get no narrower than 276–278px (its three options at their narrowest,
+> depending on which one is bold) in a 260px rail, so "Hard 8x8" ran 8px past the rail and
+> its own grey background — at every desktop width, since the rail's width is a constant.
+> Row 1's tests did not catch it: they asserted where each control is, never that it is
+> inside what holds it. The rail and board sizes stay; the options' horizontal padding drops
+> from 8px to 4px a side (`px-1`), which makes the narrowest arrangement 252.0–253.9px and
+> leaves 6px. The labels already wrapped onto two lines, and the flex row gives any spare
+> width back to the buttons, so nothing looks tighter.
+>
+> `e2e/desktop.spec.ts` now selects each option in turn and requires every option inside
+> the selector's **content** box and the selector inside the rail. The content box because,
+> as mutation found, a check against the border box or `scrollWidth` passes an option that
+> has run into the selector's 8px padding — as large as the defect itself. Mutations, each
+> failing the test: the old `p-2`; labels forced onto one line; the last option nudged
+> 12px right; a 250px rail; and a 253px rail, which fails only with "Medium 7x7" selected,
+> as the measurement predicts. Every baseline containing the selector was retaken.
 
 **The generated icons are exempt from the screenshot half**, and deliberately: they never
 appear on a page. Their visual gate is stronger than a baseline already — rows 20b and 20h
@@ -864,17 +893,30 @@ pip, one step further out: the launcher would show a game that no longer exists.
 
 ## 8. Sequencing
 
-One row, one commit. The full gate — `tsc --noEmit`, `npm run lint`, `npm test` with empty
-stderr, `npm run build`, `npm run test:e2e` — passes before each commit, verified from cold.
-Corrections are mutation-tested, and a deviation from this document is either fixed or
-written into it, never carried silently.
+One row, one commit — **except that a row which changes pixels is two**, from row 4 on.
+Baselines are generated only on the CI runner (P0-4), and a workflow can be started by hand
+only from the default branch, which has none; so the row's change is pushed with
+`[visual update]` in its commit message, CI regenerates the baselines and uploads them as
+the `visual-baselines` artifact, and a second commit adds exactly those files
+(`gh run download`) and nothing else. The first commit's visual job compares against what
+it has just generated; the second's compares against what was committed, and that run is
+the row's visual verdict. A correction that changes pixels follows the same pattern. The
+alternative — one commit per row, with temporary branches pushed to generate baselines —
+has not been asked for. `[visual measure]` re-runs the comparison 25 times against the
+committed set, for when the environment is in question.
+
+The full gate — `tsc --noEmit`, `npm run lint`, `npm test` with empty stderr,
+`npm run build`, `npm run test:e2e` — passes before each commit, verified from cold. The
+visual comparisons are not part of the local gate and cannot be: only the CI runner's
+result counts for them. Corrections are mutation-tested, and a deviation from this document
+is either fixed or written into it, never carried silently.
 
 | # | Row | Proves it |
 | --- | --- | --- |
 | 1 | **P0-1** desktop composition: breakpoint, larger board, the rail of §2.3 | E2E |
 | 2 | **P0-2** geometry assertions for the art as it stands | unit + E2E |
 | 3 | **P0-3** test-only sheet route over the real components; proven absent from the bundle | unit + E2E |
-| 4 | **P0-4** four baselines; container pinned by digest; diff budget measured | E2E |
+| 4 | **P0-4** four baselines on a plain `ubuntu-24.04` runner, no container; diff budget measured | E2E |
 | 5 | **P0-5** palette module; generated CSS tokens; metadata consumer; scoped literal audit | unit |
 | 6 | **P0-6** normalised `viewBox` geometry; baseline 2 fixed, 1/3/4 predicted | unit + E2E |
 | 7 | **P1-1** proportions retuned against the 38px rendering | unit + E2E |

@@ -21,6 +21,11 @@ import { LevelStore } from "../stores/BoardsStore"
  * The selected button also gets a ring and bold text, for the reason D10-g gave for the
  * line labels: colour is one channel and roughly one man in twelve cannot use this
  * particular one. `aria-pressed` reaches a screen reader; the ring reaches everyone else.
+ *
+ * `px-1` rather than `p-2` (graphics spec P0-4, row 4): at 8px a side the three options
+ * could not get narrower than the 260px desktop rail, and "Hard 8x8" ran past it. The flex
+ * row still spreads any spare width back into the buttons, so the labels do not look
+ * tighter where there is room; see `RAIL_WIDTH_PX` for the measurement.
  */
 
 const LEVELS = [
@@ -44,7 +49,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`cursor-pointer p-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-[#0b3c52]' : ''}`}
+                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-[#0b3c52]' : ''}`}
                         animate={{ backgroundColor: selected ? '#419dc8' : undefined }}
                         whileHover={{ backgroundColor: '#419dc8' }}
                         onClick={onClick(key)}
