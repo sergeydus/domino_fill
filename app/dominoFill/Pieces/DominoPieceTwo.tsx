@@ -2,8 +2,9 @@ import React from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
 import { PALETTE } from "@/app/palette";
+import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
 
-const strokeWidth = 6
+const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
 
 type PieceProps = React.SVGProps<SVGSVGElement> & {
     boardsStore: PuzzleSession
@@ -22,14 +23,15 @@ const DominoPieceTwo: React.FC<PieceProps> = (props) => {
     const { boardsStore, cellSize, ...rest } = props
     const size = cellSize ?? boardsStore.squareSize
     return (
-        <svg width={size * 2} height={size + 16} {...rest} className="-translate-y-4">
-            <rect width={size * 2 - 8} x={4} y={4 + 16} height={size - 8} fill={PALETTE.tileSide} strokeWidth={strokeWidth} rx={8} ry={8} />
-            <rect width={size * 2 - 8} x={4} y={4} height={size - 8} fill={PALETTE.tileFace} strokeWidth={strokeWidth} rx={8} ry={8} />
-            <rect data-outline width={size * 2 - 8} x={4} y={4} height={size - 8 + 16} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={strokeWidth} rx={8} ry={8} />
+        // Two cells (U each) wide and one tall, in drawing units; `pieceBox` is where pixels enter.
+        <svg {...pieceBox(2, 1, size)} viewBox={viewBox(2, 1)} {...rest}>
+            <rect x={I} y={I + E} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileSide} rx={R} ry={R} />
+            <rect x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileFace} rx={R} ry={R} />
+            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
 
-            <line x1={size} y1={16} x2={size} y2={size - 16} stroke={PALETTE.divider} strokeWidth={3} />
-            <circle cx={size + size / 3} cy={size / 3} fill={PALETTE.pip} r={8} />
-            <circle cx={size + size * 2 / 3} cy={size * 2 / 3} fill={PALETTE.pip} r={8} />
+            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} stroke={PALETTE.divider} strokeWidth={PIECE.dividerWidth} />
+            <circle cx={U + U / 3} cy={U / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
+            <circle cx={U + U * 2 / 3} cy={U * 2 / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
         </svg>
     );
 };

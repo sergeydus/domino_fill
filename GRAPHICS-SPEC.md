@@ -810,10 +810,11 @@ from here.
 
 **Problem.** §1.1: pixel constants inside scalable art.
 
-**Shape.** The pieces draw in a **normalised coordinate system** — a `viewBox` in cell units
-— scaled once at the outer element by `squareSize`. The drawing is then expressed in the
-units the design thinks in, and the only pixel values in a piece are the outer `width` and
-`height`.
+**Shape.** The pieces draw in a **normalised coordinate system** — a `viewBox` measured
+against the cell, at **53 units to a cell** (see the amendment for why not one) — scaled
+once at the outer element by `squareSize`. The drawing is then expressed in the units the
+design thinks in, and the only pixel values in a piece are the outer `width` and `height`
+(and the lift that goes with them), all from one function, `pieceBox`.
 
 **What this does to the baselines**, stated precisely, because the obvious claim is false.
 Today's constants were chosen at roughly 53px. Turning them into fractions *of the cell*
@@ -835,6 +836,85 @@ be a contradiction, not a standard.
 - The geometry-literal rule, stated narrowly enough to enforce: *no literal denominated in
   CSS pixels may appear in the drawing.* Literals inside the normalised `viewBox` are the
   design and are expected — the rule is about units, not about numbers.
+
+> **Amendment (row 6) — the unit, measured; and the predictions, before the baselines.**
+>
+> **What was built.**
+> - `app/dominoFill/Pieces/geometry.ts` holds every length of the drawing in units of the
+>   cell: `PIECE` (outline 6, radius 8, pip radius 8, divider inset 16 and width 3,
+>   extrusion 16, inset 4, entry 26), `UNIT = 53` to the cell, `fraction(units)`,
+>   `viewBox(across, down)`, and `pieceBox(across, down, cell)`.
+> - `pieceBox` is the only place pixels enter. It sets the svg's `width` and `height`, and
+>   its lift (`translate: 0 -extrusion`), which was the fixed `-translate-y-4` class.
+> - The entry offset in `Pieces.tsx` is `fraction(PIECE.entry)` of the cell, in place of a
+>   fixed 26px.
+> - A dead prop went with it. `Pieces.tsx` passed `className="absolute z-30"` to the upright
+>   domino, and the svg's own class, set after the spread, always overrode it. With the class
+>   gone the prop would have started to apply, so it is removed rather than turned on.
+>
+> **Why 53 units to a cell, not one.** Built first with one-unit cells (`viewBox="0 0 1
+> 2.30"`, lengths like 6/53), the 53px sheet was not pixel-identical. Chromium scales every
+> coordinate by 53 and reaches the same shapes by a different floating-point path. **462
+> pixels** of anti-aliased edge moved, up to 9 levels, identically on two runs; pixelmatch
+> counts one of them. With 53 units to a cell, the 53px drawing is rendered at a `viewBox`
+> scale of exactly 1. Measured on the development host, it is byte-identical to the old
+> drawing, apart from an 8-pixel cluster that also toggles between two runs of the *old*
+> code. The unit is still the cell's: a length's fraction of the cell is its value over
+> `UNIT`, and every piece scales as one drawing.
+>
+> **The predictions**, written before CI takes the new baselines:
+>
+> | baseline | cell | predicted change |
+> | --- | --- | --- |
+> | 2, sheet at 53 | 53 | **none** — `viewBox` scale 1 |
+> | 1, sheet at 38 | 38 | every length on every piece × 38/53 (outline 6 → 4.30, pip 16 → 11.47, divider 21 → 15.06, extrusion and lift 16 → 11.47); **nothing outside the pieces** |
+> | 3, phone | 38 | the board's pieces as in 1; the legend tray's pieces at their 44px cell × 44/53, so the tray is 144 → 141.28px and **everything below it moves up** (page 726 → 723px) |
+> | 4, desktop | 85 → **86** | the tray as in 3, and the 2.72px it gives back goes to the board, which is height-bound here: the 6x6 cell is **86**, not 85, so every cell, label and piece moves, and the pieces are drawn at 86/53 |
+>
+> The desktop cells were measured, not assumed: 85 → 86 (6x6), 74 → 75 (7x7), and 66 → 66
+> (8x8). The phone's stay at 38, and the 106px cap does not move. This is the row's
+> principle applied to the tray: its pieces are a drawing at a 44px cell, and a drawing
+> that scales has a shorter extrusion there. The layout arithmetic is untouched (§3).
+>
+> **The prediction for 1, checked on the development host.** The 38px sheet's differing
+> pixels were compared with the union of each piece's old and new drawing box (from 16px
+> above the cell to the bottom of its cells, plus 1px of anti-aliasing). All **6,351** lie
+> inside. A first "before" shot carried 5 more on the focus specimen, which has no pieces.
+> Two fresh "before" shots of the old code did not, so that cluster was host noise in the
+> first shot.
+>
+> **The assertions, rewritten from pixels to ratios.**
+> - `tests/pieceGeometry.test.tsx`: at 53px every constant is exactly row 2's pixel value,
+>   and the lift is new, at 16. At 38, 53, 75 and 106 each is the same fraction of the cell,
+>   and §1.1's 2.79× and 4.42× swings are now 1.00×.
+> - The same test reads **every geometric number the layer writes**: rect, line and circle
+>   attributes through the piece's scale, each svg's box and lift, each piece's position, and
+>   each entry offset. At 38, 75 and 106 each must be its 53px value times the cell ratio.
+> - `e2e/art.spec.ts`: in the real build, each constant is its fraction of the measured
+>   cell at 38 and 106. Inline CSS lengths read back (the lift and the entry offset) are held
+>   to three places, the precision Chromium serialises them to (`11.4717px`); everything
+>   else is held to six.
+> - The geometry-literal rule is `tests/geometryRule.test.ts`, over each piece's syntax tree:
+>   - one `<svg>`, with a `viewBox`, taking its box from `pieceBox`, and setting no width,
+>     height, class or style itself;
+>   - inside it, no reference to the cell size in px (`size`, `cellSize`, `squareSize`,
+>     `boardsStore`), no `px` or `translate-` string, and no class or style.
+>
+>   Its positive controls cover each breach.
+>
+> **Mutations,** each run against `tests/{pieceGeometry,geometryRule}` and each caught:
+> - a stroke width back in px from the cell size;
+> - the lift back to a fixed class;
+> - the lift a fixed 16px;
+> - the entry offset a fixed 26px;
+> - the outline moved from 6 to 7 units, which is what P1-1 will do, but announced;
+> - the `viewBox` a unit wider than the cell;
+> - one rock's width back to `size - 12`;
+> - `pieceBox` leaving the extrusion out of the height.
+>
+> The last passed every scaling check, because the readers take a piece's scale from its
+> width and the browser would squash the drawing to fit. An assertion that each svg's box
+> has its `viewBox`'s proportions, at every size, now catches it.
 
 ---
 

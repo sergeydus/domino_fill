@@ -4,10 +4,17 @@ import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
 import Rock from "./Rock"
 import { PuzzleSession } from "@/app/stores/PuzzleSession"
+import { PIECE, fraction } from "./geometry"
 
 const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
     const board = boardsStore.board
+    // Where a domino starts its entry, in px: a fraction of the cell like the rest of the
+    // drawing (graphics row 6), where it was a fixed 26px -- 68% of a phone cell.
+    const entry = {
+        initial: { opacity: 0, translateY: -fraction(PIECE.entry) * size, translateX: -fraction(PIECE.entry) * size, rotate: -5 },
+        animate: { opacity: 1, translateY: 0, translateX: 0, rotate: 0 },
+    }
     const ones: [number, number][] = []
     const twos: [number, number][] = []
     const rocks: [number, number][] = []
@@ -21,8 +28,9 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     /*
      * The overlay is purely decorative and takes no pointer events (spec P0-4 / D4).
      *
-     * Each piece's SVG is 16px taller than its cell and shifted up by 16px, so its box
-     * overhangs the cell above it by 12px. While this layer was interactive, that overhang
+     * Each piece's SVG is taller than its cell by its extrusion and lifted by the same
+     * amount (16px at the time; `PIECE.extrusion` of a cell since graphics row 6), so its box
+     * overhangs the cell above it. While this layer was interactive, that overhang
      * hit-tested -- `fill="transparent"` is a paint value, not `none` -- and its handler
      * removed the domino. Clicking the bottom strip of an empty cell therefore deleted the
      * piece below it instead of placing one.
@@ -43,16 +51,15 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     return <div className="absolute z-20 pointer-events-none" aria-hidden="true">
         {ones.map(([i, j]) =>
             <motion.div key={`one_${i},${j}`} className="absolute" data-piece="one" data-at={`${i},${j}`}
-                style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
-                <DominoPieceOne
-                    boardsStore={boardsStore}
-                    className="absolute z-30"
-                />
+                style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} {...entry}>
+                {/* No className: the piece's own box was always the one that applied, since
+                    the svg set its class after spreading these props (graphics row 6). */}
+                <DominoPieceOne boardsStore={boardsStore} />
             </motion.div>
         )}
         {twos.map(([i, j]) =>
             <motion.div key={`two_${i},${j}`} className="absolute" data-piece="two" data-at={`${i},${j}`}
-                style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
+                style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} {...entry}>
                 <DominoPieceTwo
                     boardsStore={boardsStore}
                     key={`${i},${j}`}

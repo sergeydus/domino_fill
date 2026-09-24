@@ -2,17 +2,22 @@ import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { drag, freeRuns, rockSquares } from './play'
 import { readArt } from './artGeometry'
+import { PIECE, UNIT, fraction } from '../app/dominoFill/Pieces/geometry'
 
 /**
- * The art as it stands, in the real build at the two ends of the real range (graphics spec
- * P0-2, row 2).
+ * The art in the real build at the two ends of the real range (graphics spec P0-2, row 2;
+ * ratios since P0-6, row 6).
  *
- * tests/pieceGeometry.test.tsx pins the six constants at chosen cell sizes. What it cannot
+ * tests/pieceGeometry.test.tsx pins the constants at chosen cell sizes. What it cannot
  * say is which cell sizes actually ship, and that is the half of §1.1 that went stale: the
  * table was measured when the widest cell was 53px, and row 1's desktop composition took
  * it to 106. So this measures the range where it is decided -- the real layout, at the
  * phone floor and at the desktop cap -- and reads the art off the board at both ends with
  * the same reader the unit test uses.
+ *
+ * Row 2 asserted pixels: a 6px outline at both ends, which was the defect. Since row 6
+ * every constant is a fraction of the cell, so at each end it must be that fraction of the
+ * cell measured there -- 4.30px of outline at 38, 12px at 106.
  *
  * Fixture-derived throughout: the dominoes go wherever today's board has room, and the
  * rocks are today's own. What that is known to cover, precisely:
@@ -56,7 +61,7 @@ const entries = (page: Page) =>
     page.evaluate(() => (window as unknown as { __entries: string[] }).__entries)
 
 for (const end of ENDS) {
-    test(`the art at ${end.name}: every constant is its pixel value at ${end.cell}px`, async ({ page }) => {
+    test(`the art at ${end.name}: every constant is its fraction of the ${end.cell}px cell`, async ({ page }) => {
         await page.setViewportSize(end.viewport)
         await openBoard(page)
         await page.getByRole('button', { name: /easy/i }).click()
@@ -99,16 +104,26 @@ for (const end of ENDS) {
             els => els.map(el => el.getAttribute('data-at')!).sort())
         expect(drawn, 'the rocks drawn are not the rocks on the board').toEqual(labelled)
 
-        expect(art.outline, 'outline stroke').toEqual(Array(pieces).fill(6))
-        expect(art.radius, 'corner radius').toEqual(Array(3 * pieces).fill(8))
-        expect(art.pip, 'pip diameter').toEqual(Array(ones + 2 * twos).fill(16))
-        expect(art.divider, 'divider span').toEqual(Array(ones + twos).fill(end.cell - 32))
-        expect(art.extrusion, 'extrusion depth').toEqual(Array(pieces).fill(16))
+        /** Every instance is `units` of the drawing, as a fraction of this cell. */
+        const each = (values: number[], length: number, units: number, label: string, digits = 6) => {
+            expect(values, `${label}: one per instance`).toHaveLength(length)
+            for (const value of values) expect(value, label).toBeCloseTo(fraction(units) * end.cell, digits)
+        }
+        each(art.outline, pieces, PIECE.outline, 'outline stroke')
+        each(art.radius, 3 * pieces, PIECE.radius, 'corner radius')
+        each(art.pip, ones + 2 * twos, 2 * PIECE.pipRadius, 'pip diameter')
+        each(art.divider, ones + twos, UNIT - 2 * PIECE.dividerInset, 'divider span')
+        each(art.extrusion, pieces, PIECE.extrusion, 'extrusion depth')
+        // The lift and the entry offset are CSS lengths read back from inline styles, which
+        // Chromium serialises to six significant digits: 11.4717px of an 11.471698...px lift
+        // at 38. Three places is that precision, not a looser claim; the drawing's own
+        // attributes above are read as written and held to six.
+        each(art.lift, pieces, PIECE.extrusion, 'lift out of the cell', 3)
 
-        const offsets = (await entries(page)).map(t => [
-            /translateX\((-?[\d.]+)px\)/.exec(t)?.[1],
-            /translateY\((-?[\d.]+)px\)/.exec(t)?.[1],
-        ].map(Number))
-        expect(offsets, 'entry offset, one [x, y] per domino placed').toEqual([[-26, -26], [-26, -26]])
+        const offsets = (await entries(page)).flatMap(t => [
+            /translateX\((-?[\d.e+-]+)px\)/.exec(t)?.[1],
+            /translateY\((-?[\d.e+-]+)px\)/.exec(t)?.[1],
+        ].map(v => -Number(v)))
+        each(offsets, 4, PIECE.entry, 'entry offset, x and y per domino placed', 3)
     })
 }
