@@ -37,7 +37,9 @@ const INVARIANTS: Pair[] = [
 /** §6: the art rows' bars, 3:1 for graphics that carry information. */
 const OWED: Pair[] = [
     ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
-        { a: 'tileFace', b: checker, min: 3, owner: 'P1-1, P1-3', holds: false } as Pair,
+        // P1-1 lists this bar, but only the checker tones can meet it -- no tile face is light
+        // enough against today's greys -- and the tones are P1-3's (see P1-1's amendment).
+        { a: 'tileFace', b: checker, min: 3, owner: 'P1-3', holds: false } as Pair,
         { a: 'pieceOutline', b: checker, min: 3, owner: 'P1-1', holds: true } as Pair,
         { a: 'rockFace', b: checker, min: 3, owner: 'P1-2, P1-3', holds: false } as Pair,
     ]),

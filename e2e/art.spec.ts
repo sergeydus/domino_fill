@@ -17,7 +17,7 @@ import { PIECE, UNIT, fraction } from '../app/dominoFill/Pieces/geometry'
  *
  * Row 2 asserted pixels: a 6px outline at both ends, which was the defect. Since row 6
  * every constant is a fraction of the cell, so at each end it must be that fraction of the
- * cell measured there -- 4.30px of outline at 38, 12px at 106.
+ * cell measured there -- since row 7, 3.42px of outline at 38 and 9.54px at 106.
  *
  * Fixture-derived throughout: the dominoes go wherever today's board has room, and the
  * rocks are today's own. What that is known to cover, precisely:
@@ -115,10 +115,41 @@ for (const end of ENDS) {
         each(art.divider, ones + twos, UNIT - 2 * PIECE.dividerInset, 'divider span')
         each(art.extrusion, pieces, PIECE.extrusion, 'extrusion depth')
         // The lift and the entry offset are CSS lengths read back from inline styles, which
-        // Chromium serialises to six significant digits: 11.4717px of an 11.471698...px lift
+        // Chromium serialises to six significant digits: 18.6415px of an 18.641509...px entry
         // at 38. Three places is that precision, not a looser claim; the drawing's own
         // attributes above are read as written and held to six.
         each(art.lift, pieces, PIECE.extrusion, 'lift out of the cell', 3)
+
+        /*
+         * P1-1: the art may not change what `pointerUp` resolves (graphics row 7).
+         *
+         * The pointer resolves a square with `elementFromPoint` (touch.spec.ts says why), so
+         * that is what is asked, of every square on the board, with every kind of piece on
+         * it: at its centre, 2px inside the middle of each edge, and 5px inside each corner.
+         * The edges are where the art reaches -- every piece stands up out of its cell by its
+         * extrusion, over the bottom of the square above -- and a piece that took the pointer
+         * there would turn a press on one square into a press on another. The corners are
+         * 5px in because the board's four outer squares are rounded by 12px, and 2px inside
+         * that corner is outside the square itself, art or none.
+         */
+        const misses = await page.evaluate(() => {
+            const wrong: string[] = []
+            for (const square of document.querySelectorAll<HTMLElement>('[data-cell]')) {
+                const r = square.getBoundingClientRect()
+                const [cx, cy] = [r.left + r.width / 2, r.top + r.height / 2]
+                const probes = [[cx, cy],
+                    [cx, r.top + 2], [cx, r.bottom - 2], [r.left + 2, cy], [r.right - 2, cy],
+                    [r.left + 5, r.top + 5], [r.right - 5, r.top + 5],
+                    [r.left + 5, r.bottom - 5], [r.right - 5, r.bottom - 5]]
+                for (const [x, y] of probes) {
+                    const hit = document.elementFromPoint(x, y)?.closest('[data-cell]')?.getAttribute('data-cell')
+                    if (hit !== square.dataset.cell) wrong.push(`${square.dataset.cell} at ${x},${y} -> ${hit}`)
+                }
+            }
+            return { wrong, squares: document.querySelectorAll('[data-cell]').length }
+        })
+        expect(misses.squares, 'every square of the easy board was probed').toBe(36)
+        expect(misses.wrong, 'a press on a square resolved to another').toEqual([])
 
         const offsets = (await entries(page)).flatMap(t => [
             /translateX\((-?[\d.e+-]+)px\)/.exec(t)?.[1],

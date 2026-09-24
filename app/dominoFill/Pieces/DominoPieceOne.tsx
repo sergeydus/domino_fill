@@ -30,9 +30,9 @@ const DominoPieceOne: React.FC<PieceProps> = (props) => {
     return (
         // One cell (U) wide and two tall, in drawing units; `pieceBox` is where pixels enter.
         <svg {...pieceBox(1, 2, size)} viewBox={viewBox(1, 2)}>
-            <rect x={O} y={I + E} width={U - 2 * O} height={2 * U - O} fill={PALETTE.tileSide} rx={R} ry={R} />
-            <rect x={O} y={I} width={U - 2 * O} height={2 * U - O} fill={PALETTE.tileFace} rx={R} ry={R} />
-            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - O + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
+            <rect x={I} y={I + E} width={U - 2 * I} height={2 * U - 2 * I} fill={PALETTE.tileSide} rx={R} ry={R} />
+            <rect x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I} fill={PALETTE.tileFace} rx={R} ry={R} />
+            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
             <line x1={PIECE.dividerInset} y1={U} x2={U - PIECE.dividerInset} y2={U} stroke={PALETTE.divider} strokeWidth={PIECE.dividerWidth} />
             <circle cx={U / 2} cy={U / 2} fill={PALETTE.pip} r={PIECE.pipRadius} />
         </svg>

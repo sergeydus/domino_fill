@@ -1,51 +1,59 @@
 /**
- * The pieces' drawing, in units of the cell (graphics spec P0-6, row 6).
+ * The pieces' drawing, in units of the cell (graphics spec P0-6, row 6; retuned in P1-1,
+ * row 7).
  *
- * Until this row every detail inside a piece was a CSS-pixel constant -- a 6px outline, an
- * 8px pip, a 16px extrusion -- drawn on a cell that ranges from 38px on a phone to 106px at
- * the desktop cap. The same drawing was therefore a different picture at every size: the
- * pip was 42% of the cell on a phone and 15% on a large desktop (§1.1).
+ * Until row 6 every detail inside a piece was a CSS-pixel constant -- a 6px outline, an 8px
+ * pip, a 16px extrusion -- drawn on a cell that ranges from 38px on a phone to 106px at the
+ * desktop cap, so the same drawing was a different picture at every size (§1.1). Row 6 put
+ * every piece in a `viewBox` measured against the cell, scaled once by `pieceBox`, which is
+ * the only place pixels enter.
  *
- * Now every piece is an SVG whose `viewBox` is measured against the cell, and the only
- * pixel values anywhere in a piece are the outer `width` and `height`, which scale the
- * whole drawing at once. The drawing's unit is **one fifty-third of a cell** (`UNIT`), not
- * one cell, and that is a measured choice rather than a taste:
+ * **A hundred units to a cell, so every value below reads as a percentage of it.** Row 6
+ * used 53, because today's art was drawn for a 53px cell and 53 units rendered the 53px
+ * sheet at a `viewBox` scale of exactly 1 -- pixel-identical, as that row required (its
+ * amendment has the measurement). Row 7 moves every length, so there is no longer a drawing
+ * to keep identical, and the unit is chosen for reading instead: P1-1's bounds are written
+ * as fractions of the cell, and so are these.
  *
- *   - Today's art was drawn for a 53px cell (§1.1), so in these units every length is the
- *     number it always was -- the outline is 6, the pip 8 -- and a 53px piece is drawn with
- *     a `viewBox` scale of exactly 1. Baseline 2 is then the same rasterisation it always
- *     was, which the spec requires.
- *   - Measured with one-cell units instead (`0 0 1 2.30`, lengths like 6/53): Chromium
- *     scaled every coordinate by 53 at the 53px cell, and the anti-aliased edges came out
- *     up to 9 levels different in 462 pixels of the 53px sheet -- one of which pixelmatch
- *     counts. The shapes were the same; the floating-point path to them was not.
+ * **The proportions are P1-1's, tuned against the 38px phone cell** (§2.1): the size the
+ * design is for, not the size it degrades to. Each value is chosen inside a bound the spec
+ * sets and `tests/proportions.test.tsx` measures from the rendered markup:
  *
- * A length's fraction of the cell is its value over `UNIT`; `fraction` below says so, and
- * P1-1 retunes these values against the 38px rendering.
+ *   - outline 9: at most 12 (at 38px, 3.4px -- chunky, without swallowing the tile);
+ *   - extrusion 14: 10 to 18 ("slightly exaggerated", where it was 30);
+ *   - pip diameter 24: 18 to 30 (it was 30.2), clear of the divider and the tile edge by at
+ *     least 6 -- the flat domino's two pips, on the thirds of its half, are the tight case,
+ *     at 10.8;
+ *   - divider span 60 of the cell, 68% of the tile it crosses: at least 55% (it was 47%
+ *     on the flat domino and 51% on the upright).
+ *
+ * The rest are unbounded and chosen to go with them: the rounder corners of a toy (14), the
+ * divider's weight (5), the margin to the cell edge (6), and the entry offset, which is
+ * P1-6's to limit and is row 6's fraction unchanged.
  */
 
-/** The drawing's units per cell: the cell size, in px, the art was drawn at. */
-export const UNIT = 53
+/** The drawing's units per cell. */
+export const UNIT = 100
 
 export const PIECE = {
     /** The silhouette's outline, as a stroke width. */
-    outline: 6,
+    outline: 9,
     /** Every corner radius: face, side and outline. */
-    radius: 8,
-    pipRadius: 8,
-    /** How far the divider stops short of each edge of the tile. */
-    dividerInset: 16,
-    dividerWidth: 3,
+    radius: 14,
+    pipRadius: 12,
+    /** How far the divider stops short of each edge of the cell it crosses. */
+    dividerInset: 20,
+    dividerWidth: 5,
     /**
      * How far the extruded side shows below the face -- and so how far every piece stands
      * up out of its cell, since the drawing is that much taller than the cell and lifted by
      * it to keep the face on the square.
      */
-    extrusion: 16,
-    /** The margin between a cell's edge and the outline's box. */
-    inset: 4,
-    /** How far up and left a domino starts its entry, before it drops into place. */
-    entry: 26,
+    extrusion: 14,
+    /** The margin between a cell's edge and the piece's box: face, side and outline alike. */
+    inset: 6,
+    /** How far up and left a domino starts its entry: row 6's 26/53 of a cell, until P1-6. */
+    entry: (26 / 53) * 100,
 } as const
 
 /** A length in drawing units, as a fraction of the cell. */
@@ -59,7 +67,7 @@ export const viewBox = (across: number, down: number) =>
  * The outer box of a piece at `cell` px: the one place pixels enter the drawing.
  *
  * `translate` lifts the drawing by its extrusion so the face sits on the cell and the side
- * shows below it -- what `-translate-y-4` did as a fixed 16px until this row.
+ * shows below it -- what `-translate-y-4` did as a fixed 16px until row 6.
  */
 export const pieceBox = (across: number, down: number, cell: number) => ({
     width: across * cell,

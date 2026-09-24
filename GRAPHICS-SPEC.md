@@ -978,6 +978,76 @@ row's to choose; these bounds are not.
 
 - The cell's hit area is untouched: art may not change what `pointerUp` resolves.
 
+> **Amendment (row 7) — the values chosen, one bar moved to P1-3, and the predictions.**
+>
+> **The values,** in `app/dominoFill/Pieces/geometry.ts`, now at **100 units to a cell** so
+> each reads as a percentage of it. Row 6's 53 existed to keep the 53px baseline identical,
+> and this row moves every length, so that reason is gone.
+>
+> | | bound | row 6 | row 7 |
+> | --- | --- | --- | --- |
+> | outline | ≤ 0.12 | 0.113 | **0.09** (3.4px at 38) |
+> | extrusion | 0.10–0.18 | 0.302 | **0.14** |
+> | pip diameter | 0.18–0.30 | 0.302 | **0.24** |
+> | divider span / the tile it crosses | ≥ 0.55 | 0.47 flat, 0.51 upright | **0.68** both |
+> | pip clearance to divider and tile edge | ≥ 0.06 | 0.05 (flat, top edge) | **0.108** at the tightest |
+> | corner radius | — | 0.151 | 0.14 |
+> | divider weight | — | 0.057 | 0.05 |
+> | margin to the cell edge | — | 0.075 / 0.113 | 0.06 |
+>
+> Row 6 carried the old art's inconsistencies: the upright domino and the rock drew their
+> face 6 units in, the flat domino 4, and the outline elsewhere again. All three pieces now
+> share one scheme: face, side and outline on the same box, inset by `inset`, with the side
+> shifted down by the extrusion. The entry offset is P1-6's to limit and keeps row 6's
+> fraction.
+>
+> **The bounds are asserted, not the values** (`tests/proportions.test.tsx`). Each is
+> measured from the real piece layer's markup at 38, 53, 75 and 106px:
+> - outline weight, extrusion and pip diameter as fractions of the cell;
+> - the divider's span over the face side it crosses;
+> - each pip's clearance to the divider's stroke, and to the visible face: inside the
+>   outline stroke, and at the face's own bottom edge, where the side begins and there is
+>   no stroke.
+>
+> Row 6's art fails four of them: pip, extrusion, divider span, and the flat pips' 0.05 from
+> the top edge. `tests/pieceGeometry.test.tsx` moves its written-out anchor to these values,
+> at a 100px cell, and keeps every row-6 scaling check.
+>
+> **The hit area,** in `e2e/art.spec.ts` at 38 and 106px, with every kind of piece on the
+> board. `elementFromPoint` must resolve each of the 36 squares at its centre, 2px inside
+> the middle of each edge (where the pieces stand over the square above), and 5px inside
+> each corner (the board's outer squares are rounded by 12px).
+>
+> **Mutations,** each caught:
+> - pip diameter 0.32;
+> - extrusion 0.19;
+> - outline 0.13;
+> - divider 0.545 of the tile;
+> - flat pips moved to the quarters;
+> - a divider heavy enough to crowd the pips;
+> - row 6's art restored whole;
+> - the piece overlay taking the pointer, caught by the hit-area check.
+>
+> **Deviation: "tile face : each checker tone ≥ 3:1" is not met here, and moves to P1-3.**
+> It is 1.47 and 2.08 today, and no proportion can change it. The only lever is colour, and
+> the face cannot supply it: even pure white reaches only 1.62 and 2.30 against today's
+> checker tones. Meeting it means darkening the checkerboard well past what it is. The
+> checker tones are P1-3's ("the checkerboard tones … every contrast guarantee is
+> recomputed from the tokens in the same commit"), and P1-3 already requires both tones to
+> clear 3:1 against the tile face. Changing them here would do half of P1-3 early and
+> without its ground. `tests/contrast.test.ts` records the pair as owed by P1-3. The other
+> four pairs in the table already hold: outline on either tone 12.94 and 9.14; pip, divider
+> and outline on the face 19.04.
+>
+> **The predictions**, before CI takes the baselines. Every baseline changes, because every
+> piece is redrawn:
+> - **1 and 2, the sheets:** only the pieces.
+> - **3, phone:** the board cell stays 38. The legend tray's pieces lose extrusion at their
+>   44px cell, so the tray is 141.28 → 134.16px and the page 723 → 716px, with everything
+>   below the tray moving up.
+> - **4, desktop:** the tray the same. The height it gives back grows the height-bound board
+>   again: 6x6 86 → **87**, 7x7 75 → 76, and 8x8 66 → 67. Measured, like row 6's.
+
 ### P1-2 · An irregular, faceted rock (§1.4, §2.1)
 
 **Acceptance.**

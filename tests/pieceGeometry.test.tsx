@@ -1,18 +1,15 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll } from 'vitest'
-import { renderToString } from 'react-dom/server'
-import { RootStore } from '@/app/stores/RootStore'
-import { PuzzleSession, GRID_BORDER_PX, GUTTER_FRACTION } from '@/app/stores/PuzzleSession'
-import { definitionFrom } from '@/app/stores/PuzzleDefinition'
-import Pieces from '@/app/dominoFill/Pieces/Pieces'
 import DominoPieceOne from '@/app/dominoFill/Pieces/DominoPieceOne'
 import DominoPieceTwo from '@/app/dominoFill/Pieces/DominoPieceTwo'
 import Rock from '@/app/dominoFill/Pieces/Rock'
 import { PIECE, UNIT, fraction } from '@/app/dominoFill/Pieces/geometry'
 import { readArt } from '@/e2e/artGeometry'
+import { renderPieces, sessionAt } from './pieceFixture'
 
 /**
- * The art's geometry, pinned (graphics spec P0-2, row 2; rewritten for P0-6, row 6).
+ * The art's geometry, pinned (graphics spec P0-2, row 2; rewritten for P0-6, row 6; values
+ * moved by P1-1, row 7).
  *
  * Row 2 pinned the six pixel constants of §1.1 at 38 and 53px, defects included: the
  * divider was 16% of a 38px cell and the pip 42% of it, because every length was a fixed
@@ -20,54 +17,21 @@ import { readArt } from '@/e2e/artGeometry'
  *
  * Row 6 made the drawing scale with the cell. So the assertions are now about ratios:
  *
- *   - **at 53px the art is exactly what row 2 pinned** -- the cell it was drawn for, where
- *     the spec requires baseline 2 to stay pixel-identical;
- *   - **at every other size it is that drawing scaled**, and nothing else: every constant is
+ *   - **at 53px the art was exactly what row 2 pinned** -- the cell it was drawn for, where
+ *     the spec required baseline 2 to stay pixel-identical;
+ *   - **at every other size it was that drawing scaled**, and nothing else: every constant is
  *     the same fraction of the cell at 38, 53, 75 and 106, and every geometric attribute on
  *     the layer is its 53px value times the cell ratio.
  *
- * P1-1 then moves the fractions. It cannot do so silently past this file.
+ * P1-1 (row 7) then moved the fractions, and moved them here: the written-out values below
+ * are its, at a 100px cell where each is its percentage of the cell. The next row to move
+ * one has to move it here too. P1-1's bounds themselves are `tests/proportions.test.tsx`.
  *
- * **Why the whole layer, rendered to a string.** `Pieces` is the component that places
- * every piece on the board at the session's cell size, so it is the real composition rather
- * than three components each handed a size. And the server render is the only one in which
- * the entry animation's starting offset is observable: it is `motion`'s `initial` state,
- * written into the markup and replaced as soon as effects run.
+ * The layer is rendered by `tests/pieceFixture.tsx`, which says why a server render of the
+ * whole layer.
  */
 
-const N = 4
-
-/**
- * A session whose cell is exactly `cell` px, holding one of everything that is drawn.
- *
- * The cell is not set directly -- nothing in the app sets it directly either. It is the
- * largest that fits the box, so the box is built to fit exactly `cell`, with half a pixel
- * of slack against `GUTTER_FRACTION` not being exact in binary. And then checked, so a
- * change to the sizing arithmetic fails here loudly rather than measuring the wrong cell.
- */
-const sessionAt = (cell: number) => {
-    const board: (number | null)[][] = Array.from({ length: N }, () => Array(N).fill(null))
-    board[3][3] = -1
-    const s = new PuzzleSession(definitionFrom({
-        puzzleId: `art-${cell}`,
-        board,
-        boardHorizontalNumbers: Array(N).fill(0).join(','),
-        boardVerticalNumbers: Array(N).fill(0).join(','),
-    }), new RootStore())
-    const px = cell * (N + GUTTER_FRACTION) + GRID_BORDER_PX + 0.5
-    s.setAvailableBox({ width: px, height: px })
-    expect(s.squareSize, 'the session did not land on the cell under test').toBe(cell)
-
-    expect(s.placeToward([0, 0], 'down'), 'upright domino').toBe(true)
-    expect(s.placeToward([0, 2], 'right'), 'flat domino').toBe(true)
-    return s
-}
-
-const render = (cell: number) => {
-    const host = document.createElement('div')
-    host.innerHTML = renderToString(<Pieces boardsStore={sessionAt(cell)} />)
-    return host
-}
+const render = renderPieces
 
 /** A pixel length out of a transform, e.g. `translateX(-26px)`. */
 const offset = (transform: string, axis: 'X' | 'Y') => {
@@ -98,38 +62,44 @@ type Constant = Exclude<keyof ReturnType<typeof measure>, 'counts'>
 /**
  * §1.1's table, as the drawing now states it.
  *
- * `units` is each constant in the drawing's own units (`UNIT` to a cell), which is its
- * pixel value at 53px and so row 2's pixel column unchanged; `fraction` is §1.1's 53px
- * column, which is now every size's. `count` is how many instances the layer draws: three
+ * `units` is each constant in the drawing's own units (`UNIT` to a cell); `fraction` is
+ * written out, as §1.1's columns were, and is every size's since row 6 -- P1-1's values
+ * since row 7 (row 6's were 0.113, 0.151, 0.302, 0.396, 0.302, 0.302 and 0.491, row 2's
+ * 53px column). `count` is how many instances the layer draws: three
  * outlines, three rects per piece, one pip on the upright and two on the flat, one divider
  * per domino, one side and one lift per piece, and an x and a y offset for each domino
  * that enters.
  */
 const TABLE: Record<Constant, { label: string, count: number, units: number, fraction: number }> = {
-    outline: { label: 'outline stroke', count: 3, units: PIECE.outline, fraction: 0.113 },
-    radius: { label: 'corner radius', count: 9, units: PIECE.radius, fraction: 0.151 },
-    pip: { label: 'pip diameter', count: 3, units: 2 * PIECE.pipRadius, fraction: 0.302 },
-    divider: { label: 'divider span', count: 2, units: UNIT - 2 * PIECE.dividerInset, fraction: 0.396 },
-    extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.302 },
-    lift: { label: 'lift out of the cell', count: 3, units: PIECE.extrusion, fraction: 0.302 },
+    outline: { label: 'outline stroke', count: 3, units: PIECE.outline, fraction: 0.09 },
+    radius: { label: 'corner radius', count: 9, units: PIECE.radius, fraction: 0.14 },
+    pip: { label: 'pip diameter', count: 3, units: 2 * PIECE.pipRadius, fraction: 0.24 },
+    divider: { label: 'divider span', count: 2, units: UNIT - 2 * PIECE.dividerInset, fraction: 0.6 },
+    extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.14 },
+    lift: { label: 'lift out of the cell', count: 3, units: PIECE.extrusion, fraction: 0.14 },
     entry: { label: 'entry offset', count: 4, units: PIECE.entry, fraction: 0.491 },
 }
 
 const CONSTANTS = Object.keys(TABLE) as Constant[]
 
-/** Row 2's pixel values at 53px, written out rather than derived, as the fixed point. */
-const ROW_2_AT_53: Record<Constant, number> = {
-    outline: 6, radius: 8, pip: 16, divider: 21, extrusion: 16, lift: 16, entry: 26,
+/**
+ * P1-1's values at a 100px cell, written out rather than derived, as the fixed point: at
+ * 100px each is its percentage of the cell. The entry offset is not P1-1's -- it is row 6's
+ * 26/53 of a cell until P1-6 limits it -- and so is not a round number.
+ */
+const P1_1_AT_100: Record<Constant, number> = {
+    outline: 9, radius: 14, pip: 24, divider: 60, extrusion: 14, lift: 14, entry: 2600 / 53,
 }
 
-describe('at 53px, the cell the art was drawn for, it is exactly what row 2 pinned', () => {
+describe(`at 100px, each constant is P1-1's value, as a percentage of the cell`, () => {
     let measured: ReturnType<typeof measure>
-    beforeAll(() => { measured = measure(53) })
+    beforeAll(() => { measured = measure(100) })
 
     for (const name of CONSTANTS) {
-        it(`${TABLE[name].label} is ${ROW_2_AT_53[name]}px on every piece`, () => {
+        it(`${TABLE[name].label} is ${P1_1_AT_100[name].toFixed(2)}px on every piece`, () => {
             expect(measured.counts).toEqual({ ones: 1, twos: 1, rocks: 1 })
-            expect(measured[name]).toEqual(Array(TABLE[name].count).fill(ROW_2_AT_53[name]))
+            expect(measured[name]).toHaveLength(TABLE[name].count)
+            for (const value of measured[name]) expect(value, TABLE[name].label).toBeCloseTo(P1_1_AT_100[name], 9)
         })
     }
 })
