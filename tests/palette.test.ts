@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
-import { COLOUR_UTILITY, scanCss, scanText, scanTs } from './colourAudit'
+import { isRead, scanCss, scanText, scanTs, stripComments } from './colourAudit'
 import { PALETTE, cssName, rgbBytes, type Token } from '@/app/palette'
 import { PALETTE_CSS_PATH, renderPaletteCss } from '@/scripts/palette-css'
 import { GROUND } from '@/app/siteMetadata'
@@ -159,26 +159,50 @@ describe('no colour outside the palette', () => {
     })
 })
 
+/**
+ * What a consumer's source contributes to the token-use check: its code, comments blanked.
+ * One function for the real check and the test below, so that test pins the check itself.
+ */
+const codeOf = (file: string, source: string) => stripComments(file, source)
+
 describe('no token is dead', () => {
     it('every token is read by something', () => {
         /*
          * A palette entry nothing reads is a value that can drift from what it names without
-         * anyone noticing -- the same failure as a literal, one step removed. Read means any
-         * of the ways a consumer can: `PALETTE.token` or `rgbBytes('token')` in TypeScript,
-         * a Tailwind utility on the generated colour, `bg-(--token)`, or `var(--token)`.
+         * anyone noticing -- the same failure as a literal, one step removed. Read in code:
+         * comments are stripped first, because a comment naming a token is not a consumer
+         * of it (codex, row 5 review: `// PALETTE.ghost` used to count).
          */
-        const consumers = SCOPE.filter(f => !ALLOWED.has(f)).map(f => readFileSync(f, 'utf8')).join('\n')
-        const unread = (Object.keys(PALETTE) as Token[]).filter(token => {
-            const name = cssName(token)
-            // Whole names only: `PALETTE.accent` is not a read of `accentEdge`, and a
-            // `data-hint` attribute is not a read of `hint`.
-            return !new RegExp(`PALETTE\\.${token}(?!\\w)`).test(consumers)
-                && !consumers.includes(`rgbBytes('${token}')`)
-                && !consumers.includes(`var(--${name})`)
-                && !consumers.includes(`(--${name})`)
-                && !new RegExp(`(?<![\\w-])(?:[\\w-]+:)*${COLOUR_UTILITY}-${name}(?:/\\d+)?(?![\\w-])`)
-                    .test(consumers)
-        })
+        const code = SCOPE.filter(f => !ALLOWED.has(f))
+            .map(f => codeOf(f, readFileSync(f, 'utf8'))).join('\n')
+        const unread = (Object.keys(PALETTE) as Token[]).filter(token => !isRead(token, code))
         expect(unread).toEqual([])
+    })
+
+    it('a token named only in a comment is not read', () => {
+        const readIn = (file: string, source: string) => isRead('ghost', codeOf(file, source))
+        // Every comment form this codebase uses, each naming the token every way a read can.
+        expect(readIn('a.tsx', '// PALETTE.ghost\nconst x = 1')).toBe(false)
+        expect(readIn('a.tsx', '/* bg-ghost, var(--ghost) */\nconst x = 1')).toBe(false)
+        expect(readIn('a.tsx', 'const x = 1 // trailing PALETTE.ghost')).toBe(false)
+        expect(readIn('a.tsx', '/**\n * rgbBytes(\'ghost\')\n */\nexport const x = 1')).toBe(false)
+        expect(readIn('a.tsx', 'const a = <div>{/* PALETTE.ghost */}</div>')).toBe(false)
+        expect(readIn('a.css', '/* var(--ghost) */\nbody { color: red }')).toBe(false)
+
+        // And the same names in code are reads, comments or not around them.
+        expect(readIn('a.tsx', '// leading\nconst x = PALETTE.ghost // trailing')).toBe(true)
+        expect(readIn('a.tsx', 'const a = <div className="p-2 bg-ghost/40" />')).toBe(true)
+        expect(readIn('a.ts', "const b = rgbBytes('ghost')")).toBe(true)
+        expect(readIn('a.css', 'body { color: var(--ghost) }')).toBe(true)
+        // Copy with a `//` in it is not a comment, and does not hide the code after it.
+        expect(readIn('a.tsx', 'const a = <p>and // or</p>; const y = PALETTE.ghost')).toBe(true)
+        expect(readIn('a.tsx', 'const a = <p>// or</p>; const y = PALETTE.ghost')).toBe(true)
+    })
+
+    it('whole names only', () => {
+        expect(isRead('accent', 'PALETTE.accentEdge')).toBe(false)
+        expect(isRead('hint', '<div data-hint />')).toBe(false)
+        expect(isRead('accent', 'className="ring-accent-edge"')).toBe(false)
+        expect(isRead('accentEdge', 'className="ring-accent-edge"')).toBe(true)
     })
 })

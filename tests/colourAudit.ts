@@ -89,9 +89,60 @@ export const scanTs = (file: string, source: string): Finding[] => {
 
 /** A stylesheet, with its comments removed and everything else scanned. */
 export const scanCss = (file: string, source: string): Finding[] => {
-    const stripped = source.replace(/\/\*[\s\S]*?\*\//g, c => c.replace(/[^\n]/g, ' '))
+    const stripped = stripCssComments(source)
     return scanText(stripped).map(hit => ({
         file, kind: hit.kind, text: hit.text,
         line: stripped.slice(0, hit.at).split('\n').length,
     }))
+}
+
+const blank = (text: string) => text.replace(/[^\n]/g, ' ')
+
+const stripCssComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, blank)
+
+/**
+ * A source file with every comment blanked out, line breaks kept.
+ *
+ * TypeScript from its syntax tree: every comment is trivia of some token -- leading if it
+ * starts a line, trailing if it shares one with the token before it -- so collecting both
+ * for every token finds them all: `//`, `/* *\/`, and JSX's `{/* *\/}`. A range that falls
+ * inside JSX text is dropped, because a `//` in copy a player reads is not a comment.
+ */
+export const stripComments = (file: string, source: string): string => {
+    if (file.endsWith('.css')) return stripCssComments(source)
+    const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true,
+        file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+    const ranges = new Map<number, number>()
+    const copy: [number, number][] = []
+    const visit = (node: ts.Node) => {
+        if (node.kind === ts.SyntaxKind.JsxText) {
+            copy.push([node.pos, node.end])
+            return
+        }
+        for (const r of ts.getLeadingCommentRanges(source, node.pos) ?? []) ranges.set(r.pos, r.end)
+        for (const r of ts.getTrailingCommentRanges(source, node.end) ?? []) ranges.set(r.pos, r.end)
+        for (const child of node.getChildren(sf)) visit(child)
+    }
+    visit(sf)
+    let out = source
+    for (const [pos, end] of ranges) {
+        if (copy.some(([from, to]) => pos >= from && pos < to)) continue
+        out = out.slice(0, pos) + blank(out.slice(pos, end)) + out.slice(end)
+    }
+    return out
+}
+
+/**
+ * Whether comment-free `code` reads `token`, in any of the ways a consumer can:
+ * `PALETTE.token` or `rgbBytes('token')` in TypeScript, a Tailwind utility on the generated
+ * colour, `bg-(--token)`, or `var(--token)`. Whole names only: `PALETTE.accent` is not a
+ * read of `accentEdge`, and a `data-hint` attribute is not a read of `hint`.
+ */
+export const isRead = (token: string, code: string): boolean => {
+    const name = token.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
+    return new RegExp(`PALETTE\\.${token}(?!\\w)`).test(code)
+        || code.includes(`rgbBytes('${token}')`)
+        || code.includes(`var(--${name})`)
+        || code.includes(`(--${name})`)
+        || new RegExp(`(?<![\\w-])(?:[\\w-]+:)*${COLOUR_UTILITY}-${name}(?:/\\d+)?(?![\\w-])`).test(code)
 }

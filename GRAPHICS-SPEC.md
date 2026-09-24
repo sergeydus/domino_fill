@@ -93,6 +93,10 @@ generated icon, and the accent blue and the arrow blues are three different blue
 job. Note the last two rows: a literal audit that looks only for `#rrggbb` would miss both
 a CSS named colour and a Tailwind utility.
 
+> **Amendment (row 5) — the count was low.** "Roughly twenty across nine files" was an
+> estimate. The audit, run over this tree, finds **71 literals in 20 files**; see P0-5's
+> amendment for the breakdown. The table above is the part the estimate got right.
+
 ### 1.3 Everything reads as one grey object
 
 At 1280×800 the whole page is `#e8e7e7` ground, `#ababab`/`#cbcbcb` cells, a `#666666`
@@ -618,18 +622,22 @@ r = 0.4. A page screenshot could not see any of that.
 
 ### P0-5 · The palette, in one place and in every consumer
 
-**Problem.** §1.2: twenty literals, nine files, three blues, one already-drifted pip.
+**Problem.** §1.2, as measured by row 5's audit: **71 literals in 20 files**, in four
+vocabularies (hex, Tailwind's palette, CSS named colours, and the icon's byte triples);
+more blues than roles for them; one already-drifted pip.
 
-**Shape.** One TypeScript module of role-named tokens (`tileFace`, not `cream`), consumed by
-four kinds of consumer — the fourth is the one that already exists and is easy to forget:
+**Shape.** One TypeScript module, `app/palette.ts`, of role-named tokens (`tileFace`, not
+`cream`), consumed by four kinds of consumer — the fourth is the one that already exists
+and is easy to forget:
 
 1. **SVG components** import it directly.
 2. **`scripts/icon.ts`** imports it directly — it runs in Node at build time, which is why
    the palette must be plain TypeScript with no React or CSS dependency.
-3. **CSS and Tailwind** cannot import TypeScript, so `globals.css`'s custom properties are
-   **generated** by `npm run tokens` and committed — the pattern rows 20b/20h used for the
-   icons, failing the same way: a test asserts the committed CSS is byte-identical to what
-   the generator produces.
+3. **CSS and Tailwind** cannot import TypeScript, so the custom properties are
+   **generated** by `npm run tokens` into their own file, `app/palette.css`, which
+   `globals.css` imports, and committed. It is the pattern rows 20b/20h used for the icons,
+   and it fails the same way: a test asserts the committed file is byte-identical to what
+   the generator produces. `globals.css` holds no colour of its own.
 4. **`siteMetadata.ts`** — `GROUND` feeds the viewport `themeColor` and the manifest's
    `theme_color` and `background_color`. It stops holding its own copy and reads the token,
    so a palette change reaches the browser chrome and the installed splash screen without
@@ -734,7 +742,18 @@ from here.
 > Only `app/palette.ts` and the byte-checked `app/palette.css` may hold a colour. Two more
 > checks go with it:
 > - Every token must be read by something. An unread token can drift as silently as a
->   literal.
+>   literal. "Read" means read in code. As first committed (`765e575`) this check searched
+>   raw source, so `// PALETTE.ghost` counted as a consumer of an otherwise unused token
+>   (codex's review). It now blanks comments first, from the syntax tree: leading and
+>   trailing comment ranges of every token, with ranges inside JSX text left alone. A test
+>   names the token only in comments (`//`, `/* */`, JSDoc, same-line trailing, JSX's
+>   `{/* */}`, CSS) and requires it unread. The same names in code, including after JSX
+>   copy containing `//`, must count as reads. Mutations, each caught:
+>   - a new token named only in a `//` comment, only in a JSX comment, and only in a
+>     same-line trailing comment, all in real components;
+>   - the check reverted to raw source;
+>   - trailing ranges dropped;
+>   - the JSX-text guard dropped.
 > - The palette itself must import nothing, because `npm run icons` loads it in Node.
 >
 > **Contrast** (`tests/contrast.test.ts`, maths in `tests/colour.ts`). The maths reads hex
