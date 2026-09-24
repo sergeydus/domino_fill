@@ -467,10 +467,9 @@ requirement, and not to be reintroduced without asking. So:
   proves every glyph on the baseline pages is drawn from them rather than from a system
   font. That establishes the font *selection*; it does not make rasterisation identical
   across runner images, which is what the environment record is for.
-- Chromium runs with `--disable-partial-raster`, so every tile is rasterised whole. By
-  default a partial re-raster's anti-aliased seam depends on what was invalidated before
-  the screenshot, which makes the output depend on timing. See the row-7 note under the
-  amendment below.
+- Chromium runs with `--disable-partial-raster`, because with it the screenshots repeat and
+  without it they measurably did not. Why it works is not established; see the row-7 note
+  under the amendment below.
 - Baselines are never taken on a developer's host: `npm run visual:update` refuses to run
   anywhere but the CI runner, and a commit message containing `[visual update]` is how CI
   is asked to regenerate them (see **Sequencing** in §8).
@@ -600,7 +599,7 @@ geometry to make.
 > the calendar shift row 3 did measure (`e2e/calendar.ts`): the page believes it is
 > 2026-10-15, in UTC, and its animation clocks run untouched.
 >
-> **Found at row 7: the noise was partial raster, and it is now switched off.** Rows 3 and 6
+> **Found at row 7: run-to-run noise, removed by a Chromium switch.** Rows 3 and 6
 > both met a few-pixel cluster that toggled between runs of *unchanged* code: on the
 > development host, and on CI's target specimens. Pixelmatch classed it as anti-aliasing, so
 > the comparison passed. Row 7's art put one pixel of it outside that class. Its
@@ -609,17 +608,28 @@ geometry to make.
 > were the same image, 11 raw pixels from the baseline, in the cluster row 6 had already
 > measured.
 >
-> The cause was not the page. By default Chromium re-rasterises only the invalidated part
-> of a tile, and the anti-aliasing where the new raster meets the old depends on what was
-> invalidated before the screenshot. Measured on the development host with row 7's art:
+> **What was measured,** on the development host with row 7's art:
 > - ten shots of the 53px sheet, **three different images** (6, 3 and 1 of each);
 > - with `--disable-partial-raster`, **one image** in ten;
 > - five shots of each of the four baselines with the switch, one image each.
 >
-> The switch is now in `playwright.visual.config.ts`. The contract stays: threshold 0, no
-> budget, and two runs of unchanged code must agree. What changed is the mechanism that
-> was breaking it. The switch changes the bytes of every baseline, so it is committed on its
-> own, with a regeneration, and measured across machines again.
+> On CI with the switch (`e71b343`, run 36039783428), the regeneration then matched its own
+> baselines **100 of 100** on the same runner. Row 7's baselines at `a0a998f` passed 8 of 8
+> in each of six attempts on newly drawn machines, **48 of 48**, on AMD EPYC 7763 and 9V74.
+> No Intel runner was drawn this time.
+>
+> **Why it works is an inference, not a finding.** By its name, the switch stops Chromium
+> re-rasterising only the invalidated part of a tile. A partial raster whose seam depends
+> on earlier invalidations would explain noise that follows timing rather than the page.
+> But Chromium's definition of the switch also disables persistent GPU memory buffers, and
+> every A/B run above toggled both together. The measurements establish that the switch
+> removes the noise, not which of its effects does. Isolating them was not attempted.
+>
+> The switch is now in `playwright.visual.config.ts`, kept for the measured result. The
+> contract stays: threshold 0, no budget, and two runs of unchanged code must agree. What
+> changed is the rendering setup that was breaking it. The switch changes the bytes of every
+> baseline, so it was committed on its own, with a regeneration, and measured across
+> machines again.
 >
 > **A row-1 defect the baselines showed, now fixed.** In the desktop rail, the difficulty
 > selector could get no narrower than 276–278px (its three options at their narrowest,
@@ -1073,11 +1083,11 @@ row's to choose; these bounds are not.
 > - **4, desktop:** the tray the same. The height it gives back grows the height-bound board
 >   again: 6x6 86 → **87**, 7x7 75 → 76, and 8x8 66 → 67. Measured, like row 6's.
 >
-> **Checked, for the sheets.** On the development host, both with the full raster P0-4 now
-> uses, the old art (`794bd19`) and the new were compared. Every changed pixel lies inside
-> a piece's old or new drawing box: **7,204 of 7,204** at 38px and **13,115 of 13,115** at
-> 53px, with nothing elsewhere. Under partial raster, rows 6 and 7 each had a noise cluster
-> to explain away; there is none.
+> **Checked, for the sheets.** On the development host, both with the
+> `--disable-partial-raster` switch P0-4 now uses, the old art (`794bd19`) and the new were
+> compared. Every changed pixel lies inside a piece's old or new drawing box: **7,204 of
+> 7,204** at 38px and **13,115 of 13,115** at 53px, with nothing elsewhere. Without the
+> switch, rows 6 and 7 each had a noise cluster to explain away; with it there is none.
 
 ### P1-2 · An irregular, faceted rock (§1.4, §2.1)
 

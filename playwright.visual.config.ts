@@ -54,17 +54,21 @@ export default defineConfig({
     use: {
         ...devices['Desktop Chrome'],
         /*
-         * Raster whole tiles, every time (found at graphics row 7).
+         * A switch that makes the screenshots repeatable (found at graphics row 7).
          *
-         * By default Chromium re-rasterises only the invalidated part of a tile, and the
-         * anti-aliasing where a partial raster meets the old one depends on what was
-         * invalidated before the screenshot -- on timing, not on the page. Rows 3 and 6 saw
-         * it as a few-pixel cluster that toggled between runs of unchanged code, always
-         * classed as anti-aliasing until row 7's art put one counted pixel in it: 7 of 25
-         * same-runner comparisons of the 53px sheet failed by that one pixel. Measured on
-         * the development host, ten shots of the sheet came out as three different images
-         * by default and as one with this switch; five of each baseline, one image each.
-         * The page is the same; the rasteriser just stops depending on its own history.
+         * What was seen: a few-pixel cluster that toggled between runs of unchanged code.
+         * Rows 3 and 6 met it, always classed as anti-aliasing, until row 7's art put one
+         * counted pixel in it and 7 of 25 same-runner comparisons of the 53px sheet failed
+         * by that one pixel. What was measured, on the development host: ten shots of the
+         * sheet came out as three different images by default, and as one with this switch;
+         * with it, five shots of each baseline gave one image each.
+         *
+         * Why it works is an inference, not a measurement. By its name the switch stops
+         * Chromium re-rasterising only the invalidated part of a tile, and a partial
+         * raster's seam depending on earlier invalidations would explain run-to-run
+         * variation. But Chromium's definition of the switch also disables persistent GPU
+         * memory buffers, and the A/B runs toggled both together, so they do not say which
+         * of the two removed the flake. The switch is kept for the measured result.
          */
         launchOptions: { args: ['--disable-partial-raster'] },
         baseURL: BASE_URL,
