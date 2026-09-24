@@ -412,11 +412,14 @@ question a visual baseline exists to answer.
 > all kept advancing under the pinned clock, so the mechanism is not established. The date
 > test moves only the calendar, with a `Date` shim that keeps time flowing.
 >
-> **For P0-4, therefore:** the diff budget has two sources to measure rather than one — the
-> Linux-vs-Windows difference the section below anticipates, *and* same-machine
-> nondeterminism at rest, measured here on Windows only. And `page.clock.install`, which
-> P0-4 plans for the full-page pair, is not the method measured here; it should be measured
-> for the stuck-card failure before a baseline depends on it.
+> **What P0-4 took from this.** The Windows host's noise does not reach P0-4's budget,
+> because baselines are neither taken nor compared anywhere but the CI runner — there is no
+> Linux-versus-Windows difference to budget for. What P0-4 measures instead is stability on
+> the runner itself: the same machine agreeing with itself (a regeneration run compares
+> against its own baselines 25 times), and different runner machines and images agreeing
+> with the committed set. And the full-page pair fixes its day with this same calendar
+> shift, not `page.clock.install`, which was never measured against the stuck-card failure.
+> Both are recorded, with their numbers, in P0-4's amendment.
 
 ### P0-4 · Four deterministic baselines
 
