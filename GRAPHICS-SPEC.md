@@ -826,6 +826,15 @@ be a contradiction, not a standard.
 
 - **Baseline 2 (53px) stays pixel-identical.** If sub-pixel rounding makes that impossible,
   the row names the attribute and the arithmetic rather than widening the diff budget.
+  "Identical" has two meanings here, and the row proves each where it can be proven:
+  - **By the suite's comparator, on CI.** The new code is compared against the unchanged
+    53px baseline at `threshold: 0`, `maxDiffPixels: 0`. That is equality as pixelmatch
+    defines it, which ignores pixels it classifies as anti-aliasing (P0-4). It is not
+    literal byte identity, and CI cannot attest that: two runs of the same code on the
+    runner differ in raw pixels (14 on the target specimens at row 6).
+  - **In raw pixels, on one machine, controlled.** Old and new code are each rendered
+    repeatedly on the development host, and the two sets of images must be the same set.
+    Run-to-run noise then shows up on both sides, and a code change on one.
 - **Baselines 1, 3 and 4 change**, and each change is *predicted before it is taken*: the new
   value of every constant equals the old one times the cell ratio, within rounding, and the
   geometry assertions from P0-2 are rewritten to assert the ratio rather than the pixel.
@@ -848,6 +857,14 @@ be a contradiction, not a standard.
 >   its lift (`translate: 0 -extrusion`), which was the fixed `-translate-y-4` class.
 > - The entry offset in `Pieces.tsx` is `fraction(PIECE.entry)` of the cell, in place of a
 >   fixed 26px.
+> - A piece takes exactly `boardsStore` and, for the tray, `cellSize`: no SVG props. As
+>   first committed (`c9a9e45`) each piece spread caller props onto its `<svg>` after
+>   `pieceBox`, so a caller could override the width, height, style or `viewBox`. No caller
+>   did, but that contradicted "the only place pixels enter" (codex's review). The spread is
+>   gone and the types are narrowed. `tests/pieceGeometry.test.tsx` holds four
+>   `@ts-expect-error` lines (width, style, class, viewBox), so re-widening the props fails
+>   `tsc`. The geometry rule now rejects any spread on the `<svg>` other than `pieceBox(...)`,
+>   before it or after it.
 > - A dead prop went with it. `Pieces.tsx` passed `className="absolute z-30"` to the upright
 >   domino, and the svg's own class, set after the spread, always overrode it. With the class
 >   gone the prop would have started to apply, so it is removed rather than turned on.
@@ -882,6 +899,23 @@ be a contradiction, not a standard.
 > inside. A first "before" shot carried 5 more on the focus specimen, which has no pieces.
 > Two fresh "before" shots of the old code did not, so that cluster was host noise in the
 > first shot.
+>
+> **Baseline 2, both kinds of identical.**
+> - **Comparator equality, on CI.** Part 2 (`288dc47`) deliberately kept row 4's
+>   `sheet-53.png` rather than CI's regenerated one. That run compared the new code against
+>   the old baseline at threshold 0 and passed (CI run 36017003760, on an Intel Xeon 8573C,
+>   a different CPU from the one that took it). CI's regenerated copy differed from the
+>   committed one in 14 raw pixels on the target specimens, none counted by the comparator.
+>   One of them is on a cell with no piece, and the same values repeat in the next
+>   specimen. That is runner noise, and it is why CI cannot attest byte identity.
+> - **Raw identity, controlled, on the development host.** The 53px sheet was shot 15 times
+>   with the pre-row-6 pieces (`ba596f9`) and 15 times with the new ones, one process at a
+>   time, on one machine. Each side produced **the same three byte-identical images and no
+>   others**: 10, 4 and 1 of them from the old code, and 12, 2 and 1 from the new. The three
+>   differ from one another only in small clusters on the target specimens (8 to 29
+>   pixels), which the old code produces as often as the new. On this host, at 53px, the
+>   new drawing is the old one pixel for pixel. The only variation is noise both sides
+>   share.
 >
 > **The assertions, rewritten from pixels to ratios.**
 > - `tests/pieceGeometry.test.tsx`: at 53px every constant is exactly row 2's pixel value,

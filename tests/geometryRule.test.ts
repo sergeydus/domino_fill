@@ -41,9 +41,17 @@ const breaches = (file: string, source: string): Breach[] => {
         const attributes = svg.attributes.properties
         const named = (name: string) => attributes.find(a => ts.isJsxAttribute(a) && a.name.getText(sf) === name)
         if (named('viewBox') === undefined) found.push(`${where(svg)} <svg> has no viewBox`)
-        const boxed = attributes.some(a => ts.isJsxSpreadAttribute(a)
-            && ts.isCallExpression(a.expression) && a.expression.expression.getText(sf) === 'pieceBox')
-        if (!boxed) found.push(`${where(svg)} <svg> does not take its box from pieceBox`)
+        const isPieceBox = (a: ts.JsxAttributeLike) => ts.isJsxSpreadAttribute(a)
+            && ts.isCallExpression(a.expression) && a.expression.expression.getText(sf) === 'pieceBox'
+        if (!attributes.some(isPieceBox)) found.push(`${where(svg)} <svg> does not take its box from pieceBox`)
+        // Any other spread can carry a width, height, style or viewBox past pieceBox -- after
+        // it, by overriding; before it, by whatever it adds that pieceBox does not set (codex,
+        // row 6 review: the pieces spread caller props last).
+        for (const a of attributes) {
+            if (ts.isJsxSpreadAttribute(a) && !isPieceBox(a)) {
+                found.push(`${where(svg)} <svg> spreads {...${a.expression.getText(sf)}}, which pieceBox does not own`)
+            }
+        }
         for (const name of ['width', 'height', 'className', 'class', 'style']) {
             if (named(name) !== undefined) found.push(`${where(svg)} <svg> sets ${name} itself`)
         }
@@ -103,5 +111,12 @@ describe('no pixel length in the drawing', () => {
         expect(piece('', '{...pieceBox(1, 1, size)}')).toEqual([expect.stringMatching(/has no viewBox/)])
         expect(piece('', '{...pieceBox(1, 1, size)} viewBox={viewBox(1, 1)} className="-translate-y-4"'))
             .toEqual([expect.stringMatching(/sets className itself/)])
+
+        // Caller props spread onto the svg, after pieceBox (the form row 6 first shipped
+        // with) or before it: either way pieceBox is no longer the only source of the box.
+        expect(piece('', '{...pieceBox(1, 1, size)} viewBox={viewBox(1, 1)} {...rest}'))
+            .toEqual([expect.stringMatching(/spreads \{\.\.\.rest\}, which pieceBox does not own/)])
+        expect(piece('', '{...props} {...pieceBox(1, 1, size)} viewBox={viewBox(1, 1)}'))
+            .toEqual([expect.stringMatching(/spreads \{\.\.\.props\}/)])
     })
 })

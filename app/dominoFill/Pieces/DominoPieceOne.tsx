@@ -5,7 +5,13 @@ import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
 
 const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
 
-type PieceProps = React.SVGProps<SVGSVGElement> & {
+/**
+ * Exactly what a piece needs, and no SVG props (graphics row 6). A spread of caller props
+ * onto the svg could override the `width`, `height`, `style` or `viewBox` that `pieceBox`
+ * sets, and then `pieceBox` would not be the only place pixels enter; no caller styles a
+ * piece, so none is accepted.
+ */
+type PieceProps = {
     boardsStore: PuzzleSession
     /**
      * Overrides the board's cell size.
@@ -19,11 +25,11 @@ type PieceProps = React.SVGProps<SVGSVGElement> & {
 }
 
 const DominoPieceOne: React.FC<PieceProps> = (props) => {
-    const { boardsStore, cellSize, ...rest } = props
+    const { boardsStore, cellSize } = props
     const size = cellSize ?? boardsStore.squareSize
     return (
         // One cell (U) wide and two tall, in drawing units; `pieceBox` is where pixels enter.
-        <svg {...pieceBox(1, 2, size)} viewBox={viewBox(1, 2)} {...rest}>
+        <svg {...pieceBox(1, 2, size)} viewBox={viewBox(1, 2)}>
             <rect x={O} y={I + E} width={U - 2 * O} height={2 * U - O} fill={PALETTE.tileSide} rx={R} ry={R} />
             <rect x={O} y={I} width={U - 2 * O} height={2 * U - O} fill={PALETTE.tileFace} rx={R} ry={R} />
             <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - O + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />

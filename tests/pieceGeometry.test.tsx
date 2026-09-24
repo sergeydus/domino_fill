@@ -5,6 +5,9 @@ import { RootStore } from '@/app/stores/RootStore'
 import { PuzzleSession, GRID_BORDER_PX, GUTTER_FRACTION } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import Pieces from '@/app/dominoFill/Pieces/Pieces'
+import DominoPieceOne from '@/app/dominoFill/Pieces/DominoPieceOne'
+import DominoPieceTwo from '@/app/dominoFill/Pieces/DominoPieceTwo'
+import Rock from '@/app/dominoFill/Pieces/Rock'
 import { PIECE, UNIT, fraction } from '@/app/dominoFill/Pieces/geometry'
 import { readArt } from '@/e2e/artGeometry'
 
@@ -203,6 +206,28 @@ const everything = (cell: number): { at: string, value: number }[] => {
     }
     return out
 }
+
+describe('a piece takes no SVG props', () => {
+    it('so a caller cannot size or style one past pieceBox -- a compile-time check', () => {
+        /*
+         * Each line must fail to type-check; `tsc --noEmit` in the gate fails on an unused
+         * `@ts-expect-error`, so widening a piece's props again breaks the build rather
+         * than this test. Never rendered: the check is the compiler's.
+         */
+        const s = sessionAt(38)
+        const attempts = () => [
+            // @ts-expect-error -- no width
+            <DominoPieceOne key='1' boardsStore={s} width={10} />,
+            // @ts-expect-error -- no style
+            <DominoPieceTwo key='2' boardsStore={s} style={{ translate: '0 0' }} />,
+            // @ts-expect-error -- no className
+            <Rock key='3' boardsStore={s} className='-translate-y-4' />,
+            // @ts-expect-error -- no viewBox
+            <Rock key='4' boardsStore={s} viewBox='0 0 1 1' />,
+        ]
+        expect(typeof attempts).toBe('function')
+    })
+})
 
 describe('every geometric attribute scales linearly with the cell', () => {
     const reference = everything(53)
