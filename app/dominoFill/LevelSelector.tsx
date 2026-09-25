@@ -39,7 +39,7 @@ const ARROW_PATH = `M10 20
 
 const Arrow: React.FC = () => (
     <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-        <path d={ARROW_PATH} fill={PALETTE.levelArrowFill} stroke={PALETTE.levelArrowStroke} strokeWidth="3" strokeLinejoin="round" />
+        <path d={ARROW_PATH} fill={PALETTE.accent} stroke={PALETTE.accentEdge} strokeWidth="3" strokeLinejoin="round" />
     </svg>
 )
 

@@ -154,7 +154,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     </button>
                 </div>
 
-                {error && <p role='alert' className='mb-2 text-sm text-alert'>{error}</p>}
+                {error && <p role='alert' className='mb-2 text-sm text-problem'>{error}</p>}
 
                 <div className='grid grid-cols-7 gap-1' role='group' aria-label={`Days in ${month}`}>
                     {days.map(date => {
@@ -177,7 +177,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                                 // a guess. The day is still selectable: picking it fetches
                                 // the month anyway.
                                 className={`rounded-md border p-1 text-xs ${MARK_CLASS[mark]} `
-                                    + (date === viewingDate ? 'ring-2 ring-archive-current' : '')}
+                                    + (date === viewingDate ? 'ring-2 ring-accent-edge' : '')}
                                 onClick={() => { void pick(date) }}
                             >
                                 {Number(date.slice(8))}

@@ -40,7 +40,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row bg-control-surface rounded gap-2 text-2xl p-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row bg-control-surface rounded gap-2 text-lg p-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
@@ -50,9 +50,8 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-accent-edge' : ''}`}
+                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-accent-edge' : 'hover:bg-panel/60'}`}
                         animate={{ backgroundColor: selected ? PALETTE.accent : undefined }}
-                        whileHover={{ backgroundColor: PALETTE.accent }}
                         onClick={onClick(key)}
                     >
                         {label}

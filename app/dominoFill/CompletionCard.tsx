@@ -71,7 +71,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             data-completion-card
             role="status"
             aria-live="polite"
-            className="control-surface flex flex-col items-center gap-3 rounded-2xl bg-accent text-on-accent px-6 py-4 shadow-lg"
+            className="control-surface flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg"
             initial={{ opacity: 0, scale: 0.9, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             // Well inside P1-4's 500ms: the card is on screen and announced immediately,
@@ -88,7 +88,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                         type="button"
                         ref={nextRef}
                         data-next-level
-                        className="control-surface cursor-pointer rounded bg-on-accent/20 px-4 py-2 hover:bg-on-accent/30"
+                        className="control-surface cursor-pointer rounded bg-panel text-ink px-4 py-2 hover:bg-accent"
                         onClick={onNext}
                     >
                         Next level
@@ -98,7 +98,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                     type="button"
                     ref={replayRef}
                     data-replay
-                    className="control-surface cursor-pointer rounded bg-on-accent/20 px-4 py-2 hover:bg-on-accent/30"
+                    className="control-surface cursor-pointer rounded bg-panel text-ink px-4 py-2 hover:bg-accent"
                     onClick={() => session.reset()}
                 >
                     Play again

@@ -22,7 +22,7 @@
  * **The values did not move in this row.** Every token is the value its use site held, and
  * the ones that came from Tailwind's palette carry Tailwind's own `oklch()` definition, so
  * the rendered page is unchanged -- measured, not assumed; see the spec's P0-5 amendment.
- * Where the name records what a token replaced (`tutorialAction` was `blue-500`), that is
+ * Where the comment records what a token replaced (`markStarted` was `amber-200`), that is
  * provenance for the rows that will change it, not a promise it stays that colour.
  */
 export const PALETTE = {
@@ -73,32 +73,44 @@ export const PALETTE = {
     // ---- meaning -------------------------------------------------------------------------
     /** A line label with nothing to report (5.62:1 on the ground, spec §4). */
     lineNeutral: '#5f5f5f',
-    /** A finished line (6.27:1). */
+    /**
+     * Finished: a finished line (6.27:1 on the ground), and a finished puzzle -- the
+     * completion card's surface (P1-4). Nothing else.
+     */
     success: '#15661a',
-    /** An overshot line, and the advice strip when it is reporting a problem (7.35:1). */
+    /** Text on a `success` surface. */
+    onSuccess: '#ffffff',
+    /**
+     * Something is wrong: an overshot line, the advice strip when it is reporting a problem
+     * (7.35:1), and the archive's error message, which had a red of its own until P1-4.
+     */
     problem: '#a10000',
     /**
      * The cell a hint is pointing at. It shared `success`'s value until P1-3, whose darker
      * checker it no longer cleared 3:1 against; now a green dark enough to.
      */
     hint: '#0b3b10',
-    /** The archive's error message. Tailwind `red-700`; not yet `problem` (P1-4). */
-    alert: 'oklch(50.5% 0.213 27.518)',
 
     // ---- interactive chrome --------------------------------------------------------------
-    /** The one interactive accent (§2.2): the selected difficulty, the completion card. */
+    /*
+     * One accent, and only on interactive chrome (§2.2, P1-4): the selected difficulty, the
+     * level arrows, the primary action of a dialog or banner, a control under the pointer
+     * in the completion card. Until P1-4 there were five blues -- this, Material's two for
+     * the arrows, Tailwind's `blue-500` and `blue-600` for the tutorial and the board's
+     * focus ring, `sky-600` for the archive's current day -- and an amber for "Go to
+     * today". Text on the accent is `ink` (5.87:1); white was 3.05:1.
+     */
     accent: '#419dc8',
-    /** The ring around the selected difficulty -- its non-colour channel's colour. */
+    /**
+     * The accent's edge: rings and strokes -- the selected difficulty's ring, the arrows'
+     * outline, the archive's current day, the board's focus ring.
+     */
     accentEdge: '#0b3c52',
-    /** Text and translucent washes on an accent surface. */
-    onAccent: '#ffffff',
-    /** Check, Hint, Undo, Reset, the difficulty group and the domino legend's tray. */
-    controlSurface: '#ababab',
-    /** The board's own focus ring. Tailwind `blue-500`. */
-    focusRing: 'oklch(62.3% 0.214 259.815)',
-    /** The level arrows, still in Material's palette -- P1-4 makes them the accent. */
-    levelArrowFill: '#4fc3f7',
-    levelArrowStroke: '#0288d1',
+    /**
+     * Check, Hint, Undo, Reset, the difficulty group and the domino legend's tray. A light
+     * warm neutral since P1-4, so the controls sit back on the warm ground; it was `#ababab`.
+     */
+    controlSurface: '#e2d9ca',
 
     // ---- the cell states (P1-5 owns these) -------------------------------------------------
     /**
@@ -133,22 +145,10 @@ export const PALETTE = {
     markPartial: 'oklch(82.8% 0.189 84.429)',
     /** Tailwind `emerald-400`. */
     markComplete: 'oklch(76.5% 0.177 163.223)',
-    /** The ring on the day being viewed. Tailwind `sky-600`. */
-    archiveCurrent: 'oklch(58.8% 0.158 241.966)',
 
     // ---- the day banner ------------------------------------------------------------------
     /** Tailwind `amber-100`. */
     bannerSurface: 'oklch(96.2% 0.059 95.617)',
-    /** "Go to today". Tailwind `amber-700`. */
-    bannerAction: 'oklch(55.5% 0.163 48.998)',
-    onBannerAction: '#ffffff',
-
-    // ---- the tutorial --------------------------------------------------------------------
-    /** "Got it!". Tailwind `blue-500`; one of the blues P1-4 folds into the accent. */
-    tutorialAction: 'oklch(62.3% 0.214 259.815)',
-    /** Tailwind `blue-600`. */
-    tutorialActionHover: 'oklch(54.6% 0.245 262.881)',
-    onTutorialAction: '#ffffff',
 } as const
 
 /**

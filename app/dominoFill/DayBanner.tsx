@@ -61,7 +61,7 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
                 <button
                     type='button'
                     data-go-to-today
-                    className='rounded-md bg-banner-action px-2 py-1 font-semibold text-on-banner-action'
+                    className='rounded-md bg-accent px-2 py-1 font-semibold text-ink'
                     /*
                      * Two routes to the same place. A held-back day is already fetched, so
                      * adopting it is instant and cannot fail; an archive day was chosen

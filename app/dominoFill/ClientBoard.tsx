@@ -306,7 +306,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     aria-colcount={size}
                     draggable={false}
                     style={gridStyle}
-                    className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-focus-ring"
+                    className="board-grid relative cursor-pointer outline-none focus-visible:ring-4 focus-visible:ring-accent-edge"
                 >
                     <Hover boardsStore={boardsStore} />
                     <Selection boardsStore={boardsStore} />

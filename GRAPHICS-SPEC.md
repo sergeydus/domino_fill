@@ -1379,6 +1379,111 @@ generator the moment it moves.
   saturated pixel would satisfy it while the controls still dominated the page, and a test
   that can be satisfied without the claim being true is worse than no test.
 
+> **Amendment (row 10) — the roles, the scan that holds them, and what moved.**
+>
+> **One accent** is two tokens that act as one:
+> - `accent` (`#419dc8`), for fills;
+> - `accentEdge` (`#0b3c52`), for its rings and strokes.
+>
+> They appear on:
+> - the selected difficulty (fill and ring);
+> - the level arrows (fill and outline);
+> - the primary action of a dialog or banner: the tutorial's "Got it!" and the banner's
+>   "Play today";
+> - the completion card's buttons under the pointer;
+> - the archive's current day (ring);
+> - the board's focus ring.
+>
+> Folded into it: Material's two arrow blues; Tailwind `blue-500` and `blue-600` for the
+> tutorial and the focus ring; `sky-600` for the archive's current day; and the amber
+> `amber-700` of "Play today". Eleven tokens went (`onAccent`, `focusRing`,
+> `levelArrowFill`, `levelArrowStroke`, `tutorialAction`, `tutorialActionHover`,
+> `onTutorialAction`, `archiveCurrent`, `bannerAction`, `onBannerAction`, `alert`), and one
+> came (`onSuccess`). Text on the accent is `ink`, at 5.87:1; the white it replaced was
+> 3.05:1.
+>
+> **The semantic colours, each only on its state:**
+> - `success`: a satisfied line, and the completion card's surface, since a solved puzzle
+>   is the same meaning. The card had been the accent, which put the accent on a status
+>   region rather than on chrome. Its text is `onSuccess`, white, at 7.13:1.
+> - `problem`: an overshot line; the advice strip while it reports a problem (`wrong`,
+>   `unavailable`); and the archive's error, which had its own `red-700` (`alert`).
+> - `hint`: the hinted square.
+>
+> The `Hint` button is a control and wears no `hint`.
+>
+> **Quieter controls.**
+> - The difficulty selector drops from `text-2xl` to `text-lg`.
+> - Its hover is a white wash instead of the accent, which had flashed on every option the
+>   pointer crossed.
+> - `controlSurface` goes from grey `#ababab` to a light warm neutral, `#e2d9ca` (ink on it
+>   12.82:1), so the controls and the legend's tray sit back on the warm ground.
+> - `LevelSelector`'s labels, roles and destination wording are untouched, and its tests
+>   pass unedited.
+>
+> **The test is a scan** (`e2e/colourRoles.spec.ts`). "Only on" is a claim about every
+> place a colour appears, so every element on the page is read:
+> - background, own text, text decoration, borders, outline, ring shadows, and SVG fill and
+>   stroke;
+> - normalised through a canvas, so every syntax the browser computes compares as bytes;
+> - matched against the five role tokens.
+>
+> A role colour whose element is not inside its allowed context fails. The contexts:
+> - the accent's: a `button`, or the grid for its focus ring;
+> - `success`'s: a satisfied label or the card;
+> - `problem`'s: an over label, a problem advice kind, or an alert;
+> - `hint`'s: the hinted square.
+>
+> The scan runs in:
+> - the 53px sheet at rest, and under the pointer on each of its enabled buttons in turn;
+> - the board focused by keyboard;
+> - a hint showing, and a wrong position checked;
+> - the archive open, and the archive reporting an error (the page's clock is moved to
+>   October so a month exists to page back to);
+> - an earlier day with its banner;
+> - the tutorial.
+>
+> Per control and per state, what each should carry:
+> - the selected difficulty: accent and edge; the others nothing, at rest or hovered;
+> - the arrows: accent and edge, enabled or not;
+> - the quiet controls: nothing, at rest, hovered or disabled;
+> - the card: `success`; its buttons nothing at rest and the accent hovered;
+> - each label state, the hinted square, the focus ring, the archive's current day and
+>   error, the banner's action, "Got it!".
+>
+> Two tests of `tests/palette.test.ts` named removed tokens as examples and now name live
+> ones. The audit's positive control on the palette file had required a fixed ten
+> `oklch()` literals, and the fold left eight. It now counts from the palette: the scanner
+> must find at least as many literals of each notation as the palette holds values.
+>
+> **Left as they are, and why:**
+> - The archive's Close button keeps `strongSurface`, a near-neutral slate: chrome, but not
+>   a hue competing with the accent.
+> - The archive's day marks keep their own progress scale. `markComplete` is a green, but
+>   it is not `success` and the scan does not treat it as one.
+> - `bannerSurface` is a surface, not chrome.
+>
+> **The predictions.** Every baseline changes: controls, arrows and the card are recoloured
+> everywhere. Layout, measured on the development host, old tree against new:
+> - **Sheets:** the page is unchanged. The difficulty buttons shrink (48 → 44px tall), and
+>   on the 53px sheet the specimens after them move left.
+> - **Desktop:** only the rail's 11 boxes move. The board is unchanged; its cell stays 87.
+> - **Phone:** the selector no longer wraps, 80 → 44px tall, so everything below it moves
+>   up exactly 36px and the page is 716 → **680px**. The board keeps its size (cell 38),
+>   and no box other than the three difficulty buttons changes size.
+>
+> **Mutations,** each caught, and each by the test aimed at it:
+> - the card back to the accent;
+> - the advice strip's problem colour on regardless of kind;
+> - the archive error in `success`;
+> - the banner's action made quiet;
+> - the focus ring as the accent instead of its edge;
+> - the accent restored on the difficulty hover;
+> - the `Hint` button painted `hint`: caught in every state that shows it;
+> - "Got it!" made quiet;
+> - the arrows' fill and stroke swapped;
+> - the audit's scanner blind to `oklch()`: caught by the recounted positive control.
+
 ### P1-5 · The persistent cell states, legible at the floor
 
 Anchor, candidate, hint and focus — the states a player reads while thinking, all of which

@@ -62,12 +62,12 @@ describe('every kind of consumer reads the token rather than a copy', () => {
     it('rgbBytes reads a token as bytes, and refuses one that is not #rrggbb', () => {
         // The ground's bytes, written out: `#f4f0e8` since P1-3 moved it from `#e8e7e7`.
         expect(rgbBytes('ground')).toEqual([0xf4, 0xf0, 0xe8])
-        expect(() => rgbBytes('focusRing')).toThrow(/not #rrggbb/)
+        expect(() => rgbBytes('candidateEdge')).toThrow(/not #rrggbb/)
     })
 
     it('cssName is the kebab-case Tailwind knows', () => {
         expect(cssName('tileFace')).toBe('tile-face')
-        expect(cssName('onTutorialAction')).toBe('on-tutorial-action')
+        expect(cssName('onSuccess')).toBe('on-success')
     })
 })
 
@@ -111,10 +111,18 @@ describe('no colour outside the palette', () => {
 
     it('and the palette is not empty of them, or the audit could not see any', () => {
         // The positive control on real source: the one file that is supposed to be full of
-        // colours is, as far as the same scanner can tell.
+        // colours is, as far as the same scanner can tell -- at least one finding for every
+        // value the palette holds, of each notation. Counted from the palette rather than
+        // written down, since P1-4 folded six `oklch()` blues and reds away and a fixed
+        // count said nothing about why it moved.
         const inPalette = audit(['app/palette.ts'])
-        expect(inPalette.filter(f => f.kind === 'hex').length).toBeGreaterThanOrEqual(20)
-        expect(inPalette.filter(f => f.kind === 'colour function').length).toBeGreaterThanOrEqual(10)
+        const values = Object.values(PALETTE) as string[]
+        const hexes = values.filter(v => v.startsWith('#')).length
+        const functions = values.filter(v => v.startsWith('oklch(')).length
+        expect(hexes + functions, 'every value is one of the two notations').toBe(values.length)
+        expect(functions, 'no oklch() left to see').toBeGreaterThan(0)
+        expect(inPalette.filter(f => f.kind === 'hex').length).toBeGreaterThanOrEqual(hexes)
+        expect(inPalette.filter(f => f.kind === 'colour function').length).toBeGreaterThanOrEqual(functions)
     })
 
     it('every vocabulary is seen, and nothing that is not a colour is', () => {
@@ -137,7 +145,7 @@ describe('no colour outside the palette', () => {
 
         // And what must not be reported: tokens, sizes, and the two colourless keywords.
         for (const clean of ['bg-control-surface', 'text-2xl', 'border-4', 'ring-2',
-            'inset-[2px]', 'rounded-[4px]', 'outline-hint', 'bg-on-accent/20', 'transparent',
+            'inset-[2px]', 'rounded-[4px]', 'outline-hint', 'bg-panel/60', 'transparent',
             'currentColor', 'none', 'font-bold', 'Hard 8x8', '#main-content']) {
             expect(kinds(clean), clean).toEqual([])
         }

@@ -90,8 +90,8 @@ const Tutorial = () => {
                         disabled={!solved}
                         onClick={dismiss}
                         className={cn(
-                            "px-4 py-2 bg-tutorial-action text-on-tutorial-action rounded hover:bg-tutorial-action-hover cursor-pointer",
-                            !solved && "opacity-50 cursor-not-allowed hover:bg-tutorial-action",
+                            "px-4 py-2 bg-accent text-ink rounded hover:ring-2 hover:ring-accent-edge cursor-pointer",
+                            !solved && "opacity-50 cursor-not-allowed hover:ring-0",
                         )}
                     >
                         Got it!
