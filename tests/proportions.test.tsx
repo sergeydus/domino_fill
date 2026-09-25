@@ -34,14 +34,23 @@ const pieces = (cell: number): Piece[] =>
         const svg = el.querySelector('svg')!
         const scale = Number(svg.getAttribute('width')) / Number(svg.getAttribute('viewBox')!.split(' ')[2])
         const n = (e: Element, a: string) => Number(e.getAttribute(a)) * scale
+        /** A rect's box, or a polygon's bounding box (the rock's, since row 8), in px. */
+        const box = (e: Element): Rect => {
+            if (e.tagName.toLowerCase() === 'rect') return { x: n(e, 'x'), y: n(e, 'y'), w: n(e, 'width'), h: n(e, 'height') }
+            const xy = e.getAttribute('points')!.trim().split(/[\s,]+/).map(v => Number(v) * scale)
+            const [xs, ys] = [xy.filter((_, i) => i % 2 === 0), xy.filter((_, i) => i % 2 === 1)]
+            const [x, y] = [Math.min(...xs), Math.min(...ys)]
+            return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
+        }
         // Drawing order, as the geometry reader uses: the side, then the face, then the outline.
-        const [side, face] = [...svg.querySelectorAll('rect:not([data-outline])')]
+        const [side, face] = [...svg.querySelectorAll('rect:not([data-outline]), polygon:not([data-outline])')].map(box)
         const line = svg.querySelector('line')
         return {
             name: `${el.dataset.piece}@${el.dataset.at}`,
-            face: { x: n(face, 'x'), y: n(face, 'y'), w: n(face, 'width'), h: n(face, 'height') },
+            face,
             outline: n(svg.querySelector('[data-outline]')!, 'stroke-width'),
-            extrusion: n(side, 'y') - n(face, 'y'),
+            // Bottom to bottom: how far the side shows below the face, for every shape.
+            extrusion: (side.y + side.h) - (face.y + face.h),
             divider: line && {
                 x1: n(line, 'x1'), y1: n(line, 'y1'), x2: n(line, 'x2'), y2: n(line, 'y2'),
                 width: n(line, 'stroke-width'),

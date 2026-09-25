@@ -41,12 +41,16 @@ const OWED: Pair[] = [
         // enough against today's greys -- and the tones are P1-3's (see P1-1's amendment).
         { a: 'tileFace', b: checker, min: 3, owner: 'P1-3', holds: false } as Pair,
         { a: 'pieceOutline', b: checker, min: 3, owner: 'P1-1', holds: true } as Pair,
-        { a: 'rockFace', b: checker, min: 3, owner: 'P1-2, P1-3', holds: false } as Pair,
     ]),
     { a: 'pip', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
     { a: 'divider', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
     { a: 'pieceOutline', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
-    { a: 'rockFace', b: 'tileFace', min: 3, owner: 'P1-2', holds: true },
+    // Every tone the rock shows, not only its face: each is part of the rock against the
+    // board, and against a domino beside it. Held since P1-2 (row 8); P1-3 moves the
+    // checker tones and must keep them held.
+    ...(['rockFace', 'rockLit', 'rockShade', 'rockSide'] as const).flatMap(rock =>
+        (['checkerLight', 'checkerDark', 'tileFace'] as const).map(b =>
+            ({ a: rock, b, min: 3, owner: 'P1-2', holds: true }) as Pair)),
     ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
         { a: 'hint', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
         // The anchor clears the light tone (3.24) and not the dark one (2.29).

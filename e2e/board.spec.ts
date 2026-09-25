@@ -202,7 +202,7 @@ test('the piece overlay does not take pointer events', async ({ page }) => {
     await expect(layer).toHaveCSS('pointer-events', 'none')
 })
 
-test('every decorative outline rect is fill="none", on all three shapes', async ({ page }) => {
+test('every decorative outline is fill="none", on all three shapes', async ({ page }) => {
     // `fill="transparent"` is rgba(0,0,0,0): a paint value that still hit-tests under
     // `visiblePainted`. `none` is the only value that paints nothing at all, so the
     // assertion is on that exact string -- "not transparent" would pass for `red`, and
@@ -220,9 +220,11 @@ test('every decorative outline rect is fill="none", on all three shapes', async 
         const pieces = page.locator(`[data-piece="${kind}"]`)
         expect(await pieces.count(), `no ${kind} on the board to check`).toBeGreaterThan(0)
 
-        const rects = page.locator(`[data-piece="${kind}"] rect[data-outline]`)
-        const fills = await rects.evaluateAll(els => els.map(el => el.getAttribute('fill')))
-        expect(fills.length, `${kind} has no marked outline rect`).toBeGreaterThan(0)
+        // Any shape: the rock's outline is a polygon since graphics P1-2 (row 8), and a
+        // selector for rects alone would find none there and check nothing.
+        const outlines = page.locator(`[data-piece="${kind}"] [data-outline]`)
+        const fills = await outlines.evaluateAll(els => els.map(el => el.getAttribute('fill')))
+        expect(fills.length, `${kind} has no marked outline`).toBeGreaterThan(0)
         expect(fills, `${kind} outline fills`).toEqual(fills.map(() => 'none'))
     }
 })

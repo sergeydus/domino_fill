@@ -49,6 +49,14 @@ export const readArt = (root: ParentNode) => {
     const rocks = all('rock')
     const pieces = [...ones, ...twos, ...rocks]
     const px = (el: Element, value: number) => value * scaleOf(el)
+    /** The lowest y a shape reaches, in drawing units: a rect's, or a polygon's points'. */
+    const bottom = (el: Element | undefined) => {
+        if (el === undefined) throw new Error('a piece with no side or no face')
+        if (el.tagName.toLowerCase() === 'rect') return num(el, 'y') + num(el, 'height')
+        const ys = (el.getAttribute('points') ?? '').trim().split(/[\s,]+/).filter((_, i) => i % 2 === 1).map(Number)
+        if (ys.length === 0) throw new Error(`${el.tagName} has no points`)
+        return Math.max(...ys)
+    }
 
     return {
         counts: { ones: ones.length, twos: twos.length, rocks: rocks.length },
@@ -63,10 +71,16 @@ export const readArt = (root: ParentNode) => {
          * The side, then the face: each piece draws its extruded side first, lower down,
          * and the face over it. Located by drawing order rather than by fill, because the
          * fills are P0-5's to turn into tokens and this should not break when they are.
+         *
+         * Measured bottom to bottom, which is how far the side shows below the face. For a
+         * domino's two rects it is the same as top to top; the rock's side is its face
+         * swept down (graphics row 8), whose top is the face's own, so only the bottoms
+         * differ.
          */
         extrusion: pieces.map(el => {
-            const [side, face] = Array.from(el.querySelectorAll('rect:not([data-outline])'))
-            return px(el, num(side, 'y') - num(face, 'y'))
+            const [side, face] = Array.from(el.querySelectorAll(
+                'rect:not([data-outline]), polygon:not([data-outline])'))
+            return px(el, bottom(side) - bottom(face))
         }),
         /*
          * How far each piece is lifted out of its cell -- the other half of the extrusion,

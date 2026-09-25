@@ -1101,6 +1101,126 @@ row's to choose; these bounds are not.
 - Covered by baselines 1 and 2, which is the kind of silhouette question geometry alone
   cannot settle.
 
+> **Amendment (row 8) — the rock drawn, "a rounded rectangle" read, and what is proved
+> versus searched.**
+>
+> **The rock** (`ROCK` in `app/dominoFill/Pieces/geometry.ts`, drawn by `Rock.tsx`) is a
+> faceted boulder:
+> - its extremes sit on the inset box every piece shares;
+> - its top carries the irregularity: a shoulder, a notch, an off-centre peak; its base is
+>   nearly flat;
+> - its extrusion is the face swept down by `extrusion`, which for a shape whose top and
+>   base are each a function of x is the top chain followed by the base shifted down. That
+>   swept outline is the silhouette: the side is filled with it and the outline strokes
+>   it, with round joins;
+> - two facets, a lit plane across the crown and a shaded plane down the right, are flat
+>   tones over the face's own, with no inner strokes and no gradients (§2.1).
+>
+> It has no `rect`, so no corner radius: row 2's table counts 6 radii where it counted 9.
+> The shared reader (`e2e/artGeometry.ts`) now measures extrusion bottom to bottom, which
+> for a domino's rects is the same as top to bottom and for the rock is the only reading
+> that works, since its side's top is the face's own.
+>
+> **How the bar is read.** "Deviates from a rounded rectangle" is read against the
+> rounded rectangle that fits the silhouette **best**, with any size, corner radius,
+> position and rotation. Against one fixed rectangle, a smaller rounded rectangle would
+> pass, and so would the domino's own shape moved by a twentieth of a cell. "At three or
+> more points" is read as three points of the outline, pairwise at least a quarter of a
+> cell apart along it, so one nick counts once. A single feature long enough to hold two
+> such points counts twice: it deviates along more than a quarter cell of outline. The
+> outline is sampled at equal arc-length steps, and every sample is a point of the
+> silhouette (`tests/roundedRect.ts`).
+>
+> **What is proved and what is searched** (`tests/rock.test.tsx`, on the outline read from
+> the rendered piece layer and divided by the cell):
+> - **Exhaustive,** at 38, 53, 75 and 106px: every axis-aligned rounded rectangle on the
+>   silhouette's own bounding box, at every corner radius. The radius is gridded, and the
+>   most a radius between grid points could change the answer is subtracted. Certified
+>   bound: **0.154** at every size. The domino's silhouette on a cell, which the rock used
+>   to be, is in this family and is also checked on its own: **0.163**.
+> - **Searched,** at 38px: all six parameters, by Nelder-Mead from 36 starting rectangles,
+>   each refined. Closest fit found: **0.0747**, rotated by about 20°.
+> - **Not proved:** a branch and bound over all six parameters, on the same Lipschitz
+>   argument as the family check, did not finish in 50 million boxes. What stands behind
+>   the search instead is agreement with a separate, far heavier search: 3,000 random
+>   starts, each refined by a pattern search, at twice the sampling, which found
+>   **0.0757**. The test holds the search to that witness: it must come at least as close.
+>   A search that stops short would overstate the deviation and make the rock pass more
+>   easily, and only the witness can see that.
+> - **The search's other direction:** four shapes that are rounded rectangles, or one
+>   spike away from one, must come out under the bar. These are the domino's silhouette;
+>   a smaller rounded rectangle, off-centre; the domino turned by 20°; and a rounded
+>   rectangle with a spike. The family check must also fail the domino.
+>
+> **Contrast.** Every rock tone clears 3:1 against both checker tones and the tile face,
+> so the rock is now dark. With today's checker, 3:1 against the darker tone needs a
+> luminance under about 0.10.
+>
+> | token | on checkerLight | on checkerDark | on tileFace |
+> | --- | --- | --- | --- |
+> | `rockFace` `#46423e` | 6.14 | 4.34 | 9.03 |
+> | `rockLit` `#5a5550` | 4.54 | 3.21 | 6.68 |
+> | `rockShade` `#35322f` | 7.85 | 5.55 | 11.55 |
+> | `rockSide` `#24221f` | 9.78 | 6.91 | 14.39 |
+>
+> The pair P0-5's amendment recorded as owed by P1-2 and P1-3 (rock face on the checker,
+> 2.24 / 1.59) now holds. `tests/contrast.test.ts` holds all twelve pairs. P1-3 moves the
+> checker and owns the recomputation. Darkening the checker enough to clear the tile face
+> will tighten the rock's bar in turn, most for `rockLit`.
+>
+> **Legible at 38px** is evidenced three ways:
+> - by the contrast above;
+> - by the silhouette bar measured at 38px, where 0.05 of the cell is 1.9px;
+> - by baselines 1 and 2, where a column of two rocks (the `target-satisfied` fixture) now
+>   reads as two rocks.
+>
+> **The name.** `cellDescription` still says "rock". The whole string is now pinned in
+> `tests/cellLabel.test.ts`, and `cellLabel.ts` is unchanged since row 19 (`3a803d5`).
+>
+> **In the browser** (`e2e/art.spec.ts`, at 38 and 106px, every one of the day's rocks):
+> - the committed path, on the side and the outline;
+> - the four tones in drawing order;
+> - no `rect`;
+> - the outline's bounding box, from Chromium's own `getBBox`;
+> - `isPointInFill`, which says that two corners of the old rounded rectangle, and the
+>   notch, are empty.
+>
+> `e2e/board.spec.ts`'s check that every decorative outline is `fill="none"` selected
+> `rect[data-outline]`. It would have found no outline on the rock and checked nothing
+> there, so it now selects any outline shape.
+>
+> **The predictions.** All four baselines change, and only inside the rocks' boxes: no
+> box, size or layout moves. The phone page stays 360×716, and the desktop's 6x6 cell stays
+> 87. Checked on the development host, with the switch P0-4 uses, old art (`d2282c1`)
+> against new:
+>
+> | baseline | rocks | changed pixels | outside a rock's box |
+> | --- | --- | --- | --- |
+> | 1, sheet at 38px | 3 | 4,024 | 0 |
+> | 2, sheet at 53px | 3 | 7,817 | 0 |
+> | 3, phone | 8 | 10,827 | 0 |
+> | 4, desktop | 8 | 54,046 | 0 |
+>
+> Every rock changed, and two shots of each state were identical.
+>
+> **Mutations,** each caught:
+> - the old rounded-rectangle rock restored;
+> - the rock drawn as a rounded-rectangle polygon;
+> - the lit facet lightened, and the side lightened, each past 3:1;
+> - a facet point off the face;
+> - the side filled with the face instead of the swept silhouette;
+> - the base swept by less than the extrusion;
+> - the rock renamed;
+> - the separation ignored;
+> - the search cut to five iterations, caught by the witness;
+> - in the browser: the old rock, lit and shade swapped, the outline painted `transparent`,
+>   and the notch filled in. The notch is caught by `isPointInFill` alone, since a shallower
+>   notch still clears the unit bar.
+>
+> Two weakened searches **survive**, and are recorded rather than hidden: one starting
+> radius instead of four, and no rotated starts. Each still reaches the witness (0.0755,
+> both), so on this shape they are not measurably weaker.
+
 ### P1-3 · A warmer board, on a warmer ground
 
 The checkerboard tones, the frame — whose 16px radius does not match the cells' 12px corner

@@ -66,13 +66,14 @@ type Constant = Exclude<keyof ReturnType<typeof measure>, 'counts'>
  * written out, as §1.1's columns were, and is every size's since row 6 -- P1-1's values
  * since row 7 (row 6's were 0.113, 0.151, 0.302, 0.396, 0.302, 0.302 and 0.491, row 2's
  * 53px column). `count` is how many instances the layer draws: three
- * outlines, three rects per piece, one pip on the upright and two on the flat, one divider
- * per domino, one side and one lift per piece, and an x and a y offset for each domino
- * that enters.
+ * outlines, three rects per domino (the rock has had no rect, and so no corner radius,
+ * since P1-2 made it a faceted polygon), one pip on the upright and two on the flat, one
+ * divider per domino, one side and one lift per piece, and an x and a y offset for each
+ * domino that enters.
  */
 const TABLE: Record<Constant, { label: string, count: number, units: number, fraction: number }> = {
     outline: { label: 'outline stroke', count: 3, units: PIECE.outline, fraction: 0.09 },
-    radius: { label: 'corner radius', count: 9, units: PIECE.radius, fraction: 0.14 },
+    radius: { label: 'corner radius', count: 6, units: PIECE.radius, fraction: 0.14 },
     pip: { label: 'pip diameter', count: 3, units: 2 * PIECE.pipRadius, fraction: 0.24 },
     divider: { label: 'divider span', count: 2, units: UNIT - 2 * PIECE.dividerInset, fraction: 0.6 },
     extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.14 },
@@ -141,10 +142,10 @@ describe('at every size, the same fraction of the cell', () => {
 /**
  * Every geometric number the layer writes, in CSS px, in document order.
  *
- * Not only the six constants: every rect, line and circle attribute through its piece's
- * scale, each svg's box and lift, each piece's position on the board, and each domino's
- * entry offset -- so a length that stopped scaling is caught whether or not anyone thought
- * to name it.
+ * Not only the six constants: every rect, line and circle attribute and every polygon
+ * point through its piece's scale, each svg's box and lift, each piece's position on the
+ * board, and each domino's entry offset -- so a length that stopped scaling is caught
+ * whether or not anyone thought to name it.
  */
 const everything = (cell: number): { at: string, value: number }[] => {
     const host = render(cell)
@@ -171,6 +172,11 @@ const everything = (cell: number): { at: string, value: number }[] => {
                 if (raw !== null) {
                     out.push({ at: `${name} ${el.tagName}[${index}] ${attribute}`, value: Number(raw) * scale })
                 }
+            }
+            const polygon = el.getAttribute('points')
+            if (polygon !== null) {
+                polygon.trim().split(/[\s,]+/).forEach((raw, i) =>
+                    out.push({ at: `${name} ${el.tagName}[${index}] points[${i}]`, value: Number(raw) * scale }))
             }
         })
     }
@@ -203,9 +209,9 @@ describe('every geometric attribute scales linearly with the cell', () => {
     const reference = everything(53)
 
     it('reads enough of the drawing to mean something', () => {
-        // Three pieces' positions, boxes and lifts; two entries; and five, five and three
-        // rects, lines and circles' worth of attributes. A reader that silently found
-        // nothing would make the assertion below vacuous.
+        // Three pieces' positions, boxes and lifts; two entries; six rects, two lines and
+        // three circles' worth of attributes; and the rock's polygons' points. A reader that
+        // silently found nothing would make the assertion below vacuous.
         expect(reference.length).toBeGreaterThanOrEqual(80)
         expect(reference.every(r => Number.isFinite(r.value))).toBe(true)
     })

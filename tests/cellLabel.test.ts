@@ -31,6 +31,16 @@ describe('naming a square', () => {
         expect(rock).toMatch(/rock/)
     })
 
+    it('calls a rock a rock, whatever it is drawn as', () => {
+        /*
+         * Graphics P1-2 (row 8) redrew the rock as a faceted boulder and required that "the
+         * picture changes, the name does not". The whole string, so any change to it --
+         * not only one that drops the word -- has to be made here on purpose.
+         */
+        expect(cellDescription([0, 0], -1)).toBe('Row 1, column 1, rock')
+        expect(cellDescription([4, 2], -1, { isHinted: true })).toBe('Row 5, column 3, rock, hinted')
+    })
+
     it('never reads a pip value out as a bare number', () => {
         /*
          * "1" is a quiz. The same rule the advice strip follows.

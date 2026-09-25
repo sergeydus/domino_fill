@@ -10,8 +10,10 @@
   --board-frame: #666666;
   --tile-face: #fff3d6;
   --tile-side: #8d8778;
-  --rock-face: #868686;
-  --rock-side: #656565;
+  --rock-face: #46423e;
+  --rock-lit: #5a5550;
+  --rock-shade: #35322f;
+  --rock-side: #24221f;
   --piece-outline: #000000;
   --pip: #000000;
   --divider: #000000;
@@ -59,6 +61,8 @@
   --color-tile-face: var(--tile-face);
   --color-tile-side: var(--tile-side);
   --color-rock-face: var(--rock-face);
+  --color-rock-lit: var(--rock-lit);
+  --color-rock-shade: var(--rock-shade);
   --color-rock-side: var(--rock-side);
   --color-piece-outline: var(--piece-outline);
   --color-pip: var(--pip);

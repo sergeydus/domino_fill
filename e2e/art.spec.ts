@@ -2,7 +2,8 @@ import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { drag, freeRuns, rockSquares } from './play'
 import { readArt } from './artGeometry'
-import { PIECE, UNIT, fraction } from '../app/dominoFill/Pieces/geometry'
+import { PIECE, ROCK, UNIT, fraction, points } from '../app/dominoFill/Pieces/geometry'
+import { rgbBytes, type Token } from '../app/palette'
 
 /**
  * The art in the real build at the two ends of the real range (graphics spec P0-2, row 2;
@@ -83,8 +84,9 @@ for (const end of ENDS) {
 
         /*
          * Every piece on the board, including all of today's rocks -- not one of each. So
-         * the expected lengths come from what is there: three rects and one outline per
-         * piece, a pip on an upright and two on a flat, a divider per domino.
+         * the expected lengths come from what is there: one outline per piece, three rects
+         * per domino (a rock has none since P1-2 made it a polygon), a pip on an upright and
+         * two on a flat, a divider per domino.
          */
         const art = await page.locator('body').evaluate(readArt)
         const { ones, twos, rocks } = art.counts
@@ -110,7 +112,7 @@ for (const end of ENDS) {
             for (const value of values) expect(value, label).toBeCloseTo(fraction(units) * end.cell, digits)
         }
         each(art.outline, pieces, PIECE.outline, 'outline stroke')
-        each(art.radius, 3 * pieces, PIECE.radius, 'corner radius')
+        each(art.radius, 3 * (ones + twos), PIECE.radius, 'corner radius')
         each(art.pip, ones + 2 * twos, 2 * PIECE.pipRadius, 'pip diameter')
         each(art.divider, ones + twos, UNIT - 2 * PIECE.dividerInset, 'divider span')
         each(art.extrusion, pieces, PIECE.extrusion, 'extrusion depth')
@@ -156,5 +158,54 @@ for (const end of ENDS) {
             /translateY\((-?[\d.e+-]+)px\)/.exec(t)?.[1],
         ].map(v => -Number(v)))
         each(offsets, 4, PIECE.entry, 'entry offset, x and y per domino placed', 3)
+    })
+
+    test(`the rocks at ${end.name}: the faceted silhouette, in the rock's tones`, async ({ page }) => {
+        /*
+         * P1-2 (graphics row 8). tests/rock.test.tsx measures the silhouette from a server
+         * render; this is the real build, with every one of today's rocks, at both ends of
+         * the range. Each must draw the committed path -- the side filled with it, the
+         * outline stroking it -- in the four rock tones, and no rect. And Chromium's own
+         * geometry is asked what the unit test computed: three points the old rounded
+         * rectangle covered -- two of its corners and the notch in the new crown -- are
+         * outside the rock's fill.
+         */
+        await page.setViewportSize(end.viewport)
+        await openBoard(page)
+        await page.getByRole('button', { name: /easy/i }).click()
+        await expect(page.locator('[data-cell]')).toHaveCount(36)
+
+        const EMPTIED: [number, number][] = [[12, 12], [88, 12], [42, 38]]
+        const rocks = await page.locator('[data-piece="rock"] svg').evaluateAll((svgs, emptied) => svgs.map(svg => {
+            const outline = svg.querySelector('[data-outline]') as SVGPolygonElement
+            const fills = Array.from(svg.querySelectorAll<SVGPolygonElement>('polygon:not([data-outline])'))
+            const box = outline.getBBox()
+            const point = new DOMPoint()
+            return {
+                width: svg.getBoundingClientRect().width,
+                rects: svg.querySelectorAll('rect').length,
+                outline: outline.getAttribute('points'),
+                side: fills[0]?.getAttribute('points'),
+                fills: fills.map(p => getComputedStyle(p).fill),
+                stroke: getComputedStyle(outline).stroke,
+                box: [box.x, box.y, box.width, box.height],
+                inFill: emptied.map(([x, y]) => { point.x = x; point.y = y; return fills[0].isPointInFill(point) }),
+            }
+        }), EMPTIED)
+
+        const rgb = (token: Token) => `rgb(${rgbBytes(token).join(', ')})`
+        const xs = ROCK.silhouette.map(p => p[0])
+        const ys = ROCK.silhouette.map(p => p[1])
+        expect(rocks.length, 'no rocks on the board').toBeGreaterThan(0)
+        for (const rock of rocks) {
+            expect(rock.width).toBe(end.cell)
+            expect(rock.rects).toBe(0)
+            expect(rock.outline).toBe(points(ROCK.silhouette))
+            expect(rock.side).toBe(points(ROCK.silhouette))
+            expect(rock.fills).toEqual((['rockSide', 'rockFace', 'rockLit', 'rockShade'] as const).map(rgb))
+            expect(rock.stroke).toBe(rgb('pieceOutline'))
+            expect(rock.box).toEqual([Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)])
+            expect(rock.inFill, 'a corner or the notch is filled').toEqual([false, false, false])
+        }
     })
 }

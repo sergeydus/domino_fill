@@ -43,8 +43,16 @@ export const PALETTE = {
     tileFace: '#fff3d6',
     /** The extruded side of a tile, and the body of the icon's tile. */
     tileSide: '#8d8778',
-    rockFace: '#868686',
-    rockSide: '#656565',
+    /**
+     * The rock's four tones: its facing plane, the lit and shaded facets, and the extruded
+     * side (P1-2). Every one clears 3:1 against both checker tones and the tile face, which
+     * is why all four are dark: against the darker checker, 3:1 needs a luminance under
+     * about 0.10.
+     */
+    rockFace: '#46423e',
+    rockLit: '#5a5550',
+    rockShade: '#35322f',
+    rockSide: '#24221f',
     /** The silhouette's edge, on dominoes and rocks alike. */
     pieceOutline: '#000000',
     /** The pip: the score. The icon drew `#1a1a1a` until this row; it now draws this. */

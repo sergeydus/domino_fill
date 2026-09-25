@@ -56,6 +56,55 @@ export const PIECE = {
     entry: (26 / 53) * 100,
 } as const
 
+/** A point of the drawing, in units. */
+export type Point = readonly [number, number]
+
+/**
+ * The rock (graphics spec P1-2, row 8): a faceted boulder, where until this row it was the
+ * domino's rounded rectangle in grey (§1.4), and two rocks stacked in a column read as an
+ * upright domino.
+ *
+ * Its extremes sit on the box every piece shares (`inset` from each edge of the cell). Its
+ * outline is drawn as two chains, each running left to right between the same two ends:
+ * the top, which carries the irregularity -- a shoulder, a notch, an off-centre peak -- and
+ * a nearly flat base it rests on.
+ *
+ * **The extrusion is the face swept down.** A domino's side is its face shifted down by
+ * `extrusion` and drawn behind it; for a rectangle that is the whole solid. For any other
+ * shape the solid is everything the face passes through on the way down, and because
+ * each chain is a function of x that is exactly the top chain, then the base shifted down,
+ * joined at the two ends. That swept outline is the silhouette: the side is filled with
+ * it, and the outline strokes it.
+ *
+ * **Facets are flat tones, not lines.** One lit plane across the crown and one shaded plane
+ * down the right, over the face's own tone -- no gradients, and no inner strokes to crowd a
+ * 38px cell (§2.1).
+ */
+const ROCK_TOP: readonly Point[] = [[6, 90], [14, 56], [28, 34], [42, 44], [56, 6], [76, 16], [86, 40], [94, 60], [94, 90]]
+const ROCK_BASE: readonly Point[] = [[6, 90], [22, 94], [78, 94], [94, 90]]
+
+const down = ([x, y]: Point): Point => [x, y + PIECE.extrusion]
+const inner = (chain: readonly Point[]) => chain.slice(1, -1)
+
+export const ROCK = {
+    /** The face: the top chain, then back along the base. */
+    face: [...ROCK_TOP, ...inner(ROCK_BASE).reverse()],
+    /** The face swept down by the extrusion: the side's fill, and the outline's path. */
+    silhouette: [
+        ...ROCK_TOP,
+        down(ROCK_TOP[ROCK_TOP.length - 1]),
+        ...inner(ROCK_BASE).reverse().map(down),
+        down(ROCK_TOP[0]),
+    ],
+    /** The plane across the crown, catching the light. */
+    lit: [[28, 34], [42, 44], [56, 6], [76, 16], [62, 40], [46, 56]],
+    /** The plane down the right, turned away from it. */
+    shade: [[76, 16], [86, 40], [94, 60], [94, 90], [78, 94], [70, 60], [62, 40]],
+} as const satisfies Record<string, readonly Point[]>
+
+/** A polygon's `points` attribute. */
+export const points = (polygon: readonly Point[]) => polygon.map(([x, y]) => `${x},${y}`).join(' ')
+
 /** A length in drawing units, as a fraction of the cell. */
 export const fraction = (units: number) => units / UNIT
 
