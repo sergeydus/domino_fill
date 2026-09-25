@@ -27,17 +27,27 @@
  */
 export const PALETTE = {
     // ---- the page ------------------------------------------------------------------------
-    /** The board's ground: the page, the browser chrome, the splash screen, the icon. */
-    ground: '#e8e7e7',
-    /** Body text on the ground; the advice strip's 14.53:1 (spec §4). */
+    /**
+     * The board's ground: the page, the browser chrome, the splash screen, the icon. A
+     * subtly warm off-white since P1-3; it was the neutral `#e8e7e7`.
+     */
+    ground: '#f4f0e8',
+    /** Body text on the ground; the advice strip's 15.77:1 (spec §4). */
     ink: '#171717',
 
     // ---- the board -----------------------------------------------------------------------
+    /*
+     * The board is a chain of 3:1 steps (P1-3): the tile face over both checker tones, and
+     * both checker tones over every rock tone. The first step caps the checker at a
+     * luminance of about 0.28, which is why the board went from light grey to a mid warm
+     * tan; the second then caps the rock at about 0.037. The two tones are 1.20:1 apart
+     * (`CHECKER_RATIO`), the step that leaves the rock room to be a rock.
+     */
     /** Squares where row + column is even (the top-left square is one). */
-    checkerLight: '#cbcbcb',
+    checkerLight: '#9c8a72',
     /** Squares where row + column is odd. */
-    checkerDark: '#ababab',
-    boardFrame: '#666666',
+    checkerDark: '#8e7c66',
+    boardFrame: '#4d3f33',
 
     // ---- the pieces ----------------------------------------------------------------------
     tileFace: '#fff3d6',
@@ -46,13 +56,13 @@ export const PALETTE = {
     /**
      * The rock's four tones: its facing plane, the lit and shaded facets, and the extruded
      * side (P1-2). Every one clears 3:1 against both checker tones and the tile face, which
-     * is why all four are dark: against the darker checker, 3:1 needs a luminance under
-     * about 0.10.
+     * is why all four are near-black: against the darker checker since P1-3, 3:1 needs a
+     * luminance under about 0.037.
      */
-    rockFace: '#46423e',
-    rockLit: '#5a5550',
-    rockShade: '#35322f',
-    rockSide: '#24221f',
+    rockFace: '#2c2925',
+    rockLit: '#37332e',
+    rockShade: '#221f1c',
+    rockSide: '#171513',
     /** The silhouette's edge, on dominoes and rocks alike. */
     pieceOutline: '#000000',
     /** The pip: the score. The icon drew `#1a1a1a` until this row; it now draws this. */
@@ -61,14 +71,17 @@ export const PALETTE = {
     divider: '#000000',
 
     // ---- meaning -------------------------------------------------------------------------
-    /** A line label with nothing to report (5.17:1 on the ground, spec §4). */
+    /** A line label with nothing to report (5.62:1 on the ground, spec §4). */
     lineNeutral: '#5f5f5f',
-    /** A finished line (5.77:1). Shares its value with `hint` today, not its role. */
+    /** A finished line (6.27:1). */
     success: '#15661a',
-    /** An overshot line, and the advice strip when it is reporting a problem (6.76:1). */
+    /** An overshot line, and the advice strip when it is reporting a problem (7.35:1). */
     problem: '#a10000',
-    /** The cell a hint is pointing at. */
-    hint: '#15661a',
+    /**
+     * The cell a hint is pointing at. It shared `success`'s value until P1-3, whose darker
+     * checker it no longer cleared 3:1 against; now a green dark enough to.
+     */
+    hint: '#0b3b10',
     /** The archive's error message. Tailwind `red-700`; not yet `problem` (P1-4). */
     alert: 'oklch(50.5% 0.213 27.518)',
 
@@ -88,8 +101,11 @@ export const PALETTE = {
     levelArrowStroke: '#0288d1',
 
     // ---- the cell states (P1-5 owns these) -------------------------------------------------
-    /** The first half of a two-step move. Tailwind `blue-600`. */
-    anchor: 'oklch(54.6% 0.245 262.881)',
+    /**
+     * The first half of a two-step move. Tailwind `blue-600` until P1-3, which held it to
+     * 3:1 against the light tone; on the new checker that needs a far darker blue.
+     */
+    anchor: '#16295e',
     /** A square the anchor could pair with: edge `blue-400`, wash `blue-200` at 40%. */
     candidateEdge: 'oklch(70.7% 0.165 254.624)',
     candidateWash: 'oklch(88.2% 0.059 254.128)',
@@ -134,6 +150,12 @@ export const PALETTE = {
     tutorialActionHover: 'oklch(54.6% 0.245 262.881)',
     onTutorialAction: '#ffffff',
 } as const
+
+/**
+ * The ratio the two checker tones stand apart, in WCAG contrast (P1-3): stated, and held
+ * by `tests/contrast.test.ts` to what the tones compute to.
+ */
+export const CHECKER_RATIO = 1.2
 
 export type Token = keyof typeof PALETTE
 

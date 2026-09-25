@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react"
 import type { LineState } from "../stores/boardRules"
 import { PALETTE } from "../palette"
 
@@ -15,7 +16,8 @@ import { PALETTE } from "../palette"
  *    the `#e8e7e7` board background: neutral `#ababab` is 1.86:1, and the green — the state
  *    colour, the thing the player is meant to read — is **1.66:1**, the least legible
  *    element on screen. The palette below is measured, not guessed: neutral 5.17:1,
- *    satisfied 5.77:1, over 6.76:1, all past the 4.5:1 that normal text needs.
+ *    satisfied 5.77:1, over 6.76:1 on that ground, all past the 4.5:1 that normal text
+ *    needs -- and 5.62, 6.27 and 7.35 on the warm ground graphics P1-3 moved it to.
  * 3. **Green meant "sum matched"**, not "line finished" — see `lineState`.
  *
  * The ring is an `outline`, not a border: outlines are drawn outside the box and take no
@@ -43,6 +45,36 @@ export const LABEL_COLORS: Record<LineState, string> = {
     neutral: PALETTE.lineNeutral,
     satisfied: PALETTE.success,
     over: PALETTE.problem,
+}
+
+/**
+ * The tie between a target and its line (graphics spec P1-3).
+ *
+ * The labels sat beside their lines with nothing joining them: a number floating in the
+ * ground a gutter away from the board. Each now carries a short tick, in its own colour,
+ * from the edge of its box -- which is the frame's outer edge -- toward the number, centred
+ * on the line. So the tie is geometric and tonal at once, and both halves are measurable:
+ * the tick's centre is the line's centre and its end is the frame, and its colour is the
+ * label's, in every state, because it paints `currentColor` and changes when the label does.
+ *
+ * Fractions of the cell, like the art (P0-6). The length fills the gap the gutter leaves
+ * below a label's text box -- the gutter is 0.7 of a cell and the text 0.5, centred, so 0.1
+ * -- and the width is the divider's weight rounded up, so it reads at 38px.
+ */
+export const LABEL_TIE = { length: 0.1, width: 0.06 } as const
+
+/** The tick's style: `below` a column's label, or to the `right` of a row's. */
+export const tieStyle = (side: 'below' | 'right'): CSSProperties => {
+    const along = `calc(var(--cell) * ${LABEL_TIE.length})`
+    const across = `calc(var(--cell) * ${LABEL_TIE.width})`
+    return {
+        position: 'absolute',
+        backgroundColor: 'currentColor',
+        pointerEvents: 'none',
+        ...(side === 'below'
+            ? { bottom: 0, left: '50%', width: across, height: along, translate: '-50% 0' }
+            : { right: 0, top: '50%', width: along, height: across, translate: '0 -50%' }),
+    }
 }
 
 export const labelPresentation = (state: LineState): LabelPresentation => ({

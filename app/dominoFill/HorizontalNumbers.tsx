@@ -1,7 +1,7 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
-import { labelPresentation, labelDescription, LABEL_COLORS } from "./lineLabel"
+import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
 
 /**
  * The column labels, along the top of the board. See VerticalNumbers for why the font is
@@ -20,7 +20,7 @@ const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsSto
         {split.map((el: string, index: number) => {
             const presentation = labelPresentation(states[index])
             return (
-                <motion.div className="flex items-center justify-center min-w-0 min-h-0"
+                <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
                     initial={{ color: LABEL_COLORS.neutral }}
                     animate={{ color: presentation.color }}
                     key={index}
@@ -35,6 +35,8 @@ const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsSto
                         borderRadius: '4px',
                     }}
                 >{el}
+                    {/* The tie to the line (P1-3): see `LABEL_TIE`. */}
+                    <span aria-hidden data-label-tie style={tieStyle('below')} />
                 </motion.div>
             )
         })}

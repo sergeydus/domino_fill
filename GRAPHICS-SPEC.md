@@ -214,8 +214,8 @@ says so rather than quietly retuning it.
 
 | Invariant | Value | Owner |
 | --- | --- | --- |
-| target label contrast, neutral / satisfied / over | 5.17 : 5.77 : 6.76 | `lineLabel.ts`, D10-g |
-| advice strip contrast | 14.53 | `AdviceStrip.tsx`, P1-5 |
+| target label contrast, neutral / satisfied / over | 5.62 : 6.27 : 7.35 (5.17 : 5.77 : 6.76 until P1-3) | `lineLabel.ts`, D10-g |
+| advice strip contrast | 15.77 (14.53 until P1-3) | `AdviceStrip.tsx`, P1-5 |
 | minimum cell | 38px | `MIN_CELL_PX`, §2.4 |
 | 8×8 fits 360px with no horizontal overflow, 50%–200% zoom | — | `e2e/layout.spec.ts` |
 | grid roles, per-cell labels, one tab stop, focus sync | — | row 19, `e2e/accessibility.spec.ts` |
@@ -1246,6 +1246,124 @@ generator the moment it moves.
 - The two checker tones differ by a stated ratio, and both clear ≥3:1 against the tile face
   and the rock.
 - The target-to-line tie is a measurable geometric or tonal relationship, asserted as such.
+
+> **Amendment (row 9) — the board is a chain of 3:1 steps, and what that cost.**
+>
+> **Why the board went from light grey to mid tan.** The bars form a chain:
+> - the tile face must clear 3:1 over both checker tones;
+> - both checker tones must clear 3:1 over every rock tone.
+>
+> The first step caps the checker at a luminance of about 0.27. The old tones were 0.60 and
+> 0.41, so the board had to darken by more than half, as P1-1's amendment warned. The
+> second step then caps every rock tone at about 0.037 against the darker checker tone. The
+> tones chosen:
+>
+> | token | was | now | why |
+> | --- | --- | --- | --- |
+> | `ground` | `#e8e7e7` | `#f4f0e8` | a subtly warm off-white |
+> | `checkerLight` / `checkerDark` | `#cbcbcb` / `#ababab` | `#9c8a72` / `#8e7c66` | warm tan, under the tile face's cap |
+> | `boardFrame` | `#666666` | `#4d3f33` | a warm dark brown, to hold the edge against the tan |
+> | rock: face / lit / shade / side | `#46423e` `#5a5550` `#35322f` `#24221f` | `#2c2925` `#37332e` `#221f1c` `#171513` | under the checker's cap |
+> | `hint` | `#15661a` | `#0b3b10` | it cleared the old checker, and fails the new one |
+> | `anchor` | Tailwind `blue-600` | `#16295e` | it held on the light tone, and fails the new one |
+>
+> The tile face stays `#fff3d6`. Lifting it was tried and is not needed: at `#fff3d6` it
+> clears 3.03 and 3.64, and the mutation run showed the lift carried no bar.
+>
+> **The two tones stand 1.20:1 apart** (`CHECKER_RATIO` in `app/palette.ts`). The test
+> requires the tones to compute to exactly that, to two places, with the light tone the
+> lighter. The ratio is small because every step of it comes out of the rock's room: at
+> 1.2 the rock may reach 0.037; at the old 1.42, on the same light tone, it would be held
+> under 0.024.
+>
+> **Every guarantee, recomputed from the tokens** (`tests/contrast.test.ts`).
+>
+> §4's text pairs, on the new ground:
+>
+> | pair | before | now |
+> | --- | --- | --- |
+> | neutral label | 5.17 | 5.62 |
+> | satisfied label | 5.77 | 6.27 |
+> | over label | 6.76 | 7.35 |
+> | advice strip | 14.53 | 15.77 |
+>
+> §4 and the test now quote the new values. §6's pairs:
+>
+> | pair (3:1) | on checkerLight | on checkerDark | on tileFace |
+> | --- | --- | --- | --- |
+> | `tileFace` | **3.03** | **3.64** | — |
+> | `pieceOutline` | 6.29 | 5.23 | 19.04 |
+> | `rockFace` / `rockLit` / `rockShade` / `rockSide` | 4.34 / 3.76 / 4.91 / 5.46 | 3.60 / 3.12 / 4.08 / 4.53 | 13.12 / 11.37 / 14.87 / 16.51 |
+> | `hint` | 3.82 | 3.17 | — |
+> | `anchor` | 4.16 | **3.45** | — |
+>
+> The tile face was owed by P1-3 and now holds on both tones. The anchor's dark-tone pair
+> was owed by P1-5 and now holds too, because the colour that kept it held on the light
+> tone clears both. The hint and the anchor's light-tone pair were held, would have broken,
+> and were fixed here rather than deferred. The candidate edge is still owed by P1-5.
+>
+> **This is P1-5's ground, entered only as far as the bars required.** The hint's dark
+> green ring clears 3:1 but is hard to see on the tan. P1-5 owns making each state
+> legible, and will meet it on this board.
+>
+> **Icons and manifest.** `npm run icons` was rerun. `tests/icons.test.ts` and the
+> served-against-served manifest test pass without being edited. Two other tests had
+> typed out the old ground's bytes, and were edited:
+> - a helper test in `tests/palette.test.ts`, which checks `rgbBytes`, now has the new
+>   bytes;
+> - row 20c's `e2e/theme.spec.ts`, which checks that the page shows the ground, now reads
+>   the token instead of a copy. Its contract is unchanged. Mutation: `palette.css`
+>   hand-edited back to `#e8e7e7`, which it fails.
+>
+> **Frame and corner, by construction.** `BOARD_CORNER_PX` (12, unchanged) in
+> `ClientBoard.tsx` becomes the shell's `--board-corner`.
+> - The corner squares take their radius from it.
+> - The frame takes its width from `--grid-border`, and its outer radius from the corner
+>   plus that width, so its inner edge is the squares' curve.
+> - Before this row they were two literals that happened to agree: `12px`, and
+>   `rounded-2xl` (16px) less a 4px border.
+>
+> `e2e/boardChrome.spec.ts` checks, at both ends of the range, that frame radius less width
+> equals each corner square's radius. Agreement alone would pass two literals, so the test
+> then changes the token in the page and requires both to follow it.
+>
+> **The tie** (`LABEL_TIE` and `tieStyle` in `lineLabel.ts`). Each label carries a tick from
+> the edge of its box, which is the frame's outer edge, toward the number:
+> - 0.1 of the cell long, filling the gap the gutter leaves below the text box;
+> - 0.06 wide;
+> - centred on its line;
+> - painted `currentColor`.
+>
+> So the tie is geometric and tonal at once. Asserted in the browser, at 38 and 106px on
+> the real board, and at 38 and 53px on the sheet, where all three states are on screen:
+> - the tick's centre is within 0.5px of the line's centre;
+> - its end is within 0.5px of the frame's outer edge;
+> - its length and width are the stated fractions;
+> - its colour is the label's, and is the state's own token in each of the three states;
+> - it is `aria-hidden`.
+>
+> **The predictions.** Every baseline changes almost everywhere, because the ground is
+> behind everything. No layout moves. Checked on the development host, old tree against
+> new: the boxes of every cell, piece, label and button, and each page's size, are
+> identical on all four (sheet 1280×800, phone 360×716, desktop 1280×800, whose 6x6 cell
+> stays 87). Two shots of the new state were identical. Changed pixels, against row 8's
+> art: 942,800 and 931,705 of 1,024,000 on the two sheets; 175,546 of 257,760 on the
+> phone; 909,591 of 1,024,000 on the desktop.
+>
+> **Mutations,** each caught:
+> - the ground back to grey (§4's values, the icons, the bytes);
+> - the tile face a shade darker;
+> - the hint back to `success`'s green;
+> - the anchor back to `blue-600`;
+> - the checker tones further apart than stated;
+> - a rock tone over the new cap;
+> - one committed icon left stale;
+> - in the browser:
+>   - the frame's radius as a literal, and the corner squares' as a literal, each caught
+>     only when the token moves;
+>   - a tick 4% off-centre;
+>   - a tick in a fixed colour;
+>   - a tick 2px short of the frame.
 
 ### P1-4 · Quieter controls, louder meaning (§2.2)
 

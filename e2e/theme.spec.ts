@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
+import { rgbBytes } from '../app/palette'
 
 /**
  * The game looks the same however the operating system is set (spec P2-3, row 20c).
@@ -75,7 +76,9 @@ for (const scheme of ['light', 'dark'] as const) {
              * colour rather than flashing a different one before the page paints.
              */
             const { ground, bodyBackground } = await palette(page)
-            expect(rgb(ground)).toEqual([232, 231, 231])
+            // The palette's ground, read from the token: typed out as `#e8e7e7`'s bytes
+            // until graphics P1-3 moved it, which is the kind of copy row 5 removed.
+            expect(rgb(ground)).toEqual(rgbBytes('ground'))
             expect(rgb(bodyBackground)).toEqual(rgb(ground))
         })
 

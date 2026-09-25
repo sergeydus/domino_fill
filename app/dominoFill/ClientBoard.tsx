@@ -22,6 +22,15 @@ type Seen = { session: PuzzleSession, count: number }
 /** Half the grid's border: the offset the labels must clear to line up with their tracks. */
 const BORDER_SIDE_PX = GRID_BORDER_PX / 2
 
+/**
+ * The radius of the board's four outer squares, and so of the frame's inner edge (graphics
+ * spec P1-3). One number for both, by construction: the corner squares read it as
+ * `--board-corner`, and the frame draws its outer edge at that plus its own width, so its
+ * inner edge lands on the squares' curve. Until P1-3 they were two literals that happened
+ * to agree -- the squares' `12px` and the frame's `rounded-2xl`, 16px, less a 4px border.
+ */
+export const BOARD_CORNER_PX = 12
+
 const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     const size = boardsStore.board.length
     const cell = boardsStore.squareSize
@@ -52,6 +61,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         ['--cell' as keyof CSSProperties]: `${cell}px`,
         ['--label-font' as keyof CSSProperties]: `${boardsStore.labelFontSize}px`,
         ['--grid-border' as keyof CSSProperties]: `${BORDER_SIDE_PX}px`,
+        ['--board-corner' as keyof CSSProperties]: `${BOARD_CORNER_PX}px`,
     } as CSSProperties
 
     /*
@@ -255,7 +265,11 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
             <div />
             <HorizontalNumbers boardsStore={boardsStore} />
             <VerticalNumbers boardsStore={boardsStore} />
-            <div className="border-board-frame border-4 rounded-2xl">
+            <div
+                className="border-board-frame"
+                style={{ borderWidth: 'var(--grid-border)', borderRadius: 'calc(var(--board-corner) + var(--grid-border))' }}
+                data-board-frame
+            >
                 {/* `cursor-pointer` lives here now: it used to be on the piece overlay,
                     which no longer takes pointer events and so no longer sets a cursor. */}
                 {/* `board-grid` carries the static touch policy; see globals.css. */}

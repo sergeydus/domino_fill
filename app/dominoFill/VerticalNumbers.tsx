@@ -1,7 +1,7 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
-import { labelPresentation, labelDescription, LABEL_COLORS } from "./lineLabel"
+import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
 
 /**
  * The row labels, down the left of the board (spec P0-3).
@@ -29,7 +29,7 @@ const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore
         {split.map((el: string, index: number) => {
             const presentation = labelPresentation(states[index])
             return (
-                <motion.div className="flex items-center justify-center min-w-0 min-h-0"
+                <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
                     initial={{ color: LABEL_COLORS.neutral }}
                     animate={{ color: presentation.color }}
                     key={index}
@@ -44,6 +44,8 @@ const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore
                         borderRadius: '4px',
                     }}
                 >{el}
+                    {/* The tie to the line (P1-3): see `LABEL_TIE`. */}
+                    <span aria-hidden data-label-tie style={tieStyle('right')} />
                 </motion.div>
             )
         })}

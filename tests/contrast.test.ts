@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { PALETTE, type Token } from '@/app/palette'
-import { contrast, over, toRgb, type Rgb } from './colour'
+import { CHECKER_RATIO, PALETTE, type Token } from '@/app/palette'
+import { contrast, luminance, over, toRgb, type Rgb } from './colour'
 
 /**
  * Every contrast pair the graphics spec names, computed from the tokens (P0-5, row 5).
@@ -37,9 +37,9 @@ const INVARIANTS: Pair[] = [
 /** §6: the art rows' bars, 3:1 for graphics that carry information. */
 const OWED: Pair[] = [
     ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
-        // P1-1 lists this bar, but only the checker tones can meet it -- no tile face is light
-        // enough against today's greys -- and the tones are P1-3's (see P1-1's amendment).
-        { a: 'tileFace', b: checker, min: 3, owner: 'P1-3', holds: false } as Pair,
+        // P1-1 lists this bar, but only the checker tones could meet it, and they were
+        // P1-3's (see P1-1's amendment). Held since P1-3 darkened and warmed the checker.
+        { a: 'tileFace', b: checker, min: 3, owner: 'P1-3', holds: true } as Pair,
         { a: 'pieceOutline', b: checker, min: 3, owner: 'P1-1', holds: true } as Pair,
     ]),
     { a: 'pip', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
@@ -53,8 +53,9 @@ const OWED: Pair[] = [
             ({ a: rock, b, min: 3, owner: 'P1-2', holds: true }) as Pair)),
     ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
         { a: 'hint', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-        // The anchor clears the light tone (3.24) and not the dark one (2.29).
-        { a: 'anchor', b: checker, min: 3, owner: 'P1-5', holds: checker === 'checkerLight' } as Pair,
+        // The anchor held on the light tone only until P1-3, whose darker checker it would
+        // have failed on both; the darker blue P1-3 gave it clears both.
+        { a: 'anchor', b: checker, min: 3, owner: 'P1-5; held on both since P1-3', holds: true } as Pair,
         { a: 'candidateEdge', b: checker, min: 3, owner: 'P1-5', holds: false } as Pair,
         { a: { token: 'cellFocus', alpha: 0.7, over: checker }, b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
     ]),
@@ -72,7 +73,9 @@ describe('§4: the invariants hold, computed from the tokens', () => {
     it('at the values §4 records', () => {
         // Rounded to the two places §4 quotes them to. A palette row that moves one of
         // these has to move §4 with it.
-        expect(INVARIANTS.map(p => ratio(p).toFixed(2))).toEqual(['5.17', '5.77', '6.76', '14.53'])
+        // P1-3 moved the ground to a warm off-white and every one of them with it; they
+        // were 5.17, 5.77, 6.76 and 14.53 on `#e8e7e7`.
+        expect(INVARIANTS.map(p => ratio(p).toFixed(2))).toEqual(['5.62', '6.27', '7.35', '15.77'])
     })
 })
 
@@ -86,6 +89,14 @@ describe('§6: each art row\'s bar, and whether it holds yet', () => {
             expect(r >= pair.min, message).toBe(pair.holds)
         })
     }
+})
+
+describe('P1-3: the two checker tones', () => {
+    it(`stand ${CHECKER_RATIO}:1 apart, as stated, the light tone the lighter`, () => {
+        // Stated as a ratio, so a later retune has to move the statement with the tones.
+        expect(luminance(PALETTE.checkerLight)).toBeGreaterThan(luminance(PALETTE.checkerDark))
+        expect(contrast(PALETTE.checkerLight, PALETTE.checkerDark).toFixed(2)).toBe(CHECKER_RATIO.toFixed(2))
+    })
 })
 
 describe('the colour maths, checked against values it did not produce', () => {

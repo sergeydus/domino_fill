@@ -3,24 +3,24 @@
  * there and regenerate. `tests/palette.test.ts` fails when the two disagree.
  */
 :root {
-  --ground: #e8e7e7;
+  --ground: #f4f0e8;
   --ink: #171717;
-  --checker-light: #cbcbcb;
-  --checker-dark: #ababab;
-  --board-frame: #666666;
+  --checker-light: #9c8a72;
+  --checker-dark: #8e7c66;
+  --board-frame: #4d3f33;
   --tile-face: #fff3d6;
   --tile-side: #8d8778;
-  --rock-face: #46423e;
-  --rock-lit: #5a5550;
-  --rock-shade: #35322f;
-  --rock-side: #24221f;
+  --rock-face: #2c2925;
+  --rock-lit: #37332e;
+  --rock-shade: #221f1c;
+  --rock-side: #171513;
   --piece-outline: #000000;
   --pip: #000000;
   --divider: #000000;
   --line-neutral: #5f5f5f;
   --success: #15661a;
   --problem: #a10000;
-  --hint: #15661a;
+  --hint: #0b3b10;
   --alert: oklch(50.5% 0.213 27.518);
   --accent: #419dc8;
   --accent-edge: #0b3c52;
@@ -29,7 +29,7 @@
   --focus-ring: oklch(62.3% 0.214 259.815);
   --level-arrow-fill: #4fc3f7;
   --level-arrow-stroke: #0288d1;
-  --anchor: oklch(54.6% 0.245 262.881);
+  --anchor: #16295e;
   --candidate-edge: oklch(70.7% 0.165 254.624);
   --candidate-wash: oklch(88.2% 0.059 254.128);
   --cell-focus: #000000;

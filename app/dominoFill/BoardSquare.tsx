@@ -46,12 +46,14 @@ const BoardSquare: React.FC<Props2> = observer((
      * built a new `Audio` per click. Sound now follows the *outcome*, in feedback.ts,
      * driven from the session so the keyboard is treated identically.
      */
-    // Round only the four corners of the board, not of every cell.
+    // Round only the four corners of the board, not of every cell -- by the board's one
+    // corner token, which the frame's inner edge also follows (ClientBoard, P1-3).
     const cornerStyle = useMemo(() => {
-        if (i === 0 && j === 0) return { borderTopLeftRadius: '12px' }
-        if (i === 0 && j === size - 1) return { borderTopRightRadius: '12px' }
-        if (i === size - 1 && j === 0) return { borderBottomLeftRadius: '12px' }
-        if (i === size - 1 && j === size - 1) return { borderBottomRightRadius: '12px' }
+        const r = 'var(--board-corner)'
+        if (i === 0 && j === 0) return { borderTopLeftRadius: r }
+        if (i === 0 && j === size - 1) return { borderTopRightRadius: r }
+        if (i === size - 1 && j === 0) return { borderBottomLeftRadius: r }
+        if (i === size - 1 && j === size - 1) return { borderBottomRightRadius: r }
         return {}
     }, [i, j, size])
 
