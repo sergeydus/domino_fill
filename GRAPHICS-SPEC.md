@@ -1491,10 +1491,16 @@ generator the moment it moves.
 > passed every assertion.
 > - **The tokens:** `tests/contrast.test.ts` holds the three pairs at 4.5:1 and at the
 >   quoted values. It also asserts that white on the accent does not clear the bar.
-> - **The page:** every scan now also traces each piece of text to the surface painted
->   behind it, the nearest element with a background. On the accent, `success` or
->   `controlSurface`, the text must be the promised token (`ink`, `onSuccess`, `ink`) and
->   clear 4.5:1 against the surface as the browser computes both.
+> - **The page:** every scan now also reads each piece of text against its nearest
+>   element, itself or an ancestor, whose computed background is not fully transparent.
+>   Where that is the accent, `success` or `controlSurface`, the text must be the promised
+>   token (`ink`, `onSuccess`, `ink`) and clear 4.5:1 against the surface as the browser
+>   computes both.
+> - **What that is not** (codex, at acceptance): a measure of the colour actually painted
+>   behind every text element. Translucent layers are not composited. Text on a wash, such
+>   as a difficulty option's `hover:bg-panel/60`, is read against the wash's own colour,
+>   which is none of the three surfaces, so it goes unchecked. It protects the three named
+>   opaque surfaces.
 > - **Presence:** it is asserted by name on "Play today", "Got it!", the selected
 >   difficulty, "Solved!", "Check", and each card button under the pointer, so the rule
 >   cannot pass by finding no text.

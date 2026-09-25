@@ -122,10 +122,17 @@ const expectRolesKept = async (page: Page, state: string) => {
  *
  * Where a role colour appears says nothing about whether the text on it can be read:
  * "Play today" back in white would keep every assertion above, at 3.05:1. So every piece
- * of text on the page is traced to the surface actually painted behind it -- the nearest
- * element, itself or an ancestor, with a background -- and on each of these surfaces it must
- * be the token promised for it, and clear 4.5:1 against it as the browser computes both.
- * `tests/contrast.test.ts` holds the same pairs as tokens.
+ * of text on the page is read against its nearest element, itself or an ancestor, whose
+ * computed background is not fully transparent; where that background is one of these
+ * three opaque surfaces, the text must be the token promised for it, and clear 4.5:1
+ * against it as the browser computes both. `tests/contrast.test.ts` holds the same pairs
+ * as tokens.
+ *
+ * What it is not (codex, row 10 acceptance): a measure of the colour actually painted
+ * behind every text element. Translucent layers are not composited. Text on a wash -- a
+ * difficulty option's `hover:bg-panel/60` -- is read against the wash's own colour, which
+ * is none of the three surfaces, so it goes unchecked. It protects the named opaque
+ * surfaces, which is what it was asked to protect.
  */
 const SURFACES = { accent: 'ink', success: 'onSuccess', controlSurface: 'ink' } as const satisfies Record<string, Token>
 
