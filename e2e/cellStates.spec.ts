@@ -31,6 +31,25 @@ const STATES = {
 } as const
 type State = keyof typeof STATES
 
+/**
+ * The focus over each thing a square can hold. The keyboard reaches every square, rocks
+ * and pieces included, and whether the brackets stay in sight there depends on the
+ * overlay's stacking order, not on the drawing. Each specimen's session keeps its own
+ * focus, so all three show at once.
+ *
+ * Measured at row 11: over the rock 10.1-10.7%, over a flat domino 13.6-14.6%, over an
+ * upright 13.0-13.3%. With the focus under the pieces (z-10), both dominoes fall to 0-0.6%;
+ * the rock keeps 9.4-10.0%, because its facets leave the corners bare and the brackets sit
+ * in the corners. Under the squares themselves (-z-10), all three fall to 0%.
+ */
+const OCCUPIED = {
+    rock: { specimen: 'rock', cell: '1,1' },
+    'domino-flat': { specimen: 'domino-flat', cell: '0,0' },
+    'domino-upright': { specimen: 'domino-upright', cell: '0,0' },
+} as const
+type Occupant = keyof typeof OCCUPIED
+type Target = { specimen: string, cell: string | null }
+
 /** A lightness change this large, out of 255, is part of a footprint. */
 const MOVED = 32
 
@@ -52,22 +71,28 @@ const grey = async (png: Buffer, box: { x: number, y: number }, size: number) =>
     return out
 }
 
-/** Each state's footprint: 1 where its square's lightness moved when its drawing was hidden. */
-const footprints = async (page: Page, cell: number) => {
+/**
+ * Each target's footprint: 1 where its square's lightness moved when the drawings were
+ * hidden. `arrange` runs on the loaded sheet, before either shot.
+ */
+const footprints = async <K extends string>(
+    page: Page, cell: number, targets: Record<K, Target>, arrange?: () => Promise<void>,
+) => {
     await page.goto(`/visual?cell=${cell}`)
     await expect(page.locator('main[data-sheet]')).toBeVisible()
     await waitForRest(page, 'main')
+    await arrange?.()
     await page.mouse.move(0, 0)
     const shot = await page.screenshot({ fullPage: true })
     // The same page with every state's drawing hidden, and nothing else touched.
     const style = await page.addStyleTag({ content: '[data-mark] { visibility: hidden !important }' })
     const bare = await page.screenshot({ fullPage: true })
     await style.evaluate(el => (el as Element).remove())
-    const out = {} as Record<State, Uint8Array>
-    for (const [state, { specimen, cell: at }] of Object.entries(STATES) as [State, typeof STATES[State]][]) {
+    const out = {} as Record<K, Uint8Array>
+    for (const [name, { specimen, cell: at }] of Object.entries(targets) as [K, Target][]) {
         const box = await rectOf(page, specimen, at)
         const [a, b] = await Promise.all([grey(shot, box, cell), grey(bare, box, cell)])
-        out[state] = Uint8Array.from(a, (v, i) => Math.abs(v - b[i]) >= MOVED ? 1 : 0)
+        out[name] = Uint8Array.from(a, (v, i) => Math.abs(v - b[i]) >= MOVED ? 1 : 0)
     }
     return out
 }
@@ -85,7 +110,7 @@ for (const cell of [38, 53]) {
     test(`at ${cell}px, each state draws a footprint of its own, in greyscale`, async ({ page }) => {
         // The sheet's own viewport, as the baselines take it.
         await page.setViewportSize({ width: 1280, height: 800 })
-        const marks = await footprints(page, cell)
+        const marks = await footprints(page, cell, STATES)
         const area = cell * cell
         const states = Object.keys(marks) as State[]
         for (const state of states) {
@@ -98,6 +123,22 @@ for (const cell of [38, 53]) {
                 const apart = a.reduce((t, v, k) => t + (v !== b[k] ? 1 : 0), 0) / area
                 expect(apart, `${states[i]} and ${states[j]} look alike without colour`).toBeGreaterThanOrEqual(APART)
             }
+        }
+    })
+
+    test(`at ${cell}px, the focus stays in sight over a rock and over both dominoes`, async ({ page }) => {
+        await page.setViewportSize({ width: 1280, height: 800 })
+        const marks = await footprints(page, cell, OCCUPIED, async () => {
+            // Through the squares themselves, as the keyboard does: focusing one sets it.
+            for (const { specimen, cell: at } of Object.values(OCCUPIED)) {
+                await page.locator(`[data-specimen="${specimen}"] [data-cell="${at}"]`).focus()
+                await expect(page.locator(`[data-specimen="${specimen}"] [data-focus]`)).toHaveAttribute('data-focus', at)
+            }
+            await waitForRest(page, 'main')
+        })
+        for (const occupant of Object.keys(marks) as Occupant[]) {
+            const drawn = marks[occupant].reduce((t, v) => t + v, 0) / (cell * cell)
+            expect.soft(drawn, `the focus is lost over the ${occupant}`).toBeGreaterThanOrEqual(FOOTPRINT)
         }
     })
 

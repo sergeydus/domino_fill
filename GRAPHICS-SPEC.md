@@ -1546,6 +1546,21 @@ Rejection is **not** here. It is motion, and it belongs to P1-6.
 > A focused anchor shows both. The overlay now draws above the pieces (z-30), so the focus
 > brackets stay visible over a placed domino; the old outline was drawn under them.
 >
+> *Correction after review:* that visibility depends on the stacking order, not on the
+> drawing, and it was only asserted on an empty square. `e2e/cellStates.spec.ts` now
+> focuses a rock, a flat domino and an upright one on the sheet, through the squares as the
+> keyboard does, and holds each focus footprint to the same 5% at 38 and 53px:
+>
+> | focus over | 38px | 53px | with the focus under the pieces (z-10) | under the squares (-z-10) |
+> | --- | --- | --- | --- | --- |
+> | a rock | 10.1% | 10.7% | 9.4–10.0%, passes | 0%, fails |
+> | a flat domino | 14.6% | 13.6% | 0.6%, fails | 0%, fails |
+> | an upright domino | 13.3% | 13.0% | 0%, fails | 0%, fails |
+>
+> The rock keeps its footprint under the pieces because its facets leave the corners bare,
+> and the brackets are drawn in the corners. So the rock case holds the overlay above the
+> squares, and the domino cases hold it above the pieces.
+>
 > **Colour, ≥3:1 on both checker tones** (`tests/contrast.test.ts`), every pair now held:
 >
 > | state | on checkerLight | on checkerDark |
