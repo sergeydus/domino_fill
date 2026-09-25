@@ -1483,6 +1483,27 @@ generator the moment it moves.
 > - "Got it!" made quiet;
 > - the arrows' fill and stroke swapped;
 > - the audit's scanner blind to `oklch()`: caught by the recounted positive control.
+>
+> **Correction (codex, row 10 review): the text on the chrome is asserted, not only
+> quoted.** The three ratios above were stated and not tested: ink on the accent 5.87,
+> white on `success` 7.13, and ink on `controlSurface` 12.82. And the scan checks where a
+> role colour appears, not what text sits on it: "Play today" back in white, at 3.05:1,
+> passed every assertion.
+> - **The tokens:** `tests/contrast.test.ts` holds the three pairs at 4.5:1 and at the
+>   quoted values. It also asserts that white on the accent does not clear the bar.
+> - **The page:** every scan now also traces each piece of text to the surface painted
+>   behind it, the nearest element with a background. On the accent, `success` or
+>   `controlSurface`, the text must be the promised token (`ink`, `onSuccess`, `ink`) and
+>   clear 4.5:1 against the surface as the browser computes both.
+> - **Presence:** it is asserted by name on "Play today", "Got it!", the selected
+>   difficulty, "Solved!", "Check", and each card button under the pointer, so the rule
+>   cannot pass by finding no text.
+>
+> Mutations, each caught:
+> - in the browser: "Play today", "Got it!", the selected difficulty, the card's buttons
+>   under the pointer and "Check", each in white; the card's message in `ink`;
+> - in the tokens: the accent darkened below ink's 4.5:1, `onSuccess` dimmed, and the
+>   control surface darkened.
 
 ### P1-5 · The persistent cell states, legible at the floor
 

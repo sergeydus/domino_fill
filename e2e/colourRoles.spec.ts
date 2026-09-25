@@ -110,8 +110,72 @@ const expectRolesKept = async (page: Page, state: string) => {
     const findings = await scan(page)
     const misplaced = findings.filter(f => !f.allowed).map(f => `${f.role} as ${f.property} on ${f.element}`)
     expect(misplaced, `in ${state}`).toEqual([])
+    const text = await foregrounds(page)
+    const unreadable = text.filter(t => !t.ok).map(t =>
+        `${t.element}: ${t.colour} on ${t.surface}, ${t.ratio.toFixed(2)}:1, not ${t.expected}`)
+    expect(unreadable, `text on the chrome's surfaces, in ${state}`).toEqual([])
     return findings
 }
+
+/**
+ * The foreground each of P1-4's surfaces promises (codex, row 10 review).
+ *
+ * Where a role colour appears says nothing about whether the text on it can be read:
+ * "Play today" back in white would keep every assertion above, at 3.05:1. So every piece
+ * of text on the page is traced to the surface actually painted behind it -- the nearest
+ * element, itself or an ancestor, with a background -- and on each of these surfaces it must
+ * be the token promised for it, and clear 4.5:1 against it as the browser computes both.
+ * `tests/contrast.test.ts` holds the same pairs as tokens.
+ */
+const SURFACES = { accent: 'ink', success: 'onSuccess', controlSurface: 'ink' } as const satisfies Record<string, Token>
+
+type Foreground = { element: string, surface: string, expected: string, colour: string, ratio: number, ok: boolean }
+
+const foregrounds = (page: Page) => page.evaluate(({ surfaces, tokens }) => {
+    const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
+    const rgba = (colour: string) => {
+        ctx.clearRect(0, 0, 1, 1)
+        ctx.fillStyle = '#000000'
+        ctx.fillStyle = colour
+        ctx.fillRect(0, 0, 1, 1)
+        return Array.from(ctx.getImageData(0, 0, 1, 1).data)
+    }
+    const same = (a: number[], b: number[]) => [0, 1, 2].every(i => Math.abs(a[i] - b[i]) <= 2)
+    const luminance = ([r, g, b]: number[]) => [r, g, b].map(v => {
+        const s = v / 255
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+    }).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0)
+    const contrast = (a: number[], b: number[]) => {
+        const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p)
+        return (x + 0.05) / (y + 0.05)
+    }
+    const out: { element: string, surface: string, expected: string, colour: string, ratio: number, ok: boolean }[] = []
+    for (const el of Array.from(document.querySelectorAll('*'))) {
+        const cs = getComputedStyle(el)
+        if (cs.display === 'none' || cs.visibility === 'hidden') continue
+        const ownText = Array.from(el.childNodes).some(n => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== '')
+        if (!ownText) continue
+        // The surface actually behind the text: the nearest painted background.
+        let behind: Element | null = el
+        while (behind !== null && rgba(getComputedStyle(behind).backgroundColor)[3] === 0) behind = behind.parentElement
+        if (behind === null) continue
+        const surfaceBytes = rgba(getComputedStyle(behind).backgroundColor)
+        const surface = Object.keys(surfaces).find(s => same(surfaceBytes, tokens[s]))
+        if (surface === undefined) continue
+        const expected = (surfaces as Record<string, string>)[surface]
+        const colour = rgba(cs.color)
+        const ratio = contrast(colour, surfaceBytes)
+        out.push({
+            element: `<${el.tagName.toLowerCase()}>${(el.textContent ?? '').trim().slice(0, 24)}`,
+            surface, expected, colour: `rgb(${colour.slice(0, 3).join(', ')})`, ratio,
+            ok: same(colour, tokens[expected]) && ratio >= 4.5,
+        })
+    }
+    return out
+}, {
+    surfaces: SURFACES,
+    tokens: Object.fromEntries((['accent', 'success', 'controlSurface', 'ink', 'onSuccess'] as const).map(t => [t, rgbBytes(t)])),
+}) as Promise<Foreground[]>
 
 /** The role colours one element paints, as `property: role`. */
 const rolesOn = (locator: Locator) => locator.evaluate((el, roles) => {
@@ -138,6 +202,16 @@ const rolesOn = (locator: Locator) => locator.evaluate((el, roles) => {
 }, Object.fromEntries(ROLES.map(r => [r, rgbBytes(r)])))
 
 const bytes = (token: Token) => `rgb(${rgbBytes(token).join(', ')})`
+
+/** The named text is on `surface` in its promised foreground, readable -- and present. */
+const expectForeground = async (page: Page, text: string, surface: keyof typeof SURFACES) => {
+    const found = (await foregrounds(page)).filter(t => t.element.endsWith(`>${text}`) && t.surface === surface)
+    expect(found.length, `"${text}" is not on the ${surface}`).toBeGreaterThan(0)
+    for (const t of found) {
+        expect(t.colour, `"${text}" on the ${surface}`).toBe(bytes(SURFACES[surface]))
+        expect(t.ratio, `"${text}" on the ${surface}`).toBeGreaterThanOrEqual(4.5)
+    }
+}
 
 test.describe('on the component sheet, where every state is on screen at once', () => {
     test.use({ baseURL: VISUAL_URL })
@@ -173,6 +247,7 @@ test.describe('on the component sheet, where every state is on screen at once', 
         const selected = page.locator('[data-difficulty][data-selected]')
         await expect(selected).toHaveCount(1)
         expect(await rolesOn(selected)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        await expectForeground(page, await selected.innerText(), 'accent')
         for (const other of await page.locator('[data-difficulty]:not([data-selected])').all()) {
             expect(await rolesOn(other)).toEqual({})
             await other.hover()
@@ -201,6 +276,8 @@ test.describe('on the component sheet, where every state is on screen at once', 
         // quiet at rest and the accent under the pointer.
         const card = page.locator('[data-completion-card]')
         expect(await rolesOn(card)).toEqual({ background: 'success' })
+        await expectForeground(page, 'Solved!', 'success')
+        await expectForeground(page, 'Check', 'controlSurface')
         for (const button of await card.locator('button').all()) {
             await page.mouse.move(0, 0)
             await waitForRest(page, 'main')
@@ -208,6 +285,7 @@ test.describe('on the component sheet, where every state is on screen at once', 
             await button.hover()
             await waitForRest(page, 'main')
             expect(await rolesOn(button)).toEqual({ background: 'accent' })
+            await expectForeground(page, await button.innerText(), 'accent')
         }
 
         // The target labels, one per state.
@@ -290,6 +368,7 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         const action = page.locator('[data-go-to-today]')
         await expect(action).toBeVisible()
         expect(await rolesOn(action)).toEqual({ background: 'accent' })
+        await expectForeground(page, 'Play today', 'accent')
         await expectRolesKept(page, 'an earlier day, with the banner')
     })
 
@@ -298,6 +377,7 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         const gotIt = page.getByRole('button', { name: 'Got it!' })
         await expect(gotIt).toBeVisible()
         expect(await rolesOn(gotIt)).toEqual({ background: 'accent' })
+        await expectForeground(page, 'Got it!', 'accent')
         await expectRolesKept(page, 'the tutorial')
     })
 })

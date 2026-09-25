@@ -91,6 +91,35 @@ describe('§6: each art row\'s bar, and whether it holds yet', () => {
     }
 })
 
+/**
+ * P1-4's text on chrome: each surface a control or the completion card can have, with the
+ * foreground it is given. Text, so 4.5:1. The spec quotes these ratios, so they are
+ * asserted at those values as well as at the bar -- and `e2e/colourRoles.spec.ts` checks
+ * that the page really draws each surface with this foreground and not another.
+ */
+const ON_CHROME: Pair[] = [
+    { a: 'ink', b: 'accent', min: 4.5, owner: 'P1-4: the selected difficulty, the primary actions', holds: true },
+    { a: 'onSuccess', b: 'success', min: 4.5, owner: 'P1-4: the completion card', holds: true },
+    { a: 'ink', b: 'controlSurface', min: 4.5, owner: 'P1-4: the quiet controls', holds: true },
+]
+
+describe('P1-4: text on the chrome\'s surfaces', () => {
+    for (const pair of ON_CHROME) {
+        it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
+            expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
+        })
+    }
+
+    it('at the values the spec quotes', () => {
+        expect(ON_CHROME.map(p => ratio(p).toFixed(2))).toEqual(['5.87', '7.13', '12.82'])
+    })
+
+    it('and the white the accent carried until P1-4 does not, which is why it is ink now', () => {
+        // The mutation codex named at row 10's review: white on the accent is 3.05:1.
+        expect(ratio({ a: 'onSuccess', b: 'accent', min: 4.5, owner: '', holds: false })).toBeLessThan(4.5)
+    })
+})
+
 describe('P1-3: the two checker tones', () => {
     it(`stand ${CHECKER_RATIO}:1 apart, as stated, the light tone the lighter`, () => {
         // Stated as a ratio, so a later retune has to move the statement with the tones.
