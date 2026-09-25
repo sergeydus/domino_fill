@@ -1,5 +1,6 @@
 import { observer } from "mobx-react"
 import { PuzzleSession } from "../stores/PuzzleSession"
+import { AnchorMark, CandidateMark, FocusMark } from "./cellStates"
 
 /**
  * The two pieces of state the new verb needs to show (spec P1-1): where the keyboard is,
@@ -24,28 +25,33 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
         width: `${size}px`,
     })
 
+    /*
+     * Each state is its own drawing (`cellStates.tsx`, graphics P1-5), in a box the size of
+     * the cell. Above the pieces (z-30, the pieces are z-20), so the keyboard's brackets
+     * stay visible over a placed domino.
+     */
     return <>
         {anchor && (
             <div
                 data-anchor={`${anchor[0]},${anchor[1]}`}
-                className="z-20 pointer-events-none absolute rounded-xl border-4 border-anchor"
+                className="z-30 pointer-events-none absolute"
                 style={at(anchor[0], anchor[1])}
-            />
+            ><AnchorMark /></div>
         )}
         {candidates.map(([i, j]) => (
             <div
                 key={`candidate_${i},${j}`}
                 data-candidate={`${i},${j}`}
-                className="z-20 pointer-events-none absolute rounded-xl border-4 border-dashed border-candidate-edge bg-candidate-wash/40"
+                className="z-30 pointer-events-none absolute"
                 style={at(i, j)}
-            />
+            ><CandidateMark /></div>
         ))}
         {focused && (
             <div
                 data-focus={`${focused[0]},${focused[1]}`}
-                className="z-20 pointer-events-none absolute rounded-xl outline-4 outline-offset-[-4px] outline-cell-focus/70"
+                className="z-30 pointer-events-none absolute"
                 style={at(focused[0], focused[1])}
-            />
+            ><FocusMark /></div>
         )}
     </>
 }

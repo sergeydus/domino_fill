@@ -1526,6 +1526,105 @@ Rejection is **not** here. It is motion, and it belongs to P1-6.
 - Each state's indicator is a fraction of the cell, not a pixel constant.
 - ≥3:1 against both checker tones. All four appear on baselines 1 and 2.
 
+> **Amendment (row 11) — four shapes, measured in greyscale.**
+>
+> **Before this row, three of the four were one shape.** The anchor was a solid 4px
+> border, the focus a 4px outline of black at 70%, and the hint a 3px outline inset 2px:
+> each a solid line round the square, told apart only by colour. The candidate was a dashed
+> 4px border over a wash. All four were pixel constants.
+>
+> **Now each is its own drawing** (`app/dominoFill/cellStates.tsx`), in a 100-unit
+> `viewBox` sized to its square, so every length is a fraction of the cell by construction:
+>
+> | state | shape | size, in hundredths of the cell |
+> | --- | --- | --- |
+> | anchor | a solid ring | inset 17, stroke 8, corner 12 |
+> | candidate | the same ring, dashed, over its 40% wash | dashes 14 on, 10 off |
+> | focus | four rounded corner brackets, outside the ring | inset 7, stroke 8, arms 28 |
+> | hint | a filled diamond at the centre | 22 from centre to each point |
+>
+> A focused anchor shows both. The overlay now draws above the pieces (z-30), so the focus
+> brackets stay visible over a placed domino; the old outline was drawn under them.
+>
+> **Colour, ≥3:1 on both checker tones** (`tests/contrast.test.ts`), every pair now held:
+>
+> | state | on checkerLight | on checkerDark |
+> | --- | --- | --- |
+> | anchor `#16295e` | 4.16 | 3.45 |
+> | candidate edge `#16295e` | 4.16 | 3.45 |
+> | focus `#000000` | 6.29 | 5.23 |
+> | hint `#0b3b10` | 3.82 | 3.17 |
+>
+> The candidate edge was Tailwind `blue-400`, at 1.27 and 1.52 on the new checker. Only a
+> blue as dark as the anchor's clears the dark tone, so the edge now shares the anchor's
+> value. It stays its own token, and the two are told apart by dashes and wash.
+>
+> The focus is drawn opaque. Before, it was 70% black.
+>
+> **"Distinguishable without colour" is measured** (`e2e/cellStates.spec.ts`, on the sheet
+> at 38 and 53px):
+> - The page is shot twice: as it is, and with every state's drawing hidden and nothing
+>   else changed.
+> - For each state, the pixels of its square whose greyscale lightness moved by at least
+>   32 of 255 are its footprint: the board taken away, and the hue thrown away.
+> - Each footprint must cover at least 5% of the square, and every pair must differ over
+>   at least 15% of it.
+>
+> Measured, at 38 and 53px:
+>
+> | | 38px | 53px |
+> | --- | --- | --- |
+> | smallest footprint: the hint | 10.0% | 9.5% |
+> | closest pair: anchor and hint | 31.4% | 33.4% |
+> | anchor / candidate | 45.8% | 47.2% |
+> | anchor / focus | 43.9% | 49.4% |
+>
+> Two states drawn alike come out 0% apart. Greyscale is the strictest reading of "without
+> colour": any pair it tells apart, a partial colour deficiency can too.
+>
+> **"A fraction of the cell"** is asserted from the browser's layout at both sizes:
+> - each drawing's box is its square's;
+> - the ring's stroke, the brackets' stroke and the diamond's width come out at their
+>   fractions of the cell in pixels.
+>
+> `tests/cellStates.test.tsx` pins the structure behind the measurement:
+> - the anchor's ring is solid, and the candidate's is the same ring, dashed, with a wash;
+> - the focus is four separate L-shaped strokes clear of the ring, and the hint a centred
+>   diamond;
+> - every drawing is a 100-unit `viewBox` at 100%, `aria-hidden`;
+> - neither `cellStates.tsx` nor `Selection.tsx` writes a pixel length.
+>
+> **Legibility on the tan**, codex's open note since row 9: the hint is no longer a thin
+> ring. It is a diamond covering about a tenth of the square, and it is the only state
+> drawn at the centre. It is still dark green on tan at 3.17 and 3.82, which clears the bar
+> without being loud.
+>
+> **The predictions.**
+> - **Baselines 1 and 2** change only in the state squares.
+> - **Baselines 3 and 4** change in one square each: the focus brackets, now drawn above a
+>   domino. The drag in their set-up leaves the keyboard focus on the square it started
+>   from (`pointerDown` sets it), and the old focus outline sat under the piece.
+> - No layout moves. Page sizes are unchanged: sheets 1280×800, phone 360×680, desktop
+>   1280×800.
+> - Measured on the development host, old tree against new: 3,733 and 6,842 pixels on the
+>   sheets; 266 on the phone, inside one 38px square; 1,215 on the desktop, inside one 86px
+>   square.
+>
+> Whether focus should follow the pointer at all is P1-6's control-state question, not
+> this row's.
+>
+> **Mutations,** each caught:
+> - in the browser: the anchor drawn as brackets (anchor and focus alike); the candidate
+>   solid with no wash (anchor and candidate alike); the hint shrunk to a speck; the focus
+>   drawn at a fixed 38px;
+> - in the unit tests: the candidate edge back to `blue-400`; a pixel border put back on
+>   the anchor's square; the candidate's dashes dropped.
+>
+> Row 10's role test (`e2e/colourRoles.spec.ts`) asserted the hinted square's `hint` as an
+> outline. It now asserts it as the diamond's fill. Its contract is unchanged: the hinted
+> square carries `hint`, and nothing else does. Mutation: the diamond filled with the
+> anchor's colour, which it fails.
+
 ### P1-6 · Motion, and the states a control owes
 
 The entry offset is 26px — 68% of a phone cell. There are zero CSS transitions, so nothing

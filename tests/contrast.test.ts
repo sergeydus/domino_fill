@@ -52,12 +52,13 @@ const OWED: Pair[] = [
         (['checkerLight', 'checkerDark', 'tileFace'] as const).map(b =>
             ({ a: rock, b, min: 3, owner: 'P1-2', holds: true }) as Pair)),
     ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
+        // P1-5's four states, each held on both tones since row 11. The anchor held on the
+        // light tone only until P1-3; the candidate edge on neither until P1-5; the focus
+        // was a 70% wash of black until P1-5 drew it opaque.
         { a: 'hint', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-        // The anchor held on the light tone only until P1-3, whose darker checker it would
-        // have failed on both; the darker blue P1-3 gave it clears both.
-        { a: 'anchor', b: checker, min: 3, owner: 'P1-5; held on both since P1-3', holds: true } as Pair,
-        { a: 'candidateEdge', b: checker, min: 3, owner: 'P1-5', holds: false } as Pair,
-        { a: { token: 'cellFocus', alpha: 0.7, over: checker }, b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
+        { a: 'anchor', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
+        { a: 'candidateEdge', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
+        { a: 'cellFocus', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
     ]),
 ]
 

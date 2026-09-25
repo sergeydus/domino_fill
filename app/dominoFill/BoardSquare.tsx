@@ -4,6 +4,7 @@ import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
 import { cellDescription } from "./cellLabel";
 import { PALETTE } from "../palette";
+import { HintMark } from "./cellStates";
 
 type Props = {
     i: number
@@ -126,15 +127,15 @@ const BoardSquare: React.FC<Props2> = observer((
             style={{ ...style, ...cornerStyle }}
         >
             {/*
-              * An outline rather than a border or a background, for the reason row 11
-              * settled for the line states: outlines take no layout space, and a border
-              * here would reopen the gutter overflow P0-3 closed. Inset so it reads as
-              * marking the cell rather than the gap beside it.
+              * The hint's diamond (graphics P1-5; `cellStates.tsx`). It was a 3px outline
+              * inset 2px -- a pixel constant, and the same shape as the anchor and the
+              * focus. Absolutely placed, so it takes no layout space, for the reason row 11
+              * settled for the line states.
               */}
             {isHinted && (
-                <div
-                    className="pointer-events-none absolute inset-[2px] rounded-[4px] outline-3 outline-hint"
-                />
+                <div className="pointer-events-none absolute inset-0">
+                    <HintMark />
+                </div>
             )}
         </div>)
 

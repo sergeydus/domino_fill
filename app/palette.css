@@ -26,7 +26,7 @@
   --accent-edge: #0b3c52;
   --control-surface: #e2d9ca;
   --anchor: #16295e;
-  --candidate-edge: oklch(70.7% 0.165 254.624);
+  --candidate-edge: #16295e;
   --candidate-wash: oklch(88.2% 0.059 254.128);
   --cell-focus: #000000;
   --drag-wash: #ffffff;

@@ -302,8 +302,8 @@ test.describe('on the component sheet, where every state is on screen at once', 
             expect(await rolesOn(neutral)).toEqual({})
         }
 
-        // The hinted square, and only it.
-        expect(await rolesOn(page.locator('[data-hinted] > div'))).toEqual({ outline: 'hint' })
+        // The hinted square, and only it: its diamond since P1-5 (row 11), an outline before.
+        expect(await rolesOn(page.locator('[data-hinted] [data-diamond]'))).toEqual({ fill: 'hint' })
     })
 })
 

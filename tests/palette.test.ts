@@ -62,7 +62,7 @@ describe('every kind of consumer reads the token rather than a copy', () => {
     it('rgbBytes reads a token as bytes, and refuses one that is not #rrggbb', () => {
         // The ground's bytes, written out: `#f4f0e8` since P1-3 moved it from `#e8e7e7`.
         expect(rgbBytes('ground')).toEqual([0xf4, 0xf0, 0xe8])
-        expect(() => rgbBytes('candidateEdge')).toThrow(/not #rrggbb/)
+        expect(() => rgbBytes('candidateWash')).toThrow(/not #rrggbb/)
     })
 
     it('cssName is the kebab-case Tailwind knows', () => {

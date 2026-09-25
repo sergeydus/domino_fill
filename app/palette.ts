@@ -118,10 +118,15 @@ export const PALETTE = {
      * 3:1 against the light tone; on the new checker that needs a far darker blue.
      */
     anchor: '#16295e',
-    /** A square the anchor could pair with: edge `blue-400`, wash `blue-200` at 40%. */
-    candidateEdge: 'oklch(70.7% 0.165 254.624)',
+    /**
+     * A square the anchor could pair with: a dashed edge over a `blue-200` wash at 40%.
+     * The edge was `blue-400`, 1.63 and 1.15 on the old checker; P1-5 needs 3:1 on both
+     * tones of the new one, and only a blue as dark as the anchor's reaches it. It shares
+     * the anchor's value, not its role: the two are told apart by shape (P1-5).
+     */
+    candidateEdge: '#16295e',
     candidateWash: 'oklch(88.2% 0.059 254.128)',
-    /** The keyboard's square, drawn at 70%. */
+    /** The keyboard's square: its corner brackets, opaque since P1-5 (they were 70%). */
     cellFocus: '#000000',
     /** The wash over the squares a drag would cover, drawn at 70%. */
     dragWash: '#ffffff',
