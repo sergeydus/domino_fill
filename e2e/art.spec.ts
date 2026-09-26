@@ -3,6 +3,7 @@ import { openBoard } from './openBoard'
 import { drag, freeRuns, rockSquares } from './play'
 import { readArt } from './artGeometry'
 import { PIECE, ROCK, UNIT, fraction, points } from '../app/dominoFill/Pieces/geometry'
+import { MOTION } from '../app/dominoFill/motion'
 import { rgbBytes, type Token } from '../app/palette'
 
 /**
@@ -157,7 +158,7 @@ for (const end of ENDS) {
             /translateX\((-?[\d.e+-]+)px\)/.exec(t)?.[1],
             /translateY\((-?[\d.e+-]+)px\)/.exec(t)?.[1],
         ].map(v => -Number(v)))
-        each(offsets, 4, PIECE.entry, 'entry offset, x and y per domino placed', 3)
+        each(offsets, 4, UNIT * MOTION.entry.offset / Math.SQRT2, 'entry offset, x and y per domino placed', 3)
     })
 
     test(`the rocks at ${end.name}: the faceted silhouette, in the rock's tones`, async ({ page }) => {

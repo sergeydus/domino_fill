@@ -2,8 +2,13 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { renderToString } from 'react-dom/server'
-import { AnchorMark, CandidateMark, FocusMark, HintMark, STATE } from '@/app/dominoFill/cellStates'
+import { AnchorMark, CandidateMark, FocusMark, HintMark, RefusedMark, STATE } from '@/app/dominoFill/cellStates'
 import { PALETTE } from '@/app/palette'
+import { runInAction } from 'mobx'
+import Selection from '@/app/dominoFill/Selection'
+import { PuzzleSession } from '@/app/stores/PuzzleSession'
+import { definitionFrom } from '@/app/stores/PuzzleDefinition'
+import { RootStore } from '@/app/stores/RootStore'
 
 /**
  * The four cell states' drawings, as markup (graphics spec P1-5, row 11).
@@ -20,7 +25,7 @@ const markup = (el: React.ReactElement) => {
     return host.querySelector('svg')!
 }
 
-const MARKS = { anchor: <AnchorMark />, candidate: <CandidateMark />, focus: <FocusMark />, hint: <HintMark /> }
+const MARKS = { anchor: <AnchorMark />, candidate: <CandidateMark />, focus: <FocusMark />, hint: <HintMark />, refused: <RefusedMark /> }
 
 describe('P1-5: each state carries a channel besides colour', () => {
     it('the anchor is a solid ring', () => {
@@ -55,6 +60,59 @@ describe('P1-5: each state carries a channel besides colour', () => {
         const points = diamond.getAttribute('points')!.split(' ').map(p => p.split(',').map(Number))
         expect(points).toEqual([[50, 50 - STATE.hint.reach], [50 + STATE.hint.reach, 50], [50, 50 + STATE.hint.reach], [50 - STATE.hint.reach, 50]])
         expect(diamond.getAttribute('fill')).toBe(PALETTE.hint)
+    })
+})
+
+describe('P1-6: a refused move is a cross, red on a white halo', () => {
+    const svg = () => markup(MARKS.refused)
+
+    it('two strokes corner to corner, the red over its halo, which is wider by the halo either side', () => {
+        const [halo, cross] = [svg().querySelector('[data-halo]')!, svg().querySelector('[data-cross]')!]
+        const { reach: r, stroke, halo: h } = STATE.refused
+        const d = `M ${50 - r} ${50 - r} L ${50 + r} ${50 + r} M ${50 + r} ${50 - r} L ${50 - r} ${50 + r}`
+        expect([halo.getAttribute('d'), cross.getAttribute('d')]).toEqual([d, d])
+        expect(cross.getAttribute('stroke')).toBe(PALETTE.problem)
+        expect(halo.getAttribute('stroke')).toBe(PALETTE.refusedHalo)
+        expect(Number(cross.getAttribute('stroke-width'))).toBe(stroke)
+        expect(Number(halo.getAttribute('stroke-width'))).toBe(stroke + 2 * h)
+        // Drawn in that order, so the red is on top.
+        expect(halo.compareDocumentPosition(cross) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('its ends stop short of the focus brackets, which can share its square', () => {
+        /*
+         * A refused Space or arrow is refused on the focused square, so the brackets and the
+         * cross are drawn together. The cross's reach is its round caps -- a disc of half
+         * the halo's width at each end -- and every point of those discs must be inside the
+         * brackets' inner edge.
+         */
+        const clear = STATE.focus.inset + STATE.focus.stroke / 2
+        const { reach: r, stroke, halo } = STATE.refused
+        const cap = stroke / 2 + halo
+        const nearest = Math.min(...[50 - r, 50 + r].flatMap(e => [e - cap, 100 - (e + cap)]))
+        expect(nearest).toBeGreaterThan(clear)
+    })
+
+    it('and the anchor ring, which a refused arrow keeps on its square, is drawn over it and stays whole', () => {
+        // Its ends pass under the ring's corners: kept inside the ring, the cross was 14.9%
+        // from the hint's diamond in greyscale, under P1-5's 15% (e2e/cellStates.spec.ts).
+        const s = new PuzzleSession(definitionFrom({
+            puzzleId: 'refused-on-anchor',
+            board: Array.from({ length: 6 }, () => Array<number | null>(6).fill(null)),
+            boardHorizontalNumbers: '3,3,3,3,3,3',
+            boardVerticalNumbers: '3,3,3,3,3,3',
+        }), new RootStore())
+        runInAction(() => {
+            s.setFocusedCell([0, 0])
+            s.handleKey(' ')
+            s.handleKey('ArrowUp')   // off the board: refused, and the anchor is kept
+        })
+        expect([s.refusedAt, s.pendingAnchor]).toEqual([[0, 0], [0, 0]])
+        const host = document.createElement('div')
+        host.innerHTML = renderToString(<Selection boardsStore={s} />)
+        const order = [...host.querySelectorAll('[data-refused], [data-anchor]')].map(el =>
+            el.hasAttribute('data-refused') ? 'refused' : 'anchor')
+        expect(order).toEqual(['refused', 'anchor'])
     })
 })
 

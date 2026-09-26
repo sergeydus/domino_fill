@@ -156,3 +156,148 @@ describe('what is not a rejection', () => {
         expect(s.outcomeTick).toBe(before)
     })
 })
+
+/**
+ * Where a refusal happened, for the mark that does not move (graphics spec P1-6, row 12).
+ *
+ * The shake is suppressed under reduced motion, so each refusal also names its square, and
+ * the board draws a cross there until the player does something else.
+ */
+describe('a refusal says where', () => {
+    it('on the square a refused drag started from', () => {
+        const s = session()
+        act(() => { s.placeToward([3, 2], 'down') })
+        act(() => {
+            s.pointerDown([2, 2])
+            s.pointerUp([3, 2])   // occupied
+        })
+        expect(s.refusedAt).toEqual([2, 2])
+    })
+
+    it('on a boxed-in square that was tapped, and on a rock that was tapped', () => {
+        const s = session([[1, 2], [3, 2], [2, 1], [2, 3]])
+        act(() => {
+            s.pointerDown([2, 2])
+            s.pointerUp([2, 2])
+        })
+        expect(s.refusedAt).toEqual([2, 2])
+        act(() => {
+            s.pointerDown([1, 2])
+            s.pointerUp([1, 2])
+        })
+        expect(s.refusedAt).toEqual([1, 2])
+    })
+
+    it('on the anchor, for a refused arrow; on the focused square, for Space and Delete', () => {
+        const s = session([[3, 2], [0, 0]])
+        act(() => { s.setFocusedCell([2, 2]) })
+        act(() => { s.handleKey(' ') })
+        act(() => { s.handleKey('ArrowDown') })   // onto the rock: refused, anchor kept
+        expect(s.refusedAt).toEqual([2, 2])
+        expect(s.pendingAnchor).toEqual([2, 2])
+
+        act(() => { s.setFocusedCell([0, 0]) })
+        act(() => { s.handleKey('Delete') })       // a rock
+        expect(s.refusedAt).toEqual([0, 0])
+    })
+
+    it('and nothing else is a place: a release off the board marks nothing', () => {
+        const s = session()
+        act(() => {
+            s.pointerDown([2, 2])
+            s.pointerUp(null)
+        })
+        expect(s.refusedAt).toBeNull()
+    })
+})
+
+describe('the mark lasts until the player does anything else', () => {
+    const refused = () => {
+        const s = session([[1, 2], [3, 2], [2, 1], [2, 3]])
+        act(() => {
+            s.pointerDown([2, 2])
+            s.pointerUp([2, 2])
+        })
+        expect(s.refusedAt).toEqual([2, 2])
+        return s
+    }
+
+    it('a press', () => {
+        const s = refused()
+        act(() => { s.pointerDown([0, 0]) })
+        expect(s.refusedAt).toBeNull()
+    })
+
+    it('a key, even one that only moves the focus', () => {
+        const s = refused()
+        act(() => { s.setFocusedCell([0, 0]) })
+        act(() => { s.handleKey('ArrowRight') })
+        expect(s.refusedAt).toBeNull()
+    })
+
+    it('a placement, an undo, a reset, a question to Check', () => {
+        let s = refused()
+        act(() => {
+            s.pointerDown([0, 0])
+            s.pointerUp([0, 1])
+        })
+        expect(s.lastOutcome).toBe('placed')
+        expect(s.refusedAt).toBeNull()
+
+        s = refused()
+        act(() => { s.placeToward([4, 4], 'down') })
+        act(() => {
+            s.pointerDown([2, 2])
+            s.pointerUp([2, 2])
+        })
+        act(() => { s.undo() })
+        expect(s.refusedAt).toBeNull()
+
+        s = refused()
+        act(() => { s.reset() })
+        expect(s.refusedAt).toBeNull()
+
+        s = refused()
+        act(() => { s.check() })
+        expect(s.refusedAt).toBeNull()
+    })
+
+    it('but not the board losing focus: walking away is not an action', () => {
+        const s = refused()
+        act(() => { s.cancelGesture() })
+        expect(s.refusedAt).toEqual([2, 2])
+    })
+})
+
+/**
+ * The focused square's brackets follow the keyboard, as `:focus-visible` does (P1-6).
+ */
+describe('focus is drawn for the keyboard, not for a press', () => {
+    it('a press moves the focus and does not draw it', () => {
+        const s = session()
+        act(() => { s.pointerDown([2, 2]) })
+        expect(s.focusedCell).toEqual([2, 2])
+        expect(s.focusVisible).toBe(false)
+    })
+
+    it('a key on the board draws it, and a press after hides it again', () => {
+        const s = session()
+        act(() => { s.handleKey('ArrowDown') })
+        expect(s.focusVisible).toBe(true)
+        act(() => { s.pointerDown([1, 1]) })
+        expect(s.focusVisible).toBe(false)
+    })
+
+    it('a chord the board leaves to the browser does not', () => {
+        const s = session()
+        act(() => { s.handleKey('c', { ctrl: true }) })
+        expect(s.focusVisible).toBe(false)
+    })
+
+    it('a reset or a restored day starts undrawn', () => {
+        const s = session()
+        act(() => { s.handleKey('ArrowDown') })
+        act(() => { s.reset() })
+        expect(s.focusVisible).toBe(false)
+    })
+})

@@ -1,7 +1,8 @@
 import { PALETTE } from "../palette"
 
 /**
- * The four persistent cell states, drawn (graphics spec P1-5, row 11).
+ * The four persistent cell states, drawn (graphics spec P1-5, row 11), and a fifth that
+ * lasts until the next move: a refused one (P1-6, row 12).
  *
  * Anchor, candidate, hint and focus are what a player reads while thinking. Until this row
  * each was a CSS border or outline in pixels -- 4px, 4px, 3px and 4px -- and three of them
@@ -30,6 +31,15 @@ export const STATE = {
     focus: { inset: 7, stroke: 8, arm: 28 },
     /** The hint's diamond: centre to each point. */
     hint: { reach: 22 },
+    /**
+     * A refused move's cross (P1-6): centre to each end along each axis, its weight, and the
+     * halo either side of it. Its ends pass under the anchor ring's corners -- a refused
+     * arrow key keeps the anchor, so the two share a square, and the ring is drawn over the
+     * cross and stays whole -- and stop short of the focus brackets, which share it too.
+     * Kept inside the ring, the cross could not be told from the hint's diamond: measured
+     * 14.9% apart in greyscale at its largest that fits, under P1-5's 15%.
+     */
+    refused: { reach: 25, stroke: 9, halo: 5 },
 } as const
 
 const U = 100
@@ -77,6 +87,29 @@ export const FocusMark: React.FC = () => {
         <svg {...box} aria-hidden="true" data-mark="focus">
             <path data-brackets d={corners.join(' ')} fill="none" stroke={PALETTE.cellFocus}
                 strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    )
+}
+
+/**
+ * A refused move (graphics spec P1-6, row 12): a cross on the square it was made from.
+ *
+ * The static equivalent of the shake, which reduced motion suppresses. A cross because it
+ * is the one shape here that says "no", and because it is not the diamond: the two are the
+ * states drawn at the centre. Red on a white halo, because a refusal lands anywhere -- on
+ * either checker tone, a domino's face, a rock -- and no one colour clears 3:1 on all of
+ * them: the halo carries it on the checker and the rock, the red on the tile's face.
+ */
+export const RefusedMark: React.FC = () => {
+    const c = U / 2
+    const { reach: r, stroke, halo } = STATE.refused
+    const d = `M ${c - r} ${c - r} L ${c + r} ${c + r} M ${c + r} ${c - r} L ${c - r} ${c + r}`
+    return (
+        <svg {...box} aria-hidden="true" data-mark="refused">
+            <path data-halo d={d} fill="none" stroke={PALETTE.refusedHalo}
+                strokeWidth={stroke + 2 * halo} strokeLinecap="round" />
+            <path data-cross d={d} fill="none" stroke={PALETTE.problem}
+                strokeWidth={stroke} strokeLinecap="round" />
         </svg>
     )
 }

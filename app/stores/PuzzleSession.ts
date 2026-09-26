@@ -179,11 +179,31 @@ export class PuzzleSession {
      */
     rejectionTick = 0
 
-    /** Record what just happened, so the view can respond to it once. */
-    private signal(outcome: PlacementOutcome): PlacementOutcome {
+    /**
+     * The square the last refused move was made from, until the player does anything else
+     * (graphics spec P1-6, row 12).
+     *
+     * The shake was the refusal's only visual answer, and `MotionConfig reducedMotion="user"`
+     * suppresses it: measured by `e2e/accessibility.spec.ts`, whose reduced-motion test
+     * samples the grid and finds it never moves. So a player who asked for less motion saw
+     * nothing at all when a move was refused. This is the answer that does not move: a mark
+     * on the square, drawn for everyone, since a shake says *that* a move was refused and
+     * never said *which*.
+     *
+     * Cleared by the next thing the player does on this board -- a press, a key, an undo, a
+     * reset, a question to Check or Hint -- so it always describes the latest attempt.
+     */
+    refusedAt: Cell | null = null
+
+    /**
+     * Record what just happened, so the view can respond to it once. A refusal says where:
+     * `at` is the square the refused move was made from.
+     */
+    private signal(outcome: PlacementOutcome, at: Cell | null = null): PlacementOutcome {
         this.lastOutcome = outcome
         this.outcomeTick++
         if (outcome === 'none') this.rejectionTick++
+        this.refusedAt = outcome === 'none' ? at : null
         return outcome
     }
 
@@ -199,6 +219,7 @@ export class PuzzleSession {
     adviceTick = 0
 
     private say(advice: Advice): Advice {
+        this.refusedAt = null
         this.advice = advice
         this.adviceTick++
         return advice
@@ -232,6 +253,19 @@ export class PuzzleSession {
 
     /** The cell the keyboard is on. Null until the board is first used from a keyboard. */
     focusedCell: Cell | null = null
+
+    /**
+     * Whether the focused cell's brackets are drawn: the board's own `:focus-visible`
+     * (graphics spec P1-6, row 12).
+     *
+     * `focusedCell` is where the keyboard *would* act, and a press moves it too, so the
+     * keyboard carries on from the square the player last touched. Drawing it after a
+     * press, though, put the brackets over the domino the player had just placed by hand
+     * -- a focus indicator for a keyboard nobody was using, which is exactly what the
+     * browser's `:focus-visible` exists to leave out. So: drawn from a key or a keyboard
+     * focus, hidden by a press, and hidden while focus is outside the board.
+     */
+    focusVisible = false
 
     /**
      * Completed moves, oldest first. Bounded at `MAX_UNDO`; the oldest is dropped.
@@ -272,6 +306,8 @@ export class PuzzleSession {
         // would write dominoes back onto a freshly cleared grid.
         this.moves = []
         this.focusedCell = null
+        this.focusVisible = false
+        this.refusedAt = null
         this.clearAdvice()
     }
 
@@ -588,6 +624,8 @@ export class PuzzleSession {
      */
     pointerDown(cell: Cell) {
         this.focusedCell = cell
+        this.focusVisible = false
+        this.refusedAt = null
         const pending = this.pendingAnchor
         if (pending) {
             const direction = directionBetween(pending, cell)
@@ -630,10 +668,10 @@ export class PuzzleSession {
             }
             // Released where the domino cannot go: nothing happens, and any pending
             // anchor is dismissed.
-            return this.signal(pending ? 'cleared' : 'none')
+            return this.signal(pending ? 'cleared' : 'none', anchor)
         }
 
-        return this.signal(this.tap(cell))
+        return this.signal(this.tap(cell), cell)
     }
 
     /**
@@ -719,6 +757,11 @@ export class PuzzleSession {
         this.focusedCell = cell && this.inBounds(cell[0], cell[1]) ? cell : null
     }
 
+    /** Whether focus on the board should be drawn. See `focusVisible`. */
+    setFocusVisible(visible: boolean) {
+        this.focusVisible = visible
+    }
+
     /**
      * The keyboard verb, which is the same verb: an anchor and a direction.
      *
@@ -770,6 +813,11 @@ export class PuzzleSession {
          */
         if (ctrl || meta || shift || alt) return false
 
+        // A key on the board: the keyboard is in use, and whatever was refused before is
+        // no longer the latest thing that happened.
+        this.focusVisible = true
+        this.refusedAt = null
+
         if (key === 'Escape') {
             if (!this.gesture) return false
             this.gesture = null
@@ -790,7 +838,7 @@ export class PuzzleSession {
                 // A refused direction keeps the anchor rather than silently choosing
                 // another one, which is the whole complaint against the old rule.
                 if (!this.canPlace(pending, direction)) {
-                    this.signal('none')
+                    this.signal('none', pending)
                     return true
                 }
                 this.placeToward(pending, direction)
@@ -806,7 +854,7 @@ export class PuzzleSession {
 
         if (key === ' ' || key === 'Enter') {
             const anchored = this.anchorFocused(focused)
-            this.signal(anchored ? 'candidates' : 'none')
+            this.signal(anchored ? 'candidates' : 'none', focused)
             return anchored
         }
 
@@ -817,7 +865,7 @@ export class PuzzleSession {
             if (!this.removePiece(i, j)) {
                 // A rock, or a half that resolves to no well-formed domino: refused, and
                 // worth saying so rather than doing nothing at all.
-                this.signal('none')
+                this.signal('none', focused)
                 return false
             }
             this.focusedCell = pair ? [pair[0][0], pair[0][1]] : focused
@@ -872,6 +920,7 @@ export class PuzzleSession {
         move.cells.forEach(([i, j], index) => { this.board[i][j] = move.before[index] })
         this.completed = this.completedByRules
         this.focusedCell = move.anchor
+        this.refusedAt = null
         this.clearAdvice()
         // A gesture in flight was aimed at a board that no longer looks like this.
         this.gesture = null
@@ -952,6 +1001,8 @@ export class PuzzleSession {
         this.gesture = null
         this.hover = null
         this.focusedCell = null
+        this.focusVisible = false
+        this.refusedAt = null
         this.advice = null
     }
 }

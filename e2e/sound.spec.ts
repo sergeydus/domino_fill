@@ -16,14 +16,19 @@ const mute = (page: Page) => page.locator('[data-mute]')
 test.beforeEach(async ({ page }) => { await openBoard(page) })
 
 test('is a real button that says which state it is in', async ({ page }) => {
+    /*
+     * Pressed is sound *on* (graphics P1-6, row 12). The button is named "Sound", so pressed
+     * says the sound is on; until row 12 it was pressed when muted, and a screen reader
+     * announced "Sound, toggle button, pressed" exactly when there was none.
+     */
     await expect(page.getByRole('button', { name: 'Sound' })).toBeVisible()
-    await expect(mute(page)).toHaveAttribute('aria-pressed', 'false')
+    await expect(mute(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(mute(page)).toHaveText('Sound on')
 
     await mute(page).click()
 
     // Both channels: `aria-pressed` for a screen reader, the word for everyone else.
-    await expect(mute(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(mute(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(mute(page)).toHaveText('Sound off')
 })
 
@@ -31,12 +36,12 @@ test('remembers the choice across a reload', async ({ page }) => {
     // A setting that resets every visit is one the player has to find every visit -- and a
     // daily puzzle is played in exactly the places where that matters.
     await mute(page).click()
-    await expect(mute(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(mute(page)).toHaveAttribute('aria-pressed', 'false')
 
     await page.reload()
     await page.locator('[data-board-shell]').waitFor()
 
-    await expect(mute(page)).toHaveAttribute('aria-pressed', 'true')
+    await expect(mute(page)).toHaveAttribute('aria-pressed', 'false')
     await expect(mute(page)).toHaveText('Sound off')
 })
 

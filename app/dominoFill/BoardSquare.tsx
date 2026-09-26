@@ -24,6 +24,11 @@ type Props2 = {
     boardsStore: PuzzleSession
 }
 
+/** `:focus-visible`, where the engine knows it; a DOM without it (jsdom) says no. */
+const focusVisible = (el: Element): boolean => {
+    try { return el.matches(':focus-visible') } catch { return false }
+}
+
 const BoardSquare: React.FC<Props2> = observer((
     { isHinted, isFocused, isAnchor, isCandidate, i, j, boardsStore },
 ) => {
@@ -120,7 +125,12 @@ const BoardSquare: React.FC<Props2> = observer((
              * as equivalent -- on reasoning that only considered the pointer and Tab, and
              * never asked what else can focus a square.
              */
-            onFocus={() => { if (!isFocused) boardsStore.setFocusedCell([i, j]) }}
+            onFocus={e => {
+                if (!isFocused) boardsStore.setFocusedCell([i, j])
+                // The browser's own judgement of whether this focus should show (P1-6):
+                // not after a press, yes after Tab or a key.
+                boardsStore.setFocusVisible(focusVisible(e.currentTarget))
+            }}
             aria-label={cellDescription([i, j], value, { isAnchor, isCandidate, isHinted })}
             aria-selected={isAnchor || undefined}
             key={i}

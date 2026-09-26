@@ -6,7 +6,7 @@ import { STATE } from '../app/dominoFill/cellStates'
 
 /**
  * The four persistent cell states, legible at the floor and without colour (graphics spec
- * P1-5, row 11).
+ * P1-5, row 11), and the refused move's cross, held to the same (P1-6, row 12).
  *
  * "Distinguishable without colour" is measured, not argued. The component sheet holds every
  * state on a board of its own. The page is shot twice: as it is, and with every state's
@@ -28,14 +28,16 @@ const STATES = {
     candidate: { specimen: 'anchor', cell: '0,1' },
     focus: { specimen: 'focus', cell: '1,1' },
     hint: { specimen: 'hint', cell: null },
+    refused: { specimen: 'refused', cell: '0,0' },
 } as const
 type State = keyof typeof STATES
 
 /**
  * The focus over each thing a square can hold. The keyboard reaches every square, rocks
  * and pieces included, and whether the brackets stay in sight there depends on the
- * overlay's stacking order, not on the drawing. Each specimen's session keeps its own
- * focus, so all three show at once.
+ * overlay's stacking order, not on the drawing. One at a time: since P1-6 the brackets
+ * are drawn only while the keyboard's focus is on the board (`focusVisible`), so focusing
+ * a second board takes them off the first.
  *
  * Measured at row 11: over the rock 10.1-10.7%, over a flat domino 13.6-14.6%, over an
  * upright 13.0-13.3%. With the focus under the pieces (z-10), both dominoes fall to 0-0.6%;
@@ -102,6 +104,12 @@ const footprints = async <K extends string>(
  * is the hint's diamond, 9.5-10%, and the closest pair is the anchor and the hint, 31-33%
  * apart, at both sizes. The bars sit well under both, so they hold what the states are and
  * fail what they must not become: two states drawn alike come out 0% apart.
+ *
+ * Row 12 added the refused cross, and the bar did its job on the first drawing: kept inside
+ * the anchor ring, the cross was 14.9% from the hint's diamond, under 15%, because its halo
+ * covered the diamond's whole centre. It was redrawn, not the bar: its ends now pass under
+ * the ring's corners, and it measures 30-31% of the square, its closest neighbour the
+ * candidate at 19.8% and the hint at 23.2%.
  */
 const FOOTPRINT = 0.05
 const APART = 0.15
@@ -128,17 +136,47 @@ for (const cell of [38, 53]) {
 
     test(`at ${cell}px, the focus stays in sight over a rock and over both dominoes`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 })
+        for (const [occupant, target] of Object.entries(OCCUPIED) as [Occupant, Target][]) {
+            const marks = await footprints(page, cell, { [occupant]: target }, async () => {
+                // Through the square itself, as the keyboard does -- a key first, so the
+                // browser counts the focus as the keyboard's.
+                await page.keyboard.press('Shift')
+                await page.locator(`[data-specimen="${target.specimen}"] [data-cell="${target.cell}"]`).focus()
+                await expect(page.locator(`[data-specimen="${target.specimen}"] [data-focus-visible]`))
+                    .toHaveAttribute('data-focus', target.cell!)
+                await waitForRest(page, 'main')
+            })
+            const drawn = marks[occupant].reduce((t, v) => t + v, 0) / (cell * cell)
+            expect.soft(drawn, `the focus is lost over the ${occupant}`).toBeGreaterThanOrEqual(FOOTPRINT)
+        }
+    })
+
+    test(`at ${cell}px, a refused move's cross stays in sight over a rock and over both dominoes`, async ({ page }) => {
+        /*
+         * A refusal lands on whatever the square holds (P1-6): a tap on a rock, a drag that
+         * starts on a domino. The cross is drawn with the other states, above the pieces,
+         * and red on a white halo so that one of the two reads on every surface.
+         */
+        await page.setViewportSize({ width: 1280, height: 800 })
+        const square = (specimen: string, at: string) => page.locator(`[data-specimen="${specimen}"] [data-cell="${at}"]`)
+        const press = async (specimen: string, from: string, to: string) => {
+            await square(specimen, from).hover()
+            await page.mouse.down()
+            await square(specimen, to).hover()
+            await page.mouse.up()
+        }
         const marks = await footprints(page, cell, OCCUPIED, async () => {
-            // Through the squares themselves, as the keyboard does: focusing one sets it.
+            await press('rock', '1,1', '1,1')                  // a tap on the rock
+            await press('domino-flat', '0,0', '1,0')           // from the flat domino, down
+            await press('domino-upright', '0,0', '0,1')        // from the upright, across
             for (const { specimen, cell: at } of Object.values(OCCUPIED)) {
-                await page.locator(`[data-specimen="${specimen}"] [data-cell="${at}"]`).focus()
-                await expect(page.locator(`[data-specimen="${specimen}"] [data-focus]`)).toHaveAttribute('data-focus', at)
+                await expect(page.locator(`[data-specimen="${specimen}"] [data-refused]`)).toHaveAttribute('data-refused', at)
             }
             await waitForRest(page, 'main')
         })
         for (const occupant of Object.keys(marks) as Occupant[]) {
             const drawn = marks[occupant].reduce((t, v) => t + v, 0) / (cell * cell)
-            expect.soft(drawn, `the focus is lost over the ${occupant}`).toBeGreaterThanOrEqual(FOOTPRINT)
+            expect.soft(drawn, `the cross is lost over the ${occupant}`).toBeGreaterThanOrEqual(FOOTPRINT)
         }
     })
 
@@ -156,19 +194,24 @@ for (const cell of [38, 53]) {
             const square = svg.closest('[data-cell]') ?? svg.parentElement!
             const [b, s] = [svg.getBoundingClientRect(), square.getBoundingClientRect()]
             const scale = b.width / svg.viewBox.baseVal.width
-            const shape = svg.querySelector('[data-ring], [data-brackets], [data-diamond]') as SVGGraphicsElement
+            const shape = svg.querySelector('[data-ring], [data-brackets], [data-diamond], [data-cross]') as SVGGraphicsElement
             return {
                 mark: svg.dataset.mark!, box: [b.width, b.height, s.width, s.height, b.x - s.x, b.y - s.y],
                 stroke: parseFloat(getComputedStyle(shape).strokeWidth) * scale,
                 extent: shape.getBBox().width * scale,
             }
         }))
-        expect(measured.map(m => m.mark).sort()).toEqual(['anchor', 'candidate', 'candidate', 'focus', 'hint'])
+        expect(measured.map(m => m.mark).sort()).toEqual(['anchor', 'candidate', 'candidate', 'focus', 'hint', 'refused'])
         for (const m of measured) {
             const [w, h, sw, sh, dx, dy] = m.box
             expect([w, h, dx, dy], `${m.mark}: not its square's box`).toEqual([sw, sh, 0, 0])
             expect(w).toBeCloseTo(cell, 6)
             if (m.mark === 'hint') expect(m.extent / cell, 'hint diamond').toBeCloseTo((2 * STATE.hint.reach) / 100, 6)
+            else if (m.mark === 'refused') {
+                // The cross's centre lines, end to end, and its red's weight.
+                expect(m.extent / cell, 'refused cross').toBeCloseTo((2 * STATE.refused.reach) / 100, 6)
+                expect(m.stroke / cell, 'refused stroke').toBeCloseTo(STATE.refused.stroke / 100, 6)
+            }
             else if (m.mark === 'focus') expect(m.stroke / cell, 'focus stroke').toBeCloseTo(STATE.focus.stroke / 100, 6)
             else expect(m.stroke / cell, `${m.mark} ring stroke`).toBeCloseTo(STATE.ring.stroke / 100, 6)
         }

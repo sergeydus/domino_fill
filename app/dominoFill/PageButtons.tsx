@@ -2,6 +2,7 @@
 import { observer } from 'mobx-react'
 import { LevelStore } from '../stores/BoardsStore'
 import { SoundStore } from '../stores/SoundStore'
+import { PRESSED } from './controlStates'
 
 /*
  * The two page-level buttons, as components (graphics spec P0-3, row 3).
@@ -30,14 +31,20 @@ export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
  * `aria-pressed` says the state, the text says it again for everyone else, and the label
  * names what the control *is* rather than what pressing it does, which is what
  * `aria-pressed` is for.
+ *
+ * **Pressed is sound on** (graphics spec P1-6, row 12). It was pressed when *muted*, so a
+ * screen reader announced "Sound, toggle button, pressed" exactly when there was none: the
+ * name is the thing, and pressed means the thing is on. It went unnoticed while nothing on
+ * screen showed the pressed state; P1-6 draws every toggle's pressed state (`PRESSED`), and
+ * drawing it on "Sound off" would have made the inversion visible to everyone.
  */
 export const SoundButton = observer(({ sound }: { sound: SoundStore }) => (
   <button
     type='button'
     data-mute
-    aria-pressed={sound.muted}
+    aria-pressed={!sound.muted}
     aria-label='Sound'
-    className='control-surface rounded-md border px-3 py-1 text-sm'
+    className={`control-surface rounded-md border px-3 py-1 text-sm ${PRESSED}`}
     onClick={() => sound.toggle()}
   >
     {sound.muted ? 'Sound off' : 'Sound on'}

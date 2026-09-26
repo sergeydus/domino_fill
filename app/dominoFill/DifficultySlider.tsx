@@ -1,8 +1,7 @@
 "use client"
-import { motion } from "motion/react"
 import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
-import { PALETTE } from "../palette"
+import { PRESSED } from "./controlStates"
 
 /**
  * Difficulty (spec P1-8, row 19).
@@ -22,6 +21,8 @@ import { PALETTE } from "../palette"
  * The selected button also gets a ring and bold text, for the reason D10-g gave for the
  * line labels: colour is one channel and roughly one man in twelve cannot use this
  * particular one. `aria-pressed` reaches a screen reader; the ring reaches everyone else.
+ * Since graphics P1-6 that is `PRESSED`, every toggle's treatment, read from the attribute;
+ * the fill was a `motion` tween, and is a CSS transition now, which reduced motion zeroes.
  *
  * `px-1` rather than `p-2` (graphics spec P0-4, row 4): at 8px a side the three options
  * could not get narrower than the 260px desktop rail, and "Hard 8x8" ran past it. The flex
@@ -44,18 +45,17 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
-                    <motion.button
+                    <button
                         key={key}
                         type="button"
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`cursor-pointer px-1 py-2 rounded control-surface ${selected ? 'font-bold ring-2 ring-accent-edge' : 'hover:bg-panel/60'}`}
-                        animate={{ backgroundColor: selected ? PALETTE.accent : undefined }}
+                        className={`cursor-pointer px-1 py-2 rounded control-surface ${PRESSED} ${selected ? '' : 'hover:bg-panel/60'}`}
                         onClick={onClick(key)}
                     >
                         {label}
-                    </motion.button>
+                    </button>
                 )
             })}
         </div >

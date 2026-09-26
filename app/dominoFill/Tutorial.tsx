@@ -2,7 +2,6 @@ import { useStores } from "@/app/hooks/useStore";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useState } from "react";
 import ClientBoard from "./ClientBoard";
-import { cn } from "../utils";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
 import { definitionFrom } from "../stores/PuzzleDefinition";
@@ -89,10 +88,7 @@ const Tutorial = () => {
                     <button
                         disabled={!solved}
                         onClick={dismiss}
-                        className={cn(
-                            "px-4 py-2 bg-accent text-ink rounded hover:ring-2 hover:ring-accent-edge cursor-pointer",
-                            !solved && "opacity-50 cursor-not-allowed hover:ring-0",
-                        )}
+                        className="px-4 py-2 bg-accent text-ink rounded enabled:hover:ring-2 enabled:hover:ring-accent-edge cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         Got it!
                     </button>

@@ -11,6 +11,7 @@ import HorizontalNumbers from "./HorizontalNumbers";
 import { GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
 import { Cell } from "../stores/placement";
 import { feedbackFor } from "./feedback";
+import { MOTION, shakeKeyframes } from "./motion";
 
 type Props = {
     boardsStore: PuzzleSession
@@ -180,6 +181,8 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         const next = e.relatedTarget as Node | null
         if (next !== null && e.currentTarget.contains(next)) return
         boardsStore.cancelGesture()
+        // Focus that has left the board is not drawn on it (P1-6, `focusVisible`).
+        boardsStore.setFocusVisible(false)
     }
 
     /*
@@ -250,7 +253,8 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
             return
         }
         if (seen.count === rejections) return
-        void shake.start({ x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.28 } })
+        // A fraction of the cell and inside P1-6's limits (`motion.ts`); it was 6px for 280ms.
+        void shake.start({ x: shakeKeyframes(boardsStore.squareSize), transition: { duration: MOTION.shake.duration } })
     }, [rejections, boardsStore, shake])
 
     const isDisabled = boardsStore.completed

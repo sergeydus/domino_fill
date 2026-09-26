@@ -81,6 +81,69 @@
   touch-action: manipulation;
 }
 
+/*
+ * Hover only where there is a hover (graphics spec P1-6, row 12).
+ *
+ * Tailwind's own `hover:` waits for `(hover: hover)` only, and some touch devices report
+ * that. A hover style on a touch screen latches: the tap that pressed the control leaves it
+ * looking hovered until something else is pressed, so it looks pressed when it is not. Every
+ * `hover:` in the app is this variant, and `e2e/controlStates.spec.ts` reads every rule the
+ * page loads to hold it.
+ */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+/*
+ * The states every control owes (graphics spec P1-6, row 12). Every control in the game is a
+ * `<button>`, so this is every control. In the base layer, so a control's own utilities can
+ * still say more; nothing here is overridden today.
+ *
+ *   - **Focus**, from the keyboard: a 3px ring 2px outside the control, on whatever it sits
+ *     on -- `controlFocus`, 15:1 or better on every light surface; a surface that is not
+ *     light sets `--focus-ring` (the completion card: `onSuccess`). A shape, so it reads
+ *     without colour, as the cell states must (P1-5).
+ *   - **Pressed**, while the pointer or key is down: a pixel lower and a little darker, so
+ *     the press is answered before its result arrives. Not when disabled: a disabled control
+ *     that moves under a press is one that looks as if it did something.
+ *   - **Transitions** on the properties those states change, short, and reduced to nothing
+ *     below for a player who asked for less motion.
+ */
+@layer base {
+  button {
+    transition-property: background-color, color, border-color, box-shadow, outline-color, filter, translate, scale, opacity;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+
+  button:focus-visible {
+    outline: 3px solid var(--focus-ring, var(--control-focus));
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled):active {
+    translate: 0 1px;
+    filter: brightness(0.9);
+  }
+}
+
+/*
+ * Reduced motion covers CSS too (P1-6). `MotionConfig reducedMotion="user"` governs `motion`
+ * and nothing else; a CSS transition or animation answers to this rule. Zero, not merely
+ * short, and on everything, so a transition added later is covered without anyone having to
+ * remember this is here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
+
 body {
   background: var(--ground);
   color: var(--ink);

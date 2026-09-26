@@ -29,8 +29,10 @@
   --candidate-edge: #16295e;
   --candidate-wash: oklch(88.2% 0.059 254.128);
   --cell-focus: #000000;
+  --refused-halo: #ffffff;
   --drag-wash: #ffffff;
   --scrim: #000000;
+  --control-focus: #000000;
   --panel: #ffffff;
   --panel-ink: #000000;
   --strong-surface: oklch(27.9% 0.041 260.031);
@@ -69,8 +71,10 @@
   --color-candidate-edge: var(--candidate-edge);
   --color-candidate-wash: var(--candidate-wash);
   --color-cell-focus: var(--cell-focus);
+  --color-refused-halo: var(--refused-halo);
   --color-drag-wash: var(--drag-wash);
   --color-scrim: var(--scrim);
+  --color-control-focus: var(--control-focus);
   --color-panel: var(--panel);
   --color-panel-ink: var(--panel-ink);
   --color-strong-surface: var(--strong-surface);

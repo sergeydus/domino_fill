@@ -4,6 +4,7 @@ import DominoPieceOne from '@/app/dominoFill/Pieces/DominoPieceOne'
 import DominoPieceTwo from '@/app/dominoFill/Pieces/DominoPieceTwo'
 import Rock from '@/app/dominoFill/Pieces/Rock'
 import { PIECE, UNIT, fraction } from '@/app/dominoFill/Pieces/geometry'
+import { MOTION } from '@/app/dominoFill/motion'
 import { readArt } from '@/e2e/artGeometry'
 import { renderPieces, sessionAt } from './pieceFixture'
 
@@ -78,18 +79,19 @@ const TABLE: Record<Constant, { label: string, count: number, units: number, fra
     divider: { label: 'divider span', count: 2, units: UNIT - 2 * PIECE.dividerInset, fraction: 0.6 },
     extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.14 },
     lift: { label: 'lift out of the cell', count: 3, units: PIECE.extrusion, fraction: 0.14 },
-    entry: { label: 'entry offset', count: 4, units: PIECE.entry, fraction: 0.491 },
+    entry: { label: 'entry offset', count: 4, units: UNIT * MOTION.entry.offset / Math.SQRT2, fraction: 0.071 },
 }
 
 const CONSTANTS = Object.keys(TABLE) as Constant[]
 
 /**
  * P1-1's values at a 100px cell, written out rather than derived, as the fixed point: at
- * 100px each is its percentage of the cell. The entry offset is not P1-1's -- it is row 6's
- * 26/53 of a cell until P1-6 limits it -- and so is not a round number.
+ * 100px each is its percentage of the cell. The entry offset is not P1-1's but P1-6's: a
+ * tenth of a cell along the diagonal, so each axis is 10/sqrt(2) -- not a round number. It
+ * was row 6's 26/53 of a cell, 0.491, until P1-6 limited it.
  */
 const P1_1_AT_100: Record<Constant, number> = {
-    outline: 9, radius: 14, pip: 24, divider: 60, extrusion: 14, lift: 14, entry: 2600 / 53,
+    outline: 9, radius: 14, pip: 24, divider: 60, extrusion: 14, lift: 14, entry: 10 / Math.SQRT2,
 }
 
 describe(`at 100px, each constant is P1-1's value, as a percentage of the cell`, () => {

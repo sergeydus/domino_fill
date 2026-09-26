@@ -82,7 +82,8 @@ export const PALETTE = {
     onSuccess: '#ffffff',
     /**
      * Something is wrong: an overshot line, the advice strip when it is reporting a problem
-     * (7.35:1), and the archive's error message, which had a red of its own until P1-4.
+     * (7.35:1), the archive's error message, which had a red of its own until P1-4, and the
+     * cross on a refused move (P1-6).
      */
     problem: '#a10000',
     /**
@@ -128,12 +129,25 @@ export const PALETTE = {
     candidateWash: 'oklch(88.2% 0.059 254.128)',
     /** The keyboard's square: its corner brackets, opaque since P1-5 (they were 70%). */
     cellFocus: '#000000',
+    /**
+     * The halo round a refused move's cross (P1-6), whose own colour is `problem`. The halo
+     * is what clears 3:1 on both checker tones and every rock tone; the red, on the tile's
+     * face, where the halo does not.
+     */
+    refusedHalo: '#ffffff',
     /** The wash over the squares a drag would cover, drawn at 70%. */
     dragWash: '#ffffff',
 
     // ---- dialogs and surfaces ------------------------------------------------------------
     /** Behind a modal, drawn at 40%. */
     scrim: '#000000',
+    // ---- focus on the chrome (P1-6) ---------------------------------------------------------
+    /**
+     * The ring round a control the keyboard is on, drawn outside it on whatever it sits on:
+     * 15:1 or better on every light surface. The completion card's green is the one dark
+     * surface a control sits on, and there the ring is `onSuccess`.
+     */
+    controlFocus: '#000000',
     /** The archive's and the tutorial's card. */
     panel: '#ffffff',
     /** The tutorial's text on its card. */

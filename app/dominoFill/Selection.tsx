@@ -1,6 +1,6 @@
 import { observer } from "mobx-react"
 import { PuzzleSession } from "../stores/PuzzleSession"
-import { AnchorMark, CandidateMark, FocusMark } from "./cellStates"
+import { AnchorMark, CandidateMark, FocusMark, RefusedMark } from "./cellStates"
 
 /**
  * The two pieces of state the new verb needs to show (spec P1-1): where the keyboard is,
@@ -17,6 +17,7 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
     const focused = boardsStore.focusedCell
     const candidates = boardsStore.candidateCells
     const anchor = boardsStore.pendingAnchor
+    const refused = boardsStore.refusedAt
 
     const at = (i: number, j: number) => ({
         top: `${i * size}px`,
@@ -31,6 +32,18 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
      * stay visible over a placed domino.
      */
     return <>
+        {/*
+          * A refused move, until the next one (P1-6): the shake's static equivalent. First,
+          * so the anchor's ring -- which a refused arrow keeps on the same square -- is
+          * drawn over the cross's ends and stays whole.
+          */}
+        {refused && (
+            <div
+                data-refused={`${refused[0]},${refused[1]}`}
+                className="z-30 pointer-events-none absolute"
+                style={at(refused[0], refused[1])}
+            ><RefusedMark /></div>
+        )}
         {anchor && (
             <div
                 data-anchor={`${anchor[0]},${anchor[1]}`}
@@ -46,12 +59,18 @@ const Selection: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) =>
                 style={at(i, j)}
             ><CandidateMark /></div>
         ))}
+        {/*
+          * Where the keyboard is, always; its brackets only while focus is visible (P1-6,
+          * row 12): after a press the square is still where the keyboard would carry on
+          * from, but nobody is using a keyboard to be shown it. See `focusVisible`.
+          */}
         {focused && (
             <div
                 data-focus={`${focused[0]},${focused[1]}`}
+                data-focus-visible={boardsStore.focusVisible || undefined}
                 className="z-30 pointer-events-none absolute"
                 style={at(focused[0], focused[1])}
-            ><FocusMark /></div>
+            >{boardsStore.focusVisible && <FocusMark />}</div>
         )}
     </>
 }

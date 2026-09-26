@@ -332,3 +332,21 @@ test('the real controls opt into fast taps instead of the board policy', async (
         await expect(control).toHaveCSS('touch-action', 'manipulation')
     }
 })
+
+test('a tapped control does not stay looking hovered (graphics P1-6)', async ({ page }) => {
+    /*
+     * A hover style latches on a touch screen: the tap that pressed the control leaves it
+     * looking hovered until something else is pressed. Hover is drawn only for a fine
+     * pointer that can hover (globals.css), which this device is not -- so the level arrow,
+     * which grows under a mouse (e2e/controlStates.spec.ts), is its own size after a tap.
+     */
+    await openBoard(page)
+    expect(await page.evaluate(() => matchMedia('(hover: hover) and (pointer: fine)').matches)).toBe(false)
+    const next = page.locator('[data-level="next"]')
+    await expect(next).toBeEnabled()
+    await next.tap()
+    // Puzzle 2 of 3: it moved, and the arrow tapped is still there to look at.
+    await expect(page.locator('[data-level="previous"]')).toBeEnabled()
+    await expect(next).toBeEnabled()
+    expect(await next.evaluate(el => getComputedStyle(el).scale)).toBe('none')
+})

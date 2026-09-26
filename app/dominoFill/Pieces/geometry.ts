@@ -28,8 +28,8 @@
  *     on the flat domino and 51% on the upright).
  *
  * The rest are unbounded and chosen to go with them: the rounder corners of a toy (14), the
- * divider's weight (5), the margin to the cell edge (6), and the entry offset, which is
- * P1-6's to limit and is row 6's fraction unchanged.
+ * divider's weight (5) and the margin to the cell edge (6). The entry offset lived here until
+ * P1-6 limited it; it is motion, not drawing, and is in `motion.ts` now.
  */
 
 /** The drawing's units per cell. */
@@ -52,8 +52,6 @@ export const PIECE = {
     extrusion: 14,
     /** The margin between a cell's edge and the piece's box: face, side and outline alike. */
     inset: 6,
-    /** How far up and left a domino starts its entry: row 6's 26/53 of a cell, until P1-6. */
-    entry: (26 / 53) * 100,
 } as const
 
 /** A point of the drawing, in units. */

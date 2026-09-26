@@ -34,7 +34,8 @@ const ALLOWED: Record<Role, string> = {
     accentEdge: 'button, [role="grid"]',
     success: '[data-line-state="satisfied"], [data-completion-card]',
     // The advice strip only while it reports a problem (`adviceIsProblem`), not the strip.
-    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"]',
+    // And a refused move's cross (P1-6, row 12): something is wrong with that move.
+    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"], [data-refused] [data-cross]',
     hint: '[data-hinted]',
 }
 
@@ -241,16 +242,25 @@ test.describe('on the component sheet, where every state is on screen at once', 
         expect(count).toBeGreaterThan(10)
         for (let i = 0; i < count; i++) {
             const button = buttons.nth(i)
-            // No wait for rest: a hovered level arrow holds its `scale(1.2)`, which is not
-            // rest, and every hover colour left is CSS, applied with the hover itself.
+            // Waited out since P1-6 (row 12): a hover colour is a CSS transition now, and a
+            // colour read on its way is between tokens, so it would be matched to no role
+            // at all -- a misplaced accent read mid-fade would pass. The level arrow's hover
+            // scale is CSS too, so it is a finished transition, not a `motion` style.
             await button.hover()
+            await waitForRest(page, 'main')
             await expectRolesKept(page, `the sheet, hovering ${await button.innerText() || await button.getAttribute('aria-label')}`)
         }
     })
 
     test('each control carries what its state calls for', async ({ page }) => {
         // The difficulty selector: the accent and its ring when selected, and nothing of
-        // the accent otherwise -- not at rest, and no longer under the pointer.
+        // the accent otherwise -- not at rest, and no longer under the pointer. Since P1-6
+        // (row 12) that is every toggle's pressed state, read from `aria-pressed`, and Sound
+        // is the other toggle: pressed while the sound is on, so pressed on this sheet.
+        const sound = page.locator('[data-mute]')
+        await expect(sound).toHaveAttribute('aria-pressed', 'true')
+        expect(await rolesOn(sound)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        await expectForeground(page, await sound.innerText(), 'accent')
         const selected = page.locator('[data-difficulty][data-selected]')
         await expect(selected).toHaveCount(1)
         expect(await rolesOn(selected)).toEqual({ background: 'accent', ring: 'accentEdge' })
@@ -269,7 +279,7 @@ test.describe('on the component sheet, where every state is on screen at once', 
         }
 
         // The quiet controls carry no role at all, enabled, disabled or hovered.
-        for (const control of await page.locator('[data-check], [data-hint], [data-undo], [data-reset], [data-open-archive], [data-mute]').all()) {
+        for (const control of await page.locator('[data-check], [data-hint], [data-undo], [data-reset], [data-open-archive]').all()) {
             expect(await rolesOn(control)).toEqual({})
             if (await control.isEnabled()) {
                 await control.hover()

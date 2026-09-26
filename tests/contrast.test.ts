@@ -121,6 +121,73 @@ describe('P1-4: text on the chrome\'s surfaces', () => {
     })
 })
 
+/**
+ * P1-6's colours (row 12).
+ *
+ * **A refused move's cross** lands on whatever the refused square holds: either checker
+ * tone, a domino's face, or any of a rock's tones. No one colour clears 3:1 on all of them
+ * -- the red is 2.08 on the dark tone and 1.73 on the rock's face -- so it is drawn red on a
+ * white halo, and on every surface one of the two must clear 3:1, with the red clearing it
+ * on the halo so the cross reads inside it.
+ *
+ * **A control's focus ring** is drawn outside the control, on what it sits on: every light
+ * surface a control has, and the completion card's green, where the ring is white.
+ */
+const REFUSAL_SURFACES = ['checkerLight', 'checkerDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
+
+const FOCUS_RINGS: Pair[] = [
+    ...(['ground', 'controlSurface', 'panel', 'bannerSurface'] as const).map(b =>
+        ({ a: 'controlFocus', b, min: 3, owner: 'P1-6: a control on a light surface', holds: true }) as Pair),
+    { a: 'onSuccess', b: 'success', min: 3, owner: 'P1-6: the completion card\'s buttons', holds: true },
+]
+
+/**
+ * `Undo` on arrival, disabled: the button at 40% opacity over the ground, so its text is
+ * ink at 40% and its surface the control surface at 40%, both over the ground. P1-6 asks
+ * that the disabled treatment keep the contrast it has; this is that contrast, pinned.
+ */
+const DISABLED_UNDO: Pair = {
+    a: { token: 'ink', alpha: 0.4, over: 'ground' },
+    b: { token: 'controlSurface', alpha: 0.4, over: 'ground' },
+    min: 0, owner: 'P1-6: disabled keeps its contrast', holds: true,
+}
+
+describe('P1-6: a refused move, a control\'s focus, and a disabled control', () => {
+    for (const surface of REFUSAL_SURFACES) {
+        it(`the refused cross reads on ${surface}: its halo or its red clears 3:1`, () => {
+            const best = Math.max(contrast(PALETTE.refusedHalo, PALETTE[surface]), contrast(PALETTE.problem, PALETTE[surface]))
+            expect(best).toBeGreaterThanOrEqual(3)
+        })
+    }
+
+    it('and the red clears 3:1 on its own halo', () => {
+        expect(contrast(PALETTE.problem, PALETTE.refusedHalo)).toBeGreaterThanOrEqual(3)
+    })
+
+    it('but neither colour could do it alone, which is why there are two', () => {
+        const alone = (token: 'problem' | 'refusedHalo') =>
+            REFUSAL_SURFACES.every(s => contrast(PALETTE[token], PALETTE[s]) >= 3)
+        expect([alone('problem'), alone('refusedHalo')]).toEqual([false, false])
+    })
+
+    for (const pair of FOCUS_RINGS) {
+        it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
+            expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
+        })
+    }
+
+    it('and the light surfaces\' ring would not do on the green, which is why the card has its own', () => {
+        expect(ratio({ a: 'controlFocus', b: 'success', min: 3, owner: '', holds: false })).toBeLessThan(3)
+    })
+
+    it('a disabled Undo keeps the contrast it had before P1-6', () => {
+        // 2.30:1, measured from the tokens at row 12. Under 3:1, and WCAG exempts a disabled
+        // control; P1-6 and P2-2 both ask only that it not move, and a row that wants it to
+        // has to move this number, in the open.
+        expect(ratio(DISABLED_UNDO).toFixed(2)).toBe('2.30')
+    })
+})
+
 describe('P1-3: the two checker tones', () => {
     it(`stand ${CHECKER_RATIO}:1 apart, as stated, the light tone the lighter`, () => {
         // Stated as a ratio, so a later retune has to move the statement with the tones.

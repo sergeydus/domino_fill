@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 
 /**
- * Wait until nothing `motion` animates inside `scope` is still moving (graphics spec P0-3/4).
+ * Wait until nothing inside `scope` is still moving (graphics spec P0-3/4).
  *
  * **At rest is a state, not a pause.** Pieces enter with an animation and the completion
  * card fades in. "Two consecutive screenshots agree" was the first definition of settled,
@@ -10,13 +10,23 @@ import { expect, type Page } from '@playwright/test'
  * two identical frames can arrive before the animations have begun. So: wait until every
  * inline opacity `motion` wrote is 1 and every inline transform is `none`.
  *
+ * **And no CSS transition is running** (P1-6, row 12). The controls' states transition since
+ * P1-6, and a transition is invisible to the inline-style check -- it lives in the computed
+ * style -- so a control read just after a hover or a press could be read on its way. The
+ * document's own list of running animations says when those are done.
+ *
  * Polled as the list of elements still moving, so a page that never settles names them.
  */
 export const waitForRest = (page: Page, scope = 'body') =>
-    expect.poll(() => page.locator(scope).first().evaluate(root =>
-        [...root.querySelectorAll<HTMLElement>('[style]')]
+    expect.poll(() => page.locator(scope).first().evaluate(root => [
+        ...[...root.querySelectorAll<HTMLElement>('[style]')]
             .filter(el => !((el.style.opacity === '' || el.style.opacity === '1')
                 && (el.style.transform === '' || el.style.transform === 'none')))
             .map(el => `${el.closest('[data-specimen]')?.getAttribute('data-specimen') ?? ''} ` +
-                `${el.tagName} style="${el.getAttribute('style')}"`)),
-    { message: 'the page never came to rest', timeout: 15_000 }).toEqual([])
+                `${el.tagName} style="${el.getAttribute('style')}"`),
+        ...document.getAnimations()
+            .filter(a => a.playState === 'running')
+            .map(a => (a.effect as KeyframeEffect | null)?.target)
+            .filter((el): el is Element => el instanceof Element && root.contains(el))
+            .map(el => `${el.tagName} is transitioning`),
+    ]), { message: 'the page never came to rest', timeout: 15_000 }).toEqual([])

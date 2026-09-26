@@ -18,7 +18,7 @@ test.use({ baseURL: VISUAL_URL })
 /** The sheet, in order. A specimen missing, added or doubled is a change to the baselines. */
 const SPECIMENS = [
     'empty', 'domino-upright', 'domino-flat', 'rock', 'target-satisfied', 'target-over',
-    'anchor', 'hint', 'focus',
+    'anchor', 'hint', 'focus', 'refused',
     'completion-card', 'controls-game', 'controls-difficulty', 'controls-level',
     'control-archive', 'control-sound',
 ]
@@ -36,6 +36,8 @@ const ISOLATED: [selector: string, specimen: string, count: number][] = [
     ['[data-candidate]', 'anchor', 2],
     ['[data-hinted]', 'hint', 1],
     ['[data-focus]', 'focus', 1],
+    ['[data-focus-visible]', 'focus', 1],
+    ['[data-refused]', 'refused', 1],
     ['[data-line-state="satisfied"]', 'target-satisfied', 1],
     ['[data-line-state="over"]', 'target-over', 1],
     ['[data-completion-card]', 'completion-card', 1],

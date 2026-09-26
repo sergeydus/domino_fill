@@ -1672,6 +1672,151 @@ nothing else.
   and `animation-duration` are `0s` on every element that has one — and non-zero without it,
   or the assertion proves nothing.
 
+> **Amendment (row 12) — motion held to its limits, a refusal that does not move, and the
+> states every control owes.**
+>
+> **Motion.** Every motion is in `app/dominoFill/motion.ts`, beside `LIMITS`: 0.12 of a cell
+> and 200ms.
+>
+> | motion | now | was |
+> | --- | --- | --- |
+> | a piece arriving | 0.1 of a cell along the diagonal, fading in; 150ms | 26px each way and a 5° turn, on a spring |
+> | the board refusing | a shake out to 0.1 of a cell; 150ms | 6px; 280ms |
+> | a line label changing state | its colour; 150ms | `motion`'s default |
+> | the completion card (P2-3) | up from 0.1 of a cell, fading in; 150ms | 8px and a 90% scale; 250ms |
+>
+> The turn and the scale went because neither is an offset a cell can bound: a turn moves the
+> ends of a domino further than its middle, and a scale moves the card's edges by a fraction
+> of the card. The difficulty selector's fill and the level arrows' hover were `motion` too;
+> they are CSS states now (below).
+>
+> **Measured on screen** (`e2e/motion.spec.ts`), every frame, on the sheet at 38px and on a
+> solved board. Each duration is held to an *upper* bound: from the frame before the motion
+> began to the first frame after it ended, which cannot come out under the truth. That bound
+> is only as good as the frames, and two things were found about them:
+> - `motion` advances its clock by at most 40ms a frame, so a starved machine stretches an
+>   animation in wall time. Measured: a 150ms label change took 262–279ms with five test
+>   workers sharing the machine, and 150 alone. So a window is timed only if every frame gap
+>   in it is 25ms or less; otherwise the scenario is run again, three times at most, and the
+>   test fails saying so.
+> - The bound exceeds the truth by up to two frame gaps. At 180ms the shake bounded at 200.1ms
+>   on one run of two. Every motion is 150ms, so 150 plus two 25ms gaps is 200 at worst.
+>
+> Measured over three runs on both projects: the entry bounds at 152–160ms and reaches 0.100
+> of a cell; the label 167ms; the shake 167ms and 0.09–0.096 (sampled; 0.1 as set); the card
+> 148–157ms and 0.100. The card is read from its transform, not its box: it scrolls itself
+> into view on arrival, which moves its box 0.56 of a cell.
+>
+> **Rejection's static equivalent.** The measurement this section asks for "first" already
+> existed: `e2e/accessibility.spec.ts` (SPEC.md row 19) samples the grid under reduced motion
+> and finds it never moves. So a player who asked for less motion got no visual answer to a
+> refused move. (The section's "Row 13" names no row of this document's sequence that
+> measures it; the measurement is row 19's, and this row relies on it.)
+>
+> The answer is a **cross on the square the refused move was made from**: the tapped square,
+> the drag's start, the anchor of a refused arrow, the focused square for Space or Delete.
+> - **For everyone, not only under reduced motion.** A shake says *that* a move was refused
+>   and never said *which*.
+> - **It lasts until the next thing the player does on that board**: a press, a key, an undo,
+>   a reset, a question to Check or Hint. It does not clear when focus leaves the board;
+>   walking away is not an action. `PuzzleSession.refusedAt`.
+> - **Red on a white halo.** A refusal lands on either checker tone, a tile's face or a rock,
+>   and no one colour clears 3:1 on all of them: the red is 2.08:1 on the dark tone and 1.73:1
+>   on the rock's face. The halo clears it on the checker (3.34 and 4.02) and on every rock
+>   tone, the red on the tile face (7.57), and the red reads on the halo at 8.35. `tests/contrast.test.ts`
+>   holds all of it, and that neither colour would do alone.
+> - **Its size was set by the greyscale test.** Kept inside the anchor ring, the cross was
+>   14.9% from the hint's diamond at both sizes, under P1-5's 15%: its halo covered the
+>   diamond's whole centre. The bar stayed and the drawing changed. The cross now reaches 25
+>   of 100 from the centre, its ends passing *under* the anchor ring's corners; a refused
+>   arrow keeps the anchor on the same square, and the ring is drawn over the cross and stays
+>   whole. It stops short of the focus brackets, which share that square too.
+> - Measured: 30–31% of the square; nearest the candidate, at 19.8%, and the hint at 23.2%;
+>   15.0–19.8% over a rock and both dominoes, above the pieces as the other states are.
+> - Under reduced motion it is present in full on its first frame and unchanged on every
+>   frame after. It is on the sheet as the `refused` specimen, so it appears on the reduced-
+>   motion baselines 1 and 2 only now that it exists.
+>
+> **The control-state contract.** Every control in the game is a `<button>`, so the states
+> are rules on `button` (`app/globals.css`), and `e2e/controlStates.spec.ts` finds the
+> buttons rather than listing them: the page's, the archive's, the day banner's, the
+> tutorial's and the completion card's.
+> - **Focus-visible:** a 3px ring 2px outside the control, `controlFocus` (black, 15:1 or
+>   better on every light surface a control sits on), and `onSuccess` on the completion card,
+>   whose green is 2.95:1 against black. Held by the cell states' own measure: the pixels
+>   round a control whose greyscale lightness moved by 32 or more between focused and not
+>   must be at least 5% of its area. And by the ring's computed style, which is what caught
+>   the rule being deleted: Chrome's own focus ring is readable without colour too.
+> - **The board's squares, the question row 11 left here:** their focus is the brackets,
+>   which were drawn whenever the keyboard's square was set, and a press sets it. So after a
+>   drag the brackets sat over the domino just placed by hand. Now they follow
+>   `:focus-visible`: drawn after a key or keyboard focus, not after a press, and not while
+>   focus is outside the board (`PuzzleSession.focusVisible`). A press still moves the
+>   keyboard's square, so a keyboard carries on from where the player touched. The sheet's
+>   `focus` specimen reaches its square with the arrow keys.
+> - **Pressed:** a pixel lower and 90% as bright while held, on every enabled control, and
+>   never on a disabled one.
+> - **Toggle:** `aria-pressed` drawn one way for every toggle (`app/dominoFill/controlStates.ts`):
+>   the accent's fill, and without colour, a ring and a bolder weight. The difficulty selector
+>   had this alone; `Sound` had only its words. **`Sound`'s pressed state was inverted.** It
+>   was pressed when muted, so a screen reader announced "Sound, toggle button, pressed"
+>   exactly when there was none. It is pressed when the sound is on, and `e2e/sound.spec.ts`
+>   now says so. Drawing the state made the inversion visible, and it would have been drawn on
+>   "Sound off".
+> - **Disabled** keeps its treatment. Undo on arrival is 40% opacity over the ground: 2.30:1
+>   text to surface, pinned in `tests/contrast.test.ts`, and held in the browser as the
+>   treatment that number is computed from. It answers neither a hover nor a press.
+> - **Hover** is the `hover:` variant, redefined as `(hover: hover) and (pointer: fine)`.
+>   Tailwind's own waits for `(hover: hover)` only. The level arrows' hover was `motion`'s
+>   `whileHover`, which answers to no media query at all, and is CSS now. Held three ways:
+>   every `:hover` rule the page loads, read from the CSSOM, sits under both conditions; a
+>   mouse still gets the arrow's hover; and on the touch device a tapped arrow is its own size
+>   afterwards.
+> - **Reduced motion covers CSS:** one rule zeroes every transition and animation duration
+>   on every element. Asserted both ways on the page: every button has a non-zero transition
+>   without the setting, and no element has one with it.
+>
+> **Predictions**, old tree against new on the development host (the committed baselines are
+> the CI runner's, whose text renders differently, so the comparison is local to local):
+> - **sheets 1 and 2:** 80,729 and 109,202 pixels. The `refused` specimen is new, so every
+>   specimen after it moves; `Sound` shows its pressed state; and the completion card's Next
+>   button now shows its white focus ring, because the card moves focus there as it mounts,
+>   which on a freshly loaded page Chrome counts as visible focus. Page size unchanged, 1280×800.
+> - **phone (3):** 5,010 pixels. The brackets over the domino placed by the set-up's drag are
+>   gone. `Sound` is filled, ringed and bold, which widens it, and the arrows and `Archive`
+>   share its centred row, so all four move by a fraction of a pixel. Page size unchanged,
+>   360×680.
+> - **desktop (4):** 3,957 pixels. The same brackets gone, and `Sound`, on a row of its own.
+>
+> **Mutations,** each caught, 21 of 21:
+> - motion (`e2e/motion.spec.ts`): the entry offset written as 0.3 of a cell; the entry back
+>   on a spring (it moved for 422–439ms); the shake back to 6px and 280ms; the label on
+>   `motion`'s default timing (267–300ms); the card back to 8px, a 90% scale and 250ms;
+> - the refusal: no square recorded (the reduced-motion test sees no mark); a press that does
+>   not clear it (unit); the cross drawn under the pieces (lost over all three); the cross
+>   back inside the ring (14.9% from the hint); the cross drawn over the anchor's ring (unit);
+> - focus: the brackets drawn after a press; kept when focus leaves the board; the controls'
+>   ring rule deleted; the card's ring left black;
+> - the rest: no pressed state; a disabled control answering a press; `Sound` pressed when
+>   muted; a toggle with no ring; Tailwind's own `hover:` back; no reduced-motion rule for CSS;
+>   `whileHover` back on the level arrow (unit).
+>
+> **Tests of other rows edited, each with its contract unchanged:**
+> - `e2e/colourRoles.spec.ts` (row 10): `problem` is also allowed on a refused cross; `Sound`,
+>   pressed, carries the accent and its ring like the selected difficulty; and each hover is
+>   now waited out, since a hover colour is a transition now, and a colour read mid-fade
+>   matches no role, so a misplaced one could pass.
+> - `e2e/cellStates.spec.ts` (row 11): the refused cross joins the greyscale comparison; the
+>   focus over a rock and both dominoes is focused one at a time, since focus leaving a board
+>   now takes its brackets with it.
+> - `e2e/sheet.spec.ts`: the new specimen, and the visible focus counted as a state of its own.
+> - `e2e/art.spec.ts` and `tests/pieceGeometry.test.tsx`: the entry offset is measured
+>   against `motion.ts` now, at 0.071 of a cell each way. It was row 6's 0.491.
+> - `e2e/rest.ts`: at rest now also means no CSS transition running.
+>
+> Left for later: `cn` in `app/utils.ts` has no caller since the tutorial stopped using it.
+> Removing it would reach into the dependencies, which is not this row's business.
+
 ---
 
 ## 7. P2 — polish

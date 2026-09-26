@@ -4,6 +4,7 @@ import { observer } from "mobx-react"
 import { motion } from "motion/react"
 import { LevelStore } from "../stores/BoardsStore"
 import { PuzzleSession } from "../stores/PuzzleSession"
+import { MOTION } from "./motion"
 
 /**
  * What winning looks like (spec P1-4).
@@ -71,12 +72,15 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             data-completion-card
             role="status"
             aria-live="polite"
-            className="control-surface flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg"
-            initial={{ opacity: 0, scale: 0.9, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            // Well inside P1-4's 500ms: the card is on screen and announced immediately,
-            // and the animation only carries it the last of the way.
-            transition={{ duration: 0.25 }}
+            // The one dark surface a control sits on: its focus ring is white (P1-6).
+            className="control-surface flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg [--focus-ring:var(--on-success)]"
+            // Inside P1-6's limits (`motion.ts`), as P2-3 asks: a tenth of a cell up, where it
+            // was 8px and a 90% scale -- a squash measured in card widths, not cells -- over
+            // 250ms. The card is on screen and announced immediately either way; the
+            // animation only carries it the last of the way.
+            initial={{ opacity: 0, y: MOTION.card.offset * session.squareSize }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: MOTION.card.duration }}
         >
             <p className="text-2xl font-bold" data-completion-message>
                 Solved!

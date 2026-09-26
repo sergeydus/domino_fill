@@ -1,6 +1,5 @@
 "use client"
 import { observer } from "mobx-react"
-import { motion } from 'motion/react'
 import { LevelStore } from "../stores/BoardsStore"
 import { PALETTE } from "../palette"
 
@@ -21,6 +20,11 @@ import { PALETTE } from "../palette"
  *
  * The arrow itself is `aria-hidden`: it is one path drawn twice, rotated, and a decorative
  * SVG with no name is noise in the accessibility tree. The button carries the name.
+ *
+ * **States in CSS since graphics P1-6 (row 12).** The hover was `motion`'s `whileHover`,
+ * which answers to no media query, and the disabled grey an inline `filter` -- which, being
+ * inline, would also have beaten the pressed state's. Hover is now the `hover:` variant,
+ * fine pointers only, and disabled is `disabled:grayscale`: the same grey as before.
  */
 
 const ARROW_PATH = `M10 20
@@ -42,6 +46,8 @@ const Arrow: React.FC = () => (
         <path d={ARROW_PATH} fill={PALETTE.accent} stroke={PALETTE.accentEdge} strokeWidth="3" strokeLinejoin="round" />
     </svg>
 )
+
+const ARROW_BUTTON = 'cursor-pointer control-surface rounded-md enabled:hover:scale-120 disabled:cursor-not-allowed disabled:grayscale'
 
 const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {
     const currentLevel = boardsStore.level
@@ -72,32 +78,26 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
     const destination = (delta: number) => Math.min(3, Math.max(1, currentLevel + delta))
 
     return <div className="flex flex-row" role="group" aria-label={`Puzzle ${currentLevel} of 3`}>
-        <motion.button
+        <button
             type="button"
             onClick={onPreviousLevelClick}
             disabled={!hasPreviousLevel}
             data-level="previous"
             aria-label={`Go to puzzle ${destination(-1)} of 3`}
-            className="rotate-180 cursor-pointer control-surface disabled:cursor-not-allowed"
-            initial={{ scale: 1 }}
-            whileHover={hasPreviousLevel ? { scale: 1.2 } : undefined}
-            style={{ filter: hasPreviousLevel ? 'unset' : 'grayscale(100%)' }}
+            className={`rotate-180 ${ARROW_BUTTON}`}
         >
             <Arrow />
-        </motion.button>
-        <motion.button
+        </button>
+        <button
             type="button"
             onClick={onNextLevelClick}
             disabled={!hasNextLevel}
             data-level="next"
             aria-label={`Go to puzzle ${destination(+1)} of 3`}
-            className="cursor-pointer control-surface disabled:cursor-not-allowed"
-            initial={{ scale: 1 }}
-            whileHover={hasNextLevel ? { scale: 1.2 } : undefined}
-            style={{ filter: hasNextLevel ? 'unset' : 'grayscale(100%)' }}
+            className={ARROW_BUTTON}
         >
             <Arrow />
-        </motion.button>
+        </button>
     </div>
 }
 export default observer(LevelSelector)

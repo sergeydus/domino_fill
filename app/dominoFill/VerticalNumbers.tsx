@@ -1,6 +1,7 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
+import { MOTION } from "./motion"
 import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
 
 /**
@@ -32,6 +33,8 @@ const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore
                 <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
                     initial={{ color: LABEL_COLORS.neutral }}
                     animate={{ color: presentation.color }}
+                    // Placement feedback, so inside P1-6's limits (`motion.ts`).
+                    transition={{ duration: MOTION.label.duration }}
                     key={index}
                     data-row-label={index}
                     data-line-state={presentation.token}

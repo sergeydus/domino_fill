@@ -4,17 +4,19 @@ import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
 import Rock from "./Rock"
 import { PuzzleSession } from "@/app/stores/PuzzleSession"
-import { PIECE, fraction } from "./geometry"
+import { MOTION, entryOffset } from "../motion"
 
 const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
     const board = boardsStore.board
-    // Where a domino starts its entry, in px: a fraction of the cell like the rest of the
-    // drawing (graphics row 6), where it was a fixed 26px -- 68% of a phone cell.
+    // Where a domino starts its entry, in px: a fraction of the cell, inside P1-6's limits
+    // (`motion.ts`). It was 26px -- 68% of a phone cell -- and a spring with a turn.
+    const from = entryOffset(size)
     const entry = {
-        initial: { opacity: 0, translateY: -fraction(PIECE.entry) * size, translateX: -fraction(PIECE.entry) * size, rotate: -5 },
-        animate: { opacity: 1, translateY: 0, translateX: 0, rotate: 0 },
-    }
+        initial: { opacity: 0, translateY: -from, translateX: -from },
+        animate: { opacity: 1, translateY: 0, translateX: 0 },
+        transition: { duration: MOTION.entry.duration, ease: 'easeOut' },
+    } as const
     const ones: [number, number][] = []
     const twos: [number, number][] = []
     const rocks: [number, number][] = []

@@ -104,9 +104,23 @@ const FIXTURES = {
         columns: '1,1', rows: '2,0',
         arrange: s => { s.hint() },
     },
+    /*
+     * By the keyboard, as a player gets there: the brackets are drawn only for focus the
+     * keyboard moved (P1-6, row 12). The first key enters the board at 0,0.
+     */
     focus: {
         columns: '1,1', rows: '1,1',
-        arrange: s => { s.setFocusedCell([1, 1]) },
+        arrange: s => { for (const key of ['ArrowDown', 'ArrowDown', 'ArrowRight']) s.handleKey(key) },
+    },
+    // A tap on a square boxed in by two rocks, which the board refuses (P1-6, row 12).
+    refused: {
+        rocks: [[0, 1], [1, 0]], columns: '1,1', rows: '1,1',
+        arrange: s => {
+            s.pointerDown([0, 0])
+            s.pointerUp([0, 0])
+            // As the anchor specimen does: the press moved the keyboard's square too.
+            s.setFocusedCell(null)
+        },
     },
 } satisfies Record<string, Fixture>
 
