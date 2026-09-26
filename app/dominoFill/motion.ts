@@ -1,5 +1,8 @@
 /**
- * Every motion the game makes, in one place (graphics spec P1-6, row 12).
+ * The four gameplay-feedback motions, in one place (graphics spec P1-6, row 12): a piece
+ * arriving, the board refusing, a line label changing state, the completion card. The
+ * controls' own state transitions are CSS, in `globals.css`, where reduced motion zeroes
+ * them.
  *
  * Offsets are fractions of the cell, like the drawing (row 6), so a phone and a desktop
  * move by the same *look*: until this row the entry was 26px -- 68% of a phone cell and 30%

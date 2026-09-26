@@ -162,3 +162,34 @@ test.describe('with reduced motion', () => {
         expect(await page.locator(`${mark} svg`).evaluate(el => el.getAnimations({ subtree: true }).length)).toBe(0)
     })
 })
+
+test.describe('the cross lasts until the board does something', () => {
+    test.use({ reducedMotion: 'reduce' })
+
+    test('Tab walking away leaves it; a key the board handles clears it', async ({ page }) => {
+        /*
+         * Row 12's correction (codex). Every key that reached the board used to clear the
+         * cross before the board knew whether the key was its own, so Tab from the refused
+         * square -- a player leaving, not acting -- took the cross with it.
+         */
+        await openSheet(page)
+        await drag(page, '0,0', '1,0')
+        await drag(page, '0,1', '0,0')   // refused
+        const mark = page.locator('[data-specimen="empty"] [data-refused]')
+        await expect(mark).toHaveAttribute('data-refused', '0,1')
+        await expect(square(page, '0,1')).toBeFocused()
+
+        await page.keyboard.press('Tab')
+        expect(await page.locator('[data-specimen="empty"] .board-grid')
+            .evaluate(grid => grid.contains(document.activeElement)), 'focus left the board').toBe(false)
+        await expect(mark).toHaveAttribute('data-refused', '0,1')
+
+        await page.keyboard.press('Shift+Tab')
+        await expect(square(page, '0,1')).toBeFocused()
+        await expect(mark, 'coming back is not an action either').toHaveAttribute('data-refused', '0,1')
+
+        await page.keyboard.press('ArrowLeft')   // the board moves its focus: an action
+        await expect(square(page, '0,0')).toBeFocused()
+        await expect(mark).toHaveCount(0)
+    })
+})

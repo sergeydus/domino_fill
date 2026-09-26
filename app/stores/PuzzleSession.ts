@@ -770,6 +770,21 @@ export class PuzzleSession {
      * -- arrows must still scroll the page when the board did not use them.
      */
     handleKey(key: string, modifiers: Modifiers = {}): boolean {
+        /*
+         * A refused move's cross lasts until the board does something (P1-6), and only a key
+         * the board *handles* is the board doing something. Tab, a letter, an Escape with
+         * nothing to cancel are the browser's, and the board returns them unhandled: Tab
+         * walking away from a refused square cleared the cross until row 12's correction,
+         * because this cleared it for every key that reached the board, before knowing.
+         * A handled key that is itself a refusal has just drawn a new cross, and keeps it.
+         */
+        const refusals = this.rejectionTick
+        const handled = this.keyOnBoard(key, modifiers)
+        if (handled && this.rejectionTick === refusals) this.refusedAt = null
+        return handled
+    }
+
+    private keyOnBoard(key: string, modifiers: Modifiers): boolean {
         const arrow: Record<string, Direction> = {
             ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
         }
@@ -813,10 +828,8 @@ export class PuzzleSession {
          */
         if (ctrl || meta || shift || alt) return false
 
-        // A key on the board: the keyboard is in use, and whatever was refused before is
-        // no longer the latest thing that happened.
+        // A key on the board: the keyboard is in use.
         this.focusVisible = true
-        this.refusedAt = null
 
         if (key === 'Escape') {
             if (!this.gesture) return false

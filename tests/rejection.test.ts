@@ -267,6 +267,31 @@ describe('the mark lasts until the player does anything else', () => {
         act(() => { s.cancelGesture() })
         expect(s.refusedAt).toEqual([2, 2])
     })
+
+    it('nor a key the board leaves to the browser: Tab walking away, a letter, an idle Escape', () => {
+        /*
+         * Row 12's correction. Every key that reached the board cleared the cross before the
+         * board decided whether it was its key, so Tab from the refused square took the
+         * cross with it (codex, reproduced in the browser; e2e/motion.spec.ts holds it
+         * there too). `cancelGesture` above is what the board's blur does, and never was
+         * the path Tab takes.
+         */
+        const s = refused()
+        for (const key of ['Tab', 'a', 'Escape']) {
+            act(() => { expect(s.handleKey(key)).toBe(false) })
+            expect(s.refusedAt, key).toEqual([2, 2])
+        }
+    })
+
+    it('and a handled key that is itself refused draws its own cross', () => {
+        const s = session([[3, 2]])
+        act(() => { s.setFocusedCell([2, 2]) })
+        act(() => { s.handleKey(' ') })
+        act(() => { expect(s.handleKey('ArrowDown')).toBe(true) })   // onto the rock: handled, and refused
+        expect(s.lastOutcome).toBe('none')
+        expect(s.refusedAt).toEqual([2, 2])
+        expect(s.refusedAt).toEqual([2, 2])
+    })
 })
 
 /**

@@ -1675,8 +1675,10 @@ nothing else.
 > **Amendment (row 12) — motion held to its limits, a refusal that does not move, and the
 > states every control owes.**
 >
-> **Motion.** Every motion is in `app/dominoFill/motion.ts`, beside `LIMITS`: 0.12 of a cell
-> and 200ms.
+> **Motion.** The four gameplay-feedback motions are in `app/dominoFill/motion.ts`, beside
+> `LIMITS`: 0.12 of a cell and 200ms. The controls' state transitions are CSS, in
+> `app/globals.css`, below. (Corrected at review: this said "every motion", which the CSS
+> transitions are not in.)
 >
 > | motion | now | was |
 > | --- | --- | --- |
@@ -1700,7 +1702,7 @@ nothing else.
 >   in it is 25ms or less; otherwise the scenario is run again, three times at most, and the
 >   test fails saying so.
 > - The bound exceeds the truth by up to two frame gaps. At 180ms the shake bounded at 200.1ms
->   on one run of two. Every motion is 150ms, so 150 plus two 25ms gaps is 200 at worst.
+>   on one run of two. Each of the four is 150ms, so 150 plus two 25ms gaps is 200 at worst.
 >
 > Measured over three runs on both projects: the entry bounds at 152–160ms and reaches 0.100
 > of a cell; the label 167ms; the shake 167ms and 0.09–0.096 (sampled; 0.1 as set); the card
@@ -1717,9 +1719,16 @@ nothing else.
 > the drag's start, the anchor of a refused arrow, the focused square for Space or Delete.
 > - **For everyone, not only under reduced motion.** A shake says *that* a move was refused
 >   and never said *which*.
-> - **It lasts until the next thing the player does on that board**: a press, a key, an undo,
->   a reset, a question to Check or Hint. It does not clear when focus leaves the board;
->   walking away is not an action. `PuzzleSession.refusedAt`.
+> - **It lasts until the next thing the player does on that board**: a press, a key the
+>   board handles, an undo, a reset, a question to Check or Hint. It does not clear when
+>   focus leaves the board; walking away is not an action. `PuzzleSession.refusedAt`.
+>   *Corrected at review:* as first committed, *any* key that reached the board cleared it,
+>   before the board decided whether the key was its own, so Tab from the refused square
+>   took the cross away (codex, reproduced in the browser). The unit test had called the
+>   blur handler directly, which is not the path Tab takes. Now only a key the board handles,
+>   and that is not itself a refusal, clears it; `tests/rejection.test.ts` holds Tab, a letter
+>   and an idle Escape, and `e2e/motion.spec.ts` presses Tab and Shift+Tab in the browser and
+>   then an arrow, which does clear it. Mutation: the old clear restored, which fails both.
 > - **Red on a white halo.** A refusal lands on either checker tone, a tile's face or a rock,
 >   and no one colour clears 3:1 on all of them: the red is 2.08:1 on the dark tone and 1.73:1
 >   on the rock's face. The halo clears it on the checker (3.34 and 4.02) and on every rock
@@ -1754,8 +1763,15 @@ nothing else.
 >   focus is outside the board (`PuzzleSession.focusVisible`). A press still moves the
 >   keyboard's square, so a keyboard carries on from where the player touched. The sheet's
 >   `focus` specimen reaches its square with the arrow keys.
-> - **Pressed:** a pixel lower and 90% as bright while held, on every enabled control, and
->   never on a disabled one.
+> - **Pressed:** a pixel lower and 90% as bright while a pointer or Space is held, on every
+>   enabled control, and never on a disabled one. *Narrowed at review:* this said "while
+>   the pointer or key is down", and holding Enter shows nothing (codex). That is the
+>   button's activation, not a missing style: a button acts on Space's release, and Chromium
+>   draws `:active` while Space is down, but it acts on Enter's keydown, so Enter's result is
+>   its answer and there is no held moment to draw. `e2e/controlStates.spec.ts` asserts both
+>   halves: Space held shows the press with nothing yet done, and Enter held has already
+>   acted. Mutation: the pressed state limited to a hovering pointer (`:active:hover`), which
+>   the mouse test passes and the Space test fails.
 > - **Toggle:** `aria-pressed` drawn one way for every toggle (`app/dominoFill/controlStates.ts`):
 >   the accent's fill, and without colour, a ring and a bolder weight. The difficulty selector
 >   had this alone; `Sound` had only its words. **`Sound`'s pressed state was inverted.** It

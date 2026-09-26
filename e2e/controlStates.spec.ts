@@ -184,6 +184,36 @@ test.describe('pressed, disabled, and toggled', () => {
         }
     })
 
+    test('from the keyboard: Space is held like a press, and Enter has nothing to hold', async ({ page }) => {
+        /*
+         * Codex, at review: holding Enter on a button left it at rest. That is the browser's
+         * activation, not a missing style. A button activates on Space's *release*, and
+         * Chromium draws `:active` while Space is down -- so, like a pointer, Space has a
+         * moment between the press and the result, and the press is answered in it. Enter
+         * activates on its *keydown*: the result is the first thing that happens, and there
+         * is no held moment to draw. Both halves are asserted, so the claim is exactly what
+         * the browser does.
+         */
+        await openBoard(page)
+        const [medium, hard] = [page.locator('[data-difficulty="normal"]'), page.locator('[data-difficulty="hard"]')]
+        await expect(medium).toHaveAttribute('aria-pressed', 'false')
+
+        await page.keyboard.press('Shift')
+        await medium.focus()
+        await page.keyboard.down(' ')
+        expect(await look(medium), 'Space held').toMatchObject({ translate: '0px 1px', filter: 'brightness(0.9)' })
+        await expect(medium, 'and nothing has happened yet').toHaveAttribute('aria-pressed', 'false')
+        await page.keyboard.up(' ')
+        await expect(medium).toHaveAttribute('aria-pressed', 'true')
+        expect(await look(medium), 'released').toMatchObject({ translate: 'none', filter: 'none' })
+
+        await hard.focus()
+        await page.keyboard.down('Enter')
+        await expect(hard, 'Enter has already acted, with the key still down').toHaveAttribute('aria-pressed', 'true')
+        expect(await look(hard), 'so there is no held state to show').toMatchObject({ translate: 'none', filter: 'none' })
+        await page.keyboard.up('Enter')
+    })
+
     test('a disabled control keeps its treatment, and does not answer a press or a hover', async ({ page }) => {
         await openBoard(page)
         const undo = page.locator('[data-undo]')

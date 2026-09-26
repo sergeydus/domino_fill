@@ -107,9 +107,10 @@
  *     on -- `controlFocus`, 15:1 or better on every light surface; a surface that is not
  *     light sets `--focus-ring` (the completion card: `onSuccess`). A shape, so it reads
  *     without colour, as the cell states must (P1-5).
- *   - **Pressed**, while the pointer or key is down: a pixel lower and a little darker, so
- *     the press is answered before its result arrives. Not when disabled: a disabled control
- *     that moves under a press is one that looks as if it did something.
+ *   - **Pressed**, while a pointer or Space is held: a pixel lower and a little darker, so
+ *     the press is answered before its result arrives. Enter has no held state to draw: a
+ *     button acts on Enter's keydown, so its result is the answer. Not when disabled: a
+ *     disabled control that moves under a press is one that looks as if it did something.
  *   - **Transitions** on the properties those states change, short, and reduced to nothing
  *     below for a player who asked for less motion.
  */
