@@ -317,6 +317,21 @@ test.describe('safe-area insets', () => {
         expect(await horizontalOverflow(page)).toBeLessThanOrEqual(1)
     })
 
+    test('a narrow screen with wide insets wraps the chrome rather than scrolling sideways', async ({ page }) => {
+        /*
+         * Row 13 (P2-1): the navigation row -- the level arrows, Archive, Sound -- grew with
+         * the `control` role, and on the CI runner's wider text the 32px insets above left
+         * it 3px short, where this machine's text still fit. 64px each side is short on any
+         * text, so this fails here as well as there if the row stops wrapping.
+         */
+        await openBoard(page)
+        await applyInsets(page, { '--safe-left': '64px', '--safe-right': '64px' })
+        await expect.poll(() => horizontalOverflow(page)).toBeLessThanOrEqual(1)
+        const nav = page.locator('[data-level="next"]').locator('xpath=ancestor::*[@data-chrome][1]')
+        const [row, room] = await nav.evaluate(el => [el.scrollWidth, el.clientWidth])
+        expect(row, 'the row holds its buttons').toBeLessThanOrEqual(room)
+    })
+
     test('no inset means no change', async ({ page }) => {
         await openBoard(page)
         await chooseDifficulty(page, /hard/i, 8)

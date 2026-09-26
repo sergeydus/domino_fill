@@ -242,9 +242,17 @@ const DominoClient: React.FC = () => {
    * The grouping is kept in the rail too. There the height reason no longer applies, but
    * these three are one thing -- where you are, and how you get elsewhere -- and the row
    * count the sound suite budgets against stays the same in both compositions.
+   *
+   * **It wraps rather than overflowing, in both** (graphics spec P2-1, row 13). One row is
+   * what it is at every width the layout suite measures without an inset. But `Archive` and
+   * `Sound` are the `control` role since row 13, 16px where they were 14, and on the CI
+   * runner, whose text is wider, a 390px screen with 32px insets each side left 3px too
+   * little: the page scrolled sideways. The game controls' own `flex-wrap` is the belt for
+   * the same case, and a wrapped row is measured like any other -- `data-chrome` heights are
+   * observed, not assumed -- so the board gives up the height the second row takes.
    */
   const navigation = (
-    <div data-chrome className={wide ? 'flex flex-wrap items-center gap-3' : 'flex items-center gap-3'}>
+    <div data-chrome className='flex flex-wrap items-center gap-3'>
       <LevelSelector boardsStore={boardsStore} />
       <ArchiveButton levels={boardsStore} />
       <SoundButton sound={sound} />

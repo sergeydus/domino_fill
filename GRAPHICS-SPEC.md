@@ -1936,6 +1936,20 @@ asserted by computed style; no component declares a size outside the table.
 >   `Sound` grow from 14 to 16px. The board is the same size.
 > - **desktop (4):** 29,281 pixels, all in the rail, for the same reasons. The board does not
 >   move. 1280×800.
+>
+> **A layout the runner found and this machine did not.** Part 1 (`b5f11fe`) passed the gate
+> here and failed one browser test on the CI runner, on all three attempts: at 390px with
+> 32px safe-area insets, the page scrolled 3px sideways. The phone's navigation row -- the
+> level arrows, `Archive`, `Sound` -- was deliberately a single line in the narrow
+> composition. `Archive` and `Sound` grew from 14 to 16px with the `control` role, and the
+> runner's text is wider than this machine's. The row now wraps in both compositions, as
+> the game controls already did for the same reason. A wrapped row is measured like any
+> other (`data-chrome` heights are observed), so the board gives up the height it takes.
+> At the baseline sizes the row still fits on one line.
+>
+> `e2e/layout.spec.ts` adds 64px insets, short on any text, so the case now fails here as
+> well as there. Mutation: the narrow composition's row unwrapped again, which that test
+> fails with 63px of sideways scroll. The baselines are the corrected tree's (part 1b).
 
 ### P2-2 · One control vocabulary
 
