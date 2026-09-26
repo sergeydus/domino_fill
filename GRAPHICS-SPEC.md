@@ -1950,6 +1950,14 @@ asserted by computed style; no component declares a size outside the table.
 > `e2e/layout.spec.ts` adds 64px insets, short on any text, so the case now fails here as
 > well as there. Mutation: the narrow composition's row unwrapped again, which that test
 > fails with 63px of sideways scroll. The baselines are the corrected tree's (part 1b).
+>
+> **On the runner** (run 36277086885 for `74a45a1`; committed as `1e9a946`, whose comparison
+> passed 8 of 8): part 1b's four images are identical to part 1's, 0 pixels on each, so the
+> wrap changed no baseline. Against the committed set: 102,571 and 85,427 pixels on the
+> sheets, 30,157 on the desktop, and the phone 360×668 as predicted. The 38px sheet counts
+> more than the local prediction for a reason the local trees could not show: row 12 had
+> wrapped the runner's difficulty selector to the sheet's third row, and at 16px it fits on
+> the second again, as it always did here. No other layout moved.
 
 ### P2-2 · One control vocabulary
 
