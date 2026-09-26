@@ -1788,6 +1788,16 @@ nothing else.
 >   360×680.
 > - **desktop (4):** 3,957 pixels. The same brackets gone, and `Sound`, on a row of its own.
 >
+> **On the CI runner** (run 36268233296, committed from 36268800510's green comparison), the
+> changes are where predicted, and the counts are not the predicted ones: 102,312 and 109,079
+> on the sheets, 5,472 on the phone, 4,127 on the desktop. Row 11's matched to the pixel
+> because nothing it changed moved any text. This row moves text -- specimens after the new
+> one, `Sound` in bold, the phone's bottom row -- and the runner renders text differently from
+> the development host, so moved text counts differently. One difference is layout, not
+> rendering, and the prediction missed it: at 38px the runner's wider text no longer fits the
+> difficulty selector on the sheet's second row, so it wraps to the third and takes the level
+> arrows, `Archive` and `Sound` with it. The sheet stays 1280×800 with every specimen whole.
+>
 > **Mutations,** each caught, 21 of 21:
 > - motion (`e2e/motion.spec.ts`): the entry offset written as 0.3 of a cell; the entry back
 >   on a spring (it moved for 422–439ms); the shake back to 6px and 280ms; the label on
