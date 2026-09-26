@@ -131,7 +131,7 @@ const BOARD_SPECIMENS = Object.keys(FIXTURES) as BoardSpecimen[]
 /** One labelled box on the sheet. The label is for a person reading a baseline. */
 const Specimen = ({ name, children }: { name: string, children: React.ReactNode }) => (
     <section data-specimen={name} aria-label={name} className='flex flex-col items-start gap-2'>
-        <h2 className='text-xs font-mono opacity-60'>{name}</h2>
+        <h2 className='text-meta opacity-60'>{name}</h2>
         {children}
     </section>
 )
@@ -159,7 +159,7 @@ const Sheet = ({ cell }: { cell: number }) => {
         <main
             data-sheet={SHEET_SENTINEL}
             data-cell-size={cell}
-            className='flex flex-wrap items-start gap-8 p-6 bg-ground font-sans'
+            className='flex flex-wrap items-start gap-8 p-6 bg-ground'
         >
             {BOARD_SPECIMENS.map(name => (
                 <Specimen key={name} name={name}>

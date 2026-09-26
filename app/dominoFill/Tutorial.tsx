@@ -40,8 +40,8 @@ const Tutorial = () => {
         // box -- so it fails to cover a page that has scrolled or overflowed. `fixed` is
         // anchored to the viewport itself and cannot come apart from it.
         <div className="fixed inset-0 z-[999] backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
-            <div className="bg-panel rounded-2xl text-panel-ink w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
-                <h2 className="text-3xl font-bold mb-2">How to play</h2>
+            <div className="bg-panel rounded-2xl text-panel-ink text-body w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
+                <h2 className="text-card-title font-bold mb-2">How to play</h2>
 
                 {/*
                   The rule, stated correctly. This previously read "the numbers indicate how
@@ -74,7 +74,7 @@ const Tutorial = () => {
                     <strong>Drag from a square toward the neighbour</strong> you want the domino to
                     cover. The direction you drag decides its shape and which way round it scores.
                 </p>
-                <p className="text-sm opacity-80">
+                <p className="text-meta opacity-80">
                     Tapping a square places the only domino that fits; if more than one fits, tap
                     again on the square you want. Tap a domino to take it off. By keyboard: arrow
                     keys move, <kbd>Space</kbd> picks the square, then an arrow key places.

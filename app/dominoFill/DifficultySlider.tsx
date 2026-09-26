@@ -41,7 +41,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row bg-control-surface rounded gap-2 text-lg p-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row bg-control-surface rounded gap-2 p-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (

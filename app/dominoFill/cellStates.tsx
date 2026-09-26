@@ -2,7 +2,8 @@ import { PALETTE } from "../palette"
 
 /**
  * The four persistent cell states, drawn (graphics spec P1-5, row 11), and a fifth that
- * lasts until the next move: a refused one (P1-6, row 12).
+ * lasts until the board next acts -- a press, a key it handles, an undo, a reset, Check or
+ * Hint: a refused move (P1-6, row 12; `PuzzleSession.refusedAt`).
  *
  * Anchor, candidate, hint and focus are what a player reads while thinking. Until this row
  * each was a CSS border or outline in pixels -- 4px, 4px, 3px and 4px -- and three of them

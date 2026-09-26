@@ -82,11 +82,11 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: MOTION.card.duration }}
         >
-            <p className="text-2xl font-bold" data-completion-message>
+            <p className="text-card-title font-bold" data-completion-message>
                 Solved!
             </p>
 
-            <div className="flex flex-row gap-2 text-lg">
+            <div className="flex flex-row gap-2">
                 {levels.hasNextLevel && (
                     <button
                         type="button"

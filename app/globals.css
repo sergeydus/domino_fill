@@ -1,6 +1,8 @@
 @import "tailwindcss";
 /* Every colour, as `--token` properties and Tailwind colours; generated (graphics spec P0-5). */
 @import "./palette.css";
+/* Every text size, as five roles; generated, and Tailwind's own scale cleared (P2-1). */
+@import "./typography.css";
 
 /*
  * One light palette, stated once (spec P2-3, row 20c).
@@ -31,11 +33,6 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-}
-
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
 /*
@@ -115,7 +112,24 @@
  *     below for a player who asked for less motion.
  */
 @layer base {
+  /*
+   * One family means the keys too (P2-1, row 13). Tailwind's preflight gives `kbd` a
+   * monospace stack of system faces, so the tutorial's "Space" and "Esc" were the only text
+   * in the game not drawn in Geist -- and in a face the page does not ship. Inherited now,
+   * which declares no family of its own.
+   */
+  kbd {
+    font-family: inherit;
+  }
+
+  /*
+   * Every button is a control, and a control's text is the `control` role (graphics spec
+   * P2-1, row 13): here, once, rather than on every button or -- as it was -- on containers
+   * whose only text was their buttons. A button whose text is something else says so with
+   * its own utility, which wins over this layer: the archive's dates are `text-meta`.
+   */
   button {
+    @apply text-control;
     transition-property: background-color, color, border-color, box-shadow, outline-color, filter, translate, scale, opacity;
     transition-duration: 120ms;
     transition-timing-function: ease-out;
@@ -145,8 +159,20 @@
   }
 }
 
+/*
+ * The one declaration of the family (graphics spec P2-1, row 13): Geist, self-hosted by
+ * `next/font`, which sets `--font-geist-sans` on `<body>` (layout.tsx). This rule said
+ * `Arial, Helvetica, sans-serif` until then, and every surface that was not inside a
+ * `font-sans` class -- the page's wrapper and the sheet's each had one -- was drawn in Arial
+ * wherever the device had it.
+ *
+ * The variable itself, not Tailwind's `--font-sans`: that was an `@theme inline` entry, which
+ * Tailwind inlines into the `font-sans` utility and never emits as a property, so a plain
+ * `var(--font-sans)` here resolved to nothing and fell back to the system face. Measured by
+ * `e2e/typography.spec.ts`, which holds every text surface to this family.
+ */
 body {
   background: var(--ground);
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans);
 }

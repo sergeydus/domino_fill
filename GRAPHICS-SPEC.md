@@ -1864,6 +1864,79 @@ derive from the cell via `LABEL_FONT_FRACTION` and keep doing so.
 **Acceptance.** Every text surface resolves to one of these five roles and to one family,
 asserted by computed style; no component declares a size outside the table.
 
+> **Amendment (row 13) — five roles, one table, one family, and two faces nobody had seen.**
+>
+> **Before this row** text was set at eleven sizes from Tailwind's scale, `text-xs` to
+> `text-3xl`. Several were on containers whose only text was their buttons (`text-lg` on the
+> difficulty group and the card's actions, `text-base` on the game controls). One,
+> `text-2xl` on the scoring key, sized no text at all.
+>
+> **Now the table is `app/typography.ts`**, in the palette's pattern. `npm run tokens` also
+> writes `app/typography.css`, a Tailwind theme block that first clears Tailwind's whole
+> size scale (`--text-*: initial`) and then declares the five roles. So `text-sm` and the
+> rest generate no CSS at all, and a size outside the table cannot be declared by accident.
+> Each role is a utility that sets size and line height together: `text-board-label`,
+> `text-card-title`, `text-control`, `text-body`, `text-meta`.
+> - **Board label:** `text-board-label` reads `--label-font`, `LABEL_FONT_FRACTION` of the
+>   cell as before, with a line height of 1. It was an inline `fontSize` and `leading-none`.
+> - **Card title:** the completion card's "Solved!" and the tutorial's "How to play".
+> - **Control:** every button, declared once on `button` in the base layer rather than on each
+>   control or its container. A button whose text is something else says so and wins: the
+>   archive's dates.
+> - **Body:** the advice strip, the day banner, the tutorial's text, the archive's month and
+>   its error, and the load-failure message.
+> - **Meta:** the archive's dates, the tutorial's keyboard note, the load failure's second
+>   line, and the component sheet's specimen labels.
+>
+> **One family, and two findings.** The body rule said `Arial, Helvetica, sans-serif`. Only
+> the page wrapper's and the sheet's `font-sans` classes kept the game in Geist. Replacing
+> both with one declaration on `body` turned up two faults:
+> - Tailwind's `--font-sans` is an `@theme inline` entry, which Tailwind inlines into its
+>   utility and never emits as a property. So `font-family: var(--font-sans)` on `body`
+>   resolved to nothing and fell back to the system face. The browser test caught it, and
+>   the rule now reads `next/font`'s own `--font-geist-sans`, which `layout.tsx` sets on
+>   `<body>`.
+> - The tutorial's `<kbd>` keys ("Space", "Esc") were drawn in a system monospace face,
+>   which preflight gives `kbd`. It was the only text in the game in a face the page does
+>   not ship. The tutorial is on no baseline, so `e2e/fonts.spec.ts` never saw it. `kbd` now
+>   inherits.
+>
+> Geist Mono was loaded for the sheet's specimen labels alone. It is gone, and they are
+> `meta`.
+>
+> **Held:**
+> - `tests/typography.test.ts`: the table is the spec's; the generated file is
+>   byte-identical to its generator, clears the scale before declaring roles, is imported, and
+>   is checked out byte for byte.
+> - The same test: no source under `app` declares a size, a line height or a family outside
+>   the table, in any vocabulary. That means Tailwind size and `leading-` utilities,
+>   `fontSize` and `lineHeight` in inline styles, and `font-size` and `line-height` in CSS.
+>   The family is declared exactly once. Each pattern is checked against examples it must
+>   and must not match.
+> - `e2e/typography.spec.ts`: on the game page with the advice strip speaking, the archive,
+>   the day banner, the tutorial, and the sheet at 38 and 53px, *every* visible element with
+>   text of its own computes to one role's size and line height together, and to the body's
+>   family, which is Geist.
+> - The same spec checks the surfaces the table names against their role: labels, every
+>   button, the advice, the archive's month and dates, the banner, the tutorial's title, text
+>   and note, the card's title and actions, and the sheet's labels.
+>
+> **Mutations,** each caught, 9 of 9: `text-sm` put back on the advice strip (by the scan, and
+> in the browser, where it now sets no size at all); buttons no longer controls; the archive's
+> dates as controls; the family back through `--font-sans`; `kbd` back in its own face; the
+> card title as body; the scale left uncleared; the label size back inline.
+>
+> **Predictions,** old tree against new on the development host. Every baseline changes,
+> and text moves on all four, so the runner's counts will not be these:
+> - **sheets 1 and 2:** 80,516 and 86,184 pixels. The specimen labels are 18px of line where
+>   they were 16, so every row of specimens moves down. The controls are 16px on a line of
+>   20, and the card's title is 24px on 30. 1280×800.
+> - **phone (3):** 12px shorter, **360×680 to 360×668**. The difficulty selector is 16px
+>   where it was 18, and the game controls' line is 20px where it was 24. `Archive` and
+>   `Sound` grow from 14 to 16px. The board is the same size.
+> - **desktop (4):** 29,281 pixels, all in the rail, for the same reasons. The board does not
+>   move. 1280×800.
+
 ### P2-2 · One control vocabulary
 
 `Check`/`Hint`/`Undo`/`Reset` are flat grey; `Archive` and `Sound on` are bordered white.

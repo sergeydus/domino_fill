@@ -171,12 +171,12 @@ const DominoClient: React.FC = () => {
    * (P1-1). It was bound to the whole wrapper, so right-clicking the difficulty slider or
    * the level arrows rotated the piece too, and Android fired it on long-press (D10-r).
    */
-  if (isLoading) return <div>no board</div>
+  if (isLoading) return <div className='text-body'>no board</div>
   if (!currentBoard) {
     return (
       <div className='m-auto p-4 text-center' role='alert'>
-        <p className='font-semibold'>Today&apos;s puzzles could not be loaded.</p>
-        <p className='text-sm opacity-70'>
+        <p className='text-body font-semibold'>Today&apos;s puzzles could not be loaded.</p>
+        <p className='text-meta opacity-70'>
           {failed ? 'Check your connection and reload the page.' : 'No board'}
         </p>
       </div>

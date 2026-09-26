@@ -29,7 +29,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
             role='status'
             aria-live='polite'
             aria-atomic='true'
-            className='min-h-6 text-center text-sm'
+            className='min-h-6 text-center text-body'
         >
             {advice && (
                 <span

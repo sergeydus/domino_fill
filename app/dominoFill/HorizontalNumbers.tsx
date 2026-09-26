@@ -15,8 +15,8 @@ const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsSto
     const split = boardsStore.definition.columnTargets.split(',')
     const states = boardsStore.columnStates
     return <div
-        className="flex flex-row min-w-0 min-h-0 leading-none tabular-nums"
-        style={{ paddingLeft: 'var(--grid-border)', fontSize: 'var(--label-font)' }}
+        className="flex flex-row min-w-0 min-h-0 text-board-label tabular-nums"
+        style={{ paddingLeft: 'var(--grid-border)' }}
     >
         {split.map((el: string, index: number) => {
             const presentation = labelPresentation(states[index])

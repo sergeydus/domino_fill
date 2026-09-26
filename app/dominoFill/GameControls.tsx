@@ -42,7 +42,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
      * the belt: a longer word, a larger default font or a narrower device drops the row to
      * two rather than pushing the page off the side.
      */
-    <div className="flex flex-row flex-wrap justify-center gap-2 text-base">
+    <div className="flex flex-row flex-wrap justify-center gap-2">
         <button
             type="button"
             data-check

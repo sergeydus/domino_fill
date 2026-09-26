@@ -39,7 +39,7 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
         <div
             data-chrome
             data-day-banner
-            className='flex items-center gap-3 rounded-lg bg-banner-surface px-3 py-2 text-sm'
+            className='flex items-center gap-3 rounded-lg bg-banner-surface px-3 py-2 text-body'
             // Polite, not assertive: this can appear while someone is placing a piece, and
             // interrupting a screen reader mid-move to say a new puzzle exists would be
             // exactly the kind of "taking the board away" the hold-back rule prevents.

@@ -141,7 +141,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     >
                         ‹
                     </button>
-                    <h2 data-archive-month className='font-semibold'>{month}</h2>
+                    <h2 data-archive-month className='text-body font-semibold'>{month}</h2>
                     <button
                         type='button'
                         data-archive-next
@@ -154,7 +154,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     </button>
                 </div>
 
-                {error && <p role='alert' className='mb-2 text-sm text-problem'>{error}</p>}
+                {error && <p role='alert' className='mb-2 text-body text-problem'>{error}</p>}
 
                 <div className='grid grid-cols-7 gap-1' role='group' aria-label={`Days in ${month}`}>
                     {days.map(date => {
@@ -176,7 +176,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                                 // Until the chunk lands there are no ids, so a mark would be
                                 // a guess. The day is still selectable: picking it fetches
                                 // the month anyway.
-                                className={`rounded-md border p-1 text-xs ${MARK_CLASS[mark]} `
+                                className={`rounded-md border p-1 text-meta ${MARK_CLASS[mark]} `
                                     + (date === viewingDate ? 'ring-2 ring-accent-edge' : '')}
                                 onClick={() => { void pick(date) }}
                             >

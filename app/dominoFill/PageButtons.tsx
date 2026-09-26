@@ -17,7 +17,7 @@ export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
   <button
     type='button'
     data-open-archive
-    className='rounded-md border px-3 py-1 text-sm'
+    className='rounded-md border px-3 py-1'
     onClick={() => levels.setArchiveOpen(true)}
   >
     Archive
@@ -44,7 +44,7 @@ export const SoundButton = observer(({ sound }: { sound: SoundStore }) => (
     data-mute
     aria-pressed={!sound.muted}
     aria-label='Sound'
-    className={`control-surface rounded-md border px-3 py-1 text-sm ${PRESSED}`}
+    className={`control-surface rounded-md border px-3 py-1 ${PRESSED}`}
     onClick={() => sound.toggle()}
   >
     {sound.muted ? 'Sound off' : 'Sound on'}
