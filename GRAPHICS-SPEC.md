@@ -1909,10 +1909,27 @@ asserted by computed style; no component declares a size outside the table.
 >   byte-identical to its generator, clears the scale before declaring roles, is imported, and
 >   is checked out byte for byte.
 > - The same test: no source under `app` declares a size, a line height or a family outside
->   the table, in any vocabulary. That means Tailwind size and `leading-` utilities,
->   `fontSize` and `lineHeight` in inline styles, and `font-size` and `line-height` in CSS.
+>   the table, in the forms the scan knows:
+>   - Tailwind size and `leading-` utilities, and arbitrary family utilities (`font-[...]`);
+>   - `fontSize` and `lineHeight` in inline styles;
+>   - `font-size`, `line-height` and `font-family` in CSS;
+>   - the `font` shorthand, in CSS, a style object, or a Tailwind arbitrary property.
+>
 >   The family is declared exactly once. Each pattern is checked against examples it must
->   and must not match.
+>   and must not match, and comments are removed by the palette audit's syntax-aware
+>   stripper.
+>
+>   *Corrected at review* (codex). This said "in any vocabulary", and the scan had two ways to
+>   fail open, both reproduced against the committed test, which passed with each planted in
+>   real source:
+>   - `font: 13px/16px Arial;` matched neither the size nor the family pattern;
+>   - the comment regex took any `//` not after a colon for a comment, so JSX text such as
+>     `fish // chips` discarded the rest of its line, including a `className="text-2xl"`
+>     later on it.
+>
+>   Both examples are now tests, and both fail the corrected scan. What it does not know it
+>   does not claim: a size built at run time from a string, say, is the browser test's to
+>   find.
 > - `e2e/typography.spec.ts`: on the game page with the advice strip speaking, the archive,
 >   the day banner, the tutorial, and the sheet at 38 and 53px, *every* visible element with
 >   text of its own computes to one role's size and line height together, and to the body's

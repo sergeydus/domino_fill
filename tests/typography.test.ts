@@ -3,6 +3,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { TYPE, roleName } from '@/app/typography'
 import { TYPOGRAPHY_CSS_PATH, renderTypographyCss } from '@/scripts/typography-css'
+import { stripComments } from './colourAudit'
 
 /**
  * Typography as roles (graphics spec P2-1, row 13).
@@ -44,22 +45,50 @@ describe('the generated stylesheet is the table', () => {
     })
 })
 
-/** Every source file under `app`, comments stripped, as [path, code]. */
+/**
+ * Every source file under `app`, comments blanked, as [path, code].
+ *
+ * Blanked by the palette audit's syntax-aware stripper, not a regex. The regex this used first
+ * took a `//` anywhere on a line for a comment, so JSX text holding a URL discarded the rest
+ * of its line -- and a size declared after it on that line was never read (codex, at row 13's
+ * review). The syntax tree knows JSX text from a comment.
+ */
 const sources = (dir = 'app'): [string, string][] =>
     readdirSync(dir).flatMap(name => {
         const path = join(dir, name)
         if (statSync(path).isDirectory()) return sources(path)
         if (!/\.(tsx?|css)$/.test(name)) return []
-        return [[path, readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')]] as [string, string][]
+        return [[path, stripComments(path, readFileSync(path, 'utf8'))]] as [string, string][]
     })
 
+/** The lines of `code` a pattern finds. */
+const hits = (pattern: RegExp, path: string, code: string) =>
+    code.split('\n').filter(l => pattern.test(l)).map(l => `${path}: ${l.trim()}`)
+
+/**
+ * The `font` shorthand, which sets size, line height and family at once: `font: 13px/16px
+ * Arial` in CSS or a style object, `[font:...]` as a Tailwind arbitrary property. It is both a
+ * size and a family, so both scans below include it. Missed until row 13's review (codex).
+ */
+const SHORTHAND = /(?<![-\w])font\s*:/
 /** A size or line height declared outside the roles, in any vocabulary the app could use. */
-const SIZE = /\btext-(xs|sm|base|lg|\d?xl|\[[^\]]+\])(?![\w-])|\bleading-[\w[\].]+|\bfontSize\b|\blineHeight\b|\bfont-size\s*:|\bline-height\s*:/
+const SIZE = new RegExp([
+    /\btext-(xs|sm|base|lg|\d?xl|\[[^\]]+\])(?![\w-])/.source,
+    /\bleading-[\w[\].]+/.source,
+    /\bfontSize\b|\blineHeight\b/.source,
+    /\bfont-size\s*:|\bline-height\s*:/.source,
+    SHORTHAND.source,
+].join('|'))
 /**
  * A family declared anywhere: the utilities, not a theme variable's name; and not
  * `font-family: inherit`, which takes a family away rather than declaring one (the `kbd` rule).
  */
-const FAMILY = /(?<![-\w])font-(sans|mono|serif)\b|\bfontFamily\b|\bfont-family\s*:(?!\s*inherit\s*;)/
+const FAMILY = new RegExp([
+    /(?<![-\w])font-(sans|mono|serif|\[)/.source,
+    /\bfontFamily\b/.source,
+    /\bfont-family\s*:(?!\s*inherit\s*;)/.source,
+    SHORTHAND.source,
+].join('|'))
 
 describe('no size, line height or family is declared outside the table', () => {
     const all = sources()
@@ -78,21 +107,34 @@ describe('no size, line height or family is declared outside the table', () => {
         for (const fine of ['text-center', 'text-ink', 'text-panel-ink', 'text-problem', 'text-body', 'text-meta', 'text-card-title', 'text-board-label']) {
             expect(SIZE.test(fine), fine).toBe(false)
         }
-        for (const bad of ['font-mono', 'font-sans', 'fontFamily', 'font-family: x']) expect(FAMILY.test(bad), bad).toBe(true)
+        for (const bad of ['font-mono', 'font-sans', "font-['Arial']", 'fontFamily', 'font-family: x']) expect(FAMILY.test(bad), bad).toBe(true)
+        // The shorthand, in each place it can be written: both a size and a family.
+        for (const bad of ['font: 13px/16px Arial;', "style={{ font: '13px Arial' }}", 'className="[font:13px_Arial]"']) {
+            expect([SIZE.test(bad), FAMILY.test(bad)], bad).toEqual([true, true])
+        }
+        for (const fine of ['font-bold', 'font-semibold', 'data-font: x', 'text-body']) expect(SIZE.test(fine), fine).toBe(false)
         expect(FAMILY.test('font-bold')).toBe(false)
         expect(FAMILY.test('--font-sans: var(--font-geist-sans);')).toBe(false)
         expect(FAMILY.test('font-family: inherit;')).toBe(false)
         expect(FAMILY.test('font-family: monospace;')).toBe(true)
     })
 
+    it('and does not mistake a `//` in JSX text for a comment', () => {
+        // codex's case: a bare `//` in copy, and a size later on the same line. Bare, because
+        // the old regex spared a `//` after a colon, so a URL would not have shown its fault.
+        const source = '<p>fish // chips <b className="text-2xl">x</b></p>\n'
+        expect(hits(SIZE, 'x.tsx', stripComments('x.tsx', source))).toHaveLength(1)
+        // While a real comment is still blanked.
+        expect(hits(SIZE, 'x.tsx', stripComments('x.tsx', 'const a = 1 // text-2xl\n'))).toEqual([])
+    })
+
     it('no size or line height anywhere but the roles', () => {
-        const found = all.filter(([path]) => !OWNERS.includes(path))
-            .flatMap(([path, code]) => code.split('\n').filter(l => SIZE.test(l)).map(l => `${path}: ${l.trim()}`))
+        const found = all.filter(([path]) => !OWNERS.includes(path)).flatMap(([path, code]) => hits(SIZE, path, code))
         expect(found).toEqual([])
     })
 
     it('and the family once, on the body, as Geist', () => {
-        const found = all.flatMap(([path, code]) => code.split('\n').filter(l => FAMILY.test(l)).map(l => `${path}: ${l.trim()}`))
+        const found = all.flatMap(([path, code]) => hits(FAMILY, path, code))
         // `next/font`'s own property, set on <body>: Tailwind's `--font-sans` was an inline
         // theme entry, never emitted, and `var()` of it fell back to the system face.
         expect(found).toEqual([`${join('app', 'globals.css')}: font-family: var(--font-geist-sans);`])
