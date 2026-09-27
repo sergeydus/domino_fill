@@ -34,10 +34,16 @@ import { control } from "../controls"
  * already did before this row; see `RAIL_WIDTH_PX`.
  */
 
+/**
+ * What each difficulty is called, where a player reads it: here, and on the completion card
+ * (graphics P2-3), which names the puzzle just solved. `normal` is "Medium" on screen.
+ */
+export const DIFFICULTY_NAME = { easy: 'Easy', normal: 'Medium', hard: 'Hard' } as const
+
 const LEVELS = [
-    { key: 'easy', label: 'Easy 6x6' },
-    { key: 'normal', label: 'Medium 7x7' },
-    { key: 'hard', label: 'Hard 8x8' },
+    { key: 'easy', label: `${DIFFICULTY_NAME.easy} 6x6` },
+    { key: 'normal', label: `${DIFFICULTY_NAME.normal} 7x7` },
+    { key: 'hard', label: `${DIFFICULTY_NAME.hard} 8x8` },
 ] as const
 
 const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {

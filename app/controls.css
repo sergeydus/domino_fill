@@ -11,7 +11,7 @@
     font-weight: 700;
   }
   .control-primary:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-primary:disabled {
     background-color: var(--control-surface);
@@ -30,7 +30,7 @@
     font-weight: 400;
   }
   .control-secondary:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-secondary:disabled {
     opacity: 0.4;
@@ -52,7 +52,7 @@
     font-weight: 400;
   }
   .control-caution:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-caution:disabled {
     opacity: 0.4;
@@ -73,7 +73,7 @@
     font-weight: 400;
   }
   .control-quiet:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-quiet:disabled {
     opacity: 0.4;
@@ -92,7 +92,7 @@
     font-weight: 400;
   }
   .control-icon:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-icon:disabled {
     filter: grayscale(1);
@@ -125,7 +125,7 @@
     box-shadow: 0 0 0 2px var(--accent-edge);
   }
   .control-day:focus-visible {
-    outline-color: var(--focus-ring, var(--accent-edge));
+    outline-color: var(--accent-edge);
   }
   .control-day:disabled {
     opacity: 0.4;

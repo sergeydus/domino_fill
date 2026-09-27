@@ -46,7 +46,7 @@ const rules = (name: VariantName): string[] => {
         ...block(at, rest),
         ...marks,
         ...(c.current ? block(`${at}[aria-current]`, [`box-shadow: 0 0 0 2px ${v(c.current.ring)};`]) : []),
-        ...block(`${at}:focus-visible`, [`outline-color: var(--focus-ring, ${v(c.focus)});`]),
+        ...block(`${at}:focus-visible`, [`outline-color: ${v(c.focus)};`]),
         ...block(`${at}:disabled`, [
             c.disabled.surface ? `background-color: ${v(c.disabled.surface)};` : null,
             c.disabled.opacity !== undefined ? `opacity: ${c.disabled.opacity};` : null,

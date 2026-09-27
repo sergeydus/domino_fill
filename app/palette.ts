@@ -75,11 +75,10 @@ export const PALETTE = {
     lineNeutral: '#5f5f5f',
     /**
      * Finished: a finished line (6.27:1 on the ground), and a finished puzzle -- the
-     * completion card's surface (P1-4). Nothing else.
+     * completion card's "Solved!" (P2-3; 7.13:1 on the panel). Nothing else. It was the
+     * card's whole surface from P1-4, with `onSuccess` white text on it, until P2-3.
      */
     success: '#15661a',
-    /** Text on a `success` surface. */
-    onSuccess: '#ffffff',
     /**
      * Something is wrong: an overshot line, the advice strip when it is reporting a problem
      * (7.35:1), the archive's error message, which had a red of its own until P1-4, and the
@@ -148,7 +147,7 @@ export const PALETTE = {
      * The archive's and the tutorial's card, and a secondary control under the pointer.
      */
     panel: '#ffffff',
-    /** The tutorial's text on its card. */
+    /** Text on a panel: the tutorial's, and the completion card's (P2-3). */
     panelInk: '#000000',
 
     // ---- the archive's day marks ---------------------------------------------------------

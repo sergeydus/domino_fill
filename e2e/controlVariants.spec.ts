@@ -36,7 +36,7 @@ import { PALETTE, type Token } from '../app/palette'
 test.use({ reducedMotion: 'reduce' })
 
 type Look = {
-    label: string, variant: string | null, mark: string | null, card: boolean, disabled: boolean, current: boolean,
+    label: string, variant: string | null, mark: string | null, disabled: boolean, current: boolean,
     background: number[], edge: number[], edgeColour: number[][], radius: string[], padding: string[],
     colour: number[], weight: string, opacity: string, filter: string, shadow: string, scale: string,
     translate: string, outline: number[],
@@ -71,7 +71,7 @@ const lookOf = (b: Locator): Promise<Look> => b.evaluate(el => {
     const variant = Array.from(el.classList).find(c => c.startsWith('control-'))?.slice('control-'.length) ?? null
     return {
         label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '?',
-        variant, mark: el.getAttribute('data-mark'), card: el.closest('[data-completion-card]') !== null,
+        variant, mark: el.getAttribute('data-mark'),
         disabled: (el as HTMLButtonElement).disabled, current: el.hasAttribute('aria-current'),
         // Every side and corner: a box of its own on one side (`pr-8`) is still one.
         background: bytes(cs.backgroundColor),
@@ -218,13 +218,13 @@ const expectVocabulary = async (page: Page, scope: Locator, least: number) => {
             await page.mouse.up()
             expect(pressed, `${look.label}: held`).toEqual(held)
 
-            // Focused from the keyboard: the variant's ring, or the card's own on its green,
-            // and nothing else.
+            // Focused from the keyboard: the variant's ring, and nothing else. (The completion
+            // card's buttons had a white ring of their own on its green until P2-3.)
             await page.keyboard.press('Shift')
             await b.focus()
             const focused = shapeOf(await lookOf(b))
             await b.evaluate(el => (el as HTMLElement).blur())
-            expect(focused, `${look.label}: focused`).toEqual({ ...at, outline: look.card ? paint.onSuccess : paint[c.focus] })
+            expect(focused, `${look.label}: focused`).toEqual({ ...at, outline: paint[c.focus] })
         })
     }
     return seen

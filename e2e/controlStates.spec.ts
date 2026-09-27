@@ -126,9 +126,9 @@ test.describe('focus-visible, on every control, readable without colour', () => 
         await expectFocusShown(page, page.locator('.fixed.inset-0').first(), PALETTE.accentEdge, 1)
     })
 
-    test('the completion card\'s, whose ring is white on its green', async ({ page }) => {
+    test('the completion card\'s, the one ring since P2-3 took the card off its green', async ({ page }) => {
         await page.goto(`${VISUAL_URL}/visual`)
-        await expectFocusShown(page, page.locator('[data-completion-card]'), PALETTE.onSuccess, 2)
+        await expectFocusShown(page, page.locator('[data-completion-card]'), PALETTE.accentEdge, 2)
     })
 
     test('and the board\'s: the brackets are the keyboard\'s, not the pointer\'s', async ({ page }) => {

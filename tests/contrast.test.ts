@@ -101,7 +101,8 @@ describe('§6: each art row\'s bar, and whether it holds yet', () => {
  */
 const ON_CHROME: Pair[] = [
     { a: 'ink', b: 'accent', min: 4.5, owner: 'P1-4: the selected difficulty, the primary actions', holds: true },
-    { a: 'onSuccess', b: 'success', min: 4.5, owner: 'P1-4: the completion card', holds: true },
+    // The completion card's outcome (P2-3), which until then was white on this green.
+    { a: 'success', b: 'panel', min: 4.5, owner: 'P2-3: the completion card\'s "Solved!"', holds: true },
     { a: 'ink', b: 'controlSurface', min: 4.5, owner: 'P1-4: the quiet controls', holds: true },
 ]
 
@@ -118,7 +119,7 @@ describe('P1-4: text on the chrome\'s surfaces', () => {
 
     it('and the white the accent carried until P1-4 does not, which is why it is ink now', () => {
         // The mutation codex named at row 10's review: white on the accent is 3.05:1.
-        expect(ratio({ a: 'onSuccess', b: 'accent', min: 4.5, owner: '', holds: false })).toBeLessThan(4.5)
+        expect(ratio({ a: 'panel', b: 'accent', min: 4.5, owner: '', holds: false })).toBeLessThan(4.5)
     })
 })
 
@@ -131,16 +132,16 @@ describe('P1-4: text on the chrome\'s surfaces', () => {
  * white halo, and on every surface one of the two must clear 3:1, with the red clearing it
  * on the halo so the cross reads inside it.
  *
- * **A control's focus ring** is drawn outside the control, on what it sits on: every light
- * surface a control has, and the completion card's green, where the ring is white. The
- * accent's edge since P2-2 (row 14), which asks for the accent on focus; black until then.
+ * **A control's focus ring** is drawn outside the control, on what it sits on: every surface a
+ * control has, all of them light since P2-3 (row 15) took the completion card off its green,
+ * where the ring had been white. The accent's edge since P2-2 (row 14), which asks for the
+ * accent on focus; black until then.
  */
 const REFUSAL_SURFACES = ['checkerLight', 'checkerDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
 
 const FOCUS_RINGS: Pair[] = [
     ...(['ground', 'controlSurface', 'panel', 'bannerSurface'] as const).map(b =>
         ({ a: 'accentEdge', b, min: 3, owner: 'P1-6, P2-2: a control on a light surface', holds: true }) as Pair),
-    { a: 'onSuccess', b: 'success', min: 3, owner: 'P1-6: the completion card\'s buttons', holds: true },
 ]
 
 /**
@@ -178,8 +179,11 @@ describe('P1-6: a refused move, a control\'s focus, and a disabled control', () 
         })
     }
 
-    it('and the light surfaces\' ring would not do on the green, which is why the card has its own', () => {
+    it('and the completion card is one of them now: the panel, where its buttons\' ring is 11.78:1', () => {
+        // The card's ring was its own white until P2-3, because `accentEdge` on its green was
+        // under 3:1; the card is the panel now, and its buttons take the one ring.
         expect(ratio({ a: 'accentEdge', b: 'success', min: 3, owner: '', holds: false })).toBeLessThan(3)
+        expect(ratio({ a: 'accentEdge', b: 'panel', min: 3, owner: '', holds: true }).toFixed(2)).toBe('11.78')
     })
 
     it('a disabled Undo keeps the contrast it had before P1-6', () => {

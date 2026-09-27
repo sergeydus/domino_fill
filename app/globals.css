@@ -100,8 +100,8 @@
  *   - **Focus**, from the keyboard: a 3px ring 2px outside the control, on whatever it sits
  *     on. A shape, so it reads without colour, as the cell states must (P1-5). Its colour
  *     is the variant's (`app/controls.ts`, P2-2): `accentEdge`, 8.42:1 or better on every
- *     light surface; a surface that is not light sets `--focus-ring` (the completion card:
- *     `onSuccess`).
+ *     surface a control sits on, all of them light since the completion card became one
+ *     (P2-3), which had set its own white ring on its green.
  *   - **Pressed**, while a pointer or Space is held: a pixel lower and a little darker, so
  *     the press is answered before its result arrives. Enter has no held state to draw: a
  *     button acts on Enter's keydown, so its result is the answer. Not when disabled: a

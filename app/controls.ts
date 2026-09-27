@@ -43,7 +43,7 @@ export type Variant = {
     hover: { surface?: Token, ring?: Token, scale?: number }
     /** While held, on top of P1-6's pixel and 90%. */
     press: { surface?: Token }
-    /** The focus ring's colour, unless the surface a control sits on sets `--focus-ring`. */
+    /** The focus ring's colour. */
     focus: Token
     /** At rest, disabled. It answers neither a hover nor a press. */
     disabled: { surface?: Token, opacity?: number, filter?: string }

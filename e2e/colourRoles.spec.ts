@@ -32,7 +32,9 @@ const ALLOWED: Record<Role, string> = {
     // Interactive chrome: a control, or the board's own focus ring on the grid.
     accent: 'button, [role="grid"]',
     accentEdge: 'button, [role="grid"]',
-    success: '[data-line-state="satisfied"], [data-completion-card]',
+    // A satisfied line, and the solved puzzle's outcome line -- not the card around it,
+    // since P2-3 (row 15) took the card off its green.
+    success: '[data-line-state="satisfied"], [data-completion-message]',
     // The advice strip only while it reports a problem (`adviceIsProblem`), not the strip.
     // And a refused move's cross (P1-6, row 12): something is wrong with that move. And the
     // caution variant's edge, `Reset` (P2-2, row 14): something that cannot be taken back.
@@ -126,18 +128,19 @@ const expectRolesKept = async (page: Page, state: string) => {
  * "Play today" back in white would keep every assertion above, at 3.05:1. So every piece
  * of text on the page is read against its nearest element, itself or an ancestor, whose
  * computed background is not fully transparent; where that background is one of these
- * three opaque surfaces, the text must be the token promised for it, and clear 4.5:1
- * against it as the browser computes both. `tests/contrast.test.ts` holds the same pairs
- * as tokens.
+ * opaque surfaces, the text must be the token promised for it, and clear 4.5:1 against it as
+ * the browser computes both. `tests/contrast.test.ts` holds the same pairs as tokens. There
+ * were three until P2-3 (row 15) took the completion card off `success`, whose white text
+ * was the third; "Solved!" in `success` on the card is `e2e/completionCard.spec.ts`'s.
  *
  * What it is not (codex, row 10 acceptance): a measure of the colour actually painted
  * behind every text element. Translucent layers are not composited. Text on a wash -- a
  * difficulty option's `hover:bg-panel/60`, until P2-2 made every control's surfaces opaque
- * tokens -- is read against the wash's own colour, which is none of the three surfaces, so
+ * tokens -- is read against the wash's own colour, which is none of the surfaces, so
  * it goes unchecked. It protects the named opaque surfaces, which is what it was asked to
  * protect.
  */
-const SURFACES = { accent: 'ink', success: 'onSuccess', controlSurface: 'ink' } as const satisfies Record<string, Token>
+const SURFACES = { accent: 'ink', controlSurface: 'ink' } as const satisfies Record<string, Token>
 
 type Foreground = { element: string, surface: string, expected: string, colour: string, ratio: number, ok: boolean }
 
@@ -184,7 +187,7 @@ const foregrounds = (page: Page) => page.evaluate(({ surfaces, tokens }) => {
     return out
 }, {
     surfaces: SURFACES,
-    tokens: Object.fromEntries((['accent', 'success', 'controlSurface', 'ink', 'onSuccess'] as const).map(t => [t, rgbBytes(t)])),
+    tokens: Object.fromEntries((['accent', 'controlSurface', 'ink'] as const).map(t => [t, rgbBytes(t)])),
 }) as Promise<Foreground[]>
 
 /** The role colours one element paints, as `property: role`. */
@@ -314,14 +317,19 @@ test.describe('on the component sheet, where every state is on screen at once', 
         expect(await rolesOn(reset)).toEqual({ border: 'problem' })
         expect(await hovered(reset)).toEqual({ border: 'problem' })
 
-        // The completion card is the solved state, so `success`; its buttons are chrome,
-        // secondary controls, which carry no role at rest or under the pointer.
+        // The completion card's "Solved!" is the solved state, so `success`, and nothing else
+        // on the card is (P2-3, row 15: the card was a `success` surface until then). Its
+        // buttons are chrome, secondary controls, which carry no role at rest or hovered.
         const card = page.locator('[data-completion-card]')
-        expect(await rolesOn(card)).toEqual({ background: 'success' })
-        await expectForeground(page, 'Solved!', 'success')
+        expect(await rolesOn(card)).toEqual({})
+        expect(await rolesOn(card.locator('[data-completion-message]'))).toEqual({ color: 'success' })
+        expect(await rolesOn(card.locator('[data-completion-detail]'))).toEqual({})
         for (const button of await card.locator('button').all()) {
-            expect(await rolesOn(button)).toEqual({})
-            expect(await hovered(button)).toEqual({})
+            // The card moves focus to its first action as it mounts, and that ring is the
+            // accent's edge like every control's since P2-3; it was the card's own white.
+            const ring = await button.evaluate(el => el.matches(':focus-visible')) ? { outline: 'accentEdge' } : {}
+            expect(await rolesOn(button)).toEqual(ring)
+            expect(await hovered(button)).toEqual(ring)
             await expectForeground(page, await button.innerText(), 'controlSurface')
         }
 

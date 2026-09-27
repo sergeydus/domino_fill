@@ -2217,6 +2217,93 @@ computed style; the card's copy, `role="status"` and focus behaviour are unchang
 row 15; it appears on **baselines 1 and 2**, as a fixture on the component sheet, because it
 is a transient surface and the desktop baseline is the ordinary composition.
 
+> **Amendment (row 15) — a light card, three levels, and a line that says what was solved.**
+>
+> **This section was written against a card that had changed under it,** and two of its
+> sentences could not both hold. Both conflicts were put to the user, who left them to this
+> row and asked for the app to be beautiful; they were decided so:
+> - **"Currently a blue box", and the outcome in the `success` token.** Row 10 had already
+>   made the whole card a `success` surface, with `onSuccess` white text. "Solved!" in white
+>   on the green was no louder than the card around it, and `success` text on a `success`
+>   surface cannot be read. So the card is the `panel`'s white, lifted from the ground by the
+>   shadow it already had, and "Solved!" is the `success` on it: 7.13:1, the same pair as
+>   before, reversed.
+> - **A detail line in `body`, and "the card's copy unchanged from row 15".** The card has
+>   never had a detail line. SPEC.md's row 15 built it with "Solved!" and its two actions, so
+>   the three levels this section asks for require new copy. The line is **"Easy · puzzle 1
+>   of 3"**: the difficulty's name (`DIFFICULTY_NAME`, shared with the selector, so "normal"
+>   reads "Medium" on both) and the level. It names what was solved, which the card did not
+>   say. *The copy is not unchanged*, and this is the one change: "Solved!", "Next level" and
+>   "Play again" are as they were. `role="status"`, `aria-live="polite"` and focus
+>   (the primary action, as it mounts) are unchanged.
+>
+> **The three levels**, loudest first:
+>
+> | level | role | weight | colour |
+> | --- | --- | --- | --- |
+> | outcome, "Solved!" | card title, 24px | 700 | `success` |
+> | detail | body, 14px | 500 | `panelInk` |
+> | actions | control, 16px | 400 | secondary controls (P2-2) |
+>
+> "Distinguishable by size *and* weight" is read as every pair of levels differing in both.
+> The body role is smaller than the control role, so a detail at the controls' weight would
+> have differed from them by size alone. It is medium, 500, which is why the table says so.
+>
+> **What went with the green:**
+> - `onSuccess`, whose only use was the card's text; the white it was is `panel`'s.
+> - `--focus-ring`, the variable the card set so its buttons' focus ring was white on the
+>   green. It was the one surface a control sat on that was not light; now every control's
+>   ring is its variant's `accentEdge`, 11.78:1 on the card.
+> - The colour-role scan's `success` context narrows from the whole card to the
+>   "Solved!" line.
+>
+> **Held:**
+> - `e2e/completionCard.spec.ts`, on the sheet at 38 and 53px and on a board really solved (a
+>   Medium puzzle, so the detail cannot be a constant that matches the sheet's Easy 1):
+>   - "Solved!" is 24px, 700, in `success`; the detail 14px, 500; each action 16px, 400;
+>   - every pair of levels differs in size *and* in weight;
+>   - no other text on the card is as large or as heavy as "Solved!";
+>   - top to bottom: outcome, detail, actions;
+>   - the card is the panel, `role="status"`, `aria-live="polite"`;
+>   - the detail names the puzzle the store was on.
+> - `tests/contrast.test.ts`: "Solved!" on the panel at 4.5:1 and at 7.13; the card's focus
+>   ring, `accentEdge` on the panel, at 11.78, and why the card had needed its own on green.
+> - `e2e/completion.spec.ts` (SPEC.md row 15), unedited: the card's behaviour, its focus, its
+>   timing.
+>
+> **Tests of other rows edited, each with its contract unchanged:**
+> - `e2e/colourRoles.spec.ts` (row 10): the card carries no role, "Solved!" carries
+>   `success`, and its detail none. The foreground check is down from three surfaces to two:
+>   the third was the card's green. The card's focused action carries the accent's edge, as
+>   every control's focus now does.
+> - `e2e/controlStates.spec.ts` and `e2e/controlVariants.spec.ts` (rows 12, 14): the card's
+>   buttons have the one ring, not their own white.
+> - `tests/contrast.test.ts` (rows 10, 12): the `onSuccess` pairs replaced by the ones above.
+>   White on the accent, 3.05:1, is now named by `panel`, which is the same white.
+> - `tests/palette.test.ts`: an example that named `onSuccess` names `controlSurface`.
+>
+> **Mutations,** each caught, 9 of 9:
+> - in `e2e/completionCard.spec.ts`:
+>   - the detail at the actions' weight;
+>   - "Solved!" not bold;
+>   - "Solved!" not in `success`;
+>   - the detail as loud as the outcome;
+>   - the detail above the outcome;
+>   - the detail a constant matching the sheet;
+>   - the card back on `success`;
+> - in `e2e/colourRoles.spec.ts`: the card on `success`;
+> - in `tests/contrast.test.ts`: `success` lightened below 4.5:1 on the panel.
+>
+> **Predictions,** old tree against new on the development host. Only the sheets change;
+> the card is not on the phone or desktop baselines, and both are byte-identical:
+> - **sheet 2 (53px):** 37,404 pixels, all inside the card's box. The card is white and
+>   25px taller (110 → 135px) for the detail line; its width is unchanged, 253px. Nothing
+>   else moves: the row's boards are taller than the card. 1280×800.
+> - **sheet 1 (38px):** 51,687 pixels. The same card, and at 38px it is the tallest thing in
+>   its row, so the row below it, the level arrows, `Archive` and `Sound`, moves down 25px.
+>   1280×800.
+> - **phone (3) and desktop (4):** unchanged.
+
 ### P2-4 · The icon, brought up to the new art
 
 The colours are already done: P0-5 took every literal out of `scripts/icon.ts`, and P1-3

@@ -6,6 +6,7 @@ import { LevelStore } from "../stores/BoardsStore"
 import { PuzzleSession } from "../stores/PuzzleSession"
 import { MOTION } from "./motion"
 import { control } from "../controls"
+import { DIFFICULTY_NAME } from "./DifficultySlider"
 
 /**
  * What winning looks like (spec P1-4).
@@ -29,6 +30,14 @@ import { control } from "../controls"
  *    equivalent: `pointer-events` stops the mouse and nothing else, leaving every cell
  *    still tabbable and still announced, so a keyboard or screen-reader user could keep
  *    "playing" a board that had already been won.
+ *
+ * **Three levels, loudest first (graphics spec P2-3, row 15).** The outcome, "Solved!", in the
+ * card-title role, bold, in `success`: the one thing on the card that is the solved state. Then
+ * which puzzle it was, in the body role at a medium weight: the line this row added, so the
+ * card says what was solved and not only that something was. Then the actions, secondary
+ * controls. Each differs from the others in size *and* weight, so the order holds without
+ * colour. The card is the panel's white, lifted by its shadow; it was a green slab, whose
+ * white "Solved!" was no louder than the card around it.
  */
 
 type Props = {
@@ -73,8 +82,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             data-completion-card
             role="status"
             aria-live="polite"
-            // The one dark surface a control sits on: its focus ring is white (P1-6).
-            className="flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg [--focus-ring:var(--on-success)]"
+            className="flex flex-col items-center gap-3 rounded-2xl bg-panel text-panel-ink px-6 py-4 shadow-lg"
             // Inside P1-6's limits (`motion.ts`), as P2-3 asks: a tenth of a cell up, where it
             // was 8px and a 90% scale -- a squash measured in card widths, not cells -- over
             // 250ms. The card is on screen and announced immediately either way; the
@@ -83,9 +91,14 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: MOTION.card.duration }}
         >
-            <p className="text-card-title font-bold" data-completion-message>
-                Solved!
-            </p>
+            <div className="flex flex-col items-center gap-1">
+                <p className="text-card-title font-bold text-success" data-completion-message>
+                    Solved!
+                </p>
+                <p className="text-body font-medium" data-completion-detail>
+                    {DIFFICULTY_NAME[levels.difficulty]} · puzzle {levels.level} of 3
+                </p>
+            </div>
 
             {/* Secondary controls (graphics P2-2, row 14): the card's own surface is the
                 outcome, and its actions are what comes after it. */}

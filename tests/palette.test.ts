@@ -67,7 +67,7 @@ describe('every kind of consumer reads the token rather than a copy', () => {
 
     it('cssName is the kebab-case Tailwind knows', () => {
         expect(cssName('tileFace')).toBe('tile-face')
-        expect(cssName('onSuccess')).toBe('on-success')
+        expect(cssName('controlSurface')).toBe('control-surface')
     })
 })
 
