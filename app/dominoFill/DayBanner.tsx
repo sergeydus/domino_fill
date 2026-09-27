@@ -1,6 +1,7 @@
 "use client"
 import { observer } from 'mobx-react'
 import type { LevelStore } from '../stores/BoardsStore'
+import { control } from '../controls'
 
 /**
  * Which day is on screen, and the way back to today (spec P1-6/P1-7, row 18d).
@@ -61,7 +62,8 @@ const DayBanner: React.FC<Props> = ({ boardsStore, onGoToDate }) => {
                 <button
                     type='button'
                     data-go-to-today
-                    className='rounded-md bg-accent px-2 py-1 font-semibold text-ink'
+                    // The banner's one action, so its primary (graphics P2-2, row 14).
+                    className={control('primary')}
                     /*
                      * Two routes to the same place. A held-back day is already fetched, so
                      * adopting it is instant and cannot fail; an archive day was chosen

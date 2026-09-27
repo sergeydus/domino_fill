@@ -2007,6 +2007,152 @@ variant; every control belongs to exactly one variant, asserted by computed styl
 is visually distinct from `Hint` and `Undo` by a named property, not by fill alone; disabled
 contrast is unchanged from today's measurement.
 
+> **Amendment (row 14) — six variants, one table, and every button in exactly one.**
+>
+> **Before this row** each of the game's 18 buttons wrote its own look, in seven designs:
+> - flat on the control surface: `Check`, `Hint`, `Undo`, `Reset`, and the difficulty's
+>   options on a tray of their own;
+> - bordered: `Archive`, `Sound` and the archive's month arrows unfilled, its days on their
+>   marks;
+> - the accent: "Got it!" and "Play today";
+> - white: the completion card's actions;
+> - slate: the archive's Close (`strongSurface`);
+> - an underlined link: the tutorial's "Skip";
+> - a drawing: the level arrows.
+>
+> The seven used two radii and six paddings between them.
+>
+> **Now the table is `app/controls.ts`**, in the palette's pattern. `npm run tokens` also writes
+> `app/controls.css`: one rule set per variant, in the `components` layer. That puts it above
+> P1-6's rules for every button and below Tailwind's utilities, so a state drawn with a utility
+> (`aria-pressed`, the archive's current day) still wins over a variant's rest. A button names
+> its variant, `control('caution')`, and nothing else about its look.
+>
+> | variant | who | at rest | hover | held | disabled |
+> | --- | --- | --- | --- | --- | --- |
+> | primary | `Check`, "Got it!", "Play today" | `accent`, bold | a 2px `accentEdge` ring | — | the neutral surface, 40% |
+> | secondary | `Hint`, `Undo`, the difficulty's options, the card's actions, the archive's Close | `controlSurface` | `panel` | `accent` | 40% |
+> | caution | `Reset` | the secondary's, with a 2px `problem` edge | `panel` | `accent` | 40% |
+> | quiet | `Archive`, `Sound`, the archive's month arrows, "Skip" | a 1px `ink` edge, no surface | `controlSurface` | `accent` | 40% |
+> | icon | the level arrows | no surface, no padding | grows to 1.2 | — | grey |
+> | day | the archive's days | the day's mark, a 1px `ink` edge | — | — | — |
+>
+> - **The box.** The four text variants share one: a 6px radius, and 8px by 12px from the
+>   outside of the edge to the text. The edge sits inside that, so `Reset` is the same size as
+>   `Hint`.
+> - **Held** is P1-6's pixel and 90% on every variant, plus the surface above where one is
+>   named. It is written after the hover it ties with, so a pointer that is pressing shows the
+>   press.
+> - **Focus** is P1-6's ring in `accentEdge`, the completion card's in `onSuccess`.
+>
+> **What the table does not show, each decided here:**
+> - **A sixth variant, `day`.** The archive's days are buttons, and the spec's five have no
+>   place for them. Their surface is how far that day was played, which is data; the nearest
+>   variant, `quiet`, is defined by having no surface. They keep the box they had, 1px edge
+>   and 4px padding, which the archive's grid is laid out on. The current day's ring is a
+>   state, like `aria-pressed`, and the archive still draws it.
+> - **The controls the spec's table does not name**, mapped here:
+>   - the difficulty's options are secondary. The pressed paragraph above keeps them from
+>     being a variant of their own. Their tray went: each option has the surface now, and a
+>     tray behind it would be the same colour behind the same colour.
+>   - the card's actions are secondary, as P2-3 already says. They were white, and the accent
+>     under the pointer.
+>   - "Got it!" and "Play today" are primary: the accent they wore since P1-4, as the action of
+>     their surface.
+>   - "Skip" and the archive's month arrows are quiet.
+>   - the archive's Close is secondary. It was row 10's one exception, a slate block
+>     (`strongSurface`, `onStrong`). Both tokens are gone.
+> - **The focus ring is `accentEdge`, not black.** "Accent on focus" is the secondary's
+>   treatment, and one ring for every variant is `accentEdge`: 8.42:1 or better on every light
+>   surface a control sits on (it was 15:1 in black). `controlFocus` is gone. The card's ring
+>   stays `onSuccess`.
+> - **Disabled contrast.** The acceptance's "today's measurement" is P1-6's, `Undo`'s 2.30:1,
+>   and it is unchanged, along with every other disabled control's but one:
+>   - `Undo` and `Hint`, secondary, are 2.30, as they were;
+>   - `Check`, now primary, is 2.30, as it was on the neutral surface. A disabled primary
+>     gives up the accent: it would otherwise take `Check` to 1.71, and a control that cannot
+>     be pressed should not wear the colour that means "press";
+>   - the archive's month arrows are 2.55, as they were;
+>   - **"Got it!" moves, from 2.02 to 2.24.** It was the accent at 50% on the panel; a disabled
+>     primary is the neutral surface at 40%.
+>
+>   `tests/contrast.test.ts` reads every one of these from the table, so a variant whose
+>   disabled look changes moves its number there.
+> - **`Reset` is caution in looks only.** It is the one control that destroys work, and now it
+>   looks like it; whether it should ask first is still `SPEC.md`'s open question, and this
+>   row leaves it open.
+> - Every button's `cursor` and its fast-tap `touch-action` moved to P1-6's base rule. They
+>   had been on some buttons and not others, the latter by a marker class, `control-surface`,
+>   which is gone.
+>
+> **Held:**
+> - `tests/controls.test.ts`:
+>   - the table is the spec's. `caution` equals `secondary` in everything but its edge.
+>   - the generated stylesheet is byte-identical to its generator, imported, and checked
+>     out byte for byte;
+>   - every hover waits for a fine pointer, and every press comes after the hover it ties with;
+>   - every `<button>` in `app`, read from the syntax tree (18 of them), names exactly one
+>     variant. None declares a surface, text colour, edge, radius, padding, weight, cursor or
+>     state look of its own. The pattern is checked against examples it must and must not
+>     match, and against planted buttons with no variant, two variants, and a look of their own.
+> - `e2e/controlVariants.spec.ts`, on the game page, the archive, the day banner, the tutorial,
+>   and the sheet with the completion card, over every visible button the browser finds:
+>   - at rest (a toggle read unpressed), the button computes to **exactly one** variant's
+>     surface, edge, radius, padding, text colour, weight, opacity and filter, and it is the
+>     variant its class names;
+>   - enabled, its hover, held and focused looks are that variant's tokens; disabled, it keeps
+>     its disabled look under the pointer (P1-6's test holds a disabled control under a press);
+>   - `Reset`'s fill equals `Hint`'s, and its edge is 2px of `problem`, where `Hint`'s and
+>     `Undo`'s are none. It is the same height as `Hint`.
+> - `tests/contrast.test.ts`: the disabled numbers above, and `Reset`'s edge at 5.97:1 on its
+>   surface and 7.35:1 on the ground.
+>
+> **Tests of other rows edited, each with its contract unchanged:**
+> - `e2e/colourRoles.spec.ts` (row 10):
+>   - `problem` is allowed on the caution variant, and an element's edge is read with its
+>     other colours;
+>   - `Check` carries the accent, and its edge under the pointer;
+>   - the card's buttons carry no role at rest or under the pointer;
+>   - "Got it!", disabled, carries none: row 10 read it in the accent while disabled. The test
+>     now solves the tutorial's board and finds the accent on the enabled button.
+> - `e2e/controlStates.spec.ts` (row 12): the ring's colour is `accentEdge`.
+> - `tests/contrast.test.ts` (row 12): the focus pairs are `accentEdge`'s.
+>
+> **Mutations,** each caught by the test aimed at it, 15 of 15:
+> - in the browser (`e2e/controlVariants.spec.ts`):
+>   - `Reset` drawn as a secondary;
+>   - primary and secondary made one look, in the table and the stylesheet together
+>     ("Easy 6x6" then computes to both);
+>   - `Check` drawn as a secondary in the stylesheet alone;
+>   - the stylesheet hand-edited to put the accent on the secondary's hover;
+>   - `Archive` with padding of its own;
+>   - "Skip" with no variant;
+>   - the press written before the hover (a held "Next level" shows the hover);
+>   - no focus colour on the secondary;
+>   - a day without its mark;
+>   - the card's buttons back on the panel;
+> - in `e2e/colourRoles.spec.ts`: `Hint` made a caution control;
+> - in the unit tests:
+>   - the caution variant without its edge;
+>   - the stylesheet hand-edited;
+>   - `Archive` with padding of its own;
+>   - a disabled primary that keeps the accent (1.71, not 2.30).
+>
+> **Predictions,** old tree against new on the development host. Every baseline changes,
+> and text moves on all four, so the runner's counts will not be these:
+> - **sheets 1 and 2:** 34,389 and 41,078 pixels, all in the controls' specimens and the
+>   completion card. `Check` is the accent and bold; `Reset` has its red edge; the difficulty's
+>   options stand on their own, and are wider, with the variant's 12px of padding where they
+>   had 4. `Archive` and
+>   `Sound` are 6px taller. The card's actions are neutral and narrower. 1280×800.
+> - **phone (3):** 16px shorter, **360×668 to 360×652**. The difficulty group loses the
+>   tray's 8px above and below, 52 → 36px, so everything below it moves up 16px. The board
+>   keeps its size (cell 38). `Archive` and `Sound` grow from 30 to 36px, and share the row
+>   the 64px arrows already set.
+> - **desktop (4):** 29,420 pixels, all in the rail (from x = 815). The board does not move.
+>   The difficulty's options wrap their labels onto two lines, as the runner's baseline already
+>   drew them. 1280×800.
+
 ### P2-3 · The completion card
 
 The game's one celebration, and currently a blue box. Its hierarchy, specified: the outcome

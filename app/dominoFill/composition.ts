@@ -47,9 +47,12 @@ export const WIDE_LAYOUT_QUERY = '(min-width: 1024px) and (min-height: 640px)'
  * comment claimed the fit from row 1 on, and the desktop baseline showed "Hard 8x8" running
  * 8px past the rail. The selector's buttons gave up horizontal padding rather than the rail
  * growing: the rail is subtracted from the board's width budget, and row 1's measured board
- * sizes stand on this number. Its narrowest arrangement is now 253.9px (with the bold
- * "Medium 7x7" selected), which leaves 6px, and `e2e/desktop.spec.ts` fails the day that
- * is gone.
+ * sizes stand on this number. `e2e/desktop.spec.ts` fails the day an option runs past it.
+ *
+ * Since graphics P2-2 (row 14) the options are secondary controls, with that variant's
+ * padding and no tray, and in 260px they wrap their labels onto two lines rather than run
+ * past the rail. The CI runner, whose text is wider, already drew them on two lines before
+ * that row; the development host had fitted them on one, in 253.9px.
  */
 export const RAIL_WIDTH_PX = 260
 

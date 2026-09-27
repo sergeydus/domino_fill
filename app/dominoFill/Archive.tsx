@@ -6,6 +6,7 @@ import type { CorpusSource } from '../stores/corpusSource'
 import { addMonths, datesIn, monthOf, type Chunk, type Manifest } from '../stores/corpus'
 import { readAllProgress, type PuzzleProgress } from '../stores/progressStorage'
 import { markForDay, type DayMark } from '../stores/dayMark'
+import { control } from '../controls'
 
 /**
  * Every published day, reachable (spec P1-6, row 18d).
@@ -39,13 +40,6 @@ type Props = {
     corpus: CorpusSource
     /** Load a date and put it on screen. Explicit, so it always applies. */
     onPick: (date: string) => Promise<void>
-}
-
-const MARK_CLASS: Record<DayMark, string> = {
-    none: 'bg-mark-none',
-    started: 'bg-mark-started',
-    partial: 'bg-mark-partial',
-    complete: 'bg-mark-complete',
 }
 
 const MARK_LABEL: Record<DayMark, string> = {
@@ -134,7 +128,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     <button
                         type='button'
                         data-archive-prev
-                        className='rounded-md border px-2 py-1 disabled:opacity-40'
+                        className={control('quiet')}
                         disabled={!canGoBack}
                         onClick={() => setMonth(current => addMonths(current, -1))}
                         aria-label='Previous month'
@@ -145,7 +139,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     <button
                         type='button'
                         data-archive-next
-                        className='rounded-md border px-2 py-1 disabled:opacity-40'
+                        className={control('quiet')}
                         disabled={!canGoForward}
                         onClick={() => setMonth(current => addMonths(current, 1))}
                         aria-label='Next month'
@@ -175,8 +169,9 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                                 aria-label={`${date}, ${MARK_LABEL[mark]}`}
                                 // Until the chunk lands there are no ids, so a mark would be
                                 // a guess. The day is still selectable: picking it fetches
-                                // the month anyway.
-                                className={`rounded-md border p-1 text-meta ${MARK_CLASS[mark]} `
+                                // the month anyway. Its surface is its mark, by `data-mark`
+                                // (the `day` variant, graphics P2-2).
+                                className={`${control('day')} text-meta `
                                     + (date === viewingDate ? 'ring-2 ring-accent-edge' : '')}
                                 onClick={() => { void pick(date) }}
                             >
@@ -189,7 +184,8 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                 <button
                     type='button'
                     data-archive-close
-                    className='mt-4 w-full rounded-md bg-strong-surface px-3 py-2 font-semibold text-on-strong'
+                    // Secondary (graphics P2-2, row 14); it was a slate block, a design of its own.
+                    className={`${control('secondary')} mt-4 w-full`}
                     onClick={() => boardsStore.setArchiveOpen(false)}
                 >
                     Close

@@ -2,6 +2,7 @@
 import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
 import { PRESSED } from "./controlStates"
+import { control } from "../controls"
 
 /**
  * Difficulty (spec P1-8, row 19).
@@ -24,10 +25,13 @@ import { PRESSED } from "./controlStates"
  * Since graphics P1-6 that is `PRESSED`, every toggle's treatment, read from the attribute;
  * the fill was a `motion` tween, and is a CSS transition now, which reduced motion zeroes.
  *
- * `px-1` rather than `p-2` (graphics spec P0-4, row 4): at 8px a side the three options
- * could not get narrower than the 260px desktop rail, and "Hard 8x8" ran past it. The flex
- * row still spreads any spare width back into the buttons, so the labels do not look
- * tighter where there is room; see `RAIL_WIDTH_PX` for the measurement.
+ * **Secondary controls, and no tray (graphics spec P2-2, row 14).** The options sat on a
+ * control-surface tray of their own, with no surface, 4px of padding and a white wash for
+ * hover: a fourth design for a button. Each option is now a secondary control with its own
+ * surface, so the tray would be the same colour behind the same colour, and it went; its
+ * 16px of padding paid for most of the options' own. In the 260px rail the options are
+ * narrower than their labels and wrap them to two lines, as the CI runner's wider text
+ * already did before this row; see `RAIL_WIDTH_PX`.
  */
 
 const LEVELS = [
@@ -41,7 +45,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row bg-control-surface rounded gap-2 p-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row gap-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
@@ -51,7 +55,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`cursor-pointer px-1 py-2 rounded control-surface ${PRESSED} ${selected ? '' : 'hover:bg-panel/60'}`}
+                        className={`${control('secondary')} ${PRESSED}`}
                         onClick={onClick(key)}
                     >
                         {label}

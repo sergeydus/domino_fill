@@ -1,6 +1,7 @@
 "use client"
 import { observer } from "mobx-react"
 import { PuzzleSession } from "../stores/PuzzleSession"
+import { control } from "../controls"
 
 /**
  * Undo and Reset (spec P1-3).
@@ -30,6 +31,11 @@ import { PuzzleSession } from "../stores/PuzzleSession"
  * what the spec asks for and also what keeps the guarantee simple: advice cannot corrupt a
  * board it never writes to, cannot desynchronise an undo stack it never pushes to, and
  * cannot save anything, because nothing it does is a change worth saving.
+ *
+ * **Three variants (graphics spec P2-2, row 14).** `Check` is the primary: it is the question
+ * a player asks when they think they are done. `Hint` and `Undo` are secondary. `Reset` is
+ * the caution variant, the one control here that throws work away, and it wears `problem`
+ * as an edge; whether it should ask first is still `SPEC.md`'s open question.
  */
 
 const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => (
@@ -46,7 +52,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-check
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
+            className={control('primary')}
             onClick={() => boardsStore.check()}
             disabled={boardsStore.completed}
         >
@@ -55,7 +61,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-hint
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
+            className={control('secondary')}
             onClick={() => boardsStore.hint()}
             disabled={boardsStore.completed}
         >
@@ -64,7 +70,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-undo
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface disabled:opacity-40 disabled:cursor-not-allowed"
+            className={control('secondary')}
             onClick={() => boardsStore.undo()}
             disabled={!boardsStore.canUndo}
         >
@@ -73,7 +79,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-reset
-            className="control-surface cursor-pointer px-3 py-2 rounded bg-control-surface"
+            className={control('caution')}
             onClick={() => boardsStore.reset()}
         >
             Reset

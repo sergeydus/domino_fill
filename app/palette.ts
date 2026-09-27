@@ -83,7 +83,8 @@ export const PALETTE = {
     /**
      * Something is wrong: an overshot line, the advice strip when it is reporting a problem
      * (7.35:1), the archive's error message, which had a red of its own until P1-4, and the
-     * cross on a refused move (P1-6).
+     * cross on a refused move (P1-6). And the edge of `Reset`, the caution variant (P2-2):
+     * not something wrong, but something that cannot be taken back.
      */
     problem: '#a10000',
     /**
@@ -94,22 +95,24 @@ export const PALETTE = {
 
     // ---- interactive chrome --------------------------------------------------------------
     /*
-     * One accent, and only on interactive chrome (§2.2, P1-4): the selected difficulty, the
-     * level arrows, the primary action of a dialog or banner, a control under the pointer
-     * in the completion card. Until P1-4 there were five blues -- this, Material's two for
+     * One accent, and only on interactive chrome (§2.2, P1-4): the primary controls, any
+     * control pressed into a state or held down, and the level arrows (P2-2). Until P1-4
+     * there were five blues -- this, Material's two for
      * the arrows, Tailwind's `blue-500` and `blue-600` for the tutorial and the board's
      * focus ring, `sky-600` for the archive's current day -- and an amber for "Go to
      * today". Text on the accent is `ink` (5.87:1); white was 3.05:1.
      */
     accent: '#419dc8',
     /**
-     * The accent's edge: rings and strokes -- the selected difficulty's ring, the arrows'
-     * outline, the archive's current day, the board's focus ring.
+     * The accent's edge: rings and strokes -- a toggle's ring, the primary's hover, the
+     * arrows' outline, the archive's current day, the board's focus ring, and every
+     * control's (P2-2; black until then), 8.42:1 or better on every light surface.
      */
     accentEdge: '#0b3c52',
     /**
-     * Check, Hint, Undo, Reset, the difficulty group and the domino legend's tray. A light
-     * warm neutral since P1-4, so the controls sit back on the warm ground; it was `#ababab`.
+     * The secondary and caution controls, a disabled primary, a quiet control under the
+     * pointer, and the domino legend's tray. A light warm neutral since P1-4, so the
+     * controls sit back on the warm ground; it was `#ababab`.
      */
     controlSurface: '#e2d9ca',
 
@@ -141,20 +144,12 @@ export const PALETTE = {
     // ---- dialogs and surfaces ------------------------------------------------------------
     /** Behind a modal, drawn at 40%. */
     scrim: '#000000',
-    // ---- focus on the chrome (P1-6) ---------------------------------------------------------
     /**
-     * The ring round a control the keyboard is on, drawn outside it on whatever it sits on:
-     * 15:1 or better on every light surface. The completion card's green is the one dark
-     * surface a control sits on, and there the ring is `onSuccess`.
+     * The archive's and the tutorial's card, and a secondary control under the pointer.
      */
-    controlFocus: '#000000',
-    /** The archive's and the tutorial's card. */
     panel: '#ffffff',
     /** The tutorial's text on its card. */
     panelInk: '#000000',
-    /** The archive's Close button. Tailwind `slate-800`. */
-    strongSurface: 'oklch(27.9% 0.041 260.031)',
-    onStrong: '#ffffff',
 
     // ---- the archive's day marks ---------------------------------------------------------
     markNone: '#ffffff',

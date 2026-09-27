@@ -3,6 +3,7 @@ import { observer } from 'mobx-react'
 import { LevelStore } from '../stores/BoardsStore'
 import { SoundStore } from '../stores/SoundStore'
 import { PRESSED } from './controlStates'
+import { control } from '../controls'
 
 /*
  * The two page-level buttons, as components (graphics spec P0-3, row 3).
@@ -11,13 +12,16 @@ import { PRESSED } from './controlStates'
  * thing: a sheet that copied this markup would be a second implementation of the controls,
  * passing while the shipped ones changed. Extracted unchanged -- same element, same
  * attributes, same classes -- so the page renders exactly what it rendered before.
+ *
+ * Both are the quiet variant (graphics spec P2-2, row 14): page-level, not part of the game,
+ * so bordered and unfilled until the pointer or a press fills them.
  */
 
 export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
   <button
     type='button'
     data-open-archive
-    className='rounded-md border px-3 py-1'
+    className={control('quiet')}
     onClick={() => levels.setArchiveOpen(true)}
   >
     Archive
@@ -44,7 +48,7 @@ export const SoundButton = observer(({ sound }: { sound: SoundStore }) => (
     data-mute
     aria-pressed={!sound.muted}
     aria-label='Sound'
-    className={`control-surface rounded-md border px-3 py-1 ${PRESSED}`}
+    className={`${control('quiet')} ${PRESSED}`}
     onClick={() => sound.toggle()}
   >
     {sound.muted ? 'Sound off' : 'Sound on'}

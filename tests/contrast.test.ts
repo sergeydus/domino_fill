@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { CHECKER_RATIO, PALETTE, type Token } from '@/app/palette'
 import { contrast, luminance, over, toRgb, type Rgb } from './colour'
+import { CONTROL, type Variant } from '@/app/controls'
 
 /**
  * Every contrast pair the graphics spec names, computed from the tokens (P0-5, row 5).
@@ -131,13 +132,14 @@ describe('P1-4: text on the chrome\'s surfaces', () => {
  * on the halo so the cross reads inside it.
  *
  * **A control's focus ring** is drawn outside the control, on what it sits on: every light
- * surface a control has, and the completion card's green, where the ring is white.
+ * surface a control has, and the completion card's green, where the ring is white. The
+ * accent's edge since P2-2 (row 14), which asks for the accent on focus; black until then.
  */
 const REFUSAL_SURFACES = ['checkerLight', 'checkerDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
 
 const FOCUS_RINGS: Pair[] = [
     ...(['ground', 'controlSurface', 'panel', 'bannerSurface'] as const).map(b =>
-        ({ a: 'controlFocus', b, min: 3, owner: 'P1-6: a control on a light surface', holds: true }) as Pair),
+        ({ a: 'accentEdge', b, min: 3, owner: 'P1-6, P2-2: a control on a light surface', holds: true }) as Pair),
     { a: 'onSuccess', b: 'success', min: 3, owner: 'P1-6: the completion card\'s buttons', holds: true },
 ]
 
@@ -177,7 +179,7 @@ describe('P1-6: a refused move, a control\'s focus, and a disabled control', () 
     }
 
     it('and the light surfaces\' ring would not do on the green, which is why the card has its own', () => {
-        expect(ratio({ a: 'controlFocus', b: 'success', min: 3, owner: '', holds: false })).toBeLessThan(3)
+        expect(ratio({ a: 'accentEdge', b: 'success', min: 3, owner: '', holds: false })).toBeLessThan(3)
     })
 
     it('a disabled Undo keeps the contrast it had before P1-6', () => {
@@ -185,6 +187,65 @@ describe('P1-6: a refused move, a control\'s focus, and a disabled control', () 
         // control; P1-6 and P2-2 both ask only that it not move, and a row that wants it to
         // has to move this number, in the open.
         expect(ratio(DISABLED_UNDO).toFixed(2)).toBe('2.30')
+    })
+})
+
+/**
+ * P2-2's disabled controls (row 14): "disabled contrast is unchanged from today's
+ * measurement". Read from the variants in `app/controls.ts`, so a variant whose disabled
+ * look changes moves these numbers: a disabled control is its variant's disabled surface
+ * (or its own) at the variant's opacity, over what it sits on.
+ */
+describe('P2-2: disabled, in every variant that is ever disabled', () => {
+    const disabled = (variant: 'primary' | 'secondary' | 'quiet', on: Token): Pair => {
+        const c: Variant = CONTROL[variant]
+        const surface = c.disabled.surface ?? (typeof c.surface === 'string' ? c.surface : on)
+        const alpha = c.disabled.opacity ?? 1
+        return {
+            a: { token: 'ink', alpha, over: on }, b: { token: surface, alpha, over: on },
+            min: 0, owner: `P2-2: a disabled ${variant} control`, holds: true,
+        }
+    }
+    const before = (surface: Token, alpha: number, on: Token): Pair => ({
+        a: { token: 'ink', alpha, over: on }, b: { token: surface, alpha, over: on },
+        min: 0, owner: 'before P2-2', holds: true,
+    })
+
+    it('Undo and Hint, secondary, are the pinned 2.30:1', () => {
+        expect(ratio(disabled('secondary', 'ground')).toFixed(2)).toBe(ratio(DISABLED_UNDO).toFixed(2))
+    })
+
+    it('a disabled Check, now primary, is 2.30:1 too, as it was on the neutral surface', () => {
+        expect(ratio(disabled('primary', 'ground')).toFixed(2)).toBe(ratio(DISABLED_UNDO).toFixed(2))
+    })
+
+    it('where a disabled primary that kept the accent would have taken it to 1.71', () => {
+        expect(ratio(before('accent', 0.4, 'ground')).toFixed(2)).toBe('1.71')
+    })
+
+    it(`the tutorial's "Got it!", disabled until its board is solved: 2.24:1, up from 2.02`, () => {
+        // The one disabled control whose number moves: it was the accent at 50% on the
+        // panel, and a disabled primary is the neutral surface at 40%.
+        expect(ratio(before('accent', 0.5, 'panel')).toFixed(2)).toBe('2.02')
+        expect(ratio(disabled('primary', 'panel')).toFixed(2)).toBe('2.24')
+    })
+
+    it(`the archive's month arrows, quiet, with no surface: 2.55:1, as they were`, () => {
+        // 40% of ink on the panel before and after; only their box changed.
+        expect(ratio(before('panel', 0.4, 'panel')).toFixed(2)).toBe('2.55')
+        expect(ratio(disabled('quiet', 'panel')).toFixed(2)).toBe('2.55')
+    })
+})
+
+/**
+ * `Reset`'s edge (P2-2): `problem`, drawn between the control's own surface and whatever the
+ * control sits on, so it has to read against both -- 3:1, a boundary that carries meaning.
+ */
+describe(`P2-2: the caution variant's edge`, () => {
+    it('reads against its surface and the ground', () => {
+        const { edge, surface } = CONTROL.caution
+        expect(contrast(PALETTE[edge.colour], PALETTE[surface]).toFixed(2)).toBe('5.97')
+        expect(contrast(PALETTE[edge.colour], PALETTE.ground).toFixed(2)).toBe('7.35')
     })
 })
 

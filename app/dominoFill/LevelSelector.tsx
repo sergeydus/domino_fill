@@ -2,6 +2,7 @@
 import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
 import { PALETTE } from "../palette"
+import { control } from "../controls"
 
 /**
  * Previous and next puzzle (spec P1-8, row 19).
@@ -24,7 +25,8 @@ import { PALETTE } from "../palette"
  * **States in CSS since graphics P1-6 (row 12).** The hover was `motion`'s `whileHover`,
  * which answers to no media query, and the disabled grey an inline `filter` -- which, being
  * inline, would also have beaten the pressed state's. Hover is now the `hover:` variant,
- * fine pointers only, and disabled is `disabled:grayscale`: the same grey as before.
+ * fine pointers only, and disabled is `disabled:grayscale`: the same grey as before. Both are
+ * the icon variant's since graphics P2-2 (row 14), in `app/controls.ts`, with the rest of it.
  */
 
 const ARROW_PATH = `M10 20
@@ -46,8 +48,6 @@ const Arrow: React.FC = () => (
         <path d={ARROW_PATH} fill={PALETTE.accent} stroke={PALETTE.accentEdge} strokeWidth="3" strokeLinejoin="round" />
     </svg>
 )
-
-const ARROW_BUTTON = 'cursor-pointer control-surface rounded-md enabled:hover:scale-120 disabled:cursor-not-allowed disabled:grayscale'
 
 const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) => {
     const currentLevel = boardsStore.level
@@ -84,7 +84,7 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
             disabled={!hasPreviousLevel}
             data-level="previous"
             aria-label={`Go to puzzle ${destination(-1)} of 3`}
-            className={`rotate-180 ${ARROW_BUTTON}`}
+            className={`rotate-180 ${control('icon')}`}
         >
             <Arrow />
         </button>
@@ -94,7 +94,7 @@ const LevelSelector: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =
             disabled={!hasNextLevel}
             data-level="next"
             aria-label={`Go to puzzle ${destination(+1)} of 3`}
-            className={ARROW_BUTTON}
+            className={control('icon')}
         >
             <Arrow />
         </button>

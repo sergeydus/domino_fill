@@ -34,8 +34,9 @@ const ALLOWED: Record<Role, string> = {
     accentEdge: 'button, [role="grid"]',
     success: '[data-line-state="satisfied"], [data-completion-card]',
     // The advice strip only while it reports a problem (`adviceIsProblem`), not the strip.
-    // And a refused move's cross (P1-6, row 12): something is wrong with that move.
-    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"], [data-refused] [data-cross]',
+    // And a refused move's cross (P1-6, row 12): something is wrong with that move. And the
+    // caution variant's edge, `Reset` (P2-2, row 14): something that cannot be taken back.
+    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"], [data-refused] [data-cross], .control-caution',
     hint: '[data-hinted]',
 }
 
@@ -131,9 +132,10 @@ const expectRolesKept = async (page: Page, state: string) => {
  *
  * What it is not (codex, row 10 acceptance): a measure of the colour actually painted
  * behind every text element. Translucent layers are not composited. Text on a wash -- a
- * difficulty option's `hover:bg-panel/60` -- is read against the wash's own colour, which
- * is none of the three surfaces, so it goes unchecked. It protects the named opaque
- * surfaces, which is what it was asked to protect.
+ * difficulty option's `hover:bg-panel/60`, until P2-2 made every control's surfaces opaque
+ * tokens -- is read against the wash's own colour, which is none of the three surfaces, so
+ * it goes unchecked. It protects the named opaque surfaces, which is what it was asked to
+ * protect.
  */
 const SURFACES = { accent: 'ink', success: 'onSuccess', controlSurface: 'ink' } as const satisfies Record<string, Token>
 
@@ -203,6 +205,9 @@ const rolesOn = (locator: Locator) => locator.evaluate((el, roles) => {
     const put = (property: string, value: string) => { const role = roleOf(value); if (role) out[property] = role }
     put('background', cs.backgroundColor)
     put('color', cs.color)
+    // An edge (P2-2's caution variant is `problem` as one), read from one side: no control
+    // has sides of different colours.
+    if (cs.borderTopStyle !== 'none' && parseFloat(cs.borderTopWidth) > 0) put('border', cs.borderTopColor)
     if (cs.outlineStyle !== 'none') put('outline', cs.outlineColor)
     for (const m of cs.boxShadow.match(/(rgba?|color|oklab|oklch)\([^)]*\)/g) ?? []) put('ring', m)
     if (el instanceof SVGGeometryElement) { put('fill', cs.fill); put('stroke', cs.stroke) }
@@ -278,31 +283,46 @@ test.describe('on the component sheet, where every state is on screen at once', 
             expect(await rolesOn(arrow)).toMatchObject({ fill: 'accent', stroke: 'accentEdge' })
         }
 
-        // The quiet controls carry no role at all, enabled, disabled or hovered.
-        for (const control of await page.locator('[data-check], [data-hint], [data-undo], [data-reset], [data-open-archive]').all()) {
+        /*
+         * The variants (P2-2, row 14). The secondary and quiet controls carry no role,
+         * enabled, disabled or hovered; the accent is theirs only while pressed, which
+         * `e2e/controlVariants.spec.ts` holds. `Check` is the primary, the accent's surface,
+         * ringed in its edge under the pointer; `Reset` is `problem`'s edge, and only that.
+         */
+        const hovered = async (control: Locator) => {
+            await control.hover()
+            await waitForRest(page, 'main')
+            const roles = await rolesOn(control)
+            await page.mouse.move(0, 0)
+            await waitForRest(page, 'main')
+            return roles
+        }
+        for (const control of await page.locator('[data-hint], [data-undo], [data-open-archive]').all()) {
             expect(await rolesOn(control)).toEqual({})
-            if (await control.isEnabled()) {
-                await control.hover()
-                expect(await rolesOn(control)).toEqual({})
-            }
+            if (await control.isEnabled()) expect(await hovered(control)).toEqual({})
         }
         await expect(page.locator('[data-undo]')).toBeDisabled()
-        await expect(page.locator('[data-check]')).toHaveCSS('background-color', bytes('controlSurface'))
+        await expect(page.locator('[data-hint]')).toHaveCSS('background-color', bytes('controlSurface'))
+        await expectForeground(page, 'Hint', 'controlSurface')
+
+        const check = page.locator('[data-check]')
+        expect(await rolesOn(check)).toEqual({ background: 'accent' })
+        expect(await hovered(check)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        await expectForeground(page, 'Check', 'accent')
+
+        const reset = page.locator('[data-reset]')
+        expect(await rolesOn(reset)).toEqual({ border: 'problem' })
+        expect(await hovered(reset)).toEqual({ border: 'problem' })
 
         // The completion card is the solved state, so `success`; its buttons are chrome,
-        // quiet at rest and the accent under the pointer.
+        // secondary controls, which carry no role at rest or under the pointer.
         const card = page.locator('[data-completion-card]')
         expect(await rolesOn(card)).toEqual({ background: 'success' })
         await expectForeground(page, 'Solved!', 'success')
-        await expectForeground(page, 'Check', 'controlSurface')
         for (const button of await card.locator('button').all()) {
-            await page.mouse.move(0, 0)
-            await waitForRest(page, 'main')
             expect(await rolesOn(button)).toEqual({})
-            await button.hover()
-            await waitForRest(page, 'main')
-            expect(await rolesOn(button)).toEqual({ background: 'accent' })
-            await expectForeground(page, await button.innerText(), 'accent')
+            expect(await hovered(button)).toEqual({})
+            await expectForeground(page, await button.innerText(), 'controlSurface')
         }
 
         // The target labels, one per state.
@@ -389,12 +409,32 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         await expectRolesKept(page, 'an earlier day, with the banner')
     })
 
-    test('the tutorial\'s action is the accent', async ({ page }) => {
+    test('the tutorial\'s action is the accent, once there is something to accept', async ({ page }) => {
         await page.goto('/')
         const gotIt = page.getByRole('button', { name: 'Got it!' })
         await expect(gotIt).toBeVisible()
+        /*
+         * Disabled until the tutorial's board is solved, and a disabled primary gives the
+         * accent up (P2-2, row 14): the colour that means "press" is not on a control that
+         * cannot be pressed. Row 10 read it here, disabled, in the accent.
+         */
+        await expect(gotIt).toBeDisabled()
+        expect(await rolesOn(gotIt)).toEqual({})
+        await expectRolesKept(page, 'the tutorial')
+
+        // Solved with two upright dominoes: 1 and 1 across the top row, 0 and 0 below.
+        const tutorial = page.locator('.fixed.inset-0').first()
+        for (const column of [0, 1]) {
+            await tutorial.locator(`[data-cell="0,${column}"]`).hover()
+            await page.mouse.down()
+            await tutorial.locator(`[data-cell="1,${column}"]`).hover()
+            await page.mouse.up()
+        }
+        await expect(gotIt).toBeEnabled()
+        await page.mouse.move(0, 0)
+        await waitForRest(page)
         expect(await rolesOn(gotIt)).toEqual({ background: 'accent' })
         await expectForeground(page, 'Got it!', 'accent')
-        await expectRolesKept(page, 'the tutorial')
+        await expectRolesKept(page, 'the tutorial, solved')
     })
 })

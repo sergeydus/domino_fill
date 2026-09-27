@@ -15,3 +15,4 @@ public/puzzles/** -text
 # and fail that check on every Windows clone, for the same reason the corpus did above.
 app/palette.css -text
 app/typography.css -text
+app/controls.css -text

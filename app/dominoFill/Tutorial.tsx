@@ -5,6 +5,7 @@ import ClientBoard from "./ClientBoard";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
 import { definitionFrom } from "../stores/PuzzleDefinition";
+import { control } from "../controls";
 
 /** Keeps the 2x2 board inside the modal instead of claiming the full board width. */
 const TUTORIAL_BOARD_SIZE = 320;
@@ -85,10 +86,11 @@ const Tutorial = () => {
                 <ClientBoard boardsStore={tutorialBoard} />
 
                 <div className="mt-4 flex flex-row items-center gap-3">
+                    {/* The dialog's primary and its way out, which is quiet (graphics P2-2). */}
                     <button
                         disabled={!solved}
                         onClick={dismiss}
-                        className="px-4 py-2 bg-accent text-ink rounded enabled:hover:ring-2 enabled:hover:ring-accent-edge cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className={control('primary')}
                     >
                         Got it!
                     </button>
@@ -96,7 +98,7 @@ const Tutorial = () => {
                         who cannot finish the 2x2, on any device. */}
                     <button
                         onClick={dismiss}
-                        className="px-4 py-2 rounded underline cursor-pointer opacity-70 hover:opacity-100"
+                        className={control('quiet')}
                     >
                         Skip
                     </button>

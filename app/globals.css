@@ -3,6 +3,8 @@
 @import "./palette.css";
 /* Every text size, as five roles; generated, and Tailwind's own scale cleared (P2-1). */
 @import "./typography.css";
+/* Every control, as one of six variants; generated (P2-2). */
+@import "./controls.css";
 
 /*
  * One light palette, stated once (spec P2-3, row 20c).
@@ -73,11 +75,6 @@
   -webkit-touch-callout: none;
 }
 
-/* Controls want the fast-tap behaviour, not the board's policy. */
-.control-surface {
-  touch-action: manipulation;
-}
-
 /*
  * Hover only where there is a hover (graphics spec P1-6, row 12).
  *
@@ -97,13 +94,14 @@
 
 /*
  * The states every control owes (graphics spec P1-6, row 12). Every control in the game is a
- * `<button>`, so this is every control. In the base layer, so a control's own utilities can
- * still say more; nothing here is overridden today.
+ * `<button>`, so this is every control. In the base layer, beneath the variants
+ * (`app/controls.css`, P2-2), which add their colours and override none of this.
  *
  *   - **Focus**, from the keyboard: a 3px ring 2px outside the control, on whatever it sits
- *     on -- `controlFocus`, 15:1 or better on every light surface; a surface that is not
- *     light sets `--focus-ring` (the completion card: `onSuccess`). A shape, so it reads
- *     without colour, as the cell states must (P1-5).
+ *     on. A shape, so it reads without colour, as the cell states must (P1-5). Its colour
+ *     is the variant's (`app/controls.ts`, P2-2): `accentEdge`, 8.42:1 or better on every
+ *     light surface; a surface that is not light sets `--focus-ring` (the completion card:
+ *     `onSuccess`).
  *   - **Pressed**, while a pointer or Space is held: a pixel lower and a little darker, so
  *     the press is answered before its result arrives. Enter has no held state to draw: a
  *     button acts on Enter's keydown, so its result is the answer. Not when disabled: a
@@ -130,13 +128,23 @@
    */
   button {
     @apply text-control;
+    /* Fast taps, not the board's policy: no wait to see whether a tap is a double tap. */
+    touch-action: manipulation;
     transition-property: background-color, color, border-color, box-shadow, outline-color, filter, translate, scale, opacity;
     transition-duration: 120ms;
     transition-timing-function: ease-out;
   }
 
+  button:enabled {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   button:focus-visible {
-    outline: 3px solid var(--focus-ring, var(--control-focus));
+    outline: 3px solid;
     outline-offset: 2px;
   }
 

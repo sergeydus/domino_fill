@@ -5,6 +5,7 @@ import { motion } from "motion/react"
 import { LevelStore } from "../stores/BoardsStore"
 import { PuzzleSession } from "../stores/PuzzleSession"
 import { MOTION } from "./motion"
+import { control } from "../controls"
 
 /**
  * What winning looks like (spec P1-4).
@@ -73,7 +74,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             role="status"
             aria-live="polite"
             // The one dark surface a control sits on: its focus ring is white (P1-6).
-            className="control-surface flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg [--focus-ring:var(--on-success)]"
+            className="flex flex-col items-center gap-3 rounded-2xl bg-success text-on-success px-6 py-4 shadow-lg [--focus-ring:var(--on-success)]"
             // Inside P1-6's limits (`motion.ts`), as P2-3 asks: a tenth of a cell up, where it
             // was 8px and a 90% scale -- a squash measured in card widths, not cells -- over
             // 250ms. The card is on screen and announced immediately either way; the
@@ -86,13 +87,15 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                 Solved!
             </p>
 
+            {/* Secondary controls (graphics P2-2, row 14): the card's own surface is the
+                outcome, and its actions are what comes after it. */}
             <div className="flex flex-row gap-2">
                 {levels.hasNextLevel && (
                     <button
                         type="button"
                         ref={nextRef}
                         data-next-level
-                        className="control-surface cursor-pointer rounded bg-panel text-ink px-4 py-2 hover:bg-accent"
+                        className={control('secondary')}
                         onClick={onNext}
                     >
                         Next level
@@ -102,7 +105,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                     type="button"
                     ref={replayRef}
                     data-replay
-                    className="control-surface cursor-pointer rounded bg-panel text-ink px-4 py-2 hover:bg-accent"
+                    className={control('secondary')}
                     onClick={() => session.reset()}
                 >
                     Play again

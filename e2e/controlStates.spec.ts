@@ -99,7 +99,7 @@ test.describe('focus-visible, on every control, readable without colour', () => 
     test('the page\'s controls', async ({ page }) => {
         await openBoard(page)
         // Difficulty 3, the enabled level arrow, Archive, Check, Hint, Reset, Sound.
-        await expectFocusShown(page, page.locator('body'), PALETTE.controlFocus, 9)
+        await expectFocusShown(page, page.locator('body'), PALETTE.accentEdge, 9)
     })
 
     test('the archive\'s, and the day banner\'s', async ({ page }) => {
@@ -107,7 +107,7 @@ test.describe('focus-visible, on every control, readable without colour', () => 
         await page.locator('[data-open-archive]').click()
         const archive = page.locator('[data-archive]')
         await expect(archive.locator('[data-archive-day]').first()).toBeVisible()
-        await expectFocusShown(page, archive, PALETTE.controlFocus, 3)
+        await expectFocusShown(page, archive, PALETTE.accentEdge, 3)
 
         // An earlier day puts the banner up, with its way back to today.
         const days = await archive.locator('[data-archive-day]').evaluateAll(els => els.map(el => el.getAttribute('data-archive-day')!))
@@ -116,14 +116,14 @@ test.describe('focus-visible, on every control, readable without colour', () => 
         test.skip(earlier.length === 0, 'no other day this month to open')
         await archive.locator(`[data-archive-day="${earlier[0]}"]`).click()
         await expect(page.locator('[data-go-to-today]')).toBeVisible()
-        await expectFocusShown(page, page.locator('[data-day-banner]'), PALETTE.controlFocus, 1)
+        await expectFocusShown(page, page.locator('[data-day-banner]'), PALETTE.accentEdge, 1)
     })
 
     test('the tutorial\'s', async ({ page }) => {
         await page.goto('/')
         const skip = page.getByRole('button', { name: 'Skip' })
         await expect(skip).toBeVisible()
-        await expectFocusShown(page, page.locator('.fixed.inset-0').first(), PALETTE.controlFocus, 1)
+        await expectFocusShown(page, page.locator('.fixed.inset-0').first(), PALETTE.accentEdge, 1)
     })
 
     test('the completion card\'s, whose ring is white on its green', async ({ page }) => {
@@ -291,8 +291,8 @@ test.describe('hover, only where there is one', () => {
             for (const sheet of Array.from(document.styleSheets)) walk(sheet.cssRules, [])
             return found
         })
-        // Found at all: the completion card's, the tutorial's, the level arrows', Skip's,
-        // the difficulty's.
+        // Found at all: one per variant with a hover since P2-2 (row 14) -- primary,
+        // secondary, caution, quiet and icon, from `app/controls.css`.
         expect(rules.length).toBeGreaterThanOrEqual(5)
         const loose = rules.filter(r => !r.media.some(m => /\(hover:\s*hover\)/.test(m) && /\(pointer:\s*fine\)/.test(m)))
         expect(loose).toEqual([])
