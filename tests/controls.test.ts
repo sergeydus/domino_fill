@@ -243,9 +243,15 @@ describe('every button is one variant, and says nothing else about its look', ()
         expect(own).toEqual([])
     })
 
-    it('and `aria-pressed`\'s look, which every toggle shares, is nothing but that state', () => {
-        const classes = PRESSED.split(/\s+/)
-        expect(classes.length).toBeGreaterThan(0)
-        expect(classes.filter(c => !c.startsWith('aria-pressed:'))).toEqual([])
+    it('and `aria-pressed`\'s look, which every toggle shares, is exactly P1-6\'s toggle and no more', () => {
+        /*
+         * The accent's fill, and without colour a bolder weight and a ring (P1-6) -- nothing
+         * else. Not "anything prefixed `aria-pressed:`": codex, at row 14's review, appended
+         * `aria-pressed:p-8`, which passed that and gave every pressed toggle a box of its
+         * own. `e2e/controlVariants.spec.ts` holds the same in the browser.
+         */
+        expect(PRESSED.split(/\s+/).sort()).toEqual([
+            'aria-pressed:bg-accent', 'aria-pressed:font-bold', 'aria-pressed:ring-2', 'aria-pressed:ring-accent-edge',
+        ])
     })
 })

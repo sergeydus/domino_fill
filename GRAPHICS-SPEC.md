@@ -2096,7 +2096,7 @@ contrast is unchanged from today's measurement.
 >     variant, and says nothing else about its look: no `style`, no spread, a `className` of
 >     literal text, `control('...')` and `PRESSED` only, and no utility, arbitrary value or
 >     arbitrary property for a surface, text colour, edge, radius, padding, weight, ring,
->     shadow, cursor or state. `PRESSED` holds nothing but `aria-pressed:` utilities. Each
+>     shadow, cursor or state. `PRESSED` is exactly P1-6's four toggle utilities. Each
 >     rule is checked against planted buttons. *Corrected at review*; see below.
 > - `e2e/controlVariants.spec.ts`, on the game page, the archive, the day banner, the tutorial,
 >   and the sheet with the completion card, over every visible button the browser finds:
@@ -2170,7 +2170,7 @@ contrast is unchanged from today's measurement.
 >   read in full -- a variable or a condition could hold anything -- and its pattern covers
 >   arbitrary values and properties, logical padding, rings, shadows and outlines. With either
 >   of codex's two planted, it fails. `PRESSED`, the one shared state look a `className` may
->   name, is audited to hold only `aria-pressed:` utilities.
+>   name, is audited to hold only `aria-pressed:` utilities (narrowed further below).
 >
 >   Refusing a conditional class moved the archive's current-day ring, which was
 >   `ring-2 ring-accent-edge` under a condition in the archive, into the `day` variant as
@@ -2182,11 +2182,28 @@ contrast is unchanged from today's measurement.
 >   whole computed look -- surface, edge, radius, padding, text colour, weight, opacity,
 >   filter, shadow, scale, translate, outline -- against the rest look with only the variant's
 >   named changes, and the rest look includes the shadow: none, or the current day's ring.
+>   Since the second correction, below, every side and corner is read: the edges, radii and
+>   padding had been read from the top and left only.
 >
 > Mutations, each caught, 8 of 8: an ink ring on the secondary's hover; a shadow while a
 > secondary is held; a quiet control filled when focused; the current day without its ring
 > (browser); `Archive` with an inline style; `Archive` with `px-[13px]`; the day ringed by a
 > condition in its `className` again; `PRESSED` carrying a padding (unit).
+>
+> **Second correction (codex, at re-review): what pressed may change.** The `PRESSED` audit
+> accepted any class prefixed `aria-pressed:`, and the browser read every toggle unpressed, so
+> `aria-pressed:p-8` gave every pressed toggle a box of its own and passed both: the committed
+> unit test 20 of 20, the variant spec 5 of 5. Now:
+> - `PRESSED` is exactly P1-6's toggle: `aria-pressed:bg-accent`, `aria-pressed:font-bold`,
+>   `aria-pressed:ring-2`, `aria-pressed:ring-accent-edge`.
+> - In the browser, every toggle is read pressed and unpressed, and the two whole looks must
+>   differ by the accent's fill, the bold weight and the `accentEdge` ring, and nothing else.
+>   A shadow is compared as the layers it paints: Tailwind's ring adds four transparent,
+>   zero-sized layers, which are dropped.
+>
+> Mutations, each caught, 6 of 6: `aria-pressed:p-8` (unit, and separately the browser);
+> `aria-pressed:pr-8`, one side; `aria-pressed:rounded-none`; the pressed ring dropped; the
+> quiet variant's right edge alone made thicker (browser).
 
 ### P2-3 · The completion card
 

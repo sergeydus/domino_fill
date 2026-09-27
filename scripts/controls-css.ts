@@ -8,10 +8,10 @@ import { cssName, type Token } from '../app/palette'
  * generated, committed, and required byte-identical to this by `tests/controls.test.ts`.
  *
  * One rule set per variant, in the `components` layer: above the base layer's rules for
- * every button (P1-6's focus and press, P2-1's text), and below Tailwind's utilities, so a
- * state a component draws with a utility -- `aria-pressed`, the archive's current day --
- * wins over the variant's rest. Hover waits for a fine pointer that can hover, as every
- * hover in the game must (P1-6).
+ * every button (P1-6's focus and press, P2-1's text), and below Tailwind's utilities, so
+ * `aria-pressed`, which `controlStates.ts` draws with utilities, wins over the variant's rest.
+ * The archive's current day is the `day` variant's own (`aria-current`, below). Hover waits
+ * for a fine pointer that can hover, as every hover in the game must (P1-6).
  */
 export const CONTROLS_CSS_PATH = 'app/controls.css'
 

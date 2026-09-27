@@ -26,14 +26,18 @@ import { PALETTE, type Token } from '../app/palette'
  * "pressed is a state, not a variant"), and pressed looks the same whatever the variant, so
  * it would hide the one underneath. For its turn here, a toggle's `aria-pressed` is set to
  * `false` in the page and put back after; nothing is clicked, so the store never hears of it.
- * What pressed looks like is `e2e/controlStates.spec.ts`'s.
+ * That pressed shows, by colour and without it, is `e2e/controlStates.spec.ts`'s. What pressed
+ * may *change* is held here: pressed against unpressed, a toggle's whole look differs by the
+ * accent's fill, the bold weight and the ring, and by nothing else, so a pressed toggle keeps
+ * its variant's box and edge (codex, at row 14's review: `aria-pressed:p-8` added to the
+ * pressed look passed every check that read a toggle unpressed).
  */
 
 test.use({ reducedMotion: 'reduce' })
 
 type Look = {
     label: string, variant: string | null, mark: string | null, card: boolean, disabled: boolean, current: boolean,
-    background: number[], edge: number, edgeColour: number[], radius: string, padding: string[],
+    background: number[], edge: number[], edgeColour: number[][], radius: string[], padding: string[],
     colour: number[], weight: string, opacity: string, filter: string, shadow: string, scale: string,
     translate: string, outline: number[],
 }
@@ -56,15 +60,27 @@ const lookOf = (b: Locator): Promise<Look> => b.evaluate(el => {
         return Array.from(ctx.getImageData(0, 0, 1, 1).data)
     }
     const cs = getComputedStyle(el)
+    const sides = ['Top', 'Right', 'Bottom', 'Left'] as const
+    /*
+     * The shadow as the layers it draws. Tailwind's ring is five layers, four of them
+     * transparent and zero-sized, which paint nothing; they are dropped, so its ring and the
+     * variants' single-layer ring compare as the same thing.
+     */
+    const layers = cs.boxShadow === 'none' ? [] : cs.boxShadow.split(/,(?![^(]*\))/).map(l => l.trim())
+        .filter(l => !/^rgba\(0, 0, 0, 0\) 0px 0px 0px 0px$/.test(l))
     const variant = Array.from(el.classList).find(c => c.startsWith('control-'))?.slice('control-'.length) ?? null
     return {
         label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '?',
         variant, mark: el.getAttribute('data-mark'), card: el.closest('[data-completion-card]') !== null,
         disabled: (el as HTMLButtonElement).disabled, current: el.hasAttribute('aria-current'),
-        background: bytes(cs.backgroundColor), edge: parseFloat(cs.borderTopWidth), edgeColour: bytes(cs.borderTopColor),
-        radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingLeft],
+        // Every side and corner: a box of its own on one side (`pr-8`) is still one.
+        background: bytes(cs.backgroundColor),
+        edge: sides.map(side => parseFloat(cs[`border${side}Width`])),
+        edgeColour: sides.map(side => bytes(cs[`border${side}Color`])),
+        radius: [cs.borderTopLeftRadius, cs.borderTopRightRadius, cs.borderBottomRightRadius, cs.borderBottomLeftRadius],
+        padding: sides.map(side => cs[`padding${side}`]),
         colour: bytes(cs.color), weight: cs.fontWeight, opacity: cs.opacity, filter: cs.filter,
-        shadow: cs.boxShadow, scale: cs.scale, translate: cs.translate, outline: bytes(cs.outlineColor),
+        shadow: layers.length ? layers.join(', ') : 'none', scale: cs.scale, translate: cs.translate, outline: bytes(cs.outlineColor),
     }
 })
 
@@ -103,10 +119,10 @@ const restOf = (name: VariantName, look: Look, paint: Record<Token, number[]>) =
     const surface = look.disabled && c.disabled.surface ? paint[c.disabled.surface] : surfaceOf(c, look.mark, paint)
     return {
         background: surface,
-        edge,
-        edgeColour: c.edge ? paint[c.edge.colour] : 'any',
-        radius: `${c.radius}px`,
-        padding: [`${c.padding.y - edge}px`, `${c.padding.x - edge}px`],
+        edge: [edge, edge, edge, edge],
+        edgeColour: c.edge ? [0, 1, 2, 3].map(() => paint[c.edge!.colour]) : 'any',
+        radius: [0, 1, 2, 3].map(() => `${c.radius}px`),
+        padding: [`${c.padding.y - edge}px`, `${c.padding.x - edge}px`, `${c.padding.y - edge}px`, `${c.padding.x - edge}px`],
         colour: c.ink ? paint[c.ink] : 'any',
         weight: String(c.weight),
         opacity: look.disabled ? String(c.disabled.opacity ?? 1) : '1',
@@ -149,6 +165,17 @@ const expectVocabulary = async (page: Page, scope: Locator, least: number) => {
     const seen = new Set<string>()
     for (const b of found) {
         await page.mouse.move(0, 0)
+        const was = await b.getAttribute('aria-pressed')
+        if (was !== null) {
+            const as = async (value: string) => {
+                await b.evaluate((el, v) => el.setAttribute('aria-pressed', v), value)
+                return shapeOf(await lookOf(b))
+            }
+            const [on, off] = [await as('true'), await as('false')]
+            await b.evaluate((el, v) => el.setAttribute('aria-pressed', v), was)
+            expect(on, `${await b.getAttribute('aria-label') ?? await b.innerText()}: pressed changes its fill, weight and ring, and nothing else`)
+                .toEqual({ ...off, background: paint.accent, weight: '700', shadow: ringOf('accentEdge', paint) })
+        }
         await unpressed(b, async () => {
             const look = await lookOf(b)
             const matches = NAMES.filter(name => {
@@ -254,8 +281,8 @@ test('Reset is told from Hint and Undo by its edge, and not by its fill', async 
     const [reset, hint, undo] = await Promise.all(['[data-reset]', '[data-hint]', '[data-undo]'].map(s => lookOf(page.locator(s))))
     expect(reset.background).toEqual(hint.background)
     expect(reset.background).toEqual(paint.controlSurface)
-    expect({ width: reset.edge, colour: reset.edgeColour }).toEqual({ width: 2, colour: paint.problem })
-    for (const quiet of [hint, undo]) expect(quiet.edge, quiet.label).toBe(0)
+    expect({ width: reset.edge, colour: reset.edgeColour }).toEqual({ width: [2, 2, 2, 2], colour: [0, 1, 2, 3].map(() => paint.problem) })
+    for (const quiet of [hint, undo]) expect(quiet.edge, quiet.label).toEqual([0, 0, 0, 0])
     // The same box all the same: the edge is inside it, so the row does not jump.
     const box = (s: string) => page.locator(s).evaluate(el => el.getBoundingClientRect().height)
     expect(await box('[data-reset]')).toBe(await box('[data-hint]'))
