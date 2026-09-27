@@ -2334,6 +2334,63 @@ pip, one step further out: the launcher would show a game that no longer exists.
   measures rather than assumes.
 - No page screenshot is owed; see the exemption under P0-4.
 
+> **Amendment (row 16) — the icon is the board's domino, drawn from the board's numbers.**
+>
+> **Before this row** the icon was its own drawing: a square-cornered block, 0.46 of the icon
+> wide and 0.78 tall. Measured against its own width, as the board's piece is against its
+> cell:
+> - its edge was 12% (the piece's outline is 9%);
+> - its pip 33% across (the piece's is 24%);
+> - its bar ran the whole width (the divider spans 60% of the cell);
+> - its corners were square (the piece's are 14% round);
+> - its body was all `tileSide`, the extrusion's colour, with no face and no extrusion.
+>
+> **Now `scripts/icon.ts` draws `DominoPieceOne`** in the board's own units. It imports `PIECE`
+> and `UNIT` from `Pieces/geometry.ts`, and paints each point as the board layers it:
+> - the `tileSide` extrusion, and the `tileFace` face over it;
+> - the outline, a stroke `PIECE.outline` wide on the edge of both, so its outer corners are
+>   `radius + outline/2` round;
+> - then the divider and the pip.
+>
+> The icon changes when the piece does. It is one scale factor, the mark's height, away from
+> the board.
+> - **Sixteen samples a pixel**, averaged. The board is drawn anti-aliased by a browser, and
+>   the rounded corners and round pip, drawn at one sample, were stair-stepped at 512px.
+>   The output is still a pure function of the size.
+> - **The mark is 0.8 of the icon's height, where it was 0.89.** The board's pip is a
+>   smaller share of its piece, so at 0.89 it sat above where `tests/icons.test.ts` samples
+>   the pip, at 0.3 of the icon. At 64px that pixel then fell on the pip's anti-aliased edge,
+>   and "the same drawing at every size" would have compared a blend. At 0.8 the pip is
+>   centred at 0.284, and the sampled pixel is inside it at every size. The corners still
+>   reach 0.419 from the centre, past the 40% a maskable icon must keep inside, so the
+>   ordinary icon still needs its separate maskable file. The maskable mark reaches 0.294.
+>
+> **Rows 20b and 20h's tests pass unaltered**, 11 of 11. `npm run icons` regenerates all four
+> files, the maskable one included.
+>
+> **Held** by `tests/iconParity.test.ts`, which reads the 512px icon's own pixels and turns
+> each measurement back into units of the board's cell:
+> - the outline, 9;
+> - the corners, 14, from how far the ground runs along the diagonal before the outer arc;
+> - the pip's diameter, 24;
+> - the divider's span, 60, and its weight, 5;
+> - the extrusion showing below the face, 9.5 (the side, less the half of the stroke over it);
+> - the silhouette, 97 by 211, outline to outline.
+>
+> Each is within one unit of `PIECE` (two for the radius). About two pixels at 512 is
+> anti-aliasing. The same test holds `Pieces/geometry.ts` to no imports, as the palette is
+> held, since Node now imports it at build time too.
+>
+> **Mutations,** each caught, 8 of 8, all in the renderer except the last:
+> - the icon's own outline (4), corners (4), pip (18 in radius), a divider spanning 80, and
+>   no extrusion, each by its measurement;
+> - the body back in `tileSide`, by the parity test's check that the face is drawn;
+> - the drawing changed without regenerating the files, by `tests/icons.test.ts`;
+> - an import added to `geometry.ts`.
+>
+> No page screenshot changes. The icons appear in the manifest and the page's metadata, on no
+> page, so the four baselines are untouched and this row is one commit.
+
 ---
 
 ## 8. Sequencing

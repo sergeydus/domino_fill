@@ -30,6 +30,10 @@
  * The rest are unbounded and chosen to go with them: the rounder corners of a toy (14), the
  * divider's weight (5) and the margin to the cell edge (6). The entry offset lived here until
  * P1-6 limited it; it is motion, not drawing, and is in `motion.ts` now.
+ *
+ * **Plain TypeScript with no imports**, as the palette is: since P2-4 (row 16) the app's icon
+ * is drawn from `PIECE` too, by `scripts/icon.ts` under tsx in Node at build time, where a
+ * React or CSS import here would break `npm run icons`.
  */
 
 /** The drawing's units per cell. */

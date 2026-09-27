@@ -1,5 +1,6 @@
 import { deflateSync } from 'node:zlib'
 import { rgbBytes } from '../app/palette'
+import { PIECE, UNIT } from '../app/dominoFill/Pieces/geometry'
 
 /**
  * The app's icon, drawn rather than pasted (spec P2-2, row 20b).
@@ -17,7 +18,7 @@ import { rgbBytes } from '../app/palette'
  * afternoon in an image editor.
  *
  * The PNG encoder is here because the alternative is a dependency, and a build-time image
- * library is a large thing to add for four flat rectangles.
+ * library is a large thing to add for one domino.
  */
 
 /**
@@ -25,15 +26,15 @@ import { rgbBytes } from '../app/palette'
  * from the palette since graphics row 5, so they cannot drift from the board's again.
  *
  * They had: the pip was `#1a1a1a` here and `black` on every piece. The board's value won,
- * because the board is what a player looks at and the icon is a picture of it; the icons
- * were regenerated, and no page pixel moved.
+ * because the board is what a player looks at and the icon is a picture of it.
  *
- * The tile's body is `tileSide`, the extrusion colour, not `tileFace`. That was already so,
- * is left alone here because this row moves no colour, and is P2-4's to reconsider along
- * with the rest of the drawing.
+ * Since P2-4 (row 16) the tile is the board's tile, layer for layer: a `tileFace` face over a
+ * `tileSide` extrusion. Until then its whole body was `tileSide`, the extrusion colour, with
+ * no face at all.
  */
 const BACKGROUND = rgbBytes('ground')
-const TILE = rgbBytes('tileSide')
+const FACE = rgbBytes('tileFace')
+const SIDE = rgbBytes('tileSide')
 const OUTLINE = rgbBytes('pieceOutline')
 const DIVIDER = rgbBytes('divider')
 const PIP = rgbBytes('pip')
@@ -45,63 +46,105 @@ type Rgb = readonly number[]
  *
  * A maskable icon is cropped to whatever shape the launcher uses, and the only region the
  * manifest specification guarantees survives is a centred circle of radius 40%. The mark
- * at full size does not fit: its outline spans 0.57 by 0.89 of the icon, so its own corners
- * sit 0.528 from the centre -- outside the circle, and liable to be clipped by a round
- * launcher.
+ * at full size does not fit: its rounded corners reach 0.42 of the icon from the centre --
+ * outside the circle, and liable to be clipped by a round launcher.
  *
- * 0.70 puts them at 0.370, inside the safe radius with room to spare, and
+ * 0.70 puts them at 0.29, inside the safe radius with room to spare, and
  * `tests/icons.test.ts` measures every painted pixel rather than trusting this arithmetic.
  */
 export const MASKABLE_SCALE = 0.70
 
 /**
- * One domino, upright, centred, with a pip in the top half.
+ * How much of the icon's height the mark fills, outline to outline.
  *
- * Deliberately blunt shapes: an icon is rendered at 48 CSS px on a home screen, where fine
- * detail becomes mud. The pip is what makes it read as a domino rather than as a door.
+ * 0.8 (graphics P2-4, row 16; it was 0.89). The board's pip is a smaller fraction of its piece
+ * than the old icon's, so at 0.89 the pip no longer reached down to where
+ * `tests/icons.test.ts` samples it -- 0.3 of the icon, every size alike -- and at 64px the
+ * sampled pixel fell on the pip's anti-aliased edge. At 0.8 the pip is centred at 0.284, and
+ * that pixel is inside it at every size; the corners still reach past the 40% a maskable
+ * icon must keep inside, which is what makes the ordinary icon a different file.
+ */
+export const MARK_HEIGHT = 0.8
+
+/*
+ * The board's upright domino (`DominoPieceOne`), in the board's own units (`Pieces/geometry.ts`):
+ * one cell of `UNIT` wide, two tall, with its extrusion below. The icon is that drawing, not a
+ * picture of it (P2-4): the outline weight, the corner radius, the pip, the divider's span and
+ * weight and the extrusion are `PIECE`'s, so the icon changes when the piece does.
+ */
+const { outline: O, radius: R, inset: I, extrusion: E, pipRadius, dividerInset, dividerWidth } = PIECE
+
+/** The box the outline's stroke covers: the piece's own box, and half the stroke outside it. */
+const BOX = { left: I - O / 2, top: I - O / 2, right: UNIT - I + O / 2, bottom: 2 * UNIT - I + E + O / 2 }
+
+/** The mark's size in units, outline to outline. */
+export const MARK = { width: BOX.right - BOX.left, height: BOX.bottom - BOX.top }
+
+/** Whether (u, v) is inside the rounded rectangle from (x0, y0) to (x1, y1), corner radius r. */
+const inRounded = (u: number, v: number, x0: number, y0: number, x1: number, y1: number, r: number) => {
+    if (u < x0 || u > x1 || v < y0 || v > y1) return false
+    const cx = Math.min(Math.max(u, x0 + r), x1 - r)
+    const cy = Math.min(Math.max(v, y0 + r), y1 - r)
+    return (u - cx) ** 2 + (v - cy) ** 2 <= r * r
+}
+
+/**
+ * The domino's colour at a point of the drawing, in units, layered as the board layers it:
+ * the side, the face over it, the outline -- a stroke `O` wide, centred on the edge of the
+ * face and side together, so its outer corners are `R + O/2` round and its inner `R - O/2` --
+ * and the divider and the pip on top.
+ */
+const paint = (u: number, v: number): Rgb => {
+    if (!inRounded(u, v, BOX.left, BOX.top, BOX.right, BOX.bottom, R + O / 2)) return BACKGROUND
+    if (!inRounded(u, v, I + O / 2, I + O / 2, UNIT - I - O / 2, 2 * UNIT - I + E - O / 2, R - O / 2)) return OUTLINE
+    if (Math.abs(v - UNIT) <= dividerWidth / 2 && u >= dividerInset && u <= UNIT - dividerInset) return DIVIDER
+    if ((u - UNIT / 2) ** 2 + (v - UNIT / 2) ** 2 <= pipRadius ** 2) return PIP
+    if (inRounded(u, v, I, I, UNIT - I, 2 * UNIT - I, R)) return FACE
+    return SIDE
+}
+
+/**
+ * Samples per pixel, in each direction. The board is drawn by a browser, anti-aliased; the
+ * icon's rounded corners and round pip, drawn at one sample, were stair-stepped at 512px.
+ * Sixteen samples averaged is the same edge, and still a pure function of the size.
+ */
+const SAMPLES = 4
+
+/**
+ * The domino, upright and centred, at `size` px: the mark `MARK_HEIGHT` of the icon tall.
  *
  * `scale` shrinks the mark without moving it, so a maskable icon is the same drawing with
  * more ground around it rather than a second picture that can drift from this one.
  */
 const draw = (size: number, scale = 1): Uint8Array => {
     const pixels = new Uint8Array(size * size * 4)
-    const put = (x: number, y: number, [r, g, b]: Rgb) => {
-        if (x < 0 || y < 0 || x >= size || y >= size) return
-        const at = (y * size + x) * 4
-        pixels[at] = r
-        pixels[at + 1] = g
-        pixels[at + 2] = b
-        pixels[at + 3] = 255
-    }
-    const rect = (x0: number, y0: number, w: number, h: number, colour: Rgb) => {
-        for (let y = Math.round(y0); y < Math.round(y0 + h); y++) {
-            for (let x = Math.round(x0); x < Math.round(x0 + w); x++) put(x, y, colour)
-        }
-    }
-    const disc = (cx: number, cy: number, r: number, colour: Rgb) => {
-        for (let y = Math.round(cy - r); y <= cy + r; y++) {
-            for (let x = Math.round(cx - r); x <= cx + r; x++) {
-                if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r) put(x, y, colour)
+    // Pixels per unit, and the mark's centre, which sits on the icon's.
+    const k = size * MARK_HEIGHT * scale / MARK.height
+    const cu = (BOX.left + BOX.right) / 2
+    const cv = (BOX.top + BOX.bottom) / 2
+    for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+            // Three running sums, not a `[0, 0, 0]`: the palette audit reads a byte triple as
+            // a colour, and would be right to about anything that looked like one.
+            let red = 0, green = 0, blue = 0
+            for (let j = 0; j < SAMPLES; j++) {
+                for (let i = 0; i < SAMPLES; i++) {
+                    const u = cu + (x + (i + 0.5) / SAMPLES - size / 2) / k
+                    const v = cv + (y + (j + 0.5) / SAMPLES - size / 2) / k
+                    const [r, g, b] = paint(u, v)
+                    red += r
+                    green += g
+                    blue += b
+                }
             }
+            const at = (y * size + x) * 4
+            const n = SAMPLES * SAMPLES
+            pixels[at] = Math.round(red / n)
+            pixels[at + 1] = Math.round(green / n)
+            pixels[at + 2] = Math.round(blue / n)
+            pixels[at + 3] = 255
         }
     }
-
-    rect(0, 0, size, size, BACKGROUND)
-
-    // Proportions as fractions of the icon, so every size is the same picture.
-    const edge = size * 0.055 * scale
-    const width = size * 0.46 * scale
-    const height = size * 0.78 * scale
-    const x = (size - width) / 2
-    const y = (size - height) / 2
-
-    rect(x - edge, y - edge, width + edge * 2, height + edge * 2, OUTLINE)
-    rect(x, y, width, height, TILE)
-    // The dividing bar: what separates the two halves of a domino.
-    rect(x, y + height / 2 - edge / 2, width, edge, DIVIDER)
-    // One pip in the top half. The top half is worth 1 in this game, which is the joke.
-    disc(size / 2, y + height / 4, size * 0.075 * scale, PIP)
-
     return pixels
 }
 
@@ -142,7 +185,8 @@ export const renderIcon = (size: number, { maskable = false } = {}): Buffer => {
     const pixels = draw(size, maskable ? MASKABLE_SCALE : 1)
 
     // Every scanline is prefixed with filter type 0 ("none"). Filtering would compress
-    // better; four flat rectangles compress well enough that it is not worth the code.
+    // better; a few flat tones and their edges compress well enough that it is not worth
+    // the code.
     const raw = Buffer.alloc(size * (size * 4 + 1))
     for (let y = 0; y < size; y++) {
         raw[y * (size * 4 + 1)] = 0
