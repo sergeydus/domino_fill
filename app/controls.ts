@@ -47,6 +47,8 @@ export type Variant = {
     focus: Token
     /** At rest, disabled. It answers neither a hover nor a press. */
     disabled: { surface?: Token, opacity?: number, filter?: string }
+    /** `aria-current`: a 2px ring, on a variant whose controls can be the current one. */
+    current?: { ring: Token }
 }
 
 /** The box every text control shares, so a row of mixed variants lines up. */
@@ -109,14 +111,18 @@ export const CONTROL = {
     /**
      * A day in the archive's calendar. Not one of the spec's five: its surface is how far
      * that day was played, which is data, and no other control's surface is. Bordered like
-     * `quiet`, in the box it had (the archive's grid is laid out on it). Its current day's
-     * ring is a state, like `aria-pressed`, and the archive draws it.
+     * `quiet`, in the box it had (the archive's grid is laid out on it). The day being played
+     * is `aria-current`, and ringed in the accent's edge; only a day can be current, so the
+     * ring is this variant's, where `aria-pressed`, which any control can be, is not.
+     * (Correction at row 14's review: the archive drew it with utilities, and a button that
+     * could carry ring utilities was one the source audit had to let wear any ring.)
      */
     day: {
         surface: { none: 'markNone', started: 'markStarted', partial: 'markPartial', complete: 'markComplete' },
         edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 400, radius: 6, padding: { x: 5, y: 5 },
         hover: {}, press: {}, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
+        current: { ring: 'accentEdge' },
     },
 } as const satisfies Record<string, Variant>
 

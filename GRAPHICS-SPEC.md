@@ -2024,8 +2024,8 @@ contrast is unchanged from today's measurement.
 >
 > **Now the table is `app/controls.ts`**, in the palette's pattern. `npm run tokens` also writes
 > `app/controls.css`: one rule set per variant, in the `components` layer. That puts it above
-> P1-6's rules for every button and below Tailwind's utilities, so a state drawn with a utility
-> (`aria-pressed`, the archive's current day) still wins over a variant's rest. A button names
+> P1-6's rules for every button and below Tailwind's utilities, so `aria-pressed`, drawn with
+> utilities (`controlStates.ts`), still wins over a variant's rest. A button names
 > its variant, `control('caution')`, and nothing else about its look.
 >
 > | variant | who | at rest | hover | held | disabled |
@@ -2035,7 +2035,7 @@ contrast is unchanged from today's measurement.
 > | caution | `Reset` | the secondary's, with a 2px `problem` edge | `panel` | `accent` | 40% |
 > | quiet | `Archive`, `Sound`, the archive's month arrows, "Skip" | a 1px `ink` edge, no surface | `controlSurface` | `accent` | 40% |
 > | icon | the level arrows | no surface, no padding | grows to 1.2 | — | grey |
-> | day | the archive's days | the day's mark, a 1px `ink` edge | — | — | — |
+> | day | the archive's days | the day's mark, a 1px `ink` edge; ringed in `accentEdge` when current | — | — | — |
 >
 > - **The box.** The four text variants share one: a 6px radius, and 8px by 12px from the
 >   outside of the edge to the text. The edge sits inside that, so `Reset` is the same size as
@@ -2049,8 +2049,9 @@ contrast is unchanged from today's measurement.
 > - **A sixth variant, `day`.** The archive's days are buttons, and the spec's five have no
 >   place for them. Their surface is how far that day was played, which is data; the nearest
 >   variant, `quiet`, is defined by having no surface. They keep the box they had, 1px edge
->   and 4px padding, which the archive's grid is laid out on. The current day's ring is a
->   state, like `aria-pressed`, and the archive still draws it.
+>   and 4px padding, which the archive's grid is laid out on. The day being played is
+>   `aria-current`, and the variant rings it in `accentEdge`: only a day can be current, where
+>   any control can be pressed. (Moved into the table at review; see the correction below.)
 > - **The controls the spec's table does not name**, mapped here:
 >   - the difficulty's options are secondary. The pressed paragraph above keeps them from
 >     being a variant of their own. Their tray went: each option has the surface now, and a
@@ -2092,16 +2093,20 @@ contrast is unchanged from today's measurement.
 >     out byte for byte;
 >   - every hover waits for a fine pointer, and every press comes after the hover it ties with;
 >   - every `<button>` in `app`, read from the syntax tree (18 of them), names exactly one
->     variant. None declares a surface, text colour, edge, radius, padding, weight, cursor or
->     state look of its own. The pattern is checked against examples it must and must not
->     match, and against planted buttons with no variant, two variants, and a look of their own.
+>     variant, and says nothing else about its look: no `style`, no spread, a `className` of
+>     literal text, `control('...')` and `PRESSED` only, and no utility, arbitrary value or
+>     arbitrary property for a surface, text colour, edge, radius, padding, weight, ring,
+>     shadow, cursor or state. `PRESSED` holds nothing but `aria-pressed:` utilities. Each
+>     rule is checked against planted buttons. *Corrected at review*; see below.
 > - `e2e/controlVariants.spec.ts`, on the game page, the archive, the day banner, the tutorial,
 >   and the sheet with the completion card, over every visible button the browser finds:
 >   - at rest (a toggle read unpressed), the button computes to **exactly one** variant's
 >     surface, edge, radius, padding, text colour, weight, opacity and filter, and it is the
 >     variant its class names;
->   - enabled, its hover, held and focused looks are that variant's tokens; disabled, it keeps
->     its disabled look under the pointer (P1-6's test holds a disabled control under a press);
+>   - enabled, its hover, held and focused looks are its whole computed look at rest with only
+>     that variant's named changes: nothing else changes, a shadow included. Disabled, its
+>     whole look is unchanged under the pointer (P1-6's test holds a disabled control under a
+>     press). *Corrected at review*; see below.
 >   - `Reset`'s fill equals `Hint`'s, and its edge is 2px of `problem`, where `Hint`'s and
 >     `Undo`'s are none. It is the same height as `Hint`.
 > - `tests/contrast.test.ts`: the disabled numbers above, and `Reset`'s edge at 5.97:1 on its
@@ -2143,8 +2148,7 @@ contrast is unchanged from today's measurement.
 > - **sheets 1 and 2:** 34,389 and 41,078 pixels, all in the controls' specimens and the
 >   completion card. `Check` is the accent and bold; `Reset` has its red edge; the difficulty's
 >   options stand on their own, and are wider, with the variant's 12px of padding where they
->   had 4. `Archive` and
->   `Sound` are 6px taller. The card's actions are neutral and narrower. 1280×800.
+>   had 4. `Archive` and `Sound` are 6px taller. The card's actions are neutral and narrower. 1280×800.
 > - **phone (3):** 16px shorter, **360×668 to 360×652**. The difficulty group loses the
 >   tray's 8px above and below, 52 → 36px, so everything below it moves up 16px. The board
 >   keeps its size (cell 38). `Archive` and `Sound` grow from 30 to 36px, and share the row
@@ -2152,6 +2156,37 @@ contrast is unchanged from today's measurement.
 > - **desktop (4):** 29,420 pixels, all in the rail (from x = 815). The board does not move.
 >   The difficulty's options wrap their labels onto two lines, as the runner's baseline already
 >   drew them. 1280×800.
+>
+> **On the CI runner** (run 36285835446, committed from it and compared in 36286245643): 35,299
+> and 42,067 on the sheets, 82,421 on the phone, 30,328 on the desktop, from x = 815. The page
+> sizes are the predicted ones, and every change is where predicted; the counts differ because
+> text moves and the runner draws text differently.
+>
+> **Correction (codex, row 14 review): two tests claimed more than they held.**
+> - **The source audit read only a button's `className`.** `style={{ padding: 13 }}` was
+>   invisible to it, and its pattern missed an arbitrary value, `px-[13px]`: planted on
+>   `Archive` in the real source, each alone, the committed test passed 18 of 18. It now reads
+>   the whole element and refuses a `style`, a spread, and any `className` expression it cannot
+>   read in full -- a variable or a condition could hold anything -- and its pattern covers
+>   arbitrary values and properties, logical padding, rings, shadows and outlines. With either
+>   of codex's two planted, it fails. `PRESSED`, the one shared state look a `className` may
+>   name, is audited to hold only `aria-pressed:` utilities.
+>
+>   Refusing a conditional class moved the archive's current-day ring, which was
+>   `ring-2 ring-accent-edge` under a condition in the archive, into the `day` variant as
+>   `aria-current`. The ring is the same, and no baseline changes: all four are byte-identical
+>   before and after on the development host (the archive is on none of them).
+> - **The hover test checked a ring only where the variant names one.** It never required
+>   none elsewhere, so an ink ring on the secondary's hover passed: the committed spec, run
+>   against that mutation, passed 5 of 5. Hover, held and focus are each now compared as the
+>   whole computed look -- surface, edge, radius, padding, text colour, weight, opacity,
+>   filter, shadow, scale, translate, outline -- against the rest look with only the variant's
+>   named changes, and the rest look includes the shadow: none, or the current day's ring.
+>
+> Mutations, each caught, 8 of 8: an ink ring on the secondary's hover; a shadow while a
+> secondary is held; a quiet control filled when focused; the current day without its ring
+> (browser); `Archive` with an inline style; `Archive` with `px-[13px]`; the day ringed by a
+> condition in its `className` again; `PRESSED` carrying a padding (unit).
 
 ### P2-3 · The completion card
 

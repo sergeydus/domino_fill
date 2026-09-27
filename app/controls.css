@@ -121,6 +121,9 @@
   .control-day[data-mark="complete"] {
     background-color: var(--mark-complete);
   }
+  .control-day[aria-current] {
+    box-shadow: 0 0 0 2px var(--accent-edge);
+  }
   .control-day:focus-visible {
     outline-color: var(--focus-ring, var(--accent-edge));
   }

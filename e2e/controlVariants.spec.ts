@@ -15,6 +15,9 @@ import { PALETTE, type Token } from '../app/palette'
  *     one its class names. Not "matches its own": matches no other, so two variants that
  *     drifted into one look fail here.
  *   - its states are that variant's tokens: under the pointer, held, focused, and disabled.
+ *     Each state is compared as the button's *whole* computed look against its rest with
+ *     only the variant's named changes applied, so a state that changes anything else --
+ *     a shadow the variant never asked for (codex, at row 14's review) -- fails.
  *
  * Under reduced motion, which zeroes the controls' transitions, so a state is read when it
  * has arrived rather than on its way.
@@ -29,7 +32,7 @@ import { PALETTE, type Token } from '../app/palette'
 test.use({ reducedMotion: 'reduce' })
 
 type Look = {
-    label: string, variant: string | null, mark: string | null, card: boolean, disabled: boolean,
+    label: string, variant: string | null, mark: string | null, card: boolean, disabled: boolean, current: boolean,
     background: number[], edge: number, edgeColour: number[], radius: string, padding: string[],
     colour: number[], weight: string, opacity: string, filter: string, shadow: string, scale: string,
     translate: string, outline: number[],
@@ -57,7 +60,7 @@ const lookOf = (b: Locator): Promise<Look> => b.evaluate(el => {
     return {
         label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '?',
         variant, mark: el.getAttribute('data-mark'), card: el.closest('[data-completion-card]') !== null,
-        disabled: (el as HTMLButtonElement).disabled,
+        disabled: (el as HTMLButtonElement).disabled, current: el.hasAttribute('aria-current'),
         background: bytes(cs.backgroundColor), edge: parseFloat(cs.borderTopWidth), edgeColour: bytes(cs.borderTopColor),
         radius: cs.borderTopLeftRadius, padding: [cs.paddingTop, cs.paddingLeft],
         colour: bytes(cs.color), weight: cs.fontWeight, opacity: cs.opacity, filter: cs.filter,
@@ -78,6 +81,13 @@ const paintsOf = (page: Page): Promise<Record<Token, number[]>> => page.evaluate
 }, PALETTE) as Promise<Record<Token, number[]>>
 
 const NONE = [0, 0, 0, 0]
+
+/** A 2px ring in `token`, as the browser computes the box shadow. */
+const ringOf = (token: Token, paint: Record<Token, number[]>) => `rgb(${paint[token].slice(0, 3).join(', ')}) 0px 0px 0px 2px`
+
+/** Everything a button computes to that its state can change: the look without its names. */
+const shapeOf = ({ background, edge, edgeColour, radius, padding, colour, weight, opacity, filter, shadow, scale, translate, outline }: Look) =>
+    ({ background, edge, edgeColour, radius, padding, colour, weight, opacity, filter, shadow, scale, translate, outline })
 
 /** The surface a variant rests on, for a button with this `data-mark`. */
 const surfaceOf = (c: Variant, mark: string | null, paint: Record<Token, number[]>) => {
@@ -101,6 +111,8 @@ const restOf = (name: VariantName, look: Look, paint: Record<Token, number[]>) =
         weight: String(c.weight),
         opacity: look.disabled ? String(c.disabled.opacity ?? 1) : '1',
         filter: look.disabled ? c.disabled.filter ?? 'none' : 'none',
+        // No shadow at rest, but the current day's ring (and a toggle's, read unpressed here).
+        shadow: look.current && c.current ? ringOf(c.current.ring, paint) : 'none',
     }
 }
 
@@ -110,7 +122,7 @@ const partsOf = (look: Look, expected: ReturnType<typeof restOf>) => ({
     edgeColour: expected.edgeColour === 'any' ? 'any' : look.edgeColour,
     radius: look.radius, padding: look.padding,
     colour: expected.colour === 'any' ? 'any' : look.colour,
-    weight: look.weight, opacity: look.opacity, filter: look.filter,
+    weight: look.weight, opacity: look.opacity, filter: look.filter, shadow: look.shadow,
 })
 
 /** Run `body` with a toggle unpressed, and put it back. */
@@ -147,35 +159,45 @@ const expectVocabulary = async (page: Page, scope: Locator, least: number) => {
             const name = look.variant as VariantName
             seen.add(name)
             const c: Variant = CONTROL[name]
-            const rest = restOf(name, look, paint)
+            const at = shapeOf(look)
             if (look.disabled) {
-                // Disabled answers neither a hover nor a press (P1-6): the rest, held.
+                // Disabled answers neither a hover nor a press (P1-6): its whole look, held.
                 await b.hover({ force: true })
-                expect(partsOf(await lookOf(b), rest), `${look.label}: disabled, hovered`).toEqual(rest)
+                expect(shapeOf(await lookOf(b)), `${look.label}: disabled, hovered`).toEqual(at)
                 return
             }
 
-            // Hover: the variant's new surface, ring or scale, and nothing else moves.
+            // Hover: the variant's new surface, ring or scale, and nothing else changes --
+            // including no shadow where the variant names none.
+            const hover = {
+                ...at,
+                background: c.hover.surface ? paint[c.hover.surface] : at.background,
+                shadow: c.hover.ring ? ringOf(c.hover.ring, paint) : at.shadow,
+                scale: c.hover.scale ? String(c.hover.scale) : at.scale,
+            }
             await b.hover()
-            const hovered = await lookOf(b)
-            expect(hovered.background, `${look.label}: hovered`).toEqual(c.hover.surface ? paint[c.hover.surface] : rest.background)
-            if (c.hover.ring) expect(hovered.shadow, `${look.label}: hovered`).toBe(`rgb(${paint[c.hover.ring].slice(0, 3).join(', ')}) 0px 0px 0px 2px`)
-            expect(hovered.scale, `${look.label}: hovered`).toBe(c.hover.scale ? String(c.hover.scale) : 'none')
+            expect(shapeOf(await lookOf(b)), `${look.label}: hovered`).toEqual(hover)
 
-            // Held: the variant's pressed surface, over the hover it is also under.
+            // Held: the variant's pressed surface over the hover it is also under, P1-6's
+            // pixel and 90%, and nothing else.
+            const held = {
+                ...hover,
+                background: c.press.surface ? paint[c.press.surface] : hover.background,
+                translate: '0px 1px', filter: 'brightness(0.9)',
+            }
             await page.mouse.down()
-            const held = await lookOf(b)
+            const pressed = shapeOf(await lookOf(b))
             await page.mouse.move(0, 0)
             await page.mouse.up()
-            expect(held.background, `${look.label}: held`).toEqual(c.press.surface ? paint[c.press.surface] : hovered.background)
-            expect(held.translate, `${look.label}: held`).toBe('0px 1px')
+            expect(pressed, `${look.label}: held`).toEqual(held)
 
-            // Focused from the keyboard: the variant's ring, or the card's own on its green.
+            // Focused from the keyboard: the variant's ring, or the card's own on its green,
+            // and nothing else.
             await page.keyboard.press('Shift')
             await b.focus()
-            const focused = await lookOf(b)
+            const focused = shapeOf(await lookOf(b))
             await b.evaluate(el => (el as HTMLElement).blur())
-            expect(focused.outline, `${look.label}: focused`).toEqual(look.card ? paint.onSuccess : paint[c.focus])
+            expect(focused, `${look.label}: focused`).toEqual({ ...at, outline: look.card ? paint.onSuccess : paint[c.focus] })
         })
     }
     return seen

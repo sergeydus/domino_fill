@@ -169,10 +169,9 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                                 aria-label={`${date}, ${MARK_LABEL[mark]}`}
                                 // Until the chunk lands there are no ids, so a mark would be
                                 // a guess. The day is still selectable: picking it fetches
-                                // the month anyway. Its surface is its mark, by `data-mark`
-                                // (the `day` variant, graphics P2-2).
-                                className={`${control('day')} text-meta `
-                                    + (date === viewingDate ? 'ring-2 ring-accent-edge' : '')}
+                                // the month anyway. Its surface is its mark, by `data-mark`,
+                                // and its ring `aria-current` (the `day` variant, graphics P2-2).
+                                className={`${control('day')} text-meta`}
                                 onClick={() => { void pick(date) }}
                             >
                                 {Number(date.slice(8))}
