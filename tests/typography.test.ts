@@ -49,9 +49,9 @@ describe('the generated stylesheet is the table', () => {
  * Every source file under `app`, comments blanked, as [path, code].
  *
  * Blanked by the palette audit's syntax-aware stripper, not a regex. The regex this used first
- * took a `//` anywhere on a line for a comment, so JSX text holding a URL discarded the rest
- * of its line -- and a size declared after it on that line was never read (codex, at row 13's
- * review). The syntax tree knows JSX text from a comment.
+ * took any `//` not straight after a colon for a comment, so a bare `//` in JSX text discarded
+ * the rest of its line -- and a size declared after it on that line was never read (codex, at
+ * row 13's review). A URL's `://` was spared. The syntax tree knows JSX text from a comment.
  */
 const sources = (dir = 'app'): [string, string][] =>
     readdirSync(dir).flatMap(name => {

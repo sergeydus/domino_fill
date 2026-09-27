@@ -1874,7 +1874,10 @@ asserted by computed style; no component declares a size outside the table.
 > **Now the table is `app/typography.ts`**, in the palette's pattern. `npm run tokens` also
 > writes `app/typography.css`, a Tailwind theme block that first clears Tailwind's whole
 > size scale (`--text-*: initial`) and then declares the five roles. So `text-sm` and the
-> rest generate no CSS at all, and a size outside the table cannot be declared by accident.
+> rest generate no CSS at all. A size written another way is not prevented, only looked for:
+> by the source scan, in the forms listed below, and in the browser, on the surfaces it
+> visits. *Corrected after acceptance* (codex): this said such a size "cannot be declared by
+> accident", which is more than either check proves.
 > Each role is a utility that sets size and line height together: `text-board-label`,
 > `text-card-title`, `text-control`, `text-body`, `text-meta`.
 > - **Board label:** `text-board-label` reads `--label-font`, `LABEL_FONT_FRACTION` of the

@@ -9,8 +9,9 @@
  * **Plain TypeScript with no imports**, as the palette is, and for the same reason: CSS reads
  * it through `app/typography.css`, generated from here by `npm run tokens`, and the tests read
  * it directly. The generated file also clears Tailwind's own scale, so `text-sm` and the rest
- * produce no CSS at all: a size outside this table cannot be declared by accident, and
- * `tests/typography.test.ts` fails on one declared on purpose.
+ * produce no CSS at all. A size written any other way is for `tests/typography.test.ts` to
+ * find in the source, in the forms it lists, and for `e2e/typography.spec.ts` to find in what
+ * the browser computes, on the surfaces it visits.
  *
  * `size` is CSS px, except the board label's: that is `LABEL_FONT_FRACTION` of the cell,
  * which the board computes and hands to CSS as `--label-font` (graphics row 2), so it is
