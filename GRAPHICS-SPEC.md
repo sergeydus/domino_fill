@@ -2345,15 +2345,27 @@ pip, one step further out: the launcher would show a game that no longer exists.
 > - its corners were square (the piece's are 14% round);
 > - its body was all `tileSide`, the extrusion's colour, with no face and no extrusion.
 >
-> **Now `scripts/icon.ts` draws `DominoPieceOne`** in the board's own units. It imports `PIECE`
-> and `UNIT` from `Pieces/geometry.ts`, and paints each point as the board layers it:
+> **Now `scripts/icon.ts` draws the domino `DominoPieceOne` draws**, in the board's own units.
+> It imports `PIECE` and `UNIT` from `Pieces/geometry.ts`, and paints each point as the board
+> layers it:
 > - the `tileSide` extrusion, and the `tileFace` face over it;
 > - the outline, a stroke `PIECE.outline` wide on the edge of both, so its outer corners are
 >   `radius + outline/2` round;
 > - then the divider and the pip.
 >
-> The icon changes when the piece does. It is one scale factor, the mark's height, away from
-> the board.
+> **The icon follows the shared constants, not the component.** Change `PIECE` or `UNIT` and
+> the icon changes with them: the parity test measures the new values, and
+> `tests/icons.test.ts` fails until `npm run icons` regenerates the files.
+>
+> The drawing itself is written twice, once as SVG in `DominoPieceOne.tsx` and once as
+> per-point colours in `icon.ts`. The pip sits at the centre of the top cell, the divider on
+> the line between the cells, and the layers run side, face, outline, divider, pip. Those are
+> each file's own copy, and no test compares them. If the component's pip moves 10 units
+> down, the icon suites still pass, 19 of 19 (checked for this correction). Full drawing
+> parity would be a future test's job: rendering the component and comparing it with the
+> icon. This row does not claim it.
+>
+> Past the constants, the icon is one scale factor, the mark's height, away from the board.
 > - **Sixteen samples a pixel**, averaged. The board is drawn anti-aliased by a browser, and
 >   the rounded corners and round pip, drawn at one sample, were stair-stepped at 512px.
 >   The output is still a pure function of the size.

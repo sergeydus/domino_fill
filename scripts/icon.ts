@@ -68,9 +68,14 @@ export const MARK_HEIGHT = 0.8
 
 /*
  * The board's upright domino (`DominoPieceOne`), in the board's own units (`Pieces/geometry.ts`):
- * one cell of `UNIT` wide, two tall, with its extrusion below. The icon is that drawing, not a
- * picture of it (P2-4): the outline weight, the corner radius, the pip, the divider's span and
- * weight and the extrusion are `PIECE`'s, so the icon changes when the piece does.
+ * one cell of `UNIT` wide, two tall, with its extrusion below. The outline weight, the corner
+ * radius, the pip, the divider's span and weight and the extrusion are `PIECE`'s, so the icon
+ * changes when those constants do.
+ *
+ * The rest is this file's own copy of `DominoPieceOne.tsx`, not a rendering of it: the pip at
+ * the centre of the top cell, the divider on the line between the cells, and the order of the
+ * layers. A change to any of those in the component would not reach the icon, and no test
+ * compares them (P2-4's amendment says so).
  */
 const { outline: O, radius: R, inset: I, extrusion: E, pipRadius, dividerInset, dividerWidth } = PIECE
 
