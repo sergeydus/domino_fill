@@ -2,6 +2,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { playSolution } from './play'
 import { VISUAL_URL } from './server'
+import { waitForRest } from './rest'
 import { rgbBytes } from '../app/palette'
 import { DIFFICULTY_NAME } from '../app/dominoFill/DifficultySlider'
 
@@ -18,15 +19,13 @@ import { DIFFICULTY_NAME } from '../app/dominoFill/DifficultySlider'
  * cannot be a constant that happens to match the sheet.
  */
 
-type Text = { text: string, size: number, weight: number, colour: string, top: number, bottom: number }
+type Text = { text: string, size: number, weight: number, colour: string }
 
 const textOf = (el: Locator): Promise<Text> => el.evaluate(node => {
     const cs = getComputedStyle(node)
-    const r = node.getBoundingClientRect()
     return {
         text: (node.textContent ?? '').replace(/\s+/g, ' ').trim(),
         size: parseFloat(cs.fontSize), weight: Number(cs.fontWeight), colour: cs.color,
-        top: r.top, bottom: r.bottom,
     }
 })
 
@@ -36,6 +35,9 @@ const rgb = (bytes: readonly number[]) => `rgb(${bytes.join(', ')})`
 const expectHierarchy = async (page: Page) => {
     const card = page.locator('[data-completion-card]')
     await expect(card).toBeVisible()
+    // At rest first: the card animates in and scrolls itself into view, and a position read
+    // on the way is a position from a different moment than the next one read.
+    await waitForRest(page)
     await expect(card).toHaveAttribute('role', 'status')
     await expect(card).toHaveAttribute('aria-live', 'polite')
 
@@ -68,9 +70,18 @@ const expectHierarchy = async (page: Page) => {
         expect(t.weight, `"${t.el}" is as heavy as the outcome`).toBeLessThan(outcome.weight)
     }
 
-    // In that order, top to bottom: the actions beneath both.
-    expect(outcome.bottom).toBeLessThanOrEqual(detail.top)
-    for (const a of actions) expect(detail.bottom, `"${a.text}" is beneath the detail`).toBeLessThanOrEqual(a.top)
+    // In that order, top to bottom, the actions beneath both: read in one pass, so every
+    // position is from the same moment.
+    const order = await card.evaluate(root => {
+        const box = (el: Element) => { const r = el.getBoundingClientRect(); return { top: r.top, bottom: r.bottom } }
+        return {
+            outcome: box(root.querySelector('[data-completion-message]')!),
+            detail: box(root.querySelector('[data-completion-detail]')!),
+            actions: Array.from(root.querySelectorAll('button')).map(b => ({ text: b.textContent!.trim(), ...box(b) })),
+        }
+    })
+    expect(order.outcome.bottom).toBeLessThanOrEqual(order.detail.top)
+    for (const a of order.actions) expect(order.detail.bottom, `"${a.text}" is beneath the detail`).toBeLessThanOrEqual(a.top)
 
     // The card is the panel, not a `success` surface; "Solved!" is the green on it.
     await expect(card).toHaveCSS('background-color', rgb(rgbBytes('panel')))

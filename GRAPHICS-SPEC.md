@@ -2266,6 +2266,15 @@ is a transient surface and the desktop baseline is the ordinary composition.
 >   - top to bottom: outcome, detail, actions;
 >   - the card is the panel, `role="status"`, `aria-live="polite"`;
 >   - the detail names the puzzle the store was on.
+>
+>   *Corrected before the baselines were committed:* the spec read the detail's and the
+>   actions' positions in separate calls, without waiting for the card to settle, and the
+>   card animates in and scrolls itself into view. On the solved board, under the whole
+>   suite's load, "Next level" was read 31px above the detail's bottom: the two positions
+>   were from different moments. It now waits for the page to come to rest and reads every
+>   position in one pass. That race was seen once and not reproduced on purpose; the fixed
+>   spec passed 60 of 60 over ten repeats on both projects, and the three mutations it
+>   concerns were caught again.
 > - `tests/contrast.test.ts`: "Solved!" on the panel at 4.5:1 and at 7.13; the card's focus
 >   ring, `accentEdge` on the panel, at 11.78, and why the card had needed its own on green.
 > - `e2e/completion.spec.ts` (SPEC.md row 15), unedited: the card's behaviour, its focus, its
