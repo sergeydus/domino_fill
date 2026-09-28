@@ -216,10 +216,17 @@ merged.
   `ClientBoard.tsx`), so the check is new.
 - **A touch long-press never switches the piece.** The switch is driven by the mouse button,
   not by the `contextmenu` event, which a long-press also fires. The context menu is suppressed
-  on the board only, not on the controls around it.
-- Today's default mode probably treats a right-click like a left click, and also opens the
-  browser menu (inferred from those handlers, untested). Whether to change that is a separate
-  decision; this contract doesn't touch the default mode.
+  on the board only, **and only in Pick a piece mode**, never on the controls around it.
+- Today's default mode may treat a right-click like a left click, and also open the browser
+  menu (inferred from those handlers, untested). That is a separate investigation. This
+  contract doesn't touch the default mode, and no test asserts its right-click behaviour
+  either way (codex).
+
+**The held piece**
+- **Upright** on first entry to the mode.
+- Kept for the rest of the session across puzzle changes and mode switches, so returning to
+  the mode returns the same piece.
+- Only the control mode is remembered on the device; the held piece is not.
 
 **The rule**
 - A pure function returns the **exact two cells, their direction and their pip values**. The
@@ -243,10 +250,12 @@ merged.
 - "Controls: Drag / Pick a piece", beside Sound, if it fits the tested phone and desktop
   layouts. The mode is remembered on the device.
 - The piece picker appears only in Pick a piece mode.
-- Switching modes clears any gesture in progress, without changing the board. It makes **no
-  additional programmatic focus move**: activating the switch may focus the switch itself, as
-  any button does. Focus must never be stranded: if it was on the picker when the picker
-  disappears, it moves to the mode switch.
+- Switching modes clears any gesture in progress, without changing the board.
+- **Focus**, in two cases:
+  - **The focused element survives the switch:** no extra focus move. Activating the switch may
+    focus the switch itself, as any button does.
+  - **The focused picker is removed:** the mode switch is focused explicitly, so focus is
+    never stranded. That fallback is the one programmatic focus move.
 
 **Tests**
 - Switching modes mid-gesture, and focus when the picker disappears.
@@ -259,7 +268,10 @@ merged.
 - A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
 - Space and Enter on an occupied cell or a rock refuse without removing.
-- The default mode left exactly as it is.
+- The held piece: upright on first entry, kept across puzzle and mode switches, not
+  remembered on the device.
+- The context menu stays available on the board in the default mode.
+- The default mode's existing placement tests pass unedited.
 
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare
