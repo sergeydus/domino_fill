@@ -107,7 +107,24 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * dominoes. `pointermove` is also non-passive, unlike React's `touchmove`, which is
      * the other reason not to mix the two families.
      */
+    /*
+     * Right-click, in Pick a piece mode: a mouse's right button, and nothing else.
+     *
+     * It switches the held piece and never reaches placement or removal. The press stops
+     * here, so no gesture begins, and the release that follows has nothing to complete:
+     * `pointerUp` with no gesture places nothing. Keyed on the button rather than on
+     * `contextmenu`, because a touch long-press fires `contextmenu` too and must not switch
+     * anything. What the default mode does with a right button is left exactly as it was:
+     * a separate question.
+     */
+    const isPickRightButton = (e: React.PointerEvent<HTMLDivElement>) =>
+        boardsStore.pickMode && e.pointerType === 'mouse' && e.button === 2
+
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (isPickRightButton(e)) {
+            boardsStore.rootStore.controls.switchHeld()
+            return
+        }
         const cell = cellFrom(e)
         boardsStore.setHover(cell)
         if (cell) boardsStore.pointerDown(cell)
@@ -119,6 +136,11 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
 
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         boardsStore.pointerUp(cellFrom(e))
+    }
+
+    /** The board's own menu is suppressed in Pick a piece mode only; right-click is taken. */
+    const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (boardsStore.pickMode) e.preventDefault()
     }
 
     /*
@@ -286,6 +308,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     onPointerCancel={onPointerCancel}
                     onLostPointerCapture={onLostPointerCapture}
                     onPointerLeave={onPointerLeave}
+                    onContextMenu={onContextMenu}
                     onKeyDown={onKeyDown}
                     onBlur={onBlur}
                     /*

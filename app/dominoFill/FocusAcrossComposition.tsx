@@ -10,6 +10,7 @@ import { Component, type ReactNode } from 'react'
 const CONTROL_ATTRIBUTES = [
   'data-check', 'data-hint', 'data-undo', 'data-reset',
   'data-difficulty', 'data-level', 'data-open-archive', 'data-mute',
+  'data-controls-mode', 'data-held-piece',
 ] as const
 
 /** A selector that will find this control again after it has been rebuilt, or null. */

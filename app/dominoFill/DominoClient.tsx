@@ -18,7 +18,7 @@ import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { FocusAcrossComposition } from './FocusAcrossComposition'
-import { ArchiveButton, SoundButton } from './PageButtons'
+import { ArchiveButton, ControlModeButton, SoundButton } from './PageButtons'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
 } from './composition'
@@ -35,7 +35,7 @@ const PAGE_MARGIN_PX = 8
 const DominoClient: React.FC = () => {
   const [isLoading, setisLoading] = useState(true)
   const [failed, setFailed] = useState(false)
-  const { boardsStore, corpus, sound } = useStores()
+  const { boardsStore, corpus, sound, controls: controlMode } = useStores()
 
   /*
    * The day's puzzles are fetched from the published corpus (spec P1-6, row 18d).
@@ -255,7 +255,15 @@ const DominoClient: React.FC = () => {
     <div data-chrome className='flex flex-wrap items-center gap-3'>
       <LevelSelector boardsStore={boardsStore} />
       <ArchiveButton levels={boardsStore} />
-      <SoundButton sound={sound} />
+      {/*
+        The two settings wrap together. At 360px the row has no room for a fourth control,
+        and wrapping one button at a time left "Sound on" alone on a line of its own
+        (measured on the phone baseline); as a pair they make a second line of settings.
+      */}
+      <div className='flex items-center gap-3'>
+        <ControlModeButton controls={controlMode} />
+        <SoundButton sound={sound} />
+      </div>
     </div>
   )
 

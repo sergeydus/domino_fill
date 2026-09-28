@@ -266,8 +266,24 @@ test.describe('pressed, disabled, and toggled', () => {
         const soundOff = await look(sound)
         expect(channels(soundOn, soundOff)).toEqual({ colour: true, weight: true, ring: true })
 
-        // Every toggle on the page was one of those.
-        expect(await page.locator('[aria-pressed]').count()).toBe(4)
+        // Pick a piece: the same control, both ways. Pressed is the mode on.
+        const pick = page.locator('[data-controls-mode]')
+        await expect(pick).toHaveAttribute('aria-pressed', 'false')
+        const pickOff = await look(pick)
+        await pick.click()
+        await page.mouse.move(0, 0)
+        await expect(pick).toHaveAttribute('aria-pressed', 'true')
+        expect(channels(await look(pick), pickOff)).toEqual({ colour: true, weight: true, ring: true })
+
+        // The picker it shows: the held piece against the other. Its pieces carry no text,
+        // so of the two signals beyond colour it is the ring a player sees.
+        const heldOn = await look(page.locator('[data-held-piece][aria-pressed="true"]'))
+        const heldOff = await look(page.locator('[data-held-piece][aria-pressed="false"]'))
+        expect(channels(heldOn, heldOff)).toEqual({ colour: true, weight: true, ring: true })
+
+        // Every toggle on the page was one of those: three difficulties, Sound, the mode,
+        // and the picker's two pieces.
+        expect(await page.locator('[aria-pressed]').count()).toBe(7)
     })
 })
 

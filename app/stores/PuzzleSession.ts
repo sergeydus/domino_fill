@@ -9,8 +9,10 @@ import {
 } from "./boardRules"
 import {
     Cell, DIRECTIONS, Direction, directionBetween, dominoFrom, neighbourOf, orderedPair, sameCell,
+    placementForHeld, placementFrom, type Piece, type Placement,
 } from "./placement"
 import { checkPosition, hintFor, type Advice } from "./advice"
+import type { ControlMode } from "./ControlStore"
 
 /** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
 export const GRID_BORDER_PX = 8
@@ -284,6 +286,47 @@ export class PuzzleSession {
     }
 
     get puzzleId() { return this.definition.puzzleId }
+
+    /**
+     * A control mode this board keeps whatever the player chose, or null to follow them.
+     *
+     * The tutorial fixes Drag: its text teaches the drag and the tap, and it appears before
+     * a player could have chosen anything else. The component sheet fixes Pick a piece on
+     * the specimen that shows the picker.
+     */
+    fixedControlMode: ControlMode | null = null
+
+    setFixedControlMode(mode: ControlMode | null) {
+        this.fixedControlMode = mode
+    }
+
+    /** The controls this board answers to right now. */
+    get controlMode(): ControlMode {
+        return this.fixedControlMode ?? this.rootStore.controls.mode
+    }
+
+    /** Pick a piece mode: taps, clicks, Space and Enter place the held piece. */
+    get pickMode(): boolean {
+        return this.controlMode === 'pick'
+    }
+
+    /** The piece Pick a piece mode places. Held for the session, across every board. */
+    get heldPiece(): Piece {
+        return this.rootStore.controls.held
+    }
+
+    /**
+     * Where the held piece would go if `cell` were tapped, or null if it cannot go there.
+     *
+     * An occupied cell is not a placement at all -- a tap there removes, and Space refuses --
+     * so it answers null before the rule is asked. A cell holding a half worth 0 is
+     * occupied like any other: `null`, not falsiness, is what empty means.
+     */
+    heldPlacement(cell: Cell): Placement | null {
+        const [i, j] = cell
+        if (!this.inBounds(i, j) || this.board[i][j] !== null) return null
+        return placementForHeld(this.heldPiece, cell, (anchor, direction) => this.canPlace(anchor, direction))
+    }
 
     setHover(cell: Cell | null) {
         // Guard here rather than at the call site: an index that is not a cell of this
@@ -589,28 +632,40 @@ export class PuzzleSession {
     }
 
     /**
-     * The pair a placement would occupy right now, for the preview.
+     * The placement the next release or key would make, for the preview.
      *
-     * During a drag it follows the pointer away from the anchor. With no gesture it
-     * previews the cell under the pointer, but only when that cell has exactly one legal
-     * direction -- the same condition under which a tap commits without asking.
+     * During a drag it follows the pointer away from the anchor, in both modes: a drag's
+     * direction decides the piece, whatever is held. With the pointer resting on a cell --
+     * hovering, or pressed and not yet moved -- it is what a tap there would do: in Pick a
+     * piece mode the held piece by `heldPlacement`, the very function the tap commits
+     * with; otherwise the one legal direction, when there is exactly one.
+     *
+     * Keyboard and touch have no hover, so in Pick a piece mode the focused cell is
+     * previewed too, while the keyboard is in use.
      */
-    get highlightedPair(): [[number, number], [number, number]] | null {
+    get preview(): Placement | null {
         const hovered = this.hoveredCell
         const anchor = this.gesture?.kind === 'drag' ? this.gesture.from : hovered
-        if (!anchor) return null
 
-        if (hovered && !sameCell(anchor, hovered)) {
+        if (anchor && hovered && !sameCell(anchor, hovered)) {
             const direction = directionBetween(anchor, hovered)
-            if (direction && this.canPlace(anchor, direction)) {
-                return orderedPair(anchor, neighbourOf(anchor, direction))
-            }
-            return null
+            return direction && this.canPlace(anchor, direction) ? placementFrom(anchor, direction) : null
         }
 
-        const legal = this.legalDirections(anchor)
-        if (legal.length !== 1) return null
-        return orderedPair(anchor, neighbourOf(anchor, legal[0]))
+        if (anchor) {
+            if (this.pickMode) return this.heldPlacement(anchor)
+            const legal = this.legalDirections(anchor)
+            return legal.length === 1 ? placementFrom(anchor, legal[0]) : null
+        }
+
+        if (this.pickMode && this.focusVisible && this.focusedCell) return this.heldPlacement(this.focusedCell)
+        return null
+    }
+
+    /** The preview's two cells, top-left first, as the highlight draws them. */
+    get highlightedPair(): [[number, number], [number, number]] | null {
+        const preview = this.preview
+        return preview ? orderedPair(preview.cells[0], preview.cells[1]) : null
     }
 
     // ---- pointer -------------------------------------------------------------------
@@ -671,7 +726,36 @@ export class PuzzleSession {
             return this.signal(pending ? 'cleared' : 'none', anchor)
         }
 
-        return this.signal(this.tap(cell), cell)
+        return this.signal(this.pickMode ? this.pickTap(cell) : this.tap(cell), cell)
+    }
+
+    /**
+     * Remove the domino on an occupied cell, as a tap does in both modes. A rock, or a half
+     * that resolves to no well-formed domino, is refused.
+     */
+    private tapOccupied(cell: Cell): PlacementOutcome {
+        const [i, j] = cell
+        const pair = this.pairAt(i, j)
+        if (!this.removePiece(i, j)) return 'none'
+        // Focus follows the removal to the pair's anchor, so a keyboard user is left
+        // somewhere related to what just happened.
+        this.focusedCell = pair ? [pair[0][0], pair[0][1]] : cell
+        return 'removed'
+    }
+
+    /**
+     * A tap in Pick a piece mode: occupied removes, as it always has; empty places the held
+     * piece wherever it can cover the cell (`heldPlacement`, the preview's own function), or
+     * is refused. Never a pending anchor: there is no direction left to ask for.
+     */
+    private pickTap(cell: Cell): PlacementOutcome {
+        const [i, j] = cell
+        if (this.board[i][j] !== null) return this.tapOccupied(cell)
+        const placement = this.heldPlacement(cell)
+        if (!placement) return 'none'
+        this.placeToward(placement.anchor, placement.direction)
+        this.focusedCell = cell
+        return 'placed'
     }
 
     /**
@@ -682,14 +766,7 @@ export class PuzzleSession {
      */
     private tap(cell: Cell): PlacementOutcome {
         const [i, j] = cell
-        if (this.board[i][j] !== null) {
-            const pair = this.pairAt(i, j)
-            if (!this.removePiece(i, j)) return 'none'
-            // Focus follows the removal to the pair's anchor, so a keyboard user is left
-            // somewhere related to what just happened.
-            this.focusedCell = pair ? [pair[0][0], pair[0][1]] : cell
-            return 'removed'
-        }
+        if (this.board[i][j] !== null) return this.tapOccupied(cell)
 
         const legal = this.legalDirections(cell)
         if (legal.length === 0) return 'none'
@@ -862,6 +939,21 @@ export class PuzzleSession {
             }
             const next = neighbourOf(focused, direction)
             if (this.inBounds(next[0], next[1])) this.focusedCell = next
+            return true
+        }
+
+        if ((key === ' ' || key === 'Enter') && this.pickMode) {
+            // The held piece, on an empty focused cell. An occupied cell or a rock refuses
+            // and never removes: removal from the keyboard is Delete and Backspace alone.
+            // Answered exactly as the default mode answers a refused Space.
+            const placement = this.heldPlacement(focused)
+            if (!placement) {
+                this.signal('none', focused)
+                return false
+            }
+            this.placeToward(placement.anchor, placement.direction)
+            this.focusedCell = focused
+            this.signal('placed')
             return true
         }
 

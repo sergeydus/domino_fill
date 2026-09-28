@@ -273,6 +273,22 @@ merged.
 - The context menu stays available on the board in the default mode.
 - The default mode's existing placement tests pass unedited.
 
+**As built** (`feature/pick-a-piece`), three choices the contract left open:
+- **The picker is the legend.** In Pick a piece mode the scoring legend's two pieces become the
+  picker's two toggle buttons, pressed for the piece held. It sits beside the board, where the
+  legend is, rather than in a row of its own. The quiet variant's padding less its edge equals
+  the legend's on the vertical axis, so the board keeps its height. In the default mode the
+  legend is exactly as it was, `role="img"` and not a button.
+- **The switch reads "Pick a piece"**, pressed when the mode is on, built like Sound
+  ("Sound", pressed when on). The contract's "Controls: Drag / Pick a piece" was one label for
+  both states; one name that is pressed or not is shorter in the row it shares with Archive and
+  Sound at 360px, and says the same thing to a screen reader.
+- **The tutorial keeps the default controls.** Its text teaches the drag and the tap, and it
+  shows before a player could choose, so its 2x2 board is fixed to the default mode.
+
+A refused Space or Enter in Pick a piece mode is answered exactly as the default mode answers
+one: the refusal is shown, and the key is left to the browser.
+
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare
   the default, PL1 and PL3 before challenge times are shared as comparable. The share card
