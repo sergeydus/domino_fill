@@ -3,12 +3,20 @@ import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
 import Rock from "./Rock"
-import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore"
+import { PuzzleSession } from "@/app/stores/PuzzleSession"
+import { MOTION, entryOffset } from "../motion"
 
-const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
-    // console.log('wrapper rerender')
+const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
-    const board = boardsStore.currentBoard.board
+    const board = boardsStore.board
+    // Where a domino starts its entry, in px: a fraction of the cell, inside P1-6's limits
+    // (`motion.ts`). It was 26px -- 68% of a phone cell -- and a spring with a turn.
+    const from = entryOffset(size)
+    const entry = {
+        initial: { opacity: 0, translateY: -from, translateX: -from },
+        animate: { opacity: 1, translateY: 0, translateX: 0 },
+        transition: { duration: MOTION.entry.duration, ease: 'easeOut' },
+    } as const
     const ones: [number, number][] = []
     const twos: [number, number][] = []
     const rocks: [number, number][] = []
@@ -19,46 +27,55 @@ const Hover: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) =>
             if (board[i][j] === -1) rocks.push([i, j])
         }
     }
-    const onclick = (i: number, j: number) => {
-        // console.log('remove click1')
-        return (e: React.MouseEvent) => {
-            // console.log('remove click2', { i, j });
-            boardsStore.removePiece(i, j)
-            e.stopPropagation()
-        }
-    }
-
-    return <div className="absolute z-20">
-        {/* <AnimatePresence> */}
+    /*
+     * The overlay is purely decorative and takes no pointer events (spec P0-4 / D4).
+     *
+     * Each piece's SVG is taller than its cell by its extrusion and lifted by the same
+     * amount (16px at the time; `PIECE.extrusion` of a cell since graphics row 6), so its box
+     * overhangs the cell above it. While this layer was interactive, that overhang
+     * hit-tested -- `fill="transparent"` is a paint value, not `none` -- and its handler
+     * removed the domino. Clicking the bottom strip of an empty cell therefore deleted the
+     * piece below it instead of placing one.
+     *
+     * Removal now happens on the cell underneath: the pointer handlers resolve a cell and
+     * `PuzzleSession.pointerUp` decides what the gesture on it means (P1-1).
+     *
+     * **`aria-hidden` as well as `pointer-events: none` (spec P1-8, row 19).** "Decorative"
+     * was true of the pointer and false of the accessibility tree: measured, these SVGs
+     * were eight unnamed `img` nodes *inside* `role="grid"`, and they were the only thing
+     * in it before the cells were named. A screen reader walking the board met a run of
+     * anonymous images that say nothing about which square they are on or what they are.
+     *
+     * Hiding the layer loses nothing, because the same information is now on the cell
+     * underneath, where it belongs and where it comes with coordinates: "Row 3, column 4,
+     * top half of an upright domino".
+     */
+    return <div className="absolute z-20 pointer-events-none" aria-hidden="true">
         {ones.map(([i, j]) =>
-            <motion.div key={`one_${i},${j}`} className="absolute cursor-pointer"
-                style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
-                <DominoPieceOne onClick={onclick(i, j)}
-                    boardsStore={boardsStore}
-                    // style={{ top: `${i * size}px`, left: `${j * size}px` }}
-                    className="absolute z-30 cursor-pointer"
-                />
+            <motion.div key={`one_${i},${j}`} className="absolute" data-piece="one" data-at={`${i},${j}`}
+                style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }} {...entry}>
+                {/* No className: the piece's own box was always the one that applied, since
+                    the svg set its class after spreading these props (graphics row 6). */}
+                <DominoPieceOne boardsStore={boardsStore} />
             </motion.div>
         )}
         {twos.map(([i, j]) =>
-            <motion.div key={`two_${i},${j}`} className="absolute cursor-pointer"
-                style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} initial={{ opacity: 0, translateY: -26, translateX: -26, rotate: -5 }} animate={{ opacity: 1, translateY: 0, translateX: 0, rotate: 0 }}>
-                <DominoPieceTwo onClick={onclick(i, j)}
+            <motion.div key={`two_${i},${j}`} className="absolute" data-piece="two" data-at={`${i},${j}`}
+                style={{ top: `${i * size}px`, left: `${(j - 1) * size}px`, zIndex: 30 + i }} {...entry}>
+                <DominoPieceTwo
                     boardsStore={boardsStore}
                     key={`${i},${j}`}
-
                 />
             </motion.div>
         )}
         {rocks.map(([i, j]) =>
-            <div key={`${i},${j}`} className="absolute"
+            <div key={`${i},${j}`} className="absolute" data-piece="rock" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }}>
                 <Rock boardsStore={boardsStore}
                     key={`rock_${i},${j}`}
                 />
             </div>
         )}
-        {/* </AnimatePresence> */}
     </div>
 }
 export default observer(Hover)

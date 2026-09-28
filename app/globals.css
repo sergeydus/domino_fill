@@ -1,26 +1,186 @@
 @import "tailwindcss";
+/* Every colour, as `--token` properties and Tailwind colours; generated (graphics spec P0-5). */
+@import "./palette.css";
+/* Every text size, as five roles; generated, and Tailwind's own scale cleared (P2-1). */
+@import "./typography.css";
+/* Every control, as one of six variants; generated (P2-2). */
+@import "./controls.css";
 
+/*
+ * One light palette, stated once (spec P2-3, row 20c).
+ *
+ * The page is drawn on the board's own ground rather than white, because that is the
+ * colour the game is actually drawn on: `page.tsx` used to hardcode `bg-[#e8e7e7]` next to a
+ * `--background` of `#ffffff`, so the two disagreed and only the hardcoded one was ever
+ * seen. Since graphics row 5 the ground is `--ground`, from `app/palette.ts`, and this file
+ * holds no colour of its own.
+ *
+ * `color-scheme: light` is a declaration, not a preference. It tells the browser this page
+ * is light, so scrollbars, form controls and any UA-supplied surface match the page instead
+ * of being auto-darkened over it.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  /*
+   * Safe-area insets, as plain variables (spec P0-3).
+   *
+   * Indirected through variables rather than used as `env()` at each site for two
+   * reasons: `env()` cannot be read back from script, so the layout budget has no way to
+   * subtract it; and a variable can be overridden, which is the only way to exercise this
+   * at all -- Chromium has no way to emulate a device's insets, so the browser tests drive
+   * these directly. On a device with no inset every one of them resolves to 0px.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/*
+ * There is no dark block any more, and that is the whole of P2-3.
+ *
+ * The spec offered "implement a real dark palette or drop it; the current half-state is
+ * worse than either", and the half-state was measurably harmful rather than merely untidy.
+ * Measured in Chrome with `prefers-color-scheme: dark`: every surface stayed light --
+ * board cells `rgb(203,203,203)`, controls `rgb(171,171,171)`, targets `rgb(95,95,95)`,
+ * identical to light mode, because all of them are hardcoded -- while `body`'s inherited
+ * text colour flipped to `#ededed`. The advice strip, which is the entire deliverable of
+ * P1-5, was then near-white text on the `#e8e7e7` page: **1.05:1**, against 14.53:1 in
+ * light mode. Turning on dark mode did not darken the game; it deleted the sentence
+ * telling you why your board cannot be finished.
+ *
+ * A real dark palette is not polish. Every colour in this game is measured against this
+ * ground -- the target states at 5.17, 5.77 and 6.76:1 (D10-g), the hint outline, the
+ * problem red, the piece and rock fills -- so a second palette means re-measuring every
+ * pair to keep row 11's guarantee. That is a design project, and P2 is the cleanup row.
+ * Light-only and honest beats two-thirds of a theme.
+ */
+
+/*
+ * The board's touch policy (spec P1-1), static and in CSS on purpose.
+ *
+ * `touch-action` is latched when a gesture begins, so changing it from JS on `pointerdown`
+ * does not affect the gesture already in flight -- an earlier draft proposed exactly that.
+ *
+ * `pinch-zoom` rather than `none`: the browser keeps two-finger pinch, which is what a
+ * low-vision player needs most over the board of all places, while suppressing the
+ * one-finger pan that would otherwise steal a drag. Tap never depends on any of this.
+ *
+ * `-webkit-touch-callout` because `select-none` sets `user-select` only; iOS still raises
+ * the long-press magnifier mid-drag without it.
+ */
+.board-grid {
+  touch-action: pinch-zoom;
+  -webkit-touch-callout: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/*
+ * Hover only where there is a hover (graphics spec P1-6, row 12).
+ *
+ * Tailwind's own `hover:` waits for `(hover: hover)` only, and some touch devices report
+ * that. A hover style on a touch screen latches: the tap that pressed the control leaves it
+ * looking hovered until something else is pressed, so it looks pressed when it is not. Every
+ * `hover:` in the app is this variant, and `e2e/controlStates.spec.ts` reads every rule the
+ * page loads to hold it.
+ */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
   }
 }
 
+/*
+ * The states every control owes (graphics spec P1-6, row 12). Every control in the game is a
+ * `<button>`, so this is every control. In the base layer, beneath the variants
+ * (`app/controls.css`, P2-2), which add their colours and override none of this.
+ *
+ *   - **Focus**, from the keyboard: a 3px ring 2px outside the control, on whatever it sits
+ *     on. A shape, so it reads without colour, as the cell states must (P1-5). Its colour
+ *     is the variant's (`app/controls.ts`, P2-2): `accentEdge`, 8.42:1 or better on every
+ *     surface a control sits on, all of them light since the completion card became one
+ *     (P2-3), which had set its own white ring on its green.
+ *   - **Pressed**, while a pointer or Space is held: a pixel lower and a little darker, so
+ *     the press is answered before its result arrives. Enter has no held state to draw: a
+ *     button acts on Enter's keydown, so its result is the answer. Not when disabled: a
+ *     disabled control that moves under a press is one that looks as if it did something.
+ *   - **Transitions** on the properties those states change, short, and reduced to nothing
+ *     below for a player who asked for less motion.
+ */
+@layer base {
+  /*
+   * One family means the keys too (P2-1, row 13). Tailwind's preflight gives `kbd` a
+   * monospace stack of system faces, so the tutorial's "Space" and "Esc" were the only text
+   * in the game not drawn in Geist -- and in a face the page does not ship. Inherited now,
+   * which declares no family of its own.
+   */
+  kbd {
+    font-family: inherit;
+  }
+
+  /*
+   * Every button is a control, and a control's text is the `control` role (graphics spec
+   * P2-1, row 13): here, once, rather than on every button or -- as it was -- on containers
+   * whose only text was their buttons. A button whose text is something else says so with
+   * its own utility, which wins over this layer: the archive's dates are `text-meta`.
+   */
+  button {
+    @apply text-control;
+    /* Fast taps, not the board's policy: no wait to see whether a tap is a double tap. */
+    touch-action: manipulation;
+    transition-property: background-color, color, border-color, box-shadow, outline-color, filter, translate, scale, opacity;
+    transition-duration: 120ms;
+    transition-timing-function: ease-out;
+  }
+
+  button:enabled {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  button:focus-visible {
+    outline: 3px solid;
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled):active {
+    translate: 0 1px;
+    filter: brightness(0.9);
+  }
+}
+
+/*
+ * Reduced motion covers CSS too (P1-6). `MotionConfig reducedMotion="user"` governs `motion`
+ * and nothing else; a CSS transition or animation answers to this rule. Zero, not merely
+ * short, and on everything, so a transition added later is covered without anyone having to
+ * remember this is here.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}
+
+/*
+ * The one declaration of the family (graphics spec P2-1, row 13): Geist, self-hosted by
+ * `next/font`, which sets `--font-geist-sans` on `<body>` (layout.tsx). This rule said
+ * `Arial, Helvetica, sans-serif` until then, and every surface that was not inside a
+ * `font-sans` class -- the page's wrapper and the sheet's each had one -- was drawn in Arial
+ * wherever the device had it.
+ *
+ * The variable itself, not Tailwind's `--font-sans`: that was an `@theme inline` entry, which
+ * Tailwind inlines into the `font-sans` utility and never emits as a property, so a plain
+ * `var(--font-sans)` here resolved to nothing and fell back to the system face. Measured by
+ * `e2e/typography.spec.ts`, which holds every text surface to this family.
+ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-geist-sans);
 }

@@ -9,6 +9,8 @@ const eslintConfig = defineConfig([
   globalIgnores([
     // Default ignores of eslint-config-next:
     ".next/**",
+    // The component sheet's build (graphics spec P0-3): generated output, like `.next`.
+    ".next-visual/**",
     "out/**",
     "build/**",
     "next-env.d.ts",

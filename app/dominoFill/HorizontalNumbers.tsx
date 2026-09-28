@@ -1,27 +1,45 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
-import { CurrentBoardStore } from "../stores/CurrentBoardStore"
-const HorizontalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
-    const board = boardsStore.currentBoard
+import { PuzzleSession } from "../stores/PuzzleSession"
+import { MOTION } from "./motion"
+import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
+
+/**
+ * The column labels, along the top of the board. See VerticalNumbers for why the font is
+ * derived from `--cell`, why `min-w-0 min-h-0` is required, and why the padding is there
+ * -- here it is `padding-left`, clearing the grid's left border.
+ */
+const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
-    const split = board.boardHorizontalNumbers.split(',')
-    const correctIndexes = boardsStore.correctHorizontalValues
-    return <div className="flex flex-row text-6xl">
-        {split.map((el, index) => {
-            let color = '#ababab'
-            if (correctIndexes[index] == Number(el)) {
-                color = '#4bce4b'
-            }
-            else if (correctIndexes[index] > Number(el)) {
-                color = '#ff0000'
-            }
+    const gutter = boardsStore.gutterSize
+    const split = boardsStore.definition.columnTargets.split(',')
+    const states = boardsStore.columnStates
+    return <div
+        className="flex flex-row min-w-0 min-h-0 text-board-label tabular-nums"
+        style={{ paddingLeft: 'var(--grid-border)' }}
+    >
+        {split.map((el: string, index: number) => {
+            const presentation = labelPresentation(states[index])
             return (
-                <motion.div className="flex items-center justify-center"
-                    initial={{ color: '#ababab' }}
-                    animate={{ color: color }}
+                <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
+                    initial={{ color: LABEL_COLORS.neutral }}
+                    animate={{ color: presentation.color }}
+                    // Placement feedback, so inside P1-6's limits (`motion.ts`).
+                    transition={{ duration: MOTION.label.duration }}
                     key={index}
-                    style={{ width: `${size}px`, height: `${size}px` }}
+                    data-col-label={index}
+                    data-line-state={presentation.token}
+                    role="img"
+                    aria-label={labelDescription(`Column ${index + 1}`, el, states[index])}
+                    style={{
+                        ...{ width: `${size}px`, height: `${gutter}px` },
+                        textDecoration: presentation.textDecoration,
+                        outline: presentation.outline,
+                        borderRadius: '4px',
+                    }}
                 >{el}
+                    {/* The tie to the line (P1-3): see `LABEL_TIE`. */}
+                    <span aria-hidden data-label-tie style={tieStyle('below')} />
                 </motion.div>
             )
         })}

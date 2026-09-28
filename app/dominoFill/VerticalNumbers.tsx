@@ -1,28 +1,55 @@
 import { observer } from "mobx-react"
 import { motion } from 'motion/react'
-import { CurrentBoardStore } from "../stores/CurrentBoardStore"
-const VerticalNumbers: React.FC<{ boardsStore: CurrentBoardStore }> = ({ boardsStore }) => {
-    // console.log('wrapper rerender')
-    const board = boardsStore.currentBoard
+import { PuzzleSession } from "../stores/PuzzleSession"
+import { MOTION } from "./motion"
+import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
+
+/**
+ * The row labels, down the left of the board (spec P0-3).
+ *
+ * One gutter, not two: this used to be rendered twice, and the duplicate right-hand copy
+ * cost a whole column of width on the one device with none to spare.
+ *
+ * `min-w-0 min-h-0` because a flex item's default `min-*: auto` is min-content, so a label
+ * wider than its box silently props the box open instead of overflowing it. The font is
+ * derived from `--cell` rather than the old constant `text-6xl` (60px), which rendered a
+ * 60px glyph inside a 39px box at phone size -- the `board label` role since graphics P2-1,
+ * `text-board-label`, which reads that size from `--label-font` with a line height of 1.
+ *
+ * `padding-top` clears the grid's own top border so each label centres on its row: the
+ * board's track includes the border, the label's track does not.
+ */
+const VerticalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     const size = boardsStore.squareSize
-    const split = board.boardVerticalNumbers.split(',')
-    const correctIndexes = boardsStore.correctVerticalValues
-    return <div className="flex flex-col text-6xl">
-        {split.map((el, index) => {
-            let color = '#ababab'
-            if (correctIndexes[index] == Number(el)) {
-                color = '#4bce4b'
-            }
-            else if(correctIndexes[index] > Number(el)) {
-                color = '#ff0000'
-            }
+    const gutter = boardsStore.gutterSize
+    const split = boardsStore.definition.rowTargets.split(',')
+    const states = boardsStore.rowStates
+    return <div
+        className="flex flex-col min-w-0 min-h-0 text-board-label tabular-nums"
+        style={{ paddingTop: 'var(--grid-border)' }}
+    >
+        {split.map((el: string, index: number) => {
+            const presentation = labelPresentation(states[index])
             return (
-                <motion.div className="flex items-center justify-center"
-                    initial={{ color: '#ababab' }}
-                    animate={{ color: color }}
+                <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
+                    initial={{ color: LABEL_COLORS.neutral }}
+                    animate={{ color: presentation.color }}
+                    // Placement feedback, so inside P1-6's limits (`motion.ts`).
+                    transition={{ duration: MOTION.label.duration }}
                     key={index}
-                    style={{ width: `${size}px`, height: `${size}px` }}
+                    data-row-label={index}
+                    data-line-state={presentation.token}
+                    role="img"
+                    aria-label={labelDescription(`Row ${index + 1}`, el, states[index])}
+                    style={{
+                        ...{ width: `${gutter}px`, height: `${size}px` },
+                        textDecoration: presentation.textDecoration,
+                        outline: presentation.outline,
+                        borderRadius: '4px',
+                    }}
                 >{el}
+                    {/* The tie to the line (P1-3): see `LABEL_TIE`. */}
+                    <span aria-hidden data-label-tie style={tieStyle('right')} />
                 </motion.div>
             )
         })}

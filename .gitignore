@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-visual/
 /out/
 
 # production
@@ -39,3 +40,18 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# chromium debug output from playwright runs
+debug.log
+
+# a corpus build that was interrupted before it could swap into place
+/public/puzzles.staging/
+
+# Stray build logs. One was swept into a commit by `git add -A`.
+*.log

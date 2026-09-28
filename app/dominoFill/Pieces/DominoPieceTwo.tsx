@@ -1,21 +1,43 @@
 import React from "react";
 import { observer } from "mobx-react";
-import { CurrentBoardStore } from "@/app/stores/CurrentBoardStore";
+import { PuzzleSession } from "@/app/stores/PuzzleSession";
+import { PALETTE } from "@/app/palette";
+import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
 
-const strokeWidth = 6
+const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
 
-const DominoPieceTwo: React.FC<React.SVGProps<SVGSVGElement> & { boardsStore: CurrentBoardStore }> = (props) => {
-    const { boardsStore, ...rest } = props
-    const size = boardsStore.squareSize
+/**
+ * Exactly what a piece needs, and no SVG props (graphics row 6). A spread of caller props
+ * onto the svg could override the `width`, `height`, `style` or `viewBox` that `pieceBox`
+ * sets, and then `pieceBox` would not be the only place pixels enter; no caller styles a
+ * piece, so none is accepted.
+ */
+type PieceProps = {
+    boardsStore: PuzzleSession
+    /**
+     * Overrides the board's cell size.
+     *
+     * The piece tray passes a constant. Without it the tray's height is a function of the
+     * board's cell size, while the board's cell size is a function of the height left over
+     * after the tray -- a feedback loop that visibly creeps the board a couple of pixels
+     * larger over several frames before settling.
+     */
+    cellSize?: number
+}
+
+const DominoPieceTwo: React.FC<PieceProps> = (props) => {
+    const { boardsStore, cellSize } = props
+    const size = cellSize ?? boardsStore.squareSize
     return (
-        <svg width={size * 2} height={size + 16} {...rest} className="-translate-y-4">
-            <rect width={size * 2 - 8} x={4} y={4 + 16} height={size - 8} fill="#8d8778" strokeWidth={strokeWidth} rx={8} ry={8} />
-            <rect width={size * 2 - 8} x={4} y={4} height={size - 8} fill="#FFF3D6" strokeWidth={strokeWidth} rx={8} ry={8} />
-            <rect width={size * 2 - 8} x={4} y={4} height={size - 8 + 16} stroke="black" fill="transparent" strokeWidth={strokeWidth} rx={8} ry={8} />
+        // Two cells (U each) wide and one tall, in drawing units; `pieceBox` is where pixels enter.
+        <svg {...pieceBox(2, 1, size)} viewBox={viewBox(2, 1)}>
+            <rect x={I} y={I + E} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileSide} rx={R} ry={R} />
+            <rect x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileFace} rx={R} ry={R} />
+            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
 
-            <line x1={size} y1={16} x2={size} y2={size - 16} stroke="black" strokeWidth={3} />
-            <circle cx={size + size / 3} cy={size / 3} fill="black" r={8} />
-            <circle cx={size + size * 2 / 3} cy={size * 2 / 3} fill="black" r={8} />
+            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} stroke={PALETTE.divider} strokeWidth={PIECE.dividerWidth} />
+            <circle cx={U + U / 3} cy={U / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
+            <circle cx={U + U * 2 / 3} cy={U * 2 / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
         </svg>
     );
 };
