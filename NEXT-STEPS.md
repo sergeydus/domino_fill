@@ -210,8 +210,16 @@ merged.
 - An **invalid drag** is refused. It never falls back to a held-piece click.
 - Everything goes through the existing pointer events, **never a new `onClick`**. Touch sends
   a compatibility click after `pointerup`, which could place a piece and then remove it.
-- **Right-click** switches the held piece and does nothing else: no placement, no removal. The
-  context menu is suppressed on the board only, not on the controls around it.
+- **Right-click is mouse-only.** A right-button press from a mouse (`pointerType` "mouse",
+  button 2) switches the held piece and never reaches the placement or removal handlers. Today
+  those handlers don't check the button (read: `onPointerDown` and `onPointerUp` in
+  `ClientBoard.tsx`), so the check is new.
+- **A touch long-press never switches the piece.** The switch is driven by the mouse button,
+  not by the `contextmenu` event, which a long-press also fires. The context menu is suppressed
+  on the board only, not on the controls around it.
+- Today's default mode probably treats a right-click like a left click, and also opens the
+  browser menu (inferred from those handlers, untested). Whether to change that is a separate
+  decision; this contract doesn't touch the default mode.
 
 **The rule**
 - A pure function returns the **exact two cells, their direction and their pip values**. The
@@ -220,23 +228,37 @@ merged.
   session's existing removal rule handles it first. Rocks refuse.
 
 **Keyboard**
-- **Space and Enter** place the held piece on an empty focused cell.
+- **Space and Enter** place the held piece on an empty focused cell. On an occupied cell or a
+  rock they refuse, and never remove.
 - **Delete and Backspace**, and only those, remove an occupied domino.
-- Keyboard focus shows the held piece and where it would land, since keyboard and touch have
-  no hover.
+- Keyboard focus shows the held piece and where it would land, since there's no hover.
+
+**Touch**
+- Keyboard focus gives no preview on touch. So the picker must show clearly, at all times,
+  which piece is held.
+- A press-and-hold preview (showing the placement while the finger is down, and placing on
+  release) would be a useful addition, not a requirement.
 
 **The mode switch**
 - "Controls: Drag / Pick a piece", beside Sound, if it fits the tested phone and desktop
   layouts. The mode is remembered on the device.
 - The piece picker appears only in Pick a piece mode.
-- Switching modes clears any gesture in progress, without changing the board or moving focus.
+- Switching modes clears any gesture in progress, without changing the board. It makes **no
+  additional programmatic focus move**: activating the switch may focus the switch itself, as
+  any button does. Focus must never be stranded: if it was on the picker when the picker
+  disappears, it moves to the mode switch.
 
 **Tests**
-- Switching modes mid-gesture.
-- Right-click, and touch's compatibility events.
+- Switching modes mid-gesture, and focus when the picker disappears.
+- Right-click switches the piece and never places or removes.
+- A touch long-press doesn't switch the piece, and touch's compatibility events don't place
+  twice.
 - All four board edges and rocks.
+- Both positions fitting: the top or left tie-break.
+- Only the opposite (bottom or right) position fitting.
+- A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
-- The case where only the opposite (bottom or right) position fits.
+- Space and Enter on an occupied cell or a rock refuse without removing.
 - The default mode left exactly as it is.
 
 Notes for all of these:
@@ -247,9 +269,8 @@ Notes for all of these:
   by unit and browser tests. Each new scheme needs its own written placement rule and tests
   beside those, not an edit to them.
 - **Placing during a drag**, rather than on release, is also a speed idea: see Controls 5.
-- **Suggested order.** PL5 first: it improves the default drag for everyone. Then PL1 with
-  PL2, as one opt-in scheme, once its placement rule is written down. Try PL3 and PL4 only
-  after play-testing PL1.
+- **Order.** PL1 with PL2 now, as one opt-in mode, against the contract above. PL5 later,
+  as its own change. Try PL3 and PL4 only after play-testing PL1.
 
 ### Making today's drag feel better
 
