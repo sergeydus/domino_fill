@@ -15,8 +15,16 @@ import { PRESSED } from '@/app/dominoFill/controlStates'
  */
 
 describe('the table is the spec\'s', () => {
-    it('five variants, and the archive\'s days', () => {
-        expect(Object.keys(CONTROL)).toEqual(['primary', 'secondary', 'caution', 'quiet', 'icon', 'day'])
+    it('five variants, the archive\'s days, and the picker\'s choices', () => {
+        expect(Object.keys(CONTROL)).toEqual(['primary', 'secondary', 'caution', 'quiet', 'icon', 'day', 'choice'])
+    })
+
+    it('choice: a ring when checked, never a fill, and bordered like quiet', () => {
+        expect(CONTROL.choice).toMatchObject({ surface: null, edge: { width: 1, colour: 'ink' }, checked: { ring: 'accentEdge' } })
+        // Chosen is not pressed: nothing about a choice is the accent's surface.
+        expect(Object.values(CONTROL.choice.press)).not.toContain('accent')
+        // A domino two 18px cells long, with room above and below it, in a 48px row.
+        expect(2 * 18 + 2 * CONTROL.choice.padding.y).toBeLessThanOrEqual(48)
     })
 
     it('primary: the accent\'s surface, the strongest weight', () => {
@@ -191,8 +199,9 @@ describe('every button is one variant, and says nothing else about its look', ()
 
     it('reads the app: every button there is, found', () => {
         // A positive control: a scan that found no buttons would pass everything below.
-        // 21 since Pick a piece: its mode switch, and the picker's two pieces.
-        expect(all.length).toBe(21)
+        // 20 since the picker's chips: Pick a piece's mode switch, and one `<button>` for the
+        // picker's two pieces, which were two elements until then (21).
+        expect(all.length).toBe(20)
     })
 
     it('recognises a button\'s own look, however it is written', () => {

@@ -10,7 +10,8 @@ import { cssName, type Token } from '../app/palette'
  * One rule set per variant, in the `components` layer: above the base layer's rules for
  * every button (P1-6's focus and press, P2-1's text), and below Tailwind's utilities, so
  * `aria-pressed`, which `controlStates.ts` draws with utilities, wins over the variant's rest.
- * The archive's current day is the `day` variant's own (`aria-current`, below). Hover waits
+ * The archive's current day is the `day` variant's own (`aria-current`, below), and the
+ * picker's chosen piece the `choice` variant's (`aria-checked`). Hover waits
  * for a fine pointer that can hover, as every hover in the game must (P1-6).
  */
 export const CONTROLS_CSS_PATH = 'app/controls.css'
@@ -46,6 +47,7 @@ const rules = (name: VariantName): string[] => {
         ...block(at, rest),
         ...marks,
         ...(c.current ? block(`${at}[aria-current]`, [`box-shadow: 0 0 0 2px ${v(c.current.ring)};`]) : []),
+        ...(c.checked ? block(`${at}[aria-checked="true"]`, [`box-shadow: 0 0 0 2px ${v(c.checked.ring)};`]) : []),
         ...block(`${at}:focus-visible`, [`outline-color: ${v(c.focus)};`]),
         ...block(`${at}:disabled`, [
             c.disabled.surface ? `background-color: ${v(c.disabled.surface)};` : null,

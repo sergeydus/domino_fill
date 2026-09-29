@@ -36,7 +36,7 @@ import { PALETTE, type Token } from '../app/palette'
 test.use({ reducedMotion: 'reduce' })
 
 type Look = {
-    label: string, variant: string | null, mark: string | null, disabled: boolean, current: boolean,
+    label: string, variant: string | null, mark: string | null, disabled: boolean, current: boolean, checked: boolean,
     background: number[], edge: number[], edgeColour: number[][], radius: string[], padding: string[],
     colour: number[], weight: string, opacity: string, filter: string, shadow: string, scale: string,
     translate: string, outline: number[],
@@ -73,6 +73,7 @@ const lookOf = (b: Locator): Promise<Look> => b.evaluate(el => {
         label: el.getAttribute('aria-label') ?? el.textContent?.trim() ?? '?',
         variant, mark: el.getAttribute('data-mark'),
         disabled: (el as HTMLButtonElement).disabled, current: el.hasAttribute('aria-current'),
+        checked: el.getAttribute('aria-checked') === 'true',
         // Every side and corner: a box of its own on one side (`pr-8`) is still one.
         background: bytes(cs.backgroundColor),
         edge: sides.map(side => parseFloat(cs[`border${side}Width`])),
@@ -127,8 +128,10 @@ const restOf = (name: VariantName, look: Look, paint: Record<Token, number[]>) =
         weight: String(c.weight),
         opacity: look.disabled ? String(c.disabled.opacity ?? 1) : '1',
         filter: look.disabled ? c.disabled.filter ?? 'none' : 'none',
-        // No shadow at rest, but the current day's ring (and a toggle's, read unpressed here).
-        shadow: look.current && c.current ? ringOf(c.current.ring, paint) : 'none',
+        // No shadow at rest, but the current day's ring, and a checked choice's (and a
+        // toggle's, read unpressed here).
+        shadow: look.current && c.current ? ringOf(c.current.ring, paint)
+            : look.checked && c.checked ? ringOf(c.checked.ring, paint) : 'none',
     }
 }
 
@@ -175,6 +178,25 @@ const expectVocabulary = async (page: Page, scope: Locator, least: number) => {
             await b.evaluate((el, v) => el.setAttribute('aria-pressed', v), was)
             expect(on, `${await b.getAttribute('aria-label') ?? await b.innerText()}: pressed changes its fill, weight and ring, and nothing else`)
                 .toEqual({ ...off, background: paint.accent, weight: '700', shadow: ringOf('accentEdge', paint) })
+        }
+        /*
+         * A choice, checked against unchecked: its variant's ring, and nothing else about the
+         * button -- no fill, no weight, no box. Its check mark is a drawing inside it, held by
+         * `e2e/controlStates.spec.ts`. Set in the page and put back; nothing is clicked.
+         */
+        const checkedWas = await b.getAttribute('aria-checked')
+        if (checkedWas !== null) {
+            const as = async (value: string) => {
+                await b.evaluate((el, v) => el.setAttribute('aria-checked', v), value)
+                return shapeOf(await lookOf(b))
+            }
+            const [on, off] = [await as('true'), await as('false')]
+            await b.evaluate((el, v) => el.setAttribute('aria-checked', v), checkedWas)
+            const variant = await b.evaluate(el => Array.from(el.classList).find(c => c.startsWith('control-'))?.slice('control-'.length))
+            const ring = (CONTROL[variant as VariantName] as Variant).checked?.ring
+            expect(ring, `${await b.getAttribute('aria-label')}: a checked control names a checked ring`).toBeDefined()
+            expect(on, `${await b.getAttribute('aria-label')}: checked changes its ring, and nothing else`)
+                .toEqual({ ...off, shadow: ringOf(ring!, paint) })
         }
         await unpressed(b, async () => {
             const look = await lookOf(b)
@@ -265,7 +287,7 @@ test.describe('every control is one variant, at rest and in each of its states',
         await page.goto(`${VISUAL_URL}/visual?cell=53`)
         await expect(page.locator('main[data-sheet]')).toBeVisible()
         const seen = await expectVocabulary(page, page.locator('main'), 13)
-        expect([...seen].sort()).toEqual(['caution', 'icon', 'primary', 'quiet', 'secondary'])
+        expect([...seen].sort()).toEqual(['caution', 'choice', 'icon', 'primary', 'quiet', 'secondary'])
     })
 })
 

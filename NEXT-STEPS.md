@@ -291,11 +291,16 @@ merged.
 - The default mode's existing placement tests pass unedited.
 
 **As built** (`feature/pick-a-piece`), four choices the contract left open:
-- **The picker is the legend.** In Pick a piece mode the scoring legend's two pieces become the
-  picker's two toggle buttons, pressed for the piece held. It sits beside the board, where the
-  legend is, rather than in a row of its own. The quiet variant's padding less its edge equals
-  the legend's on the vertical axis, so the board keeps its height. In the default mode the
-  legend is exactly as it was, `role="img"` and not a button.
+- **The picker is two chips, in the legend's place** (redesigned 2026-09-29). First built as the
+  scoring legend's two pieces turned into toggle buttons, in the legend's capsule: boxes of two
+  sizes, the held one filled solid blue, and no names. The user called it "horrendous". Now
+  it's one row of two equal 48px chips, each the piece drawn small beside its name, "Upright"
+  or "Flat". They sit centred under the board's frame, with no capsule, and nothing touches a
+  border. It's a radio group, since exactly one piece is always held: one tab stop, on the piece
+  held, and arrow keys choose the other. Chosen is a ring and a check mark inside the chip (the
+  new `choice` control variant, GRAPHICS-SPEC P2-2), never a fill. The row is shorter than the
+  legend, so the board is larger in this mode. In the default mode the legend is exactly as it
+  was, `role="img"` and not a button.
 - **The switch reads "Pick a piece"**, pressed when the mode is on, built like Sound
   ("Sound", pressed when on). The contract's "Controls: Drag / Pick a piece" was one label for
   both states; one name that is pressed or not is shorter in the row it shares with Archive and
