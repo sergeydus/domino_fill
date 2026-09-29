@@ -214,6 +214,9 @@ merged.
   button 2) switches the held piece and never reaches the placement or removal handlers. Today
   those handlers don't check the button (read: `onPointerDown` and `onPointerUp` in
   `ClientBoard.tsx`), so the check is new.
+- **Only the primary button places or removes** (codex, reviewing the build). Every other
+  button, the middle one included, is ignored in Pick a piece mode; a middle click had reached
+  the release as a same-cell tap.
 - **A touch long-press never switches the piece.** The switch is driven by the mouse button,
   not by the `contextmenu` event, which a long-press also fires. The context menu is suppressed
   on the board only, **and only in Pick a piece mode**, never on the controls around it.
@@ -239,6 +242,12 @@ merged.
   rock they refuse, and never remove.
 - **Delete and Backspace**, and only those, remove an occupied domino.
 - Keyboard focus shows the held piece and where it would land, since there's no hover.
+- **The input used last decides the preview** (codex, reviewing the build). With the mouse
+  resting on one cell and the keyboard moved to another, the preview is the keyboard's, where
+  Space and Enter would place; the mouse moving again takes it back. A drag in progress keeps
+  its own.
+- **A refusal is still handled.** Space or Enter refused on an occupied cell or a rock is the
+  board's key, so the browser doesn't also act on it: Space doesn't scroll the page.
 
 **Touch**
 - Keyboard focus gives no preview on touch. So the picker must show clearly, at all times,
@@ -267,13 +276,17 @@ merged.
 - Only the opposite (bottom or right) position fitting.
 - A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
-- Space and Enter on an occupied cell or a rock refuse without removing.
+- Space and Enter on an occupied cell or a rock refuse without removing, and without the page
+  scrolling.
+- A middle click on an empty or an occupied cell places and removes nothing.
+- The mouse resting on one cell and the keyboard on another: the preview is at the keyboard's
+  cell, and Enter places there.
 - The held piece: upright on first entry, kept across puzzle and mode switches, not
   remembered on the device.
 - The context menu stays available on the board in the default mode.
 - The default mode's existing placement tests pass unedited.
 
-**As built** (`feature/pick-a-piece`), three choices the contract left open:
+**As built** (`feature/pick-a-piece`), four choices the contract left open:
 - **The picker is the legend.** In Pick a piece mode the scoring legend's two pieces become the
   picker's two toggle buttons, pressed for the piece held. It sits beside the board, where the
   legend is, rather than in a row of its own. The quiet variant's padding less its edge equals
@@ -285,9 +298,13 @@ merged.
   Sound at 360px, and says the same thing to a screen reader.
 - **The tutorial keeps the default controls.** Its text teaches the drag and the tap, and it
   shows before a player could choose, so its 2x2 board is fixed to the default mode.
+- **The switch and Sound wrap together.** At 360px the navigation row had no room for another
+  button, and adding one left Sound alone on a second line. The two are grouped, so they wrap
+  as one row of settings; the phone page is 48px taller (652 to 700px in the baseline).
 
-A refused Space or Enter in Pick a piece mode is answered exactly as the default mode answers
-one: the refusal is shown, and the key is left to the browser.
+The default mode still leaves a refused Space to the browser (its Space anchors, and a refusal
+there returns the key unhandled), so on an overflowing page it can scroll. Whether to change
+that is a separate decision (codex).
 
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare

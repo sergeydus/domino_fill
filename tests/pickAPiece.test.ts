@@ -290,7 +290,8 @@ describe('the keyboard in Pick a piece mode', () => {
             for (const cell of [[1, 0], [2, 0], [0, 1]] as Cell[]) {
                 const before = snapshot(s)
                 runInAction(() => s.setFocusedCell(cell))
-                expect(key(s, k)).toBe(false)
+                // Handled, so the browser does not also act on it: Space would scroll.
+                expect(key(s, k)).toBe(true)
                 expect(s.refusedAt).toEqual(cell)
                 expect(snapshot(s)).toEqual(before)
             }
@@ -315,6 +316,35 @@ describe('the keyboard in Pick a piece mode', () => {
         expect(s.hoveredCell).toBeNull()
         expect(s.preview).toEqual(s.heldPlacement([1, 0]))
         expect(s.highlightedPair).toEqual([[1, 0], [2, 0]])
+    })
+
+    it('the input used last decides the preview: a key after the mouse, then the mouse again', () => {
+        pick()
+        const s = session()
+        // The mouse comes to rest on 4,4.
+        runInAction(() => s.setHover([4, 4]))
+        expect(s.preview).toEqual(s.heldPlacement([4, 4]))
+
+        // The keyboard moves to 1,0 with the mouse still there: the preview is where Enter
+        // would place, not where the mouse is resting.
+        key(s, 'ArrowRight')
+        key(s, 'ArrowDown')
+        expect(s.hoveredCell).toEqual([4, 4])
+        expect(s.preview).toEqual(s.heldPlacement([1, 0]))
+
+        // The mouse moves again: the preview is the mouse's.
+        runInAction(() => s.setHover([4, 4]))
+        expect(s.preview).toEqual(s.heldPlacement([4, 4]))
+    })
+
+    it('a drag in progress keeps its own preview, whatever key comes', () => {
+        pick()
+        const s = session()
+        key(s, 'ArrowRight') // focus on 0,0
+        runInAction(() => { s.pointerDown([2, 2]); s.setHover([2, 3]) })
+        key(s, 'ArrowDown') // the keyboard is in use again, mid-drag
+        expect(s.keyboardLatest).toBe(true)
+        expect(s.preview).toMatchObject({ anchor: [2, 2], direction: 'right' })
     })
 
     it('the default mode shows no focus preview', () => {

@@ -108,21 +108,20 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * the other reason not to mix the two families.
      */
     /*
-     * Right-click, in Pick a piece mode: a mouse's right button, and nothing else.
+     * Buttons, in Pick a piece mode: only the primary button places or removes.
      *
-     * It switches the held piece and never reaches placement or removal. The press stops
-     * here, so no gesture begins, and the release that follows has nothing to complete:
-     * `pointerUp` with no gesture places nothing. Keyed on the button rather than on
-     * `contextmenu`, because a touch long-press fires `contextmenu` too and must not switch
-     * anything. What the default mode does with a right button is left exactly as it was:
-     * a separate question.
+     * A mouse's right button switches the held piece, and nothing else. Keyed on the button
+     * rather than on `contextmenu`, because a touch long-press fires `contextmenu` too and
+     * must not switch anything. Every other non-primary press -- the middle button, a pen's
+     * barrel or eraser -- is ignored: before this, a middle click went on to `pointerUp` as a
+     * same-cell tap and placed or removed a piece (codex). The press stops here, so no
+     * gesture begins, and the release that follows has nothing to complete: `pointerUp`
+     * with no gesture places nothing. What the default mode does with those buttons is left
+     * exactly as it was: a separate question.
      */
-    const isPickRightButton = (e: React.PointerEvent<HTMLDivElement>) =>
-        boardsStore.pickMode && e.pointerType === 'mouse' && e.button === 2
-
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (isPickRightButton(e)) {
-            boardsStore.rootStore.controls.switchHeld()
+        if (boardsStore.pickMode && e.button !== 0) {
+            if (e.pointerType === 'mouse' && e.button === 2) boardsStore.rootStore.controls.switchHeld()
             return
         }
         const cell = cellFrom(e)

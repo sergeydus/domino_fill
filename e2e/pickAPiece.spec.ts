@@ -38,6 +38,32 @@ const bothFitUpright = async (page: Page) => {
     throw new Error('today\'s board has no cell with room above and below')
 }
 
+/** Two such cells, with no cell in common between their upright placements. */
+const twoBothFitUpright = async (page: Page) => {
+    const { size, free } = await freeCells(page)
+    const fits: [number, number][] = []
+    for (let i = 1; i + 1 < size; i++) {
+        for (let j = 0; j < size; j++) if (free(i, j) && free(i - 1, j) && free(i + 1, j)) fits.push([i, j])
+    }
+    const a = fits[0]
+    const b = fits.find(([i, j]) => j !== a?.[1] || Math.abs(i - a[0]) > 1)
+    if (!a || !b) throw new Error('today\'s board has no two separate cells with room above and below')
+    return [a, b] as const
+}
+
+/** The preview is one box covering `i,j` and the cell below it: an upright piece there. */
+const expectPreviewAt = async (page: Page, [i, j]: readonly [number, number]) => {
+    const wash = page.locator('.bg-drag-wash')
+    await expect(wash).toHaveCount(1)
+    const top = (await cell(page, i, j).boundingBox())!
+    const below = (await cell(page, i + 1, j).boundingBox())!
+    await expect.poll(async () => {
+        const box = (await wash.boundingBox())!
+        return [box.x - top.x, box.y - top.y, box.y + box.height - (below.y + below.height)]
+            .every(d => Math.abs(d) <= 1)
+    }, { message: `the preview covers ${i},${j} and ${i + 1},${j}` }).toBe(true)
+}
+
 /** A bottom-row cell with a free cell above: an upright piece fits only as its bottom half. */
 const bottomEdgeUpright = async (page: Page) => {
     const { size, free } = await freeCells(page)
@@ -118,6 +144,41 @@ test('right-click switches the piece and never places or removes', async ({ page
     await expect(upright(page, i, j)).toBeVisible()
     await cell(page, i, j).click({ button: 'right' })
     await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'true')
+    await expect(upright(page, i, j)).toBeVisible()
+    await expect(placed(page)).toHaveCount(1)
+})
+
+test('a middle click neither places nor removes: only the primary button does', async ({ page }) => {
+    await turnOn(page)
+    const [i, j] = await bothFitUpright(page)
+
+    /*
+     * Each middle press must reach the board, or a pass says nothing. Where the page
+     * scrolls (the phone size), Chromium makes a middle press the start of autoscroll and
+     * swallows the next press to end it -- measured: the left click after it arrived as a
+     * lone `pointerup`. Escape ends autoscroll, so each middle click is followed by one.
+     */
+    await page.locator('.board-grid').evaluate(grid => {
+        const w = window as unknown as { middles: number }
+        w.middles = 0
+        grid.addEventListener('pointerdown', e => { if ((e as PointerEvent).button === 1) w.middles++ })
+    })
+    const middle = async (a: number, b: number, n: number) => {
+        await cell(page, a, b).click({ button: 'middle' })
+        await page.keyboard.press('Escape')
+        expect(await page.evaluate(() => (window as unknown as { middles: number }).middles)).toBe(n)
+    }
+
+    // On an empty cell: nothing placed, and the held piece unchanged.
+    await middle(i, j, 1)
+    await expect(placed(page)).toHaveCount(0)
+    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+
+    // On an occupied cell, either half: the piece stays.
+    await cell(page, i, j).click()
+    await expect(upright(page, i, j)).toBeVisible()
+    await middle(i, j, 2)
+    await middle(i + 1, j, 3)
     await expect(upright(page, i, j)).toBeVisible()
     await expect(placed(page)).toHaveCount(1)
 })
@@ -204,6 +265,56 @@ test.describe('the keyboard', () => {
         // Delete still removes it.
         await page.keyboard.press('Delete')
         await expect(placed(page)).toHaveCount(0)
+    })
+
+    test('with the mouse resting on one cell, the preview follows the keyboard to another', async ({ page }) => {
+        await turnOn(page)
+        const [a, b] = await twoBothFitUpright(page)
+
+        // The mouse comes to rest on A: the preview is there.
+        const rest = (await cell(page, ...a).boundingBox())!
+        await page.mouse.move(rest.x + rest.width / 2, rest.y + rest.height / 2)
+        await expectPreviewAt(page, a)
+
+        // The keyboard goes to B with the mouse still on A: the preview goes with it, and
+        // Enter places what it shows.
+        await focusTo(page, ...b)
+        await expectPreviewAt(page, b)
+        await page.keyboard.press('Enter')
+        await expect(upright(page, ...b)).toBeVisible()
+        await expect(placed(page)).toHaveCount(1)
+    })
+
+    test('a refused Space is still the board\'s: the page does not scroll', async ({ page }) => {
+        // Short enough that the page overflows at either project's width.
+        await page.setViewportSize({ width: page.viewportSize()!.width, height: 420 })
+        await turnOn(page)
+        const [i, j] = await bothFitUpright(page)
+        await focusTo(page, i, j)
+        await page.keyboard.press('Enter') // a piece to refuse on
+        await expect(upright(page, i, j)).toBeVisible()
+
+        const scroll = () => page.evaluate(() => ({
+            y: window.scrollY,
+            room: document.documentElement.scrollHeight - window.innerHeight - window.scrollY,
+        }))
+        const start = await scroll()
+        // There is somewhere for Space to scroll to, so a pass is not the page being full.
+        expect(start.room).toBeGreaterThan(0)
+
+        // Whether the board claimed the key, read at the window after React's handler ran.
+        await page.evaluate(() => {
+            const w = window as unknown as { spaces: boolean[] }
+            w.spaces = []
+            window.addEventListener('keydown', e => { if (e.key === ' ') w.spaces.push(e.defaultPrevented) })
+        })
+        await page.keyboard.press(' ')
+        await expect(page.locator('[data-refused]')).toHaveCount(1)
+        expect(await page.evaluate(() => (window as unknown as { spaces: boolean[] }).spaces)).toEqual([true])
+        // Keyboard scrolling is animated, so a scroll would not show at once: give it time.
+        await page.waitForTimeout(600)
+        expect((await scroll()).y).toBe(start.y)
+        await expect(upright(page, i, j)).toBeVisible()
     })
 })
 
