@@ -519,6 +519,15 @@ export class LevelStore {
         return this.definitionsFor(this.difficulty)?.[this.level - 1] ?? null
     }
 
+    /**
+     * Drop any gesture in progress on every board, leaving the boards as they are. The
+     * control mode changed, and a pending anchor or a drag from one mode means nothing in
+     * the other.
+     */
+    cancelAllGestures() {
+        for (const session of this.sessions.values()) session.cancelGesture()
+    }
+
     /** Pure lookup: no construction, no mutation. */
     get currentBoard(): PuzzleSession | null {
         const definition = this.currentDefinition

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
+import { readBoard } from './play'
 
 /**
  * The keyboard half of the placement verb (spec P1-1), in a real browser.
@@ -190,4 +191,56 @@ test('keys the board does not use are left to the page', async ({ page }) => {
     await page.keyboard.press('End')        // not a board key
 
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+})
+
+test('a refused Space or Enter is still the board\'s: shown, and the phone page does not scroll', async ({ page }) => {
+    // Phone-sized here, since this file does not run in the phone project; the page
+    // overflows at this size, which is checked below rather than assumed.
+    await page.setViewportSize({ width: 360, height: 640 })
+    const { size, board } = await readBoard(page)
+    let rock: [number, number] | null = null
+    for (let i = 0; i < size && !rock; i++) for (let j = 0; j < size && !rock; j++) if (board[i][j] === -1) rock = [i, j]
+    if (!rock) throw new Error('today\'s board has no rock') // every published easy-1 has at least 8
+
+    // An occupied cell to refuse on: an upright piece placed from the keyboard.
+    const { i, j } = await freeRun(page)
+    await focusTo(page, i, j)
+    await page.keyboard.press(' ')
+    await page.keyboard.press('ArrowDown')
+    await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+
+    // Read at the window, after React's handler has run.
+    await page.evaluate(() => {
+        const w = window as unknown as { claimed: string[] }
+        w.claimed = []
+        window.addEventListener('keydown', e => w.claimed.push(`${e.shiftKey ? 'Shift+' : ''}${e.key}:${e.defaultPrevented}`))
+    })
+    const claimed = () => page.evaluate(() => (window as unknown as { claimed: string[] }).claimed)
+    const scroll = () => page.evaluate(() => ({
+        y: window.scrollY,
+        room: document.documentElement.scrollHeight - window.innerHeight - window.scrollY,
+    }))
+
+    const refusals = [[rock, ' '], [rock, 'Enter'], [[i, j], ' '], [[i, j], 'Enter']] as const
+    for (const [[a, b], key] of refusals) {
+        // Programmatic focus puts the keyboard on the square (see BoardSquare's `onFocus`).
+        await page.locator(`[data-cell="${a},${b}"]`).focus()
+        const start = await scroll()
+        expect(start.room, 'somewhere for Space to scroll to').toBeGreaterThan(0)
+        const rejected = Number(await grid(page).getAttribute('data-rejected') ?? 0)
+
+        await page.keyboard.press(key)
+        // Refused, once, here: the grid counts every refusal, and the mark names the square.
+        await expect(grid(page), `${key} on ${a},${b}`).toHaveAttribute('data-rejected', String(rejected + 1))
+        await expect(page.locator('[data-refused]')).toHaveAttribute('data-refused', `${a},${b}`)
+        // Keyboard scrolling is animated, so a scroll would not show at once.
+        await page.waitForTimeout(600)
+        expect((await scroll()).y, `${key} on ${a},${b}`).toBe(start.y)
+    }
+    expect(await claimed()).toEqual([' :true', 'Enter:true', ' :true', 'Enter:true'])
+    await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+
+    // A chord is still the browser's: Shift+Space is not claimed, even on a board square.
+    await page.keyboard.press('Shift+Space')
+    expect((await claimed()).at(-1)).toBe('Shift+ :false')
 })

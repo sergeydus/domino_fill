@@ -107,7 +107,23 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * dominoes. `pointermove` is also non-passive, unlike React's `touchmove`, which is
      * the other reason not to mix the two families.
      */
+    /*
+     * Buttons, in Pick a piece mode: only the primary button places or removes.
+     *
+     * A mouse's right button switches the held piece, and nothing else. Keyed on the button
+     * rather than on `contextmenu`, because a touch long-press fires `contextmenu` too and
+     * must not switch anything. Every other non-primary press -- the middle button, a pen's
+     * barrel or eraser -- is ignored: before this, a middle click went on to `pointerUp` as a
+     * same-cell tap and placed or removed a piece (codex). The press stops here, so no
+     * gesture begins, and the release that follows has nothing to complete: `pointerUp`
+     * with no gesture places nothing. What the default mode does with those buttons is left
+     * exactly as it was: a separate question.
+     */
     const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (boardsStore.pickMode && e.button !== 0) {
+            if (e.pointerType === 'mouse' && e.button === 2) boardsStore.rootStore.controls.switchHeld()
+            return
+        }
         const cell = cellFrom(e)
         boardsStore.setHover(cell)
         if (cell) boardsStore.pointerDown(cell)
@@ -119,6 +135,11 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
 
     const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         boardsStore.pointerUp(cellFrom(e))
+    }
+
+    /** The board's own menu is suppressed in Pick a piece mode only; right-click is taken. */
+    const onContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (boardsStore.pickMode) e.preventDefault()
     }
 
     /*
@@ -154,8 +175,10 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * The same verb from the keyboard: arrows move the focused cell, Space or Enter makes
      * it the anchor, then arrows choose the neighbour. Escape leaves any state it entered.
      *
-     * `preventDefault` only when the board actually used the key, so arrows still scroll
-     * the page and Space still does whatever it would otherwise do.
+     * `preventDefault` only when the board claimed the key, so a key it has no use for --
+     * Tab, End, a letter, any chord -- still does whatever it would otherwise do. Space and
+     * Enter on a square are always the board's, refused or not: a refusal is shown, and
+     * the page must not also scroll under it.
      */
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         // All four modifiers, not just the two that pick the shortcut: dropping `shift`
@@ -286,6 +309,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     onPointerCancel={onPointerCancel}
                     onLostPointerCapture={onLostPointerCapture}
                     onPointerLeave={onPointerLeave}
+                    onContextMenu={onContextMenu}
                     onKeyDown={onKeyDown}
                     onBlur={onBlur}
                     /*

@@ -10,7 +10,8 @@ import CompletionCard from '../dominoFill/CompletionCard'
 import GameControls from '../dominoFill/GameControls'
 import DifficultySlider from '../dominoFill/DifficultySlider'
 import LevelSelector from '../dominoFill/LevelSelector'
-import { ArchiveButton, SoundButton } from '../dominoFill/PageButtons'
+import { ArchiveButton, ControlModeButton, SoundButton } from '../dominoFill/PageButtons'
+import DominoPieces from '../dominoFill/Pieces/DominoPieces'
 
 /**
  * Declared here and nowhere else in the repository (graphics spec P0-3, row 3).
@@ -122,6 +123,18 @@ const FIXTURES = {
             s.setFocusedCell(null)
         },
     },
+    /*
+     * Pick a piece mode's preview, with the pointer resting on 0,0: the held piece --
+     * upright, the session's starting piece -- would cover 0,0 and 1,0. Hover rather than
+     * the keyboard, so the focus brackets stay the `focus` specimen's alone.
+     */
+    'held-preview': {
+        columns: '1,1', rows: '1,1',
+        arrange: s => {
+            s.setFixedControlMode('pick')
+            s.setHover([0, 0])
+        },
+    },
 } satisfies Record<string, Fixture>
 
 type BoardSpecimen = keyof typeof FIXTURES
@@ -142,8 +155,11 @@ const Specimen = ({ name, children }: { name: string, children: React.ReactNode 
  *
  * Nothing here depends on the date or on anything a player has stored about a day: the
  * boards are fixtures, not the day's puzzle, and they are never registered with the level
- * store, so nothing about them is saved. The one control that reads storage is Sound,
- * whose state is the player's mute preference -- a fresh browser shows "Sound on".
+ * store, so nothing about them is saved. The two controls that read storage are Sound,
+ * whose state is the player's mute preference -- a fresh browser shows "Sound on" -- and
+ * the control mode, which a fresh browser shows unpressed, in the default drag controls.
+ * The picker and the held-piece preview fix Pick a piece mode on their own sessions, so
+ * they do not depend on it.
  */
 const Sheet = ({ cell }: { cell: number }) => {
     const root = useStores()
@@ -154,6 +170,12 @@ const Sheet = ({ cell }: { cell: number }) => {
     // Controls act on a session of their own, so pressing one cannot change a specimen.
     const [controlSession] = useState(() =>
         sessionAt(root, 'controls', cell, { columns: '1,1', rows: '1,1' }))
+
+    // The piece tray in Pick a piece mode, where it is the picker.
+    const [pickerSession] = useState(() =>
+        sessionAt(root, 'picker', cell, {
+            columns: '1,1', rows: '1,1', arrange: s => { s.setFixedControlMode('pick') },
+        }))
 
     return (
         <main
@@ -183,6 +205,12 @@ const Sheet = ({ cell }: { cell: number }) => {
             </Specimen>
             <Specimen name='control-sound'>
                 <SoundButton sound={root.sound} />
+            </Specimen>
+            <Specimen name='control-mode'>
+                <ControlModeButton controls={root.controls} />
+            </Specimen>
+            <Specimen name='piece-picker'>
+                <DominoPieces boardsStore={pickerSession} />
             </Specimen>
         </main>
     )

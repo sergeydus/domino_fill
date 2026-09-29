@@ -191,7 +191,8 @@ describe('every button is one variant, and says nothing else about its look', ()
 
     it('reads the app: every button there is, found', () => {
         // A positive control: a scan that found no buttons would pass everything below.
-        expect(all.length).toBe(18)
+        // 21 since Pick a piece: its mode switch, and the picker's two pieces.
+        expect(all.length).toBe(21)
     })
 
     it('recognises a button\'s own look, however it is written', () => {

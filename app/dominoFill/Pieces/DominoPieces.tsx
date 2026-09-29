@@ -3,6 +3,8 @@ import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo";
 import { observer } from 'mobx-react';
 import { PuzzleSession } from '@/app/stores/PuzzleSession';
+import { control } from '@/app/controls';
+import { PRESSED } from '../controlStates';
 
 /**
  * Cell size for the pieces in the tray, in CSS px.
@@ -13,24 +15,63 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession';
  */
 const TRAY_CELL_PX = 44;
 
+const UPRIGHT = 'An upright domino scores 1 in its top square and 0 below'
+const FLAT = 'A flat domino scores 0 in its left square and 2 on the right'
+
 /**
- * The piece tray, which is a **legend** and not a mode selector (spec P1-1).
+ * The piece tray: a **legend** in the default mode, and the **picker** in Pick a piece mode.
  *
- * It used to select which piece the next click would place, which is the orientation mode
- * the drag verb deletes: you drag toward the neighbour you want, so there is no selection
- * to make and no wrong mode to be stuck in. What is left is the scoring key -- this shape
- * is worth 1, that one 2 -- which is the part players actually need and could not get
- * anywhere else.
+ * **In the default mode it selects nothing (spec P1-1).** It used to select which piece the
+ * next click would place, which is the orientation mode the drag verb deletes: you drag
+ * toward the neighbour you want, so there is no selection to make and no wrong mode to be
+ * stuck in. What is left is the scoring key -- this shape is worth 1, that one 2.
  *
- * **`role="img"`, not `<button>` (spec P1-8, row 19).** P1-8 asks for real buttons here,
- * written when this tray was a mode selector; a button that selects nothing would be a
- * worse control than no control. The real defect it was pointing at is still here and is
- * now fixed: `aria-label` on a role-less `div` is not exposed, and measured in Chrome
- * these two entries reached the accessibility tree as bare unnamed `img` nodes -- the
- * explanations were being written and then dropped. A role that supports naming is what
- * makes them audible. See the amendment under P1-8 in SPEC.md.
+ * **`role="img"`, not `<button>`, there (spec P1-8, row 19).** A button that selects nothing
+ * would be a worse control than no control. `aria-label` on a role-less `div` is not
+ * exposed -- measured in Chrome, the entries reached the accessibility tree as bare unnamed
+ * `img` nodes -- so the role is what makes the explanations audible.
+ *
+ * **In Pick a piece mode the same two pieces are the picker** (NEXT-STEPS.md, PL1), which
+ * the player turned on deliberately. Now they do select something, so they are real toggle
+ * buttons, pressed for the piece held. The picker takes the legend's place rather than a
+ * row of its own, so the board keeps the height it had: the quiet variant's padding less
+ * its edge is the legend's `p-2` on the vertical axis.
  */
 const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: currentBoard }) => {
+    if (currentBoard.pickMode) {
+        const controls = currentBoard.rootStore.controls
+        return (
+            <div
+                className="flex flex-row bg-control-surface rounded-4xl gap-4 pt-6 px-4 items-center"
+                data-legend
+                data-piece-picker
+                role="group"
+                aria-label="Held piece"
+            >
+                <button
+                    type="button"
+                    data-held-piece="upright"
+                    aria-pressed={currentBoard.heldPiece === 'upright'}
+                    aria-label={`Hold upright. ${UPRIGHT}`}
+                    className={`${control('quiet')} ${PRESSED}`}
+                    onClick={() => controls.setHeld('upright')}
+                >
+                    <DominoPieceOne boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
+                </button>
+                <button
+                    type="button"
+                    data-held-piece="flat"
+                    aria-pressed={currentBoard.heldPiece === 'flat'}
+                    aria-label={`Hold flat. ${FLAT}`}
+                    className={`${control('quiet')} ${PRESSED}`}
+                    onClick={() => controls.setHeld('flat')}
+                >
+                    <DominoPieceTwo boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div
             className="flex flex-row bg-control-surface rounded-4xl gap-4 pt-6 px-4 items-center"
@@ -42,7 +83,7 @@ const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: c
                 className='p-2'
                 data-legend-piece="1"
                 role="img"
-                aria-label="An upright domino scores 1 in its top square and 0 below"
+                aria-label={UPRIGHT}
             >
                 <DominoPieceOne boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
             </div>
@@ -50,7 +91,7 @@ const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: c
                 className='p-2'
                 data-legend-piece="2"
                 role="img"
-                aria-label="A flat domino scores 0 in its left square and 2 on the right"
+                aria-label={FLAT}
             >
                 <DominoPieceTwo boardsStore={currentBoard} cellSize={TRAY_CELL_PX} />
             </div>

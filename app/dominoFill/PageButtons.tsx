@@ -2,6 +2,7 @@
 import { observer } from 'mobx-react'
 import { LevelStore } from '../stores/BoardsStore'
 import { SoundStore } from '../stores/SoundStore'
+import type { ControlStore } from '../stores/ControlStore'
 import { PRESSED } from './controlStates'
 import { control } from '../controls'
 
@@ -42,6 +43,32 @@ export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
  * screen showed the pressed state; P1-6 draws every toggle's pressed state (`PRESSED`), and
  * drawing it on "Sound off" would have made the inversion visible to everyone.
  */
+/*
+ * The control mode (NEXT-STEPS.md, Pick a piece), beside Sound and built like it: the name
+ * is the thing, and pressed means the thing is on. Pressed is Pick a piece; unpressed is
+ * the default drag controls.
+ *
+ * **Focus is never stranded.** Turning the mode off takes the picker away, and the picker
+ * can hold focus while this is activated -- a browser that does not focus a clicked button
+ * (Safari) leaves it where it was. So when focus was on the picker, it moves here: the one
+ * programmatic focus move the contract allows. Otherwise focus is left alone.
+ */
+export const ControlModeButton = observer(({ controls }: { controls: ControlStore }) => (
+  <button
+    type='button'
+    data-controls-mode
+    aria-pressed={controls.mode === 'pick'}
+    className={`${control('quiet')} ${PRESSED}`}
+    onClick={e => {
+      const onPicker = document.activeElement?.closest('[data-piece-picker]') != null
+      controls.toggleMode()
+      if (onPicker && controls.mode !== 'pick') e.currentTarget.focus()
+    }}
+  >
+    Pick a piece
+  </button>
+))
+
 export const SoundButton = observer(({ sound }: { sound: SoundStore }) => (
   <button
     type='button'

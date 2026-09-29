@@ -24,6 +24,9 @@ const Tutorial = () => {
             boardsStore.rootStore,
         );
         session.setMaxBoardSize(TUTORIAL_BOARD_SIZE);
+        // The text below teaches the default controls, the drag and the tap, so this
+        // board answers to them whatever the player has chosen for the game.
+        session.setFixedControlMode('drag');
         return session;
     });
     const [hasSeenTutorial, setHasSeenTutorial] = useLocalStorage('hasSeenTutorial', false);

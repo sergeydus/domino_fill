@@ -3,6 +3,7 @@ import { LevelStore } from "./BoardsStore";
 import { SizeStore } from "./SizeStore";
 import { CorpusSource } from "./corpusSource";
 import { SoundStore } from "./SoundStore";
+import { ControlStore } from "./ControlStore";
 
 /**
  * The store graph.
@@ -25,10 +26,13 @@ export class RootStore {
     corpus: CorpusSource
     /** The persisted mute preference (spec P2-4, row 20d). */
     sound: SoundStore
+    /** The control mode, remembered, and the piece held in Pick a piece mode. */
+    controls: ControlStore
 
     constructor(corpus: CorpusSource = new CorpusSource()) {
         this.corpus = corpus
         this.sound = new SoundStore()
+        this.controls = new ControlStore(this)
         this.boardsStore = new LevelStore(this)
         this.sizeStore = new SizeStore(this)
     }

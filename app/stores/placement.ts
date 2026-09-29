@@ -3,8 +3,9 @@
  *
  * One verb: an **anchor cell** plus a **direction**. A pointer drag, a tap, and an arrow
  * key all produce exactly that pair, so there is no orientation *mode* anywhere in the
- * input path -- no right-click, no toggle, no selected piece to have forgotten you left in
- * the wrong state.
+ * default input path -- no right-click, no toggle, no selected piece to have forgotten you
+ * left in the wrong state. A held piece exists only in the opt-in Pick a piece mode
+ * (`placementForHeld`, below), which the player turns on deliberately.
  *
  * The direction alone fixes the orientation *and* the pip values, because a domino's two
  * halves are not interchangeable: upright is 1 on top and 0 below, flat is 0 on the left
@@ -64,6 +65,53 @@ export const dominoFrom = (anchor: Cell, direction: Direction): {
     cells: [anchor, neighbourOf(anchor, direction)],
     values: VALUES[direction],
 })
+
+/** The two pieces. Upright is 1 over 0; flat is 0 then 2. */
+export type Piece = 'upright' | 'flat'
+
+/** A placement in full: where it starts, which way, and what it writes where. */
+export type Placement = {
+    anchor: Cell
+    direction: Direction
+    cells: readonly [Cell, Cell]
+    values: readonly [number, number]
+}
+
+export const placementFrom = (anchor: Cell, direction: Direction): Placement =>
+    ({ anchor, direction, ...dominoFrom(anchor, direction) })
+
+/**
+ * The two ways a held piece can cover a cell, tie-break first (Pick a piece, PL1/PL2).
+ *
+ * Upright: the cell as the top half (`down`), else as the bottom half (`up`). Flat: the
+ * cell as the left half (`right`), else as the right half (`left`). `VALUES` already
+ * gives each direction the right pips, so the clicked cell is worth 1 or 0 upright, and 0
+ * or 2 flat, exactly as a drag in that direction would make it.
+ */
+const HELD: Record<Piece, readonly [Direction, Direction]> = {
+    upright: ['down', 'up'],
+    flat: ['right', 'left'],
+}
+
+/**
+ * Where a held piece goes when `cell` is clicked, or null if it cannot cover it.
+ *
+ * Only two positions of the piece cover the cell. When both fit, the tie-break decides
+ * (the cell becomes the top or left half); when one fits, that one; when neither, null.
+ * This is not the half-cell rule P1-1 removed: that one overrode a direction the player
+ * had chosen, and here no direction is chosen at all.
+ *
+ * Pure: whether a position fits is the caller's `canPlace`. The preview and the commit
+ * both call this, so what is shown is what is placed.
+ */
+export const placementForHeld = (
+    piece: Piece,
+    cell: Cell,
+    canPlace: (anchor: Cell, direction: Direction) => boolean,
+): Placement | null => {
+    const direction = HELD[piece].find(d => canPlace(cell, d))
+    return direction ? placementFrom(cell, direction) : null
+}
 
 /**
  * The pair as a top-left-first ordered pair, for display.

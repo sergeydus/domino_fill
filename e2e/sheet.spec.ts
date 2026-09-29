@@ -18,9 +18,9 @@ test.use({ baseURL: VISUAL_URL })
 /** The sheet, in order. A specimen missing, added or doubled is a change to the baselines. */
 const SPECIMENS = [
     'empty', 'domino-upright', 'domino-flat', 'rock', 'target-satisfied', 'target-over',
-    'anchor', 'hint', 'focus', 'refused',
+    'anchor', 'hint', 'focus', 'refused', 'held-preview',
     'completion-card', 'controls-game', 'controls-difficulty', 'controls-level',
-    'control-archive', 'control-sound',
+    'control-archive', 'control-sound', 'control-mode', 'piece-picker',
 ]
 
 /**
@@ -49,6 +49,9 @@ const ISOLATED: [selector: string, specimen: string, count: number][] = [
     ['[data-level]', 'controls-level', 2],
     ['[data-open-archive]', 'control-archive', 1],
     ['[data-mute]', 'control-sound', 1],
+    ['[data-controls-mode]', 'control-mode', 1],
+    ['[data-piece-picker]', 'piece-picker', 1],
+    ['[data-held-piece]', 'piece-picker', 2],
 ]
 
 const openSheet = async (page: Page, cell?: number) => {
