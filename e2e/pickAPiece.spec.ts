@@ -297,11 +297,16 @@ test.describe('the keyboard', () => {
          * stop, 0,0 on a fresh board, so this test needs 0,0 and 1,0 free for the upright
          * piece -- and rocks are content: 2026-09-30's first easy board has one at 0,0
          * (codex), where a test on today's board would throw before it tested anything.
-         * Noon UTC is that date from UTC-11 to UTC+11. `beforeEach` loaded today's board,
-         * so the page is reloaded with the calendar moved; nothing was played on it.
+         * `beforeEach` loaded today's board, so the page is reloaded with the calendar
+         * moved; nothing was played on it.
+         *
+         * Noon on that day in the *browser's* time zone, read from the page before the
+         * calendar moves, since the day is the page's local date. A fixed instant is not one
+         * date everywhere: noon UTC was already the 30th from UTC+12 to UTC+14 (codex).
          */
         const DAY = '2026-09-29'
-        await page.addInitScript(onDate, Date.parse(`${DAY}T12:00:00Z`))
+        const noon = await page.evaluate(() => new Date(2026, 8, 29, 12).getTime())
+        await page.addInitScript(onDate, noon)
         await page.reload()
         await waitForBoard(page)
         expect(await page.evaluate(() => {
