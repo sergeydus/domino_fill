@@ -276,7 +276,8 @@ export class PuzzleSession {
      * `hover` alone cannot say which input the player is using. Pick a piece mode previews
      * both, and the preview has to be the one the next action would commit: with the mouse
      * resting on A and focus moved to B, it showed A while Space and Enter placed at B
-     * (codex). The input used last decides.
+     * (codex). The input used last decides: a key on the board, or focus arriving on it
+     * visibly (`setFocusVisible`), against the pointer moving.
      */
     keyboardLatest = false
 
@@ -853,9 +854,18 @@ export class PuzzleSession {
         this.focusedCell = cell && this.inBounds(cell[0], cell[1]) ? cell : null
     }
 
-    /** Whether focus on the board should be drawn. See `focusVisible`. */
+    /**
+     * Whether focus on the board should be drawn. See `focusVisible`.
+     *
+     * Focus arriving visibly is the keyboard in use even when no key reached the board: Tab
+     * from a control outside it lands on a square, and that Tab is the page's key, not the
+     * board's. So it is the latest input too, or a mouse resting on another square kept the
+     * preview while Space placed here (codex). Hidden focus says nothing about which input
+     * came last, so it leaves `keyboardLatest` alone.
+     */
     setFocusVisible(visible: boolean) {
         this.focusVisible = visible
+        if (visible) this.keyboardLatest = true
     }
 
     /**

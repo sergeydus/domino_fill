@@ -337,6 +337,28 @@ describe('the keyboard in Pick a piece mode', () => {
         expect(s.preview).toEqual(s.heldPlacement([4, 4]))
     })
 
+    it('focus arriving visibly, with no key on the board, takes the preview from a resting mouse', () => {
+        pick()
+        const s = session()
+        runInAction(() => s.setHover([4, 4]))
+        // What a square's `onFocus` does when Tab lands on it: the Tab was the page's key.
+        runInAction(() => { s.setFocusedCell([1, 0]); s.setFocusVisible(true) })
+        expect(s.preview).toEqual(s.heldPlacement([1, 0]))
+
+        // Hidden focus -- a press, or focus leaving -- hands nothing to the keyboard.
+        runInAction(() => { s.setHover([4, 4]); s.setFocusVisible(false) })
+        expect(s.keyboardLatest).toBe(false)
+        expect(s.preview).toEqual(s.heldPlacement([4, 4]))
+    })
+
+    it('a drag in progress keeps its preview when focus arrives visibly', () => {
+        pick()
+        const s = session()
+        runInAction(() => { s.pointerDown([2, 2]); s.setHover([2, 3]) })
+        runInAction(() => { s.setFocusedCell([0, 0]); s.setFocusVisible(true) })
+        expect(s.preview).toMatchObject({ anchor: [2, 2], direction: 'right' })
+    })
+
     it('a drag in progress keeps its own preview, whatever key comes', () => {
         pick()
         const s = session()

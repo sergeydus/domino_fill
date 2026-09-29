@@ -285,6 +285,47 @@ test.describe('the keyboard', () => {
         await expect(placed(page)).toHaveCount(1)
     })
 
+    test('Tab into the board with the mouse resting elsewhere: the preview is where Space places', async ({ page }) => {
+        // Tall enough that tabbing through the controls does not scroll the page. Measured at
+        // 360x640: it did, the board moved out from under the resting mouse, and the test
+        // passed with the fix removed -- the mouse was no longer over the square it names.
+        await page.setViewportSize({ width: page.viewportSize()!.width, height: 1100 })
+        await turnOn(page)
+        // Tab lands on the board's one tab stop, 0,0 on a fresh board; the held piece is
+        // upright, so its placement there is 0,0 and 1,0 when both are free.
+        const { size, free } = await freeCells(page)
+        if (!free(0, 0) || !free(1, 0)) throw new Error('today\'s board has no upright room at 0,0')
+        let rest: [number, number] | null = null
+        for (let i = 1; i + 1 < size && !rest; i++) {
+            for (let j = 1; j < size && !rest; j++) if (free(i, j) && free(i - 1, j) && free(i + 1, j)) rest = [i, j]
+        }
+        if (!rest) throw new Error('today\'s board has no cell with room above and below off column 0')
+
+        const box = (await cell(page, ...rest).boundingBox())!
+        const mouse = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+        await page.mouse.move(mouse.x, mouse.y)
+        await expectPreviewAt(page, rest)
+        const underMouse = () => page.evaluate(({ x, y }) =>
+            document.elementFromPoint(x, y)?.closest('[data-cell]')?.getAttribute('data-cell'), mouse)
+
+        // A real Tab entry, from outside the board: no key ever reaches the board's handler.
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+        for (let n = 0; n < 40; n++) {
+            await page.keyboard.press('Tab')
+            if (await page.evaluate(() => !!document.activeElement?.closest('[data-cell]'))) break
+        }
+        await expect(cell(page, 0, 0)).toBeFocused()
+        // The mouse is still resting on the other square, so the preview had a rival.
+        expect(await underMouse()).toBe(`${rest[0]},${rest[1]}`)
+        expect(await page.evaluate(() => window.scrollY)).toBe(0)
+
+        // Before Space: the preview has followed focus.
+        await expectPreviewAt(page, [0, 0])
+        await page.keyboard.press(' ')
+        await expect(upright(page, 0, 0)).toBeVisible()
+        await expect(placed(page)).toHaveCount(1)
+    })
+
     test('a refused Space is still the board\'s: the page does not scroll', async ({ page }) => {
         // Short enough that the page overflows at either project's width.
         await page.setViewportSize({ width: page.viewportSize()!.width, height: 420 })

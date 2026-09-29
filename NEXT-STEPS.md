@@ -244,8 +244,9 @@ merged.
 - Keyboard focus shows the held piece and where it would land, since there's no hover.
 - **The input used last decides the preview** (codex, reviewing the build). With the mouse
   resting on one cell and the keyboard moved to another, the preview is the keyboard's, where
-  Space and Enter would place; the mouse moving again takes it back. A drag in progress keeps
-  its own.
+  Space and Enter would place; the mouse moving again takes it back. Focus arriving visibly
+  counts as the keyboard even when no key reached the board, as when Tab enters it from a
+  control outside. A drag in progress keeps its own.
 - **A refusal is still handled.** Space or Enter refused on an occupied cell or a rock is the
   board's key, so the browser doesn't also act on it: Space doesn't scroll the page.
 
@@ -280,7 +281,8 @@ merged.
   scrolling.
 - A middle click on an empty or an occupied cell places and removes nothing.
 - The mouse resting on one cell and the keyboard on another: the preview is at the keyboard's
-  cell, and Enter places there.
+  cell, and Enter places there. Also with focus entering by Tab from outside the board,
+  checked before Space.
 - The held piece: upright on first entry, kept across puzzle and mode switches, not
   remembered on the device.
 - The context menu stays available on the board in the default mode.
