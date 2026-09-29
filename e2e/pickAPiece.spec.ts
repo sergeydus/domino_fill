@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openBoard, waitForBoard } from './openBoard'
 import { readBoard, drag } from './play'
+import { onDate } from './calendar'
 
 /**
  * Pick a piece mode, in a browser (NEXT-STEPS.md, PL1/PL2 and its implementation contract).
@@ -290,16 +291,33 @@ test.describe('the keyboard', () => {
         // 360x640: it did, the board moved out from under the resting mouse, and the test
         // passed with the fix removed -- the mouse was no longer over the square it names.
         await page.setViewportSize({ width: page.viewportSize()!.width, height: 1100 })
+
+        /*
+         * A published day, pinned before its board loads. Tab lands on the board's one tab
+         * stop, 0,0 on a fresh board, so this test needs 0,0 and 1,0 free for the upright
+         * piece -- and rocks are content: 2026-09-30's first easy board has one at 0,0
+         * (codex), where a test on today's board would throw before it tested anything.
+         * Noon UTC is that date from UTC-11 to UTC+11. `beforeEach` loaded today's board,
+         * so the page is reloaded with the calendar moved; nothing was played on it.
+         */
+        const DAY = '2026-09-29'
+        await page.addInitScript(onDate, Date.parse(`${DAY}T12:00:00Z`))
+        await page.reload()
+        await waitForBoard(page)
+        expect(await page.evaluate(() => {
+            const d = new Date()
+            return [d.getFullYear(), d.getMonth() + 1, d.getDate()].map(n => String(n).padStart(2, '0')).join('-')
+        })).toBe(DAY)
+
         await turnOn(page)
-        // Tab lands on the board's one tab stop, 0,0 on a fresh board; the held piece is
-        // upright, so its placement there is 0,0 and 1,0 when both are free.
+        // The held piece is upright, so its placement at 0,0 is 0,0 and 1,0.
         const { size, free } = await freeCells(page)
-        if (!free(0, 0) || !free(1, 0)) throw new Error('today\'s board has no upright room at 0,0')
+        if (!free(0, 0) || !free(1, 0)) throw new Error(`${DAY}'s board has no upright room at 0,0`)
         let rest: [number, number] | null = null
         for (let i = 1; i + 1 < size && !rest; i++) {
             for (let j = 1; j < size && !rest; j++) if (free(i, j) && free(i - 1, j) && free(i + 1, j)) rest = [i, j]
         }
-        if (!rest) throw new Error('today\'s board has no cell with room above and below off column 0')
+        if (!rest) throw new Error(`${DAY}'s board has no cell with room above and below off column 0`)
 
         const box = (await cell(page, ...rest).boundingBox())!
         const mouse = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
