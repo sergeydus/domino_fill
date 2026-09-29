@@ -989,10 +989,16 @@ export class PuzzleSession {
             return true
         }
 
+        /*
+         * Handled either way. A refusal -- a rock, an occupied cell, a cell with no legal
+         * direction -- is still the board answering a key it claims, and it shows as one.
+         * Returned unhandled, Space went on to scroll an overflowing page away from the
+         * board the player was using (codex). Modified chords never get here.
+         */
         if (key === ' ' || key === 'Enter') {
             const anchored = this.anchorFocused(focused)
             this.signal(anchored ? 'candidates' : 'none', focused)
-            return anchored
+            return true
         }
 
         if (key === 'Delete' || key === 'Backspace') {

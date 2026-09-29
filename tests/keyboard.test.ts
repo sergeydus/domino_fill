@@ -152,14 +152,20 @@ describe('Space or Enter sets the anchor, then an arrow places', () => {
         expect(s.board[0][1]).toBe(2)
     })
 
-    it('is unhandled on a cell with no legal direction, rather than entering a dead mode', () => {
+    /*
+     * A refused Space or Enter is still handled: the board shows the refusal, and the key
+     * must not go on to scroll the page. These three returned `false` until codex's review
+     * of Pick a piece found Space scrolling an overflowing page from a refused square.
+     */
+    it('is refused on a cell with no legal direction, rather than entering a dead mode', () => {
         // Boxed in on all four sides: there is nothing to anchor, and an anchor offering
         // no candidates would be a mode with nothing in it.
         const s = session([[1, 2], [3, 2], [2, 1], [2, 3]])
         focusAt(s, [2, 2])
 
-        expect(press(s, ' ')).toBe(false)
+        expect(press(s, ' ')).toBe(true)
         expect(s.pendingAnchor).toBeNull()
+        expect(s.refusedAt).toEqual([2, 2])
     })
 
     it('does not remove: that is Delete and Backspace alone', () => {
@@ -171,18 +177,22 @@ describe('Space or Enter sets the anchor, then an arrow places', () => {
             runInAction(() => { s.placeToward([2, 2], 'down') })
             focusAt(s, [2, 2])
 
-            expect(press(s, key), key).toBe(false)
+            expect(press(s, key), key).toBe(true)
             expect(s.board[2][2], key).toBe(1)
             expect(s.board[3][2], key).toBe(0)
             expect(s.pendingAnchor, key).toBeNull()
+            expect(s.refusedAt, key).toEqual([2, 2])
         }
     })
 
-    it('is unhandled on a rock', () => {
-        const s = session([[2, 2]])
-        focusAt(s, [2, 2])
-        expect(press(s, ' ')).toBe(false)
-        expect(s.board[2][2]).toBe(-1)
+    it('is refused on a rock', () => {
+        for (const key of [' ', 'Enter']) {
+            const s = session([[2, 2]])
+            focusAt(s, [2, 2])
+            expect(press(s, key), key).toBe(true)
+            expect(s.board[2][2], key).toBe(-1)
+            expect(s.refusedAt, key).toEqual([2, 2])
+        }
     })
 
     it('a refused direction keeps the anchor instead of choosing another', () => {

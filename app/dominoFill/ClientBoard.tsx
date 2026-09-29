@@ -175,8 +175,10 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
      * The same verb from the keyboard: arrows move the focused cell, Space or Enter makes
      * it the anchor, then arrows choose the neighbour. Escape leaves any state it entered.
      *
-     * `preventDefault` only when the board actually used the key, so arrows still scroll
-     * the page and Space still does whatever it would otherwise do.
+     * `preventDefault` only when the board claimed the key, so a key it has no use for --
+     * Tab, End, a letter, any chord -- still does whatever it would otherwise do. Space and
+     * Enter on a square are always the board's, refused or not: a refusal is shown, and
+     * the page must not also scroll under it.
      */
     const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
         // All four modifiers, not just the two that pick the shortcut: dropping `shift`

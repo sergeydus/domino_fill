@@ -304,9 +304,9 @@ merged.
   button, and adding one left Sound alone on a second line. The two are grouped, so they wrap
   as one row of settings; the phone page is 48px taller (652 to 700px in the baseline).
 
-The default mode still leaves a refused Space to the browser (its Space anchors, and a refusal
-there returns the key unhandled), so on an overflowing page it can scroll. Whether to change
-that is a separate decision (codex).
+The default mode's refused Space and Enter are handled too, in a separate commit (codex): on a
+rock, an occupied cell or a cell with no legal direction the refusal is shown, and Space no
+longer scrolls an overflowing page. Shift+Space and other chords stay the browser's.
 
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare
