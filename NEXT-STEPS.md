@@ -238,17 +238,19 @@ merged.
   session's existing removal rule handles it first. Rocks refuse.
 
 **Keyboard**
-- **Space and Enter** place the held piece on an empty focused cell. On an occupied cell or a
-  rock they refuse, and never remove.
-- **Delete and Backspace**, and only those, remove an occupied domino.
+- **Space and Enter** do what a tap on the focused cell does: place the held piece on an empty
+  cell, and **remove a placed piece** (user, 2026-09-29, after seeing the refusal's cross drawn
+  over their own domino; this replaces "refuse, and never remove"). A rock, or a cell where the
+  held piece has no room, refuses. Undo brings a removed piece back.
+- **Delete and Backspace** also remove a placed domino.
 - Keyboard focus shows the held piece and where it would land, since there's no hover.
 - **The input used last decides the preview** (codex, reviewing the build). With the mouse
   resting on one cell and the keyboard moved to another, the preview is the keyboard's, where
   Space and Enter would place; the mouse moving again takes it back. Focus arriving visibly
   counts as the keyboard even when no key reached the board, as when Tab enters it from a
   control outside. A drag in progress keeps its own.
-- **A refusal is still handled.** Space or Enter refused on an occupied cell or a rock is the
-  board's key, so the browser doesn't also act on it: Space doesn't scroll the page.
+- **A refusal is still handled.** Space or Enter refused on a rock is the board's key, so the
+  browser doesn't also act on it: Space doesn't scroll the page.
 
 **Touch**
 - Keyboard focus gives no preview on touch. So the picker must show clearly, at all times,
@@ -277,8 +279,8 @@ merged.
 - Only the opposite (bottom or right) position fitting.
 - A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
-- Space and Enter on an occupied cell or a rock refuse without removing, and without the page
-  scrolling.
+- Space and Enter on either half of a placed piece, the half worth 0 included, remove it, and
+  undo restores it. On a rock they refuse without the page scrolling.
 - A middle click on an empty or an occupied cell places and removes nothing.
 - The mouse resting on one cell and the keyboard on another: the preview is at the keyboard's
   cell, and Enter places there. Also with focus entering by Tab from outside the board,

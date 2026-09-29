@@ -973,19 +973,17 @@ export class PuzzleSession {
         }
 
         if ((key === ' ' || key === 'Enter') && this.pickMode) {
-            // The held piece, on an empty focused cell. An occupied cell or a rock refuses
-            // and never removes: removal from the keyboard is Delete and Backspace alone.
-            // The refusal is still the board's answer to a key it claims, so it is handled:
-            // left to the browser, Space scrolled an overflowing page away from the board
-            // the player was placing on (codex).
-            const placement = this.heldPlacement(focused)
-            if (!placement) {
-                this.signal('none', focused)
-                return true
-            }
-            this.placeToward(placement.anchor, placement.direction)
-            this.focusedCell = focused
-            this.signal('placed')
+            /*
+             * Exactly what a tap on the focused square does, by the same function: the held
+             * piece on an empty square, removal on a placed piece, and a refusal on a rock or
+             * where the piece has no room. Space refused on a placed piece until the player
+             * saw it: a cross over their own domino, where a click on it removes (user,
+             * 2026-09-29). Undo brings a removed piece back.
+             *
+             * Handled either way, refusal included: left to the browser, Space scrolled an
+             * overflowing page away from the board the player was placing on (codex).
+             */
+            this.signal(this.pickTap(focused), focused)
             return true
         }
 

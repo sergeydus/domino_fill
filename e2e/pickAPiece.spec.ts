@@ -241,7 +241,7 @@ test.describe('the keyboard', () => {
         await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', `${i},${j}`)
     }
 
-    test('focus previews the held piece; Enter places it, and Space on it refuses', async ({ page }) => {
+    test('focus previews the held piece; Enter places it, and Space on it removes it', async ({ page }) => {
         await turnOn(page)
         const [i, j] = await bothFitUpright(page)
         await focusTo(page, i, j)
@@ -258,12 +258,14 @@ test.describe('the keyboard', () => {
         await page.keyboard.press('Enter')
         await expect(upright(page, i, j)).toBeVisible()
 
-        // Space on the piece just placed: refused, never removed.
+        // Space on the piece just placed removes it, as a click on it does: no refusal.
         await page.keyboard.press(' ')
-        await expect(upright(page, i, j)).toBeVisible()
-        await expect(page.locator('[data-refused]')).toHaveCount(1)
+        await expect(placed(page)).toHaveCount(0)
+        await expect(page.locator('[data-refused]')).toHaveCount(0)
 
-        // Delete still removes it.
+        // Placed again; Delete removes it too.
+        await page.keyboard.press('Enter')
+        await expect(upright(page, i, j)).toBeVisible()
         await page.keyboard.press('Delete')
         await expect(placed(page)).toHaveCount(0)
     })
@@ -353,10 +355,13 @@ test.describe('the keyboard', () => {
         // Short enough that the page overflows at either project's width.
         await page.setViewportSize({ width: page.viewportSize()!.width, height: 420 })
         await turnOn(page)
-        const [i, j] = await bothFitUpright(page)
-        await focusTo(page, i, j)
-        await page.keyboard.press('Enter') // a piece to refuse on
-        await expect(upright(page, i, j)).toBeVisible()
+        // A rock: in this mode Space refuses only there, or where the piece has no room.
+        const { board, size } = await readBoard(page)
+        let rock: [number, number] | null = null
+        for (let a = 0; a < size && !rock; a++) for (let b = 0; b < size && !rock; b++) if (board[a][b] === -1) rock = [a, b]
+        if (!rock) throw new Error('today\'s board has no rock') // every published easy-1 has at least 8
+        // Programmatic focus puts the keyboard on the square (BoardSquare's `onFocus`).
+        await cell(page, ...rock).focus()
 
         const scroll = () => page.evaluate(() => ({
             y: window.scrollY,
@@ -373,12 +378,12 @@ test.describe('the keyboard', () => {
             window.addEventListener('keydown', e => { if (e.key === ' ') w.spaces.push(e.defaultPrevented) })
         })
         await page.keyboard.press(' ')
-        await expect(page.locator('[data-refused]')).toHaveCount(1)
+        await expect(page.locator('[data-refused]')).toHaveAttribute('data-refused', `${rock[0]},${rock[1]}`)
         expect(await page.evaluate(() => (window as unknown as { spaces: boolean[] }).spaces)).toEqual([true])
         // Keyboard scrolling is animated, so a scroll would not show at once: give it time.
         await page.waitForTimeout(600)
         expect((await scroll()).y).toBe(start.y)
-        await expect(upright(page, i, j)).toBeVisible()
+        await expect(placed(page)).toHaveCount(0)
     })
 })
 
