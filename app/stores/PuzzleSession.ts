@@ -62,6 +62,29 @@ export { MIN_CELL_PX }
 export type PlacementOutcome = 'placed' | 'removed' | 'candidates' | 'cleared' | 'none'
 
 /**
+ * Why a move was refused (keyboard polish, section 3 of its contract in NEXT-STEPS): one
+ * kind per path that refuses, decided on that path when it refuses. `refusalText.ts` says
+ * each one in words.
+ *
+ *   - `rock`: the move was made on or from a rock;
+ *   - `space-on-piece`: the default mode's Space or Enter on a placed piece, which
+ *     is Delete's;
+ *   - `no-room`: nothing fits on the square, `piece` being the one Pick a piece mode held,
+ *     or null in the default mode, where any piece was allowed;
+ *   - `drag-from-piece`: a drag that started on a placed piece;
+ *   - `not-adjacent`: a drag released on a square that isn't next to its start;
+ *   - `blocked`: a drag or an arrow aimed at a rock or a placed piece;
+ *   - `edge`: an arrow, after a selection, aimed off the board;
+ *   - `other`: anything else the rules refuse (a half that belongs to no well-formed piece).
+ */
+export type Refusal =
+    | { kind: 'rock' | 'space-on-piece' | 'drag-from-piece' | 'not-adjacent' | 'blocked' | 'edge' | 'other' }
+    | { kind: 'no-room', piece: Piece | null }
+
+/** A move's result before it is signalled: done, or refused and why. */
+type Attempt = Exclude<PlacementOutcome, 'none'> | Refusal
+
+/**
  * A gesture in progress.
  *
  * `drag` is a pointer held down on a cell. `pending` is a tap that could not decide --
@@ -194,19 +217,59 @@ export class PuzzleSession {
      *
      * Cleared by the next thing the player does on this board -- a press, a key, an undo, a
      * reset, a question to Check or Hint -- so it always describes the latest attempt.
+     *
+     * Read from `refusal`, which holds the square and why together: one field, so the cross
+     * and its reason cannot outlive each other.
      */
-    refusedAt: Cell | null = null
+    get refusedAt(): Cell | null {
+        return this.refusal?.at ?? null
+    }
 
     /**
-     * Record what just happened, so the view can respond to it once. A refusal says where:
-     * `at` is the square the refused move was made from.
+     * The last refused move: where it was made from, and why it was refused, stored when it
+     * happened (keyboard polish, section 3). The reason is shown under the board and spoken,
+     * so a player hears why, not only that a move was refused.
      */
-    private signal(outcome: PlacementOutcome, at: Cell | null = null): PlacementOutcome {
+    refusal: { at: Cell, reason: Refusal } | null = null
+
+    /**
+     * Which of the two things the board says came last: a Check or Hint answer, or a
+     * refusal's reason. The announcer says only the latest, so an answer that a refusal
+     * covered and then uncovered comes back into view without being said a second time.
+     */
+    lastSaid: 'advice' | 'refusal' | null = null
+
+    /**
+     * Record what just happened, so the view can respond to it once.
+     *
+     * It leaves `refusal` alone: every move that gets here began with a press or a handled
+     * key, and those have already cleared it. Clearing it here too was mutation-tested as
+     * making no difference on any path.
+     */
+    private signal(outcome: Exclude<PlacementOutcome, 'none'>): PlacementOutcome {
         this.lastOutcome = outcome
         this.outcomeTick++
-        if (outcome === 'none') this.rejectionTick++
-        this.refusedAt = outcome === 'none' ? at : null
         return outcome
+    }
+
+    /** A refused move, from the square `at`, and why. */
+    private refuse(at: Cell, reason: Refusal): PlacementOutcome {
+        this.lastOutcome = 'none'
+        this.outcomeTick++
+        this.rejectionTick++
+        this.refusal = { at, reason }
+        this.lastSaid = 'refusal'
+        return 'none'
+    }
+
+    /** Signal what a move did, or its refusal, made from `at`. */
+    private settle(attempt: Attempt, at: Cell): PlacementOutcome {
+        return typeof attempt === 'string' ? this.signal(attempt) : this.refuse(at, attempt)
+    }
+
+    /** Why the occupied square `at` refused: a rock, or a half no rule can remove. */
+    private occupiedRefusal([i, j]: Cell): Refusal {
+        return { kind: this.board[i][j] === -1 ? 'rock' : 'other' }
     }
 
     /**
@@ -221,9 +284,10 @@ export class PuzzleSession {
     adviceTick = 0
 
     private say(advice: Advice): Advice {
-        this.refusedAt = null
+        this.refusal = null
         this.advice = advice
         this.adviceTick++
+        this.lastSaid = 'advice'
         return advice
     }
 
@@ -363,7 +427,7 @@ export class PuzzleSession {
         this.moves = []
         this.focusedCell = null
         this.focusVisible = false
-        this.refusedAt = null
+        this.refusal = null
         this.clearAdvice()
     }
 
@@ -700,7 +764,7 @@ export class PuzzleSession {
     pointerDown(cell: Cell) {
         this.focusedCell = cell
         this.focusVisible = false
-        this.refusedAt = null
+        this.refusal = null
         const pending = this.pendingAnchor
         if (pending) {
             const direction = directionBetween(pending, cell)
@@ -743,20 +807,34 @@ export class PuzzleSession {
             }
             // Released where the domino cannot go: nothing happens, and any pending
             // anchor is dismissed.
-            return this.signal(pending ? 'cleared' : 'none', anchor)
+            return pending ? this.signal('cleared') : this.refuse(anchor, this.dragRefusal(anchor, direction))
         }
 
-        return this.signal(this.pickMode ? this.pickTap(cell) : this.tap(cell), cell)
+        return this.settle(this.pickMode ? this.pickTap(cell) : this.tap(cell), cell)
+    }
+
+    /**
+     * Why a drag from `from` toward `direction` (null: not a neighbour) was refused.
+     *
+     * Where it started is judged first (codex): a drag from a rock or a placed piece could
+     * never have placed anything, wherever it was aimed, so that is what it is told.
+     */
+    private dragRefusal(from: Cell, direction: Direction | null): Refusal {
+        const [i, j] = from
+        if (this.board[i][j] === -1) return { kind: 'rock' }
+        if (this.board[i][j] !== null) return { kind: 'drag-from-piece' }
+        if (!direction) return { kind: 'not-adjacent' }
+        return { kind: 'blocked' }
     }
 
     /**
      * Remove the domino on an occupied cell, as a tap does in both modes. A rock, or a half
      * that resolves to no well-formed domino, is refused.
      */
-    private tapOccupied(cell: Cell): PlacementOutcome {
+    private tapOccupied(cell: Cell): Attempt {
         const [i, j] = cell
         const pair = this.pairAt(i, j)
-        if (!this.removePiece(i, j)) return 'none'
+        if (!this.removePiece(i, j)) return this.occupiedRefusal(cell)
         // Focus follows the removal to the pair's anchor, so a keyboard user is left
         // somewhere related to what just happened.
         this.focusedCell = pair ? [pair[0][0], pair[0][1]] : cell
@@ -768,11 +846,11 @@ export class PuzzleSession {
      * piece wherever it can cover the cell (`heldPlacement`, the preview's own function), or
      * is refused. Never a pending anchor: there is no direction left to ask for.
      */
-    private pickTap(cell: Cell): PlacementOutcome {
+    private pickTap(cell: Cell): Attempt {
         const [i, j] = cell
         if (this.board[i][j] !== null) return this.tapOccupied(cell)
         const placement = this.heldPlacement(cell)
-        if (!placement) return 'none'
+        if (!placement) return { kind: 'no-room', piece: this.heldPiece }
         this.placeToward(placement.anchor, placement.direction)
         this.focusedCell = cell
         return 'placed'
@@ -784,12 +862,12 @@ export class PuzzleSession {
      * Occupied removes. Empty places, if exactly one direction is legal; if several are,
      * the anchor is held and the candidates are offered for a second tap.
      */
-    private tap(cell: Cell): PlacementOutcome {
+    private tap(cell: Cell): Attempt {
         const [i, j] = cell
         if (this.board[i][j] !== null) return this.tapOccupied(cell)
 
         const legal = this.legalDirections(cell)
-        if (legal.length === 0) return 'none'
+        if (legal.length === 0) return { kind: 'no-room', piece: null }
         if (legal.length === 1) {
             this.placeToward(cell, legal[0])
             this.focusedCell = cell
@@ -814,17 +892,18 @@ export class PuzzleSession {
      * the keyboard's arrow is the direction, so there is always a second key coming and
      * nothing is saved by guessing.
      *
-     * Returns whether there was anything to anchor.
+     * Returns `'candidates'`, or why there was nothing to anchor.
      */
-    private anchorFocused(cell: Cell): boolean {
+    private anchorFocused(cell: Cell): Attempt {
         const [i, j] = cell
         // Nothing to anchor: occupied cells belong to Delete/Backspace, and a cell with no
         // legal direction would be a mode offering nothing.
-        if (this.board[i][j] !== null) return false
-        if (this.legalDirections(cell).length === 0) return false
+        if (this.board[i][j] === -1) return { kind: 'rock' }
+        if (this.board[i][j] !== null) return { kind: 'space-on-piece' }
+        if (this.legalDirections(cell).length === 0) return { kind: 'no-room', piece: null }
 
         this.gesture = { kind: 'pending', from: cell }
-        return true
+        return 'candidates'
     }
 
     /**
@@ -886,7 +965,7 @@ export class PuzzleSession {
          */
         const refusals = this.rejectionTick
         const handled = this.keyOnBoard(key, modifiers)
-        if (handled && this.rejectionTick === refusals) this.refusedAt = null
+        if (handled && this.rejectionTick === refusals) this.refusal = null
         return handled
     }
 
@@ -958,7 +1037,8 @@ export class PuzzleSession {
                 // A refused direction keeps the anchor rather than silently choosing
                 // another one, which is the whole complaint against the old rule.
                 if (!this.canPlace(pending, direction)) {
-                    this.signal('none', pending)
+                    const [ni, nj] = neighbourOf(pending, direction)
+                    this.refuse(pending, { kind: this.inBounds(ni, nj) ? 'blocked' : 'edge' })
                     return true
                 }
                 this.placeToward(pending, direction)
@@ -983,7 +1063,7 @@ export class PuzzleSession {
              * Handled either way, refusal included: left to the browser, Space scrolled an
              * overflowing page away from the board the player was placing on (codex).
              */
-            this.signal(this.pickTap(focused), focused)
+            this.settle(this.pickTap(focused), focused)
             return true
         }
 
@@ -994,8 +1074,7 @@ export class PuzzleSession {
          * board the player was using (codex). Modified chords never get here.
          */
         if (key === ' ' || key === 'Enter') {
-            const anchored = this.anchorFocused(focused)
-            this.signal(anchored ? 'candidates' : 'none', focused)
+            this.settle(this.anchorFocused(focused), focused)
             return true
         }
 
@@ -1006,7 +1085,7 @@ export class PuzzleSession {
             if (!this.removePiece(i, j)) {
                 // A rock, or a half that resolves to no well-formed domino: refused, and
                 // worth saying so rather than doing nothing at all.
-                this.signal('none', focused)
+                this.refuse(focused, this.occupiedRefusal(focused))
                 return false
             }
             this.focusedCell = pair ? [pair[0][0], pair[0][1]] : focused
@@ -1061,7 +1140,7 @@ export class PuzzleSession {
         move.cells.forEach(([i, j], index) => { this.board[i][j] = move.before[index] })
         this.completed = this.completedByRules
         this.focusedCell = move.anchor
-        this.refusedAt = null
+        this.refusal = null
         this.clearAdvice()
         // A gesture in flight was aimed at a board that no longer looks like this.
         this.gesture = null
@@ -1143,7 +1222,7 @@ export class PuzzleSession {
         this.hover = null
         this.focusedCell = null
         this.focusVisible = false
-        this.refusedAt = null
+        this.refusal = null
         this.advice = null
     }
 }

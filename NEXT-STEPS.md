@@ -421,6 +421,17 @@ paths, and the reason is stored with the refusal)*
     prove the announcer's content, and the manual screen-reader check covers speech.
 - Refusals are unchanged in all other ways: the shake, the cross and the vibration.
 
+**As built, section 3** (three choices the contract left open):
+- **One field for the cross and its reason.** `PuzzleSession.refusal` holds the square and
+  why; `refusedAt` is read from it, so the two can't outlive each other. Each path returns its
+  reason where it refuses (`Refusal` in `PuzzleSession.ts`, worded in `refusalText.ts`).
+- **Each message is in the accessibility tree once.** The contract made only the guide
+  `aria-hidden`. The row's copy of a reason, or of a fresh Check or Hint answer, is hidden too,
+  while the announcer holds it, so reading the page doesn't meet it twice. An answer back in
+  view after a refusal is the row's alone, and readable there.
+- **The announcer has the body type role**, like the row, since the typography audit holds all
+  text, hidden or not, to a role.
+
 **Tests (sections 2 and 3)**
 - The guide:
   - the visible wording per mode;

@@ -38,7 +38,9 @@ const ALLOWED: Record<Role, string> = {
     // The advice strip only while it reports a problem (`adviceIsProblem`), not the strip.
     // And a refused move's cross (P1-6, row 12): something is wrong with that move. And the
     // caution variant's edge, `Reset` (P2-2, row 14): something that cannot be taken back.
-    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"], [data-refused] [data-cross], .control-caution',
+    // And the refused move's reason in the strip (keyboard polish), for the same reason as
+    // its cross.
+    problem: '[data-line-state="over"], [data-advice-kind="wrong"], [data-advice-kind="unavailable"], [role="alert"], [data-refused] [data-cross], [data-refusal-reason], .control-caution',
     hint: '[data-hinted]',
 }
 
@@ -380,6 +382,16 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         await expect(page.locator('[data-advice-kind]')).toHaveAttribute('data-advice-kind', 'wrong')
         expect(await rolesOn(page.locator('[data-advice] .text-problem'))).toEqual({ color: 'problem' })
         await expectRolesKept(page, 'a problem reported')
+    })
+
+    test('a refused move is a problem: its cross, and its reason in the strip', async ({ page }) => {
+        await openBoard(page)
+        const rock = await page.locator('[data-piece="rock"]').first().getAttribute('data-at')
+        await page.locator(`[data-cell="${rock}"]`).focus()
+        await page.keyboard.press(' ')
+        await expect(page.locator('[data-refusal-reason]')).toHaveText('That square is a rock.')
+        expect(await rolesOn(page.locator('[data-refusal-reason]'))).toEqual({ color: 'problem' })
+        await expectRolesKept(page, 'a refusal showing')
     })
 
     test('the archive: its current day is the accent\'s edge, its error is a problem', async ({ page }) => {
