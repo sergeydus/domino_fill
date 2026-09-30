@@ -315,6 +315,97 @@ The default mode's refused Space and Enter are handled too, in a separate commit
 rock, an occupied cell or a cell with no legal direction the refusal is shown, and Space no
 longer scrolls an overflowing page. Shift+Space and other chords stay the browser's.
 
+### Keyboard polish: implementation contract
+
+**Why.** The user found keyboard play unpolished in three ways: switching pieces, knowing what a
+key does, and the focus marker's look. Codex added a fourth: a refusal says nothing to a screen
+reader (U6). The underlying problem is a rule that changes between modes without saying so. In
+the default mode Space selects and an arrow places; in Pick a piece mode Space places or removes
+at once. The tutorial explains only the first.
+
+**Decided (user, 2026-09-30, from prototype screenshots):**
+- The focus marker becomes **soft corners**.
+- A **one-line key guide** per mode.
+- A refusal's reason is **shown and spoken**.
+- **Switching pieces stays Tab, arrow, Shift+Tab**, explained by the guide. A single key on the
+  board is reconsidered only if that still feels slow after play.
+
+Codex reviews this contract before any code.
+
+**1. The focus marker: soft corners**
+- Four rounded corner brackets, thinner than today's, in the accent's edge on a white halo. The
+  prototype drew them 5 units wide on a 9-unit halo, 8 in from the edge, each arm 24 long, with
+  a radius-6 bend. They mean the same thing and follow the same rules as now: drawn while
+  `focusVisible`, above the pieces.
+- **Held to the existing bars, not new ones:**
+  - P1-5's greyscale test: at least 15% from the anchor, candidate, hint and refused marks, and
+    at least 5% of the square, at 38px and 53px.
+  - The same test over a rock and over both dominoes.
+  - The cross's ends still stop short of the brackets.
+  - Contrast: the focus colour on both checker tones at 3:1 or better. As with the cross, the
+    halo can carry it where the colour alone doesn't. `tests/contrast.test.ts` records which does.
+- If the soft corners fail a bar, the drawing changes, not the bar, as with the cross in row 12.
+- The colours become tokens: `cellFocus` changes value, and a halo token is added. They aren't
+  literals.
+
+**2. The key guide**
+- One line, in the row under the picker that the Check and Hint messages use:
+  - **Default mode:** "**Space** + **arrow**: place · **Delete**: remove".
+  - **Pick a piece:** "**Space**: place or remove · **Tab**: choose a piece".
+- **When it shows:** while the board shows keyboard focus (`focusVisible`) and there's no Check
+  or Hint message and no refusal reason. A press or tap hides it, as it hides the focus marker.
+  It also hides when focus leaves the board.
+- **Not in the live region.** A guide spoken every time focus enters the board would be noise.
+  The squares already have accessible names, and the guide's wording is exposed as a description
+  of the grid (`aria-describedby`), read once on entry.
+- **Nothing moves:** one line at 360px in both modes, and the board's size is unchanged when the
+  guide appears. Both are tested.
+- **The tutorial:** one sentence for keyboard players, matching the default mode, since the
+  tutorial is fixed to the default controls.
+
+**3. A refusal, said in words**
+- Every refusal gets a reason, from the move that was refused, in the same row: red, as Check's
+  problems are. It's inside the existing live region, so a screen reader speaks it too.
+  - A rock: "That square is a rock."
+  - A placed piece, for the default mode's Space: "Delete removes a piece; Space selects an empty square."
+  - No room for the held piece, or no legal direction: "No room for a piece there."
+  - A blocked direction: "That way is blocked."
+  - Off the board: "That's the edge of the board."
+- **Every refusal**, by pointer or key, in both modes, because every refusal draws the cross.
+- **Repeats are announced.** It's keyed on the refusal counter, as Check's answer is keyed on
+  its counter, so a second refusal is spoken again.
+- **Lifetime:** exactly the cross's (`refusedAt`). While it shows, it takes the row. A Check or
+  Hint message, which survives a refused move, shows again once the refusal clears.
+- Refusals are unchanged in all other ways: the shake, the cross and the vibration.
+
+**4. Switching pieces**
+- No new key. The guide names Tab. The route is unchanged, and was measured: Tab from a square
+  lands on the held chip, an arrow switches, and Shift+Tab returns to the same square.
+- **Revisit after play.** If it's still slow, a key that works only while focus is on the board
+  and is listed in the guide. That would reverse the "no keyboard shortcuts" decision, so it's
+  the user's call.
+
+**Tests**
+- The marker: the greyscale and footprint tests at both sizes, over each occupant, and with the
+  cross; contrast; the sheet's `focus` specimen, so this is a visual update.
+- The guide:
+  - the wording per mode;
+  - shown only with keyboard focus on the board, and hidden by a press, a blur, advice or a refusal;
+  - one line at 360px;
+  - no change to the board's size;
+  - not inside the live region;
+  - the grid's `aria-describedby`.
+- Refusals:
+  - each reason from the move that caused it, in both modes, by key and by pointer;
+  - the live region's content, including a repeat;
+  - cleared when the cross clears;
+  - advice showing again after.
+- Mutations for each rule.
+
+**Not in this change:**
+- Full-page Pick a piece baselines (codex, on the chips): U7.
+- The single switch key.
+
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare
   the default, PL1 and PL3 before challenge times are shared as comparable. The share card
@@ -468,7 +559,8 @@ Two limits:
 | U3 | A short design note | `GRAPHICS-SPEC.md` and `SPEC.md` total about 4,300 lines (measured), much of it correction records. A short note becomes the entry point; the specs stay as history. | Medium | |
 | U4 | Gate by risk | The full gate and review round suited a careful rebuild. A text change needs less than a change to timing, storage, input or content. Never drop the tests that protect a rule (codex). Tests run to about 22,700 lines (measured). | A decision | |
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
-| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Later (user, 2026-09-30) |
+| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
+| U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 
 ## Open questions
 
