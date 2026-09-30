@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { VISUAL_URL } from './server'
 import { CONTROL, type Variant, type VariantName } from '../app/controls'
 import { PALETTE, type Token } from '../app/palette'
@@ -261,6 +262,8 @@ test.describe('every control is one variant, at rest and in each of its states',
     })
 
     test('the archive, and the day banner', async ({ page }) => {
+        // A day with earlier days in its month: on the 1st this skipped (`pinDay`).
+        await pinDay(page, LATE_IN_A_MONTH)
         await openBoard(page)
         await page.locator('[data-open-archive]').click()
         const archive = page.locator('[data-archive]')
@@ -269,7 +272,7 @@ test.describe('every control is one variant, at rest and in each of its states',
         expect([...seen].sort()).toEqual(['day', 'quiet', 'secondary'])
 
         const days = await archive.locator('[data-archive-day]:not([aria-current])').evaluateAll(els => els.map(el => el.getAttribute('data-archive-day')!))
-        test.skip(days.length === 0, 'no other day this month to open')
+        expect(days.length, 'another day this month to open').toBeGreaterThan(0)
         await archive.locator(`[data-archive-day="${days[0]}"]`).click()
         await expect(page.locator('[data-go-to-today]')).toBeVisible()
         expect([...await expectVocabulary(page, page.locator('[data-day-banner]'), 1)]).toEqual(['primary'])

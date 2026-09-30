@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import { openBoard } from './openBoard'
 import { VISUAL_URL } from './server'
 import { drag } from './play'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { PALETTE } from '../app/palette'
 
 /**
@@ -103,6 +104,8 @@ test.describe('focus-visible, on every control, readable without colour', () => 
     })
 
     test('the archive\'s, and the day banner\'s', async ({ page }) => {
+        // A day with earlier days in its month: on the 1st this skipped (`pinDay`).
+        await pinDay(page, LATE_IN_A_MONTH)
         await openBoard(page)
         await page.locator('[data-open-archive]').click()
         const archive = page.locator('[data-archive]')
@@ -113,7 +116,7 @@ test.describe('focus-visible, on every control, readable without colour', () => 
         const days = await archive.locator('[data-archive-day]').evaluateAll(els => els.map(el => el.getAttribute('data-archive-day')!))
         const current = await archive.locator('[aria-current="date"]').getAttribute('data-archive-day')
         const earlier = days.filter(d => d !== current)
-        test.skip(earlier.length === 0, 'no other day this month to open')
+        expect(earlier.length, 'another day this month to open').toBeGreaterThan(0)
         await archive.locator(`[data-archive-day="${earlier[0]}"]`).click()
         await expect(page.locator('[data-go-to-today]')).toBeVisible()
         await expectFocusShown(page, page.locator('[data-day-banner]'), PALETTE.accentEdge, 1)

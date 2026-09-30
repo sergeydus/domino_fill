@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard, waitForBoard } from './openBoard'
 import { drag } from './play'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 
 /**
  * The archive, and the day that is not taken away (spec P1-6/P1-7, row 18d).
@@ -172,10 +173,14 @@ test.describe('the archive', () => {
     })
 
     test('going to an earlier day changes the board and says which day it is', async ({ page }) => {
+        // A day with earlier days in its month; on the 1st there are none (`pinDay`).
+        await pinDay(page, LATE_IN_A_MONTH)
+        await page.reload()
+        await waitForBoard(page)
         await openArchive(page)
         const dates = await offeredDates(page)
-        // The first day of the month on screen: always in the past or today, never later.
         const target = dates[0]
+        expect(target < LATE_IN_A_MONTH, 'an earlier day').toBe(true)
 
         await page.locator(`[data-archive-day="${target}"]`).click()
         await expect(page.locator('[data-archive]')).toBeHidden()
@@ -191,13 +196,15 @@ test.describe('the day you left is still there', () => {
          * retires its sessions -- deliberately, so the Map does not grow by nine every
          * midnight -- so this is a genuine restore by `puzzleId`, with the `definitionHash`
          * checked, and not a session that happened to survive.
+         *
+         * On a pinned day: it needs two earlier days, and skipped on the 1st and 2nd.
          */
+        await pinDay(page, LATE_IN_A_MONTH)
         await openBoard(page)
         await openArchive(page)
         const dates = await offeredDates(page)
-        const older = dates[0]
-        const other = dates[1] ?? dates[0]
-        test.skip(older === other, 'needs two archive days to move between')
+        const [older, other] = dates
+        expect(other < LATE_IN_A_MONTH, 'two earlier days to move between').toBe(true)
 
         await page.locator(`[data-archive-day="${older}"]`).click()
         await expect(page.locator('[data-viewing-date]')).toContainText(older)
@@ -221,6 +228,8 @@ test.describe('the day you left is still there', () => {
     })
 
     test('an archive day survives a reload, because the date is the key', async ({ page }) => {
+        // Pinned, as above; the pin holds across the reload below, so "today" stays that day.
+        await pinDay(page, LATE_IN_A_MONTH)
         await openBoard(page)
         await openArchive(page)
         const older = (await offeredDates(page))[0]
