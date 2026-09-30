@@ -3,6 +3,7 @@ import { observer } from 'mobx-react'
 import type { PuzzleSession } from '../stores/PuzzleSession'
 import { adviceIsProblem, adviceMessage } from './adviceText'
 import { refusalMessage } from './refusalText'
+import { KEY_GUIDE } from './keyGuide'
 
 /**
  * Where the board says things: Check's and Hint's answers (spec P1-5, row 18e), and why a
@@ -14,7 +15,10 @@ import { refusalMessage } from './refusalText'
  * it again, an answer to a question nobody had just asked. So:
  *
  *   - **the row** (`data-advice`) is what is visible, and is not live. A reason while a
- *     refusal stands, else the latest answer;
+ *     refusal stands, else the latest answer, else -- while the keyboard is on the board --
+ *     the key guide (keyboard polish, section 2): one line saying what the keys do in this
+ *     mode. It is `aria-hidden`, because the grid's description says all of it
+ *     (`KEY_INSTRUCTIONS`, in ClientBoard);
  *   - **the announcer** (`data-announcer`) is visually hidden and polite. It holds only
  *     what was said last (`lastSaid`), while it is still current: an answer as it arrives, a
  *     reason until its cross clears (codex). An answer uncovered again is not in it.
@@ -38,7 +42,7 @@ import { refusalMessage } from './refusalText'
  * because the region has to be observed before the text lands in it.
  */
 const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
-    const { advice, adviceTick, refusal, rejectionTick, lastSaid } = boardsStore
+    const { advice, adviceTick, refusal, rejectionTick, lastSaid, focusVisible, controlMode } = boardsStore
     const said = refusal ? 'refusal' : advice && lastSaid === 'advice' ? 'advice' : null
 
     return (
@@ -53,7 +57,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                     >
                         {refusalMessage(refusal.reason)}
                     </span>
-                ) : advice && (
+                ) : advice ? (
                     <span
                         key={adviceTick}
                         data-advice-kind={advice.kind}
@@ -61,6 +65,12 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                         className={adviceIsProblem(advice) ? 'font-semibold text-problem' : ''}
                     >
                         {adviceMessage(advice)}
+                    </span>
+                ) : focusVisible && (
+                    <span data-key-guide aria-hidden='true'>
+                        {KEY_GUIDE[controlMode].map((part, n) => typeof part === 'string'
+                            ? part
+                            : <strong key={n} className='font-semibold'>{part.key}</strong>)}
                     </span>
                 )}
             </div>

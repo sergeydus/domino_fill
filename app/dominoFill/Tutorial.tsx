@@ -80,9 +80,15 @@ const Tutorial = () => {
                 </p>
                 <p className="text-meta opacity-80">
                     Tapping a square places the only domino that fits; if more than one fits, tap
-                    again on the square you want. Tap a domino to take it off. By keyboard: arrow
-                    keys move, <kbd>Space</kbd> picks the square, then an arrow key places.
-                    <kbd>Esc</kbd> cancels.
+                    again on the square you want. Tap a domino to take it off.{' '}
+                    {/* The keyboard, in the default mode's words (keyboard polish, section 2):
+                        the tutorial's board is fixed to it. The `{' '}`s are the spaces a line
+                        break before a tag drops in JSX: this read "places.Esc cancels." */}
+                    <span data-tutorial-keys>
+                        By keyboard: arrow keys move, <kbd>Space</kbd> selects a square, then an
+                        arrow key places a piece that way.{' '}<kbd>Delete</kbd> removes one,
+                        and <kbd>Esc</kbd> cancels.
+                    </span>
                 </p>
 
                 <p className="mt-2">Try it: fill this board so the top numbers and the side numbers both match.</p>

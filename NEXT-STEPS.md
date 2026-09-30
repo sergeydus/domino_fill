@@ -383,6 +383,23 @@ this feature's acceptance (see "Acceptance").
 - **The tutorial:** one sentence for keyboard players, matching the default mode, since the
   tutorial is fixed to the default controls.
 
+**As built, section 2:**
+- **The guide** is the row's last choice, after a refusal's reason and a Check or Hint answer,
+  with its keys in bold (`keyGuide.ts`). Measured at 360px on this PC: 290px wide in the
+  default mode and 271px in Pick a piece mode, and the row stays at its 24px minimum. CI's
+  text is wider, and the one-line test runs there too.
+- **The size test runs at two sizes.** At 360x640 the board is limited by the width, so a guide
+  that grew the row only lengthened the page, and passed (mutation-tested). At 1280x800 it's
+  limited by the height, where a taller row would take from the board. Both also hold the row's
+  height.
+- **The description** is a visually hidden paragraph just before the board, named by the
+  grid's `aria-describedby` through `useId`, so the tutorial's board and the page's each have
+  their own. The tutorial's board describes the default mode, which it's fixed to.
+- **The tutorial already had a keyboard sentence**, so it was reworded rather than added: "By
+  keyboard: arrow keys move, Space selects a square, then an arrow key places a piece that way.
+  Delete removes one, and Esc cancels." It rendered as "places.Esc cancels.", a space lost to a
+  line break before a tag in JSX, now held by a test.
+
 **3. A refusal, said in words** *(corrected at codex's review: reasons come from the actual
 paths, and the reason is stored with the refusal)*
 - **The reason is stored when the refusal happens**, alongside `refusedAt` and with the same

@@ -1,5 +1,5 @@
 "use client"
-import React, { CSSProperties, useEffect, useRef } from "react";
+import React, { CSSProperties, useEffect, useId, useRef } from "react";
 import BoardSquare from "./BoardSquare";
 import { motion, useAnimationControls } from "motion/react";
 import { observer } from "mobx-react";
@@ -12,6 +12,7 @@ import { GRID_BORDER_PX, PuzzleSession } from "../stores/PuzzleSession";
 import { Cell } from "../stores/placement";
 import { feedbackFor } from "./feedback";
 import { MOTION, shakeKeyframes } from "./motion";
+import { KEY_INSTRUCTIONS } from "./keyGuide";
 
 type Props = {
     boardsStore: PuzzleSession
@@ -281,7 +282,19 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     }, [rejections, boardsStore, shake])
 
     const isDisabled = boardsStore.completed
-    return (
+    /*
+     * The board's keys, in full, for a screen reader (keyboard polish, section 2): the grid's
+     * description. Mounted from the start, so it is there before focus arrives rather than
+     * appearing with it, and outside the shell, whose children are its grid layout's four
+     * areas. Visually hidden; the visible guide under the board is its short form. Whether a
+     * screen reader reads it as focus lands on a cell varies by reader: the contract's manual
+     * check.
+     */
+    const describedBy = useId()
+    return (<>
+        <p id={describedBy} data-key-instructions className="sr-only text-body">
+            {KEY_INSTRUCTIONS[boardsStore.controlMode]}
+        </p>
         <div
             className="select-none"
             style={shellStyle}
@@ -330,6 +343,7 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                     tabIndex={-1}
                     role="grid"
                     aria-label={`Domino board, ${size} by ${size}`}
+                    aria-describedby={describedBy}
                     aria-rowcount={size}
                     aria-colcount={size}
                     draggable={false}
@@ -366,6 +380,6 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
                 </motion.div>
             </div>
         </div>
-    )
+    </>)
 }
 export default observer(ClientBoard)
