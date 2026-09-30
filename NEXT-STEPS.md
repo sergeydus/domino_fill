@@ -332,7 +332,10 @@ at once. The tutorial explains only the first.
 
 Codex reviews this contract before any code. First review, 2026-09-30: codex would approve it
 with three corrections, now made below (the guide's wording and description, and the refusal
-paths). Its check of the corrections is pending.
+paths). Second review, the same day: **approved for implementation**, with three details carried
+in below: "Ctrl/Cmd+Z" in the full instructions, the announcer's refusal cleared with the cross,
+and a reason precedence for drags. Codex also moved the real screen-reader check from U1 into
+this feature's acceptance (see "Acceptance").
 
 **1. The focus marker: soft corners**
 - Four rounded corner brackets, thinner than today's, in the accent's edge on a white halo. The
@@ -364,19 +367,19 @@ paths). Its check of the corrections is pending.
   line appears. Both are tested.
 - **For assistive technology, the full instructions**, mode-specific and never live:
   - Default: "Arrow keys move. Space or Enter selects a square, then an arrow key places a piece
-    that way. Escape cancels. Delete removes a piece. Control+Z undoes."
+    that way. Escape cancels. Delete removes a piece. Ctrl/Cmd+Z undoes."
   - Pick a piece: "Arrow keys move. Space or Enter places the held piece, or removes a placed
-    one. Delete removes a piece. Control+Z undoes. Tab goes to the piece picker, where an arrow
+    one. Delete removes a piece. Ctrl/Cmd+Z undoes. Tab goes to the piece picker, where an arrow
     key switches the piece; Shift+Tab comes back to the same square."
+  - "Ctrl/Cmd+Z", not "Control+Z", because the board takes either (codex).
 - **Where the full instructions live:** a visually hidden element, **always mounted**, before
   focus arrives, and referenced by the grid's `aria-describedby`. The visible line is
   `aria-hidden`, so browse mode doesn't read the same thing twice; its equivalent is the
   description.
 - **No promise about when it's read.** The game focuses a *cell*, not the grid, and whether a
   screen reader reads the grid's description as focus lands on a cell varies by reader. The
-  tests can prove the markup, not the speech. A manual check with a real screen reader (NVDA or
-  Narrator on Windows, VoiceOver on a phone) is part of U1's play-test, and the result is
-  recorded here.
+  tests can prove the markup, not the speech. A manual check with a real screen reader is part
+  of this feature's acceptance (see "Acceptance").
 - **The tutorial:** one sentence for keyboard players, matching the default mode, since the
   tutorial is fixed to the default controls.
 
@@ -397,6 +400,10 @@ paths, and the reason is stored with the refusal)*
   | An arrow after a selection pointing off the board | "That's the edge of the board." |
   | Anything else that refuses (a malformed piece's removal, which the rules prevent) | "That can't be done there." |
 
+- **Precedence, where a refusal fits more than one row** (codex): the square the move started
+  from is judged before where it was aimed. A drag from a rock says "That square is a rock.",
+  and a drag from a placed piece says it can't be dragged, whether it was released diagonally,
+  on a blocked square or on a legal one.
 - **Not refusals, and they stay silent:**
   - a pointer released outside the board (deliberately a silent cancellation);
   - an arrow that simply stops at the edge while moving focus, with nothing selected.
@@ -407,9 +414,9 @@ paths, and the reason is stored with the refusal)*
   - One visually hidden polite status region is the announcer. It receives each new Check or
     Hint answer (keyed on `adviceTick`, as now) and each new refusal reason (keyed on
     `rejectionTick`), so a repeat is a new announcement.
-  - While a reason shows, it takes the visible row. When it clears (with the cross), an
-    earlier Check or Hint message, which survives a refused move, **reappears visually and is
-    not announced again**.
+  - While a reason shows, it takes the visible row. When it clears (with the cross), the
+    announcer's copy of it is cleared too (codex), and an earlier Check or Hint message, which
+    survives a refused move, **reappears visually and is not announced again**.
   - `role="status"` is polite. It doesn't guarantee every rapid message is spoken, so the tests
     prove the announcer's content, and the manual screen-reader check covers speech.
 - Refusals are unchanged in all other ways: the shake, the cross and the vibration.
@@ -440,6 +447,19 @@ paths, and the reason is stored with the refusal)*
 - The marker: the greyscale and footprint tests at both sizes, over each occupant, and with the
   cross; contrast; the sheet's `focus` specimen, so this is a visual update.
 - Mutations for each rule, in every section.
+
+**Acceptance: a real screen reader** (codex, second review). The tests prove markup and the
+announcer's content, not speech, so the feature isn't accepted until someone has listened. Only
+Narrator is installed on the development PC, and Claude can't hear it, so this is a person's
+check, recorded here with the reader and browser used:
+1. With Narrator (Win+Ctrl+Enter) or NVDA, Tab onto the board in each mode. Is the full
+   instruction read, at once or with the reader's command for more about an item?
+2. Space on a rock, then on a placed piece in the default mode. Is each reason spoken, and is a
+   second Space on the same rock spoken again?
+3. Check, then a refused Space, then an arrow. Is the Check answer spoken once, and not again
+   when it reappears after the refusal clears?
+4. The picker: Tab from a square, an arrow, Shift+Tab. Is the held piece's name and state read,
+   and does Shift+Tab land on the same square?
 
 **Not in this change:**
 - Full-page Pick a piece baselines (codex, on the chips): U7.
