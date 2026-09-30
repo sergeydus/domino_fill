@@ -173,6 +173,23 @@ describe('P1-6: a refused move, a control\'s focus, and a disabled control', () 
         expect([alone('problem'), alone('refusedHalo')]).toEqual([false, false])
     })
 
+    /*
+     * The keyboard polish's soft corners, held as the cross is: the keyboard reaches every
+     * square, so the brackets land on the same surfaces a refusal does. Their colour clears
+     * 3:1 on both checker tones on its own (the §6 rows above); the halo is what edges a thin
+     * stroke everywhere else, and it only can if it contrasts with the brackets themselves.
+     */
+    for (const surface of REFUSAL_SURFACES) {
+        it(`the focus brackets read on ${surface}: their halo or their colour clears 3:1`, () => {
+            const best = Math.max(contrast(PALETTE.cellFocusHalo, PALETTE[surface]), contrast(PALETTE.cellFocus, PALETTE[surface]))
+            expect(best).toBeGreaterThanOrEqual(3)
+        })
+    }
+
+    it('and the brackets clear 3:1 on their own halo', () => {
+        expect(contrast(PALETTE.cellFocus, PALETTE.cellFocusHalo)).toBeGreaterThanOrEqual(3)
+    })
+
     for (const pair of FOCUS_RINGS) {
         it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
             expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)

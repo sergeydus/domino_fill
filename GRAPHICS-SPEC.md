@@ -1639,6 +1639,50 @@ Rejection is **not** here. It is motion, and it belongs to P1-6.
 > outline. It now asserts it as the diamond's fill. Its contract is unchanged: the hinted
 > square carries `hint`, and nothing else does. Mutation: the diamond filled with the
 > anchor's colour, which it fails.
+>
+> **Amendment (keyboard polish, NEXT-STEPS) — the focus becomes soft corners.** The user
+> found the black brackets the least finished part of playing by keyboard, and chose "soft
+> corners" from prototypes. Same meaning, same rules (drawn while `focusVisible`, above the
+> pieces), a new drawing:
+>
+> | | before | now |
+> | --- | --- | --- |
+> | shape | four L brackets, square corners | four L brackets, bent round a radius of 6 |
+> | size, in hundredths of the cell | inset 7, stroke 8, arms 28 | inset 8, stroke 5, arms 24 |
+> | colour | `cellFocus` `#000000` | `cellFocus` `#093346`, on a `cellFocusHalo` white halo 2 either side |
+>
+> **The colour is the accent's edge darkened, not the accent's edge.** `#0b3c52`, the board's
+> own focus ring, is 2.93:1 on the dark checker tone, under the 3:1 the brackets have held
+> since this row. The contract allowed the halo to carry it there, as it carries the cross;
+> that would have loosened a pair held since row 11, so the colour changed instead: the same
+> hue at 85%, 4.00:1 on the light tone and 3.32:1 on the dark.
+>
+> **The halo is held as the cross's is** (`tests/contrast.test.ts`): on each checker tone, the
+> tile's face and all four rock tones, the halo or the colour clears 3:1, and the brackets
+> clear 3:1 on their halo. Without that pair, a halo in the brackets' own colour passed every
+> other bar (mutation-tested): the brackets sit in the corners, clear of what a square holds.
+>
+> **Measured on the greyscale bars, unchanged:**
+>
+> | | 38px | 53px | bar |
+> | --- | --- | --- | --- |
+> | focus footprint | 21.8% | 16.5% | 5% |
+> | closest pair: focus and hint | 31.8% | 25.9% | 15% |
+> | focus and anchor | 41.6% | 35.5% | 15% |
+> | focus over a rock | 21.8% | 20.0% | 5% |
+> | focus over a flat domino | 16.7% | 16.2% | 5% |
+> | focus over an upright domino | 15.9% | 14.9% | 5% |
+>
+> Over every occupant the soft corners read better than the brackets did (10.1–14.6%), since
+> the halo edges them against the rock and the domino. The halo's outer edge still clears the
+> anchor's ring (12.5 against 13), and the cross's round ends still stop short of it (15.5).
+>
+> **Prediction:** the sheets change in the focus specimen's square and nowhere else. The
+> phone and desktop baselines don't change: since row 12 their set-up's drag hides the focus.
+>
+> **Mutations, 8 of 8 caught:** the accent's edge itself; no halo; the halo over the
+> brackets; square corners; the old stroke; a halo wide enough to touch the ring; the halo in
+> the brackets' colour; a hairline too faint to read.
 
 ### P1-6 · Motion, and the states a control owes
 

@@ -129,8 +129,20 @@ export const PALETTE = {
      */
     candidateEdge: '#16295e',
     candidateWash: 'oklch(88.2% 0.059 254.128)',
-    /** The keyboard's square: its corner brackets, opaque since P1-5 (they were 70%). */
-    cellFocus: '#000000',
+    /**
+     * The keyboard's square: its corner brackets, opaque since P1-5 (they were 70%). The
+     * accent's edge's hue since the keyboard polish, as the board's own focus ring is, where
+     * they were black: the same "the keyboard is here", at two scales. Darkened to 85%: the
+     * accent's edge itself, `#0b3c52`, is 2.93:1 on the dark checker tone, under the 3:1
+     * these have held since P1-5. This is 3.32:1 there and 4.00:1 on the light tone.
+     */
+    cellFocus: '#093346',
+    /**
+     * The halo round the focus brackets (keyboard polish). As with the refused cross's, it
+     * keeps a thin stroke in sight on the dark rock and on a domino's edge, where the colour
+     * alone is too close.
+     */
+    cellFocusHalo: '#ffffff',
     /**
      * The halo round a refused move's cross (P1-6), whose own colour is `problem`. The halo
      * is what clears 3:1 on both checker tones and every rock tone; the red, on the tile's

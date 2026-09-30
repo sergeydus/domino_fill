@@ -353,6 +353,11 @@ this feature's acceptance (see "Acceptance").
 - The colours become tokens: `cellFocus` changes value, and a halo token is added. They aren't
   literals.
 
+**As built, section 1:** as prototyped, with one change the bars forced. The accent's edge
+itself is 2.93:1 on the dark checker tone, so `cellFocus` is that hue at 85%, `#093346`,
+which holds 3:1 on both tones alone rather than leaning on the halo. The halo is held as the
+cross's is. Measurements and mutations: GRAPHICS-SPEC, the amendment after row 11.
+
 **2. The key guide** *(corrected at codex's review: the wording, and what the description promises)*
 - **Visible:** one line, in the row under the picker that the Check and Hint messages use.
   It's accurate even when short:

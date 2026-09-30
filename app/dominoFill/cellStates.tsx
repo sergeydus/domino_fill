@@ -13,9 +13,11 @@ import { PALETTE } from "../palette"
  * **Four shapes, not four colours:**
  *   - **anchor**, the square a half-made move starts from: a solid ring;
  *   - **candidate**, a square it could pair with: the same ring, dashed, over a wash;
- *   - **focus**, where the keyboard is: four corner brackets near the square's edge, rounded
- *     so they follow the board's own rounded corners, and outside the ring, so a focused
- *     anchor shows both;
+ *   - **focus**, where the keyboard is: four corner brackets near the square's edge, bent
+ *     round so they follow the board's own rounded corners, and outside the ring, so a
+ *     focused anchor shows both. Thin, in the accent's edge on a white halo, since the
+ *     keyboard polish ("soft corners"): they were twice as heavy, in black, and the user
+ *     found them the least finished part of playing by keyboard;
  *   - **hint**, where the next piece goes: a diamond at the centre.
  *
  * Each is drawn in a `viewBox` of one cell, 100 units across, and scaled to the cell, so
@@ -28,8 +30,12 @@ export const STATE = {
     ring: { inset: 17, stroke: 8, radius: 12 },
     /** The candidates' dashes along that ring: drawn, then skipped. */
     dash: { on: 14, off: 10 },
-    /** The focus brackets: at the edge, each arm this long. */
-    focus: { inset: 7, stroke: 8, arm: 28 },
+    /**
+     * The focus brackets: in from the edge, each arm this long, bent round a corner of this
+     * radius, and the halo either side of the stroke. The soft corners (keyboard polish),
+     * where they were 7 in, 8 wide and 28 long, square-cornered and haloless.
+     */
+    focus: { inset: 8, stroke: 5, arm: 24, bend: 6, halo: 2 },
     /** The hint's diamond: centre to each point. */
     hint: { reach: 22 },
     /**
@@ -75,18 +81,23 @@ export const CandidateMark: React.FC = () => {
 }
 
 export const FocusMark: React.FC = () => {
-    const { inset: a, stroke, arm } = STATE.focus
+    const { inset: a, stroke, arm, bend: r, halo } = STATE.focus
     const b = U - a
-    // Each corner an L: along the top or bottom edge, then down or up the side.
+    // Each corner an L turning right, clockwise round the square, bent round a quarter
+    // circle: along one side, round the corner, along the next.
+    const turn = (x: number, y: number) => `A ${r} ${r} 0 0 1 ${x} ${y}`
     const corners = [
-        `M ${a} ${a + arm} V ${a} H ${a + arm}`,
-        `M ${b - arm} ${a} H ${b} V ${a + arm}`,
-        `M ${b} ${b - arm} V ${b} H ${b - arm}`,
-        `M ${a + arm} ${b} H ${a} V ${b - arm}`,
+        `M ${a} ${a + arm} V ${a + r} ${turn(a + r, a)} H ${a + arm}`,
+        `M ${b - arm} ${a} H ${b - r} ${turn(b, a + r)} V ${a + arm}`,
+        `M ${b} ${b - arm} V ${b - r} ${turn(b - r, b)} H ${b - arm}`,
+        `M ${a + arm} ${b} H ${a + r} ${turn(a, b - r)} V ${b - arm}`,
     ]
+    const d = corners.join(' ')
     return (
         <svg {...box} aria-hidden="true" data-mark="focus">
-            <path data-brackets d={corners.join(' ')} fill="none" stroke={PALETTE.cellFocus}
+            <path data-halo d={d} fill="none" stroke={PALETTE.cellFocusHalo}
+                strokeWidth={stroke + 2 * halo} strokeLinecap="round" strokeLinejoin="round" />
+            <path data-brackets d={d} fill="none" stroke={PALETTE.cellFocus}
                 strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     )
