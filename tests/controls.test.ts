@@ -5,6 +5,9 @@ import ts from 'typescript'
 import { CONTROL, type VariantName } from '@/app/controls'
 import { CONTROLS_CSS_PATH, renderControlsCss } from '@/scripts/controls-css'
 import { PRESSED } from '@/app/dominoFill/controlStates'
+import { CHIP_CELL_PX } from '@/app/dominoFill/Pieces/DominoPieces'
+import { WIDE_LAYOUT_QUERY } from '@/app/dominoFill/composition'
+import { pieceBox } from '@/app/dominoFill/Pieces/geometry'
 
 /**
  * One control vocabulary (graphics spec P2-2, row 14).
@@ -23,8 +26,18 @@ describe('the table is the spec\'s', () => {
         expect(CONTROL.choice).toMatchObject({ surface: null, edge: { width: 1, colour: 'ink' }, checked: { ring: 'accentEdge' } })
         // Chosen is not pressed: nothing about a choice is the accent's surface.
         expect(Object.values(CONTROL.choice.press)).not.toContain('accent')
-        // A domino two 18px cells long, with room above and below it, in a 48px row.
-        expect(2 * 18 + 2 * CONTROL.choice.padding.y).toBeLessThanOrEqual(48)
+        // A chip is the upright piece's box, extruded side included, plus the padding, which
+        // includes the edge: 66px on a phone and 78px on the desktop composition. The first
+        // chips were 46px, and "tiny".
+        const chip = (cell: number) => Math.round(pieceBox(1, 2, cell).height + 2 * CONTROL.choice.padding.y)
+        expect([chip(CHIP_CELL_PX.narrow), chip(CHIP_CELL_PX.wide)]).toEqual([66, 78])
+    })
+
+    it('the `wide:` variant is the desktop composition\'s query, exactly', () => {
+        // A size that follows the layout must switch where the layout does (globals.css).
+        const css = readFileSync('app/globals.css', 'utf8')
+        const variant = css.match(/@custom-variant wide \(@media (.+)\);/)
+        expect(variant?.[1]).toBe(WIDE_LAYOUT_QUERY)
     })
 
     it('primary: the accent\'s surface, the strongest weight', () => {

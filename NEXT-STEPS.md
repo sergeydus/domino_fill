@@ -294,7 +294,7 @@ merged.
 - **The picker is two chips, in the legend's place** (redesigned 2026-09-29). First built as the
   scoring legend's two pieces turned into toggle buttons, in the legend's capsule: boxes of two
   sizes, the held one filled solid blue, and no names. The user called it "horrendous". Now
-  it's one row of two equal 48px chips, each the piece drawn small beside its name, "Upright"
+  it's one row of two equal chips, each the piece drawn beside its name, "Upright"
   or "Flat". They sit centred under the board's frame, with no capsule, and nothing touches a
   border. It's a radio group, since exactly one piece is always held: one tab stop, on the piece
   held, and arrow keys choose the other. Chosen is a ring and a check mark inside the chip (the
@@ -468,6 +468,7 @@ Two limits:
 | U3 | A short design note | `GRAPHICS-SPEC.md` and `SPEC.md` total about 4,300 lines (measured), much of it correction records. A short note becomes the entry point; the specs stay as history. | Medium | |
 | U4 | Gate by risk | The full gate and review round suited a careful rebuild. A text change needs less than a change to timing, storage, input or content. Never drop the tests that protect a rule (codex). Tests run to about 22,700 lines (measured). | A decision | |
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
+| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Later (user, 2026-09-30) |
 
 ## Open questions
 

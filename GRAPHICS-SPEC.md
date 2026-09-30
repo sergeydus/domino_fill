@@ -2216,25 +2216,38 @@ contrast is unchanged from today's measurement.
 > with the radio group's keyboard: one tab stop, on the piece held, and an arrow key choosing
 > the other. They are the new **`choice`** variant, in `app/controls.ts` like the others:
 > - Bordered like `quiet`, 1px of ink, no surface until hovered, but flatter (5px vertical
->   padding), so a piece two 18px cells long and its name fit a 48px chip.
+>   padding), so the chip is barely taller than its piece.
+> - *Corrected at the user's review: "the chips are tiny".* The pieces were drawn on 18px
+>   cells, in 46px chips (this amendment first said 48px; the variant's padding includes its
+>   edge). Now 26px cells on a phone, in 144x66px chips, and 32px in the desktop composition,
+>   in 192x78px chips, chosen by `WIDE_LAYOUT_QUERY` in script and by a `wide:` CSS variant
+>   that `tests/controls.test.ts` holds to the same query. On a phone the chips' width is the
+>   limit: 26px is the most the upright chip's piece, name and check mark fit in 144px. Each
+>   piece is centred in its chip; the drawing is lifted by its extruded side (`pieceBox`), so
+>   its slot is lowered by the same, and the layout test measures the drawing, not the slot.
+>   Mutations, each caught, 6 of 6: 18px cells again (unit); desktop drawn at the phone's
+>   cell, and at the phone's width; the piece left lifted; a two-cell slot shorter than the
+>   drawing (the first build's own mistake, measured); the `wide:` variant on width alone.
 > - **Checked** is a 2px ring in the accent's edge (`Variant.checked`, generated into
 >   `controls.css` as `[aria-checked="true"]`, as the day's `aria-current` ring is), and a check
 >   mark the chip draws inside itself, on the chosen chip only. The ring and the mark are a
 >   shape as well as a colour (P1-8). Chosen is never the accent's fill; that stays the
 >   toggle's.
 > - Each chip centres what it shows: the piece, its name, and the mark when chosen. Both chips
->   are 144px wide, 12px apart, and the pair is centred under the board's frame, not the page.
+>   are one width (144px on a phone, 192px on desktop), 12px apart, and the pair is centred under the board's frame, not the page.
 >   The row labels stand to the frame's left, and a picker centred on the page looked pushed
 >   left of the board.
 >
-> The row is 62px where the legend is 134px, so the board is larger in Pick a piece mode:
-> measured on 2026-09-29's 6x6, 296px against 236px at 360x700, and 596px against 530px at
-> 1280x800. The default mode's legend is unchanged.
+> The row is 82px on a phone and 94px on desktop, where the legend is 134px, so the board is
+> larger in Pick a piece mode: measured on 2026-09-29's 6x6, 278px against 236px at 360x700,
+> and 566px against 530px at 1280x800. (With the first, 46px chips it was 296px and 596px.)
+> The default mode's legend is unchanged.
 >
 > Held by:
 > - `tests/controls.test.ts`: the table has seven variants; `choice` has a checked ring and no
->   accent anywhere in its press; its padding fits the 48px chip. The source audit refuses
->   `aria-checked:` utilities as it does `aria-pressed:` ones.
+>   accent anywhere in its press; a chip is its piece's box plus the padding, 66px and 78px;
+>   the `wide:` variant is `WIDE_LAYOUT_QUERY`. The source audit refuses `aria-checked:`
+>   utilities as it does `aria-pressed:` ones.
 > - `e2e/controlVariants.spec.ts`: reads `aria-checked` and expects the checked ring at rest,
 >   and requires checked against unchecked to differ by that ring and nothing else. The sheet's
 >   `piece-picker` specimen is where it meets `choice`.

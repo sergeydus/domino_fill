@@ -129,8 +129,8 @@ export const CONTROL = {
     /**
      * One of a set in which exactly one is always chosen: Pick a piece's two pieces, which are
      * `role="radio"`. Not a toggle -- neither can be switched off, only the other chosen -- so
-     * not `aria-pressed` and not its accent fill. Bordered like `quiet`, flatter, so a domino
-     * and its name fit a 48px row. Chosen is a ring in the accent's edge, with a check mark the
+     * not `aria-pressed` and not its accent fill. Bordered like `quiet`, flatter, so a chip is
+     * barely taller than its piece. Chosen is a ring in the accent's edge, with a check mark the
      * control draws inside itself: a shape as well as a colour (P1-8), and never a fill, so the
      * piece's picture stays what is read. The picker's first version filled the held piece's
      * whole button blue; the user's word for it was "horrendous".

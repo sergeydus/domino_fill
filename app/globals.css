@@ -93,6 +93,13 @@
 }
 
 /*
+ * The desktop composition's own width and height (`WIDE_LAYOUT_QUERY`, `composition.ts`),
+ * for sizes that follow it in CSS: `wide:w-48`. The same query, not a nearby breakpoint, so a
+ * size cannot switch where the layout does not; `tests/controls.test.ts` holds them equal.
+ */
+@custom-variant wide (@media (min-width: 1024px) and (min-height: 640px));
+
+/*
  * The states every control owes (graphics spec P1-6, row 12). Every control in the game is a
  * `<button>`, so this is every control. In the base layer, beneath the variants
  * (`app/controls.css`, P2-2), which add their colours and override none of this.

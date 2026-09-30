@@ -2,6 +2,10 @@ import { test, expect, type Page } from '@playwright/test'
 import { openBoard, waitForBoard } from './openBoard'
 import { readBoard, drag } from './play'
 import { onDate } from './calendar'
+import { CHIP_CELL_PX } from '../app/dominoFill/Pieces/DominoPieces'
+import { WIDE_LAYOUT_QUERY } from '../app/dominoFill/composition'
+import { CONTROL } from '../app/controls'
+import { pieceBox } from '../app/dominoFill/Pieces/geometry'
 
 /**
  * Pick a piece mode, in a browser (NEXT-STEPS.md, PL1/PL2 and its implementation contract).
@@ -153,14 +157,32 @@ test('the picker: two equal chips, centred under the board, their contents centr
         const chip = held(page, piece)
         const box = (await chip.boundingBox())!
         // What the chip shows, drawing, name and (chosen) check mark, as one run.
-        // Visible parts only: a slot kept for a hidden mark is empty space to the eye.
+        // Visible parts only: a slot kept for a hidden mark is empty space to the eye. And
+        // what is drawn, not the box around it: the piece's slot is moved to cancel the
+        // drawing's lift, so its box and the piece do not coincide.
         const parts = await chip.evaluate(el => Array.from(el.children).filter(c => getComputedStyle(c).visibility !== 'hidden').map(c => {
-            const r = c.getBoundingClientRect()
+            const r = (c.tagName.toLowerCase() === 'svg' ? c : c.querySelector('svg') ?? c).getBoundingClientRect()
             return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }
         }))
         return { box, parts }
     }))
     const [a, b] = chips.map(c => c.box)
+
+    /*
+     * Not tiny: the pieces drawn at the chip cell for this composition, two cells long, and
+     * each chip that plus its padding. The first chips drew 18px cells in a 46px chip.
+     */
+    const wide = await page.evaluate(q => matchMedia(q).matches, WIDE_LAYOUT_QUERY)
+    const cellPx = wide ? CHIP_CELL_PX.wide : CHIP_CELL_PX.narrow
+    const slot = pieceBox(1, 2, cellPx).height
+    const drawing = (await held(page, 'upright').locator('svg').first().boundingBox())!
+    expect(Math.abs(drawing.height - slot)).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(a.height - (slot + 2 * CONTROL.choice.padding.y))).toBeLessThanOrEqual(0.5)
+    // 144px wide on a phone, where the width is the limit, and 192px on desktop.
+    expect(a.width).toBe(wide ? 192 : 144)
+    // And the drawing is inside its chip, however it is lifted: at least 4px clear.
+    expect(drawing.y - a.y).toBeGreaterThanOrEqual(4)
+    expect(a.y + a.height - (drawing.y + drawing.height)).toBeGreaterThanOrEqual(4)
 
     // Equal, and level with each other.
     expect(Math.abs(a.width - b.width)).toBeLessThanOrEqual(0.5)

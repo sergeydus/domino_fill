@@ -6,6 +6,9 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession';
 import { control } from '@/app/controls';
 import { PALETTE } from '@/app/palette';
 import type { Piece } from '@/app/stores/placement';
+import { useMediaQuery } from '@/app/hooks/useMediaQuery';
+import { WIDE_LAYOUT_QUERY } from '../composition';
+import { pieceBox } from './geometry';
 
 /**
  * Cell size for the pieces in the tray, in CSS px.
@@ -19,8 +22,15 @@ const TRAY_CELL_PX = 44;
 const UPRIGHT = 'An upright domino scores 1 in its top square and 0 below'
 const FLAT = 'A flat domino scores 0 in its left square and 2 on the right'
 
-/** Cell size for the pieces drawn in the picker's chips: a piece two cells long fits a 48px row. */
-const CHIP_CELL_PX = 18
+/**
+ * Cell size for the pieces drawn in the picker's chips, by composition.
+ *
+ * First 18px, which the user found "tiny". On a phone the chips' width is the limit -- two
+ * chips, 12px apart, beside the row labels' gutter, inside 360px -- and 26px is the most the
+ * upright chip's piece, name and check mark fit in 144px. The desktop composition has room
+ * for more, so 32px there, in 192px chips.
+ */
+export const CHIP_CELL_PX = { narrow: 26, wide: 32 } as const
 
 const PIECES = {
     upright: { name: 'Upright', explanation: UPRIGHT, Drawing: DominoPieceOne },
@@ -55,6 +65,8 @@ const HeldPieceChoice: React.FC<{ session: PuzzleSession, piece: Piece }> = obse
     const { name, explanation, Drawing } = PIECES[piece]
     const held = session.heldPiece === piece
     const other: Piece = piece === 'upright' ? 'flat' : 'upright'
+    const cell = useMediaQuery(WIDE_LAYOUT_QUERY) ? CHIP_CELL_PX.wide : CHIP_CELL_PX.narrow
+    const slot = pieceBox(1, 2, cell)
 
     const onKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
         const arrow = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)
@@ -72,12 +84,23 @@ const HeldPieceChoice: React.FC<{ session: PuzzleSession, piece: Piece }> = obse
             tabIndex={held ? 0 : -1}
             data-held-piece={piece}
             aria-label={`${name}. ${explanation}`}
-            className={`${control('choice')} flex items-center justify-center gap-2 w-36`}
+            className={`${control('choice')} flex items-center justify-center gap-2 w-36 wide:w-48`}
             onClick={() => controls.setHeld(piece)}
             onKeyDown={onKeyDown}
         >
-            <span className="flex items-center justify-center size-9">
-                <Drawing boardsStore={session} cellSize={CHIP_CELL_PX} />
+            {/*
+              * The upright piece's box for both pieces, so both chips are one height; only as
+              * wide as the piece, or the upright chip's contents would not fit a phone's 144px.
+              * A piece's box includes its extruded side, and the drawing is lifted by that much
+              * (`pieceBox`); the slot is lowered by the same, so the piece is centred in the
+              * chip rather than 4px high -- measured, a first version's fixed two-cell slot
+              * was that much shorter than the drawing, which overflowed it.
+              */}
+            <span
+                className="flex items-center justify-center"
+                style={{ height: slot.height, translate: `0 ${slot.height - 2 * cell}px` }}
+            >
+                <Drawing boardsStore={session} cellSize={cell} />
             </span>
             <span>{name}</span>
             {held && <CheckMark />}
@@ -103,8 +126,9 @@ const HeldPieceChoice: React.FC<{ session: PuzzleSession, piece: Piece }> = obse
  * name, centred under the board, with no surface of its own around them. The first picker
  * was this legend's two pieces made into toggle buttons, in the legend's capsule; boxes of two
  * sizes, the held one filled solid blue, and no names -- the user called it "horrendous". The
- * chips' row is 62px where the legend is 134px, so the board is larger in this mode: measured
- * on today's 6x6, 296px against 236px at 360x700, and 596px against 530px at 1280x800.
+ * chips' row is 82px on a phone and 94px in the desktop composition, where the legend is
+ * 134px, so the board is larger in this mode: measured on 2026-09-29's 6x6, 278px against
+ * 236px at 360x700, and 566px against 530px at 1280x800.
  */
 const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: currentBoard }) => {
     if (currentBoard.pickMode) {
