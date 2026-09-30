@@ -242,9 +242,13 @@ export class PuzzleSession {
     /**
      * Record what just happened, so the view can respond to it once.
      *
-     * It leaves `refusal` alone: every move that gets here began with a press or a handled
-     * key, and those have already cleared it. Clearing it here too was mutation-tested as
-     * making no difference on any path.
+     * It leaves `refusal` alone. On the ordinary paths a press or a handled key has already
+     * cleared it, and clearing it here too was mutation-tested as making no difference there.
+     * Not on every path (codex): with an anchor pending and an arrow refused, a release that
+     * arrives with no press on the board, over no square, signals `cleared` and dismisses the
+     * anchor with nothing having cleared the cross. Before the keyboard polish this cleared
+     * it; now the cross stays, since nothing was pressed on the board, and
+     * tests/refusalReasons.test.ts holds that.
      */
     private signal(outcome: Exclude<PlacementOutcome, 'none'>): PlacementOutcome {
         this.lastOutcome = outcome

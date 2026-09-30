@@ -453,6 +453,12 @@ paths, and the reason is stored with the refusal)*
   view after a refusal is the row's alone, and readable there.
 - **The announcer has the body type role**, like the row, since the typography audit holds all
   text, hidden or not, to a role.
+- *Correction at codex's implementation review:* `7dcc1aa` said every path to `signal` had
+  already cleared the refusal, so clearing it there again was an equivalent mutation. That
+  holds on the ordinary paths only. With an anchor pending and an arrow refused, a release
+  that arrives with no press on the board dismisses the anchor, and nothing clears the cross.
+  It used to clear there, and now it stays. Codex judged that right, since nothing was pressed
+  on the board, and a test now holds it: clearing it in `signal` again fails.
 
 **Tests (sections 2 and 3)**
 - The guide:
@@ -482,7 +488,11 @@ paths, and the reason is stored with the refusal)*
 - Mutations for each rule, in every section.
 
 **Acceptance: a real screen reader** (codex, second review). The tests prove markup and the
-announcer's content, not speech, so the feature isn't accepted until someone has listened. Only
+announcer's content, not speech, so the feature isn't accepted until someone has listened.
+This is a real gate: focus lands on a cell while the full instructions are the description of
+its parent grid, and whether a reader reads a parent's description is exactly what varies.
+Codex reviewed the implementation at `38512ed` (2026-10-01) and found no code blocker, and
+holds final acceptance on these four checks. Only
 Narrator is installed on the development PC, and Claude can't hear it, so this is a person's
 check, recorded here with the reader and browser used:
 1. With Narrator (Win+Ctrl+Enter) or NVDA, Tab onto the board in each mode. Is the full

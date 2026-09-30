@@ -226,6 +226,15 @@ describe('the reason lives exactly as long as the cross', () => {
         expect(s.refusal).toEqual({ at: [2, 2], reason: { kind: 'rock' } })
     })
 
+    it('kept by a release that arrives with no press on the board, which only dismisses the anchor (codex)', () => {
+        const s = session()
+        expect(attempt(s, keys(s, [0, 0], ' ', 'ArrowUp'))).toEqual({ at: [0, 0], kind: 'edge' })
+        expect(s.pendingAnchor).toEqual([0, 0])
+        act(() => { expect(s.pointerUp(null)).toBe('cleared') })
+        expect(s.pendingAnchor).toBeNull()
+        expect(s.refusal).toEqual({ at: [0, 0], reason: { kind: 'edge' } })
+    })
+
     it('the next refusal replaces both', () => {
         const s = refusedOnRock()
         act(() => { s.placeToward([4, 4], 'down') })
