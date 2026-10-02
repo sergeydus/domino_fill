@@ -11,7 +11,7 @@ import { placementForHeld, type Cell, type Direction } from '@/app/stores/placem
  * Pick a piece mode (NEXT-STEPS.md, PL1/PL2 and its implementation contract).
  *
  * The player holds one of the two pieces, and a tap, a click, Space or Enter places it
- * wherever it can cover the cell: as the top or left half when both positions fit, the
+ * wherever it can cover the cell: with its numbered half there when both positions fit, the
  * other way when only that one does, and nowhere when neither does. Drags keep the
  * default's directional placement. Browser-only questions -- right-click, a touch
  * long-press, the compatibility click, focus when the picker goes -- are in
@@ -61,12 +61,14 @@ describe('the rule: where a held piece covers a clicked cell', () => {
             i < 0 || j < 0 || i >= N || j >= N || blocked.some(([a, b]) => a === i && b === j))
     }
 
-    it('both positions fitting: the cell is the top half, or the left half', () => {
+    it("both positions fitting: the cell takes the numbered half, an upright's 1 or a flat's 2", () => {
+        // Upright, the top half; flat, the right half (the user, 2026-10-02: it was the left,
+        // which put the blank half under the cursor).
         expect(placementForHeld('upright', [2, 2], free())).toEqual({
             anchor: [2, 2], direction: 'down', cells: [[2, 2], [3, 2]], values: [1, 0],
         })
         expect(placementForHeld('flat', [2, 2], free())).toEqual({
-            anchor: [2, 2], direction: 'right', cells: [[2, 2], [2, 3]], values: [0, 2],
+            anchor: [2, 2], direction: 'left', cells: [[2, 2], [2, 1]], values: [2, 0],
         })
     })
 
@@ -75,9 +77,9 @@ describe('the rule: where a held piece covers a clicked cell', () => {
         expect(placementForHeld('upright', [2, 2], free([[3, 2]]))).toEqual({
             anchor: [2, 2], direction: 'up', cells: [[2, 2], [1, 2]], values: [0, 1],
         })
-        // Flat, the cell to the right taken: the clicked cell is the right half, worth 2.
-        expect(placementForHeld('flat', [2, 2], free([[2, 3]]))).toEqual({
-            anchor: [2, 2], direction: 'left', cells: [[2, 2], [2, 1]], values: [2, 0],
+        // Flat, the cell to the left taken: the clicked cell is the left half, worth 0.
+        expect(placementForHeld('flat', [2, 2], free([[2, 1]]))).toEqual({
+            anchor: [2, 2], direction: 'right', cells: [[2, 2], [2, 3]], values: [0, 2],
         })
     })
 
@@ -138,7 +140,7 @@ describe('a tap in Pick a piece mode', () => {
 
         hold('flat')
         expect(tap(s, [4, 1])).toBe('placed')
-        expect([at(s, [4, 1]), at(s, [4, 2])]).toEqual([0, 2])
+        expect([at(s, [4, 0]), at(s, [4, 1])]).toEqual([0, 2])
     })
 
     it('never leaves a pending anchor', () => {
@@ -160,12 +162,12 @@ describe('a tap in Pick a piece mode', () => {
         expect([at(s, [0, 5]), at(s, [1, 5])]).toEqual([1, 0])
 
         hold('flat')
-        // Right edge, flat: no cell to the right, so the clicked cell is the right half.
-        tap(s, [3, 5])
-        expect([at(s, [3, 4]), at(s, [3, 5])]).toEqual([0, 2])
-        // Left edge, flat: the cell is the left half.
+        // Left edge, flat: no cell to the left, so the clicked cell is the left half.
         tap(s, [2, 0])
         expect([at(s, [2, 0]), at(s, [2, 1])]).toEqual([0, 2])
+        // Right edge, flat: the cell is the right half.
+        tap(s, [3, 5])
+        expect([at(s, [3, 4]), at(s, [3, 5])]).toEqual([0, 2])
     })
 
     it('with a rock where the tie-break would go, uses the opposite position', () => {
@@ -179,9 +181,9 @@ describe('a tap in Pick a piece mode', () => {
         pick()
         hold('flat')
         const s = session()
-        runInAction(() => s.placeToward([2, 3], 'down')) // an upright domino at 2,3 and 3,3
+        runInAction(() => s.placeToward([2, 1], 'down')) // an upright domino at 2,1 and 3,1
         expect(tap(s, [2, 2])).toBe('placed')
-        expect([at(s, [2, 1]), at(s, [2, 2])]).toEqual([0, 2])
+        expect([at(s, [2, 2]), at(s, [2, 3])]).toEqual([0, 2])
     })
 
     it('where neither position fits, is refused and changes nothing', () => {
