@@ -124,15 +124,19 @@ test('the picker chooses the piece a click places', async ({ page }) => {
     await turnOn(page)
     await held(page, 'flat').click()
     await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
+    // A cell with room on both sides, so the tie-break decides, not an edge or a neighbour.
     const { size, free } = await freeCells(page)
     let target: [number, number] | null = null
     for (let i = 0; i < size && !target; i++) {
-        for (let j = 0; j + 1 < size && !target; j++) if (free(i, j) && free(i, j + 1)) target = [i, j]
+        for (let j = 1; j + 1 < size && !target; j++) if (free(i, j - 1) && free(i, j) && free(i, j + 1)) target = [i, j]
     }
-    if (!target) throw new Error('today\'s board has no free flat run')
+    if (!target) throw new Error('today\'s board has no three free squares in a row')
     await cell(page, ...target).click()
-    // Flat, with the clicked cell its left half when the cell to its right is free.
-    await expect(flat(page, target[0], target[1] + 1)).toBeVisible()
+    // The numbered half where the click was (the user, 2026-10-02): the 2 on the clicked
+    // cell, so the piece reaches left. `data-at` is the square holding a flat piece's 2,
+    // and its 0 is always the square to the left.
+    await expect(flat(page, target[0], target[1])).toBeVisible()
+    await expect(placed(page)).toHaveCount(1)
 })
 
 test('the picker: two equal chips, centred under the board, their contents centred, nothing on an edge', async ({ page }) => {

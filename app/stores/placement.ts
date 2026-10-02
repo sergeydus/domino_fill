@@ -83,21 +83,26 @@ export const placementFrom = (anchor: Cell, direction: Direction): Placement =>
 /**
  * The two ways a held piece can cover a cell, tie-break first (Pick a piece, PL1/PL2).
  *
- * Upright: the cell as the top half (`down`), else as the bottom half (`up`). Flat: the
- * cell as the left half (`right`), else as the right half (`left`). `VALUES` already
- * gives each direction the right pips, so the clicked cell is worth 1 or 0 upright, and 0
- * or 2 flat, exactly as a drag in that direction would make it.
+ * **The numbered half goes where you click**: upright, the cell as the top half, worth 1
+ * (`down`), else the bottom half (`up`); flat, the cell as the right half, worth 2 (`left`),
+ * else the left half (`right`). `VALUES` already gives each direction the right pips, so the
+ * clicked cell is worth what a drag in that direction would make it.
+ *
+ * It was "the top or left half", a rule about position: the 1 under the cursor upright and
+ * the blank under it flat. The user asked why the two differed and chose the number
+ * (2026-10-02), so flat's order is reversed and upright's is unchanged.
  */
 const HELD: Record<Piece, readonly [Direction, Direction]> = {
     upright: ['down', 'up'],
-    flat: ['right', 'left'],
+    flat: ['left', 'right'],
 }
 
 /**
  * Where a held piece goes when `cell` is clicked, or null if it cannot cover it.
  *
  * Only two positions of the piece cover the cell. When both fit, the tie-break decides
- * (the cell becomes the top or left half); when one fits, that one; when neither, null.
+ * (the cell takes the numbered half: an upright's 1, a flat's 2); when one fits, that one;
+ * when neither, null.
  * This is not the half-cell rule P1-1 removed: that one overrode a direction the player
  * had chosen, and here no direction is chosen at all.
  *
