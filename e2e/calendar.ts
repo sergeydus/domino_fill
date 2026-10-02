@@ -34,7 +34,8 @@ export const onDate = (target: number) => {
  *
  * On the first of a month the archive offers only today, so a test that took "an earlier day
  * this month" from the real calendar failed or skipped every 1st: measured on 2026-10-01,
- * four failures and four skips. Pinned instead, as the tests needing particular cells are.
+ * four failures (two tests, in both projects) and eight skips (four tests, in both).
+ * Pinned instead, as the tests needing particular cells are.
  */
 export const LATE_IN_A_MONTH = '2026-09-29'
 
