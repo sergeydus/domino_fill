@@ -279,7 +279,7 @@ merged.
 - All four board edges and rocks.
 - Both positions fitting: the numbered-half tie-break (the top of an upright, the right of a flat; it
   was the top or left until 2026-10-02).
-- Only the opposite (bottom or right) position fitting.
+- Only the opposite (bottom or left) position fitting.
 - A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
 - Space and Enter on either half of a placed piece, the half worth 0 included, remove it, and
