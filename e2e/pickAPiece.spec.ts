@@ -2,6 +2,10 @@ import { test, expect, type Page } from '@playwright/test'
 import { openBoard, waitForBoard } from './openBoard'
 import { readBoard, drag } from './play'
 import { onDate } from './calendar'
+import { CHIP_CELL_PX } from '../app/dominoFill/Pieces/DominoPieces'
+import { WIDE_LAYOUT_QUERY } from '../app/dominoFill/composition'
+import { CONTROL } from '../app/controls'
+import { pieceBox } from '../app/dominoFill/Pieces/geometry'
 
 /**
  * Pick a piece mode, in a browser (NEXT-STEPS.md, PL1/PL2 and its implementation contract).
@@ -92,14 +96,14 @@ test('the switch sits beside Sound, starts off, and is remembered', async ({ pag
     await expect(page.locator('[data-legend] button')).toHaveCount(0)
 
     await turnOn(page)
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
-    await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'false')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'false')
 
     await page.reload()
     await expect(mode(page)).toHaveAttribute('aria-pressed', 'true')
     await expect(picker(page)).toBeVisible()
     // The held piece is not remembered: a new visit holds upright again.
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
 })
 
 test('a click places the held piece: the tie-break, and the opposite at the bottom edge', async ({ page }) => {
@@ -119,7 +123,7 @@ test('a click places the held piece: the tie-break, and the opposite at the bott
 test('the picker chooses the piece a click places', async ({ page }) => {
     await turnOn(page)
     await held(page, 'flat').click()
-    await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
     const { size, free } = await freeCells(page)
     let target: [number, number] | null = null
     for (let i = 0; i < size && !target; i++) {
@@ -131,12 +135,106 @@ test('the picker chooses the piece a click places', async ({ page }) => {
     await expect(flat(page, target[0], target[1] + 1)).toBeVisible()
 })
 
+test('the picker: two equal chips, centred under the board, their contents centred, nothing on an edge', async ({ page }) => {
+    // The user, on the first chips: "make sure ui is centralized and not touching any border".
+    await turnOn(page)
+    await page.mouse.move(0, 0)
+
+    /*
+     * The pair centred under the board's frame. Not under the page's centre line: the row
+     * labels stand to the frame's left, so the frame is right of it, and a picker centred on
+     * the page looked pushed to the left of the board it belongs to. Polled, so it is read
+     * once the board has taken the height the smaller tray gave back; everything after is
+     * measured from there.
+     */
+    await expect.poll(async () => {
+        const [u, f] = [(await held(page, 'upright').boundingBox())!, (await held(page, 'flat').boundingBox())!]
+        const frame = (await page.locator('[data-board-frame]').boundingBox())!
+        return Math.abs((u.x + f.x + f.width) / 2 - (frame.x + frame.width / 2))
+    }).toBeLessThanOrEqual(1)
+
+    const chips = await Promise.all((['upright', 'flat'] as const).map(async piece => {
+        const chip = held(page, piece)
+        const box = (await chip.boundingBox())!
+        // What the chip shows, drawing, name and (chosen) check mark, as one run.
+        // Visible parts only: a slot kept for a hidden mark is empty space to the eye. And
+        // what is drawn, not the box around it: the piece's slot is moved to cancel the
+        // drawing's lift, so its box and the piece do not coincide.
+        const parts = await chip.evaluate(el => Array.from(el.children).filter(c => getComputedStyle(c).visibility !== 'hidden').map(c => {
+            const r = (c.tagName.toLowerCase() === 'svg' ? c : c.querySelector('svg') ?? c).getBoundingClientRect()
+            return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }
+        }))
+        return { box, parts }
+    }))
+    const [a, b] = chips.map(c => c.box)
+
+    /*
+     * Not tiny: the pieces drawn at the chip cell for this composition, two cells long, and
+     * each chip that plus its padding. The first chips drew 18px cells in a 46px chip.
+     */
+    const wide = await page.evaluate(q => matchMedia(q).matches, WIDE_LAYOUT_QUERY)
+    const cellPx = wide ? CHIP_CELL_PX.wide : CHIP_CELL_PX.narrow
+    const slot = pieceBox(1, 2, cellPx).height
+    const drawing = (await held(page, 'upright').locator('svg').first().boundingBox())!
+    expect(Math.abs(drawing.height - slot)).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(a.height - (slot + 2 * CONTROL.choice.padding.y))).toBeLessThanOrEqual(0.5)
+    // 144px wide on a phone, where the width is the limit, and 192px on desktop.
+    expect(a.width).toBe(wide ? 192 : 144)
+    // And the drawing is inside its chip, however it is lifted: at least 4px clear.
+    expect(drawing.y - a.y).toBeGreaterThanOrEqual(4)
+    expect(a.y + a.height - (drawing.y + drawing.height)).toBeGreaterThanOrEqual(4)
+
+    // Equal, and level with each other.
+    expect(Math.abs(a.width - b.width)).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(a.height - b.height)).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(a.y - b.y)).toBeLessThanOrEqual(0.5)
+    // Clear of the page's edges, with the 16px gutter.
+    const width = page.viewportSize()!.width
+    expect(a.x).toBeGreaterThanOrEqual(16)
+    expect(b.x + b.width).toBeLessThanOrEqual(width - 16)
+
+    for (const { box, parts } of chips) {
+        const left = Math.min(...parts.map(p => p.left)), right = Math.max(...parts.map(p => p.right))
+        const top = Math.min(...parts.map(p => p.top)), bottom = Math.max(...parts.map(p => p.bottom))
+        // Centred across the chip, within a pixel.
+        expect(Math.abs((left - box.x) - (box.x + box.width - right))).toBeLessThanOrEqual(1)
+        // And nothing touches the border: at least 4px clear on every side.
+        expect(left - box.x).toBeGreaterThanOrEqual(4)
+        expect(box.x + box.width - right).toBeGreaterThanOrEqual(4)
+        expect(top - box.y).toBeGreaterThanOrEqual(4)
+        expect(box.y + box.height - bottom).toBeGreaterThanOrEqual(4)
+    }
+})
+
+test('the picker is one radio group: one tab stop, on the piece held, and arrows choose', async ({ page }) => {
+    await turnOn(page)
+    await expect(picker(page)).toHaveAttribute('role', 'radiogroup')
+    await expect(held(page, 'upright')).toHaveAttribute('role', 'radio')
+    await expect(held(page, 'upright')).toHaveAttribute('tabindex', '0')
+    await expect(held(page, 'flat')).toHaveAttribute('tabindex', '-1')
+
+    await held(page, 'upright').focus()
+    await page.keyboard.press('ArrowRight')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
+    await expect(held(page, 'flat')).toBeFocused()
+    await expect(held(page, 'flat')).toHaveAttribute('tabindex', '0')
+    await expect(held(page, 'upright')).toHaveAttribute('tabindex', '-1')
+
+    await page.keyboard.press('ArrowLeft')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
+    await expect(held(page, 'upright')).toBeFocused()
+
+    // A chord is not the group's.
+    await page.keyboard.press('Shift+ArrowRight')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
+})
+
 test('right-click switches the piece and never places or removes', async ({ page }) => {
     await turnOn(page)
     const [i, j] = await bothFitUpright(page)
 
     await cell(page, i, j).click({ button: 'right' })
-    await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
     await expect(placed(page)).toHaveCount(0)
 
     // On a placed piece too: switches, and the piece stays.
@@ -144,7 +242,7 @@ test('right-click switches the piece and never places or removes', async ({ page
     await cell(page, i, j).click()
     await expect(upright(page, i, j)).toBeVisible()
     await cell(page, i, j).click({ button: 'right' })
-    await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
     await expect(upright(page, i, j)).toBeVisible()
     await expect(placed(page)).toHaveCount(1)
 })
@@ -173,7 +271,7 @@ test('a middle click neither places nor removes: only the primary button does', 
     // On an empty cell: nothing placed, and the held piece unchanged.
     await middle(i, j, 1)
     await expect(placed(page)).toHaveCount(0)
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
 
     // On an occupied cell, either half: the piece stays.
     await cell(page, i, j).click()
@@ -210,7 +308,7 @@ test('the board\'s context menu is suppressed in Pick a piece mode, and only the
 
 test('a drag still places what its direction makes, whatever is held', async ({ page }) => {
     await turnOn(page)
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
     const { size, free } = await freeCells(page)
     let run: [number, number] | null = null
     for (let i = 0; i < size && !run; i++) {
@@ -241,7 +339,7 @@ test.describe('the keyboard', () => {
         await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', `${i},${j}`)
     }
 
-    test('focus previews the held piece; Enter places it, and Space on it refuses', async ({ page }) => {
+    test('focus previews the held piece; Enter places it, and Space on it removes it', async ({ page }) => {
         await turnOn(page)
         const [i, j] = await bothFitUpright(page)
         await focusTo(page, i, j)
@@ -258,12 +356,14 @@ test.describe('the keyboard', () => {
         await page.keyboard.press('Enter')
         await expect(upright(page, i, j)).toBeVisible()
 
-        // Space on the piece just placed: refused, never removed.
+        // Space on the piece just placed removes it, as a click on it does: no refusal.
         await page.keyboard.press(' ')
-        await expect(upright(page, i, j)).toBeVisible()
-        await expect(page.locator('[data-refused]')).toHaveCount(1)
+        await expect(placed(page)).toHaveCount(0)
+        await expect(page.locator('[data-refused]')).toHaveCount(0)
 
-        // Delete still removes it.
+        // Placed again; Delete removes it too.
+        await page.keyboard.press('Enter')
+        await expect(upright(page, i, j)).toBeVisible()
         await page.keyboard.press('Delete')
         await expect(placed(page)).toHaveCount(0)
     })
@@ -353,10 +453,13 @@ test.describe('the keyboard', () => {
         // Short enough that the page overflows at either project's width.
         await page.setViewportSize({ width: page.viewportSize()!.width, height: 420 })
         await turnOn(page)
-        const [i, j] = await bothFitUpright(page)
-        await focusTo(page, i, j)
-        await page.keyboard.press('Enter') // a piece to refuse on
-        await expect(upright(page, i, j)).toBeVisible()
+        // A rock: in this mode Space refuses only there, or where the piece has no room.
+        const { board, size } = await readBoard(page)
+        let rock: [number, number] | null = null
+        for (let a = 0; a < size && !rock; a++) for (let b = 0; b < size && !rock; b++) if (board[a][b] === -1) rock = [a, b]
+        if (!rock) throw new Error('today\'s board has no rock') // every published easy-1 has at least 8
+        // Programmatic focus puts the keyboard on the square (BoardSquare's `onFocus`).
+        await cell(page, ...rock).focus()
 
         const scroll = () => page.evaluate(() => ({
             y: window.scrollY,
@@ -373,12 +476,12 @@ test.describe('the keyboard', () => {
             window.addEventListener('keydown', e => { if (e.key === ' ') w.spaces.push(e.defaultPrevented) })
         })
         await page.keyboard.press(' ')
-        await expect(page.locator('[data-refused]')).toHaveCount(1)
+        await expect(page.locator('[data-refused]')).toHaveAttribute('data-refused', `${rock[0]},${rock[1]}`)
         expect(await page.evaluate(() => (window as unknown as { spaces: boolean[] }).spaces)).toEqual([true])
         // Keyboard scrolling is animated, so a scroll would not show at once: give it time.
         await page.waitForTimeout(600)
         expect((await scroll()).y).toBe(start.y)
-        await expect(upright(page, i, j)).toBeVisible()
+        await expect(placed(page)).toHaveCount(0)
     })
 })
 

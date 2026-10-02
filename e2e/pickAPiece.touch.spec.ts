@@ -65,8 +65,8 @@ test('a tap places the held piece once; the compatibility click does not remove 
 
 test('the picker is the switch on touch', async ({ page }) => {
     await held(page, 'flat').tap()
-    await expect(held(page, 'flat')).toHaveAttribute('aria-pressed', 'true')
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'false')
+    await expect(held(page, 'flat')).toHaveAttribute('aria-checked', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'false')
 })
 
 test('a long-press never switches the piece', async ({ page }) => {
@@ -82,12 +82,12 @@ test('a long-press never switches the piece', async ({ page }) => {
     await send('touchStart', [at])
     await page.waitForTimeout(1200)
     await send('touchEnd', [])
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
 
     // Whether this emulator fires `contextmenu` for a long-press is its own business, so
     // the event a long-press raises is also dispatched directly, on a cell, as a touch
     // browser would: it must not switch the piece either.
     await page.locator(`[data-cell="${i - 1},${j}"]`).dispatchEvent('contextmenu', { bubbles: true, cancelable: true })
     expect(await page.evaluate(() => (window as unknown as { menus: number }).menus)).toBeGreaterThan(0)
-    await expect(held(page, 'upright')).toHaveAttribute('aria-pressed', 'true')
+    await expect(held(page, 'upright')).toHaveAttribute('aria-checked', 'true')
 })

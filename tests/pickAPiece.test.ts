@@ -282,19 +282,36 @@ describe('the keyboard in Pick a piece mode', () => {
         }
     })
 
-    it('Space and Enter on an occupied cell or a rock refuse, and never remove', () => {
+    it('Space and Enter on a placed piece remove it, from either half, as a tap does', () => {
+        pick()
+        for (const k of [' ', 'Enter']) {
+            // 1,0 is worth 1 and 2,0 worth 0: the half worth 0 is a placed piece too.
+            for (const half of [[1, 0], [2, 0]] as Cell[]) {
+                const s = session([], `remove-${k}-${half}`)
+                runInAction(() => s.placeToward([1, 0], 'down'))
+                const placed = snapshot(s)
+                runInAction(() => s.setFocusedCell(half))
+                expect(key(s, k)).toBe(true)
+                expect([at(s, [1, 0]), at(s, [2, 0])]).toEqual([null, null])
+                expect(s.lastOutcome).toBe('removed')
+                expect(s.refusedAt).toBeNull()
+                // Undo gives it back, so a stray key costs one undo.
+                runInAction(() => s.undo())
+                expect(snapshot(s)).toEqual(placed)
+            }
+        }
+    })
+
+    it('Space and Enter on a rock refuse, handled, and change nothing', () => {
         pick()
         for (const k of [' ', 'Enter']) {
             const s = session([[0, 1]], `refuse-${k}`)
-            runInAction(() => s.placeToward([1, 0], 'down')) // 1,0 is worth 1; 2,0 worth 0
-            for (const cell of [[1, 0], [2, 0], [0, 1]] as Cell[]) {
-                const before = snapshot(s)
-                runInAction(() => s.setFocusedCell(cell))
-                // Handled, so the browser does not also act on it: Space would scroll.
-                expect(key(s, k)).toBe(true)
-                expect(s.refusedAt).toEqual(cell)
-                expect(snapshot(s)).toEqual(before)
-            }
+            const before = snapshot(s)
+            runInAction(() => s.setFocusedCell([0, 1]))
+            // Handled, so the browser does not also act on it: Space would scroll.
+            expect(key(s, k)).toBe(true)
+            expect(s.refusedAt).toEqual([0, 1])
+            expect(snapshot(s)).toEqual(before)
         }
     })
 

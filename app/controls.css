@@ -130,4 +130,25 @@
   .control-day:disabled {
     opacity: 0.4;
   }
+  .control-choice {
+    border: 1px solid var(--ink);
+    border-radius: 6px;
+    padding: 4px 11px;
+    color: var(--ink);
+    font-weight: 400;
+  }
+  .control-choice[aria-checked="true"] {
+    box-shadow: 0 0 0 2px var(--accent-edge);
+  }
+  .control-choice:focus-visible {
+    outline-color: var(--accent-edge);
+  }
+  .control-choice:disabled {
+    opacity: 0.4;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .control-choice:enabled:hover {
+      background-color: var(--control-surface);
+    }
+  }
 }

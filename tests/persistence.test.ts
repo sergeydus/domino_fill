@@ -576,6 +576,20 @@ describe('a v1 document is carried forward', () => {
      * migration is a real one rather than a discard: a player mid-puzzle when they picked up
      * the new build should not lose the board.
      */
+
+    /*
+     * The clock, pinned the day after the records' `savedOn`. These tests write documents
+     * saved on 2026-09-15 and expect them carried forward, which is true only inside the
+     * 14-day window (`RETENTION_DAYS`) -- and they read the real clock, so on 2026-09-30 the
+     * records had expired and five of them failed, a date bomb rather than a regression. The
+     * clock still runs (`shouldAdvanceTime`), so a test that reads `Date.now()` before and
+     * after an action sees time pass as it did. `afterEach` puts the real timers back.
+     */
+    beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'], shouldAdvanceTime: true })
+        vi.setSystemTime(new Date(2026, 8, 16, 12))
+    })
+
     const legacyDocument = (savedOn: string) => JSON.stringify({
         version: 1,
         puzzles: {

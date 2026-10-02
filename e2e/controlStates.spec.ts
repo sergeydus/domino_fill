@@ -3,6 +3,7 @@ import sharp from 'sharp'
 import { openBoard } from './openBoard'
 import { VISUAL_URL } from './server'
 import { drag } from './play'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { PALETTE } from '../app/palette'
 
 /**
@@ -103,6 +104,8 @@ test.describe('focus-visible, on every control, readable without colour', () => 
     })
 
     test('the archive\'s, and the day banner\'s', async ({ page }) => {
+        // A day with earlier days in its month: on the 1st this skipped (`pinDay`).
+        await pinDay(page, LATE_IN_A_MONTH)
         await openBoard(page)
         await page.locator('[data-open-archive]').click()
         const archive = page.locator('[data-archive]')
@@ -113,7 +116,7 @@ test.describe('focus-visible, on every control, readable without colour', () => 
         const days = await archive.locator('[data-archive-day]').evaluateAll(els => els.map(el => el.getAttribute('data-archive-day')!))
         const current = await archive.locator('[aria-current="date"]').getAttribute('data-archive-day')
         const earlier = days.filter(d => d !== current)
-        test.skip(earlier.length === 0, 'no other day this month to open')
+        expect(earlier.length, 'another day this month to open').toBeGreaterThan(0)
         await archive.locator(`[data-archive-day="${earlier[0]}"]`).click()
         await expect(page.locator('[data-go-to-today]')).toBeVisible()
         await expectFocusShown(page, page.locator('[data-day-banner]'), PALETTE.accentEdge, 1)
@@ -275,15 +278,41 @@ test.describe('pressed, disabled, and toggled', () => {
         await expect(pick).toHaveAttribute('aria-pressed', 'true')
         expect(channels(await look(pick), pickOff)).toEqual({ colour: true, weight: true, ring: true })
 
-        // The picker it shows: the held piece against the other. Its pieces carry no text,
-        // so of the two signals beyond colour it is the ring a player sees.
-        const heldOn = await look(page.locator('[data-held-piece][aria-pressed="true"]'))
-        const heldOff = await look(page.locator('[data-held-piece][aria-pressed="false"]'))
-        expect(channels(heldOn, heldOff)).toEqual({ colour: true, weight: true, ring: true })
+        // Every toggle on the page was one of those: three difficulties, Sound and the mode.
+        // The picker the mode shows is not a toggle but a choice, below.
+        expect(await page.locator('[aria-pressed]').count()).toBe(5)
+    })
 
-        // Every toggle on the page was one of those: three difficulties, Sound, the mode,
-        // and the picker's two pieces.
-        expect(await page.locator('[aria-pressed]').count()).toBe(7)
+    test('a choice shows which is chosen by a ring and a check mark, not a fill', async ({ page }) => {
+        /*
+         * The picker's two pieces are radios: exactly one is always held. Chosen is the
+         * `choice` variant's ring and a check mark drawn inside the chip -- a shape, so it
+         * survives without colour -- and never the accent's fill, which is a toggle's. The
+         * first picker was two toggles, and the held one's whole button went solid blue.
+         */
+        await openBoard(page)
+        await page.locator('[data-controls-mode]').click()
+        await page.mouse.move(0, 0)
+        const chosen = page.locator('[data-held-piece][aria-checked="true"]')
+        const other = page.locator('[data-held-piece][aria-checked="false"]')
+        await expect(chosen).toHaveCount(1)
+        await expect(other).toHaveCount(1)
+        const [on, off] = [await look(chosen), await look(other)]
+
+        expect(on.shadow).not.toBe('none')
+        expect(off.shadow).toBe('none')
+        expect([on.background, on.weight]).toEqual([off.background, off.weight])
+        expect(on.background).not.toBe(rgb(PALETTE.accent))
+
+        // The check mark: shown on the chosen chip only, and inside its border on every side.
+        await expect(chosen.locator('[data-check-mark]')).toBeVisible()
+        await expect(other.locator('[data-check-mark]')).toHaveCount(0)
+        const chip = (await chosen.boundingBox())!
+        const mark = (await chosen.locator('[data-check-mark]').boundingBox())!
+        expect(mark.x).toBeGreaterThan(chip.x)
+        expect(mark.y).toBeGreaterThan(chip.y)
+        expect(mark.x + mark.width).toBeLessThan(chip.x + chip.width)
+        expect(mark.y + mark.height).toBeLessThan(chip.y + chip.height)
     })
 })
 

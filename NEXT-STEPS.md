@@ -238,17 +238,19 @@ merged.
   session's existing removal rule handles it first. Rocks refuse.
 
 **Keyboard**
-- **Space and Enter** place the held piece on an empty focused cell. On an occupied cell or a
-  rock they refuse, and never remove.
-- **Delete and Backspace**, and only those, remove an occupied domino.
+- **Space and Enter** do what a tap on the focused cell does: place the held piece on an empty
+  cell, and **remove a placed piece** (user, 2026-09-29, after seeing the refusal's cross drawn
+  over their own domino; this replaces "refuse, and never remove"). A rock, or a cell where the
+  held piece has no room, refuses. Undo brings a removed piece back.
+- **Delete and Backspace** also remove a placed domino.
 - Keyboard focus shows the held piece and where it would land, since there's no hover.
 - **The input used last decides the preview** (codex, reviewing the build). With the mouse
   resting on one cell and the keyboard moved to another, the preview is the keyboard's, where
   Space and Enter would place; the mouse moving again takes it back. Focus arriving visibly
   counts as the keyboard even when no key reached the board, as when Tab enters it from a
   control outside. A drag in progress keeps its own.
-- **A refusal is still handled.** Space or Enter refused on an occupied cell or a rock is the
-  board's key, so the browser doesn't also act on it: Space doesn't scroll the page.
+- **A refusal is still handled.** Space or Enter refused on a rock is the board's key, so the
+  browser doesn't also act on it: Space doesn't scroll the page.
 
 **Touch**
 - Keyboard focus gives no preview on touch. So the picker must show clearly, at all times,
@@ -277,8 +279,8 @@ merged.
 - Only the opposite (bottom or right) position fitting.
 - A neighbouring cell occupied by another domino.
 - Both halves of an occupied piece, including the half worth 0.
-- Space and Enter on an occupied cell or a rock refuse without removing, and without the page
-  scrolling.
+- Space and Enter on either half of a placed piece, the half worth 0 included, remove it, and
+  undo restores it. On a rock they refuse without the page scrolling.
 - A middle click on an empty or an occupied cell places and removes nothing.
 - The mouse resting on one cell and the keyboard on another: the preview is at the keyboard's
   cell, and Enter places there. Also with focus entering by Tab from outside the board,
@@ -289,11 +291,16 @@ merged.
 - The default mode's existing placement tests pass unedited.
 
 **As built** (`feature/pick-a-piece`), four choices the contract left open:
-- **The picker is the legend.** In Pick a piece mode the scoring legend's two pieces become the
-  picker's two toggle buttons, pressed for the piece held. It sits beside the board, where the
-  legend is, rather than in a row of its own. The quiet variant's padding less its edge equals
-  the legend's on the vertical axis, so the board keeps its height. In the default mode the
-  legend is exactly as it was, `role="img"` and not a button.
+- **The picker is two chips, in the legend's place** (redesigned 2026-09-29). First built as the
+  scoring legend's two pieces turned into toggle buttons, in the legend's capsule: boxes of two
+  sizes, the held one filled solid blue, and no names. The user called it "horrendous". Now
+  it's one row of two equal chips, each the piece drawn beside its name, "Upright"
+  or "Flat". They sit centred under the board's frame, with no capsule, and nothing touches a
+  border. It's a radio group, since exactly one piece is always held: one tab stop, on the piece
+  held, and arrow keys choose the other. Chosen is a ring and a check mark inside the chip (the
+  new `choice` control variant, GRAPHICS-SPEC P2-2), never a fill. The row is shorter than the
+  legend, so the board is larger in this mode. In the default mode the legend is exactly as it
+  was, `role="img"` and not a button.
 - **The switch reads "Pick a piece"**, pressed when the mode is on, built like Sound
   ("Sound", pressed when on). The contract's "Controls: Drag / Pick a piece" was one label for
   both states; one name that is pressed or not is shorter in the row it shares with Archive and
@@ -461,6 +468,7 @@ Two limits:
 | U3 | A short design note | `GRAPHICS-SPEC.md` and `SPEC.md` total about 4,300 lines (measured), much of it correction records. A short note becomes the entry point; the specs stay as history. | Medium | |
 | U4 | Gate by risk | The full gate and review round suited a careful rebuild. A text change needs less than a change to timing, storage, input or content. Never drop the tests that protect a rule (codex). Tests run to about 22,700 lines (measured). | A decision | |
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
+| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Later (user, 2026-09-30) |
 
 ## Open questions
 
