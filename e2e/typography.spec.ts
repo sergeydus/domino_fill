@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { VISUAL_URL } from './server'
 import { TYPE, type Role } from '../app/typography'
 
@@ -120,11 +121,13 @@ test('the archive: its dates are meta, its words body, its buttons controls', as
 })
 
 test('the day banner is body, its action a control', async ({ page }) => {
+    // A day with earlier days in its month: on the 1st this skipped (`pinDay`).
+    await pinDay(page, LATE_IN_A_MONTH)
     await openBoard(page)
     await page.locator('[data-open-archive]').click()
     const archive = page.locator('[data-archive]')
     const days = await archive.locator('[data-archive-day]:not([aria-current])').evaluateAll(els => els.map(el => el.getAttribute('data-archive-day')!))
-    test.skip(days.length === 0, 'no other day this month to open')
+    expect(days.length, 'another day this month to open').toBeGreaterThan(0)
     await archive.locator(`[data-archive-day="${days[0]}"]`).click()
     const banner = page.locator('[data-day-banner]')
     await expect(banner).toBeVisible()
