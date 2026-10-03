@@ -131,13 +131,13 @@ not that a human found them in the recorded time (codex).
 
 ## Controls
 
-Undoable Reset matters most: today one misclick can wipe a nearly finished board with no way
-back. The suggested order is 1, 8, 6, 7, then 4. Item 5 waits for the input study (D14).
+Undoable Reset mattered most: one misclick could wipe a nearly finished board with no way
+back. It's built (item 1, PR #6). The suggested order is 1, 8, 6, 7, then 4. Item 5 waits for the input study (D14).
 Items 2 and 3 are No: there will be no keyboard shortcuts.
 
 | # | Idea | Why, and the boundary | Helps | Effort | Decision |
 | --- | --- | --- | --- | --- | --- |
-| 1 | Undo reverses Reset | Reset clears the board and the undo history, with no confirmation, next to Undo (read: `reset()` in `app/stores/PuzzleSession.ts` sets `moves = []`). Reset becomes one reversible step. Tests would cover Undo straight after Reset, and Reset → move → Undo → Undo (codex). Undo history doesn't survive a reload today (read: saved progress holds only the board, completion and a timestamp), so whether recovery should is a separate decision. | Both | Small to medium | |
+| 1 | Undo reverses Reset | Reset clears the board and the undo history, with no confirmation, next to Undo (read: `reset()` in `app/stores/PuzzleSession.ts` sets `moves = []`). Reset becomes one reversible step. Tests would cover Undo straight after Reset, and Reset → move → Undo → Undo (codex). Undo history doesn't survive a reload today (read: saved progress holds only the board, completion and a timestamp), so whether recovery should is a separate decision. | Both | Small to medium | Yes (user): built in PR #6, contract below |
 | 2 | Faster keyboard placement | Placing takes three presses: an arrow to reach the cell, Space, then an arrow. My earlier Shift+Arrow idea would reverse a deliberate decision: SPEC row 14 gave Shift back to the browser, with tests (read: commit `0c8fce3`), because Shift+Arrow extends a selection and Shift+Space scrolls. Any new key scheme would be a shortcut. | Challenge, keyboard players | — | No |
 | 3 | Shortcuts for Hint and Check, redo, then Reset | The buttons have no keys, and redo doesn't exist. Had they been built, single-letter keys would need board focus or an off switch, per WCAG 2.2's rule on character-key shortcuts (codex). A Redo *button* isn't a shortcut and remains open as item 8. | Both | — | No |
 | 4 | Drag a placed domino to move it | Dragging a placed piece does nothing now (read: `pointerUp` refuses a drag from an occupied cell). Dropping it off the board **cancels** rather than removes, so a missed drag never destroys a move (codex). Tap and Delete stay the ways to remove a piece. Test on touch first. | Casual | Medium, with its own review | |
