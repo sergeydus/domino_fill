@@ -156,7 +156,9 @@ Some controls should stay as they are:
 **Why.** Reset (item 1) clears the board *and* the undo history, at once and with no
 confirmation, beside Undo (read: `reset()` in `PuzzleSession.ts` sets `moves = []`). One
 misclick can wipe a nearly finished board for good. Chosen next by the user, 2026-10-03.
-Codex reviews this contract before any code.
+Codex reviews this contract before any code. First review, 2026-10-03: approved with four
+corrections and two behaviours to pin, all made below. Play again undoable, and a Reset as one
+entry towards `MAX_UNDO`, are both agreed.
 
 **How it works today** (read):
 - `Move` records exactly two cells and what was in them before, plus the focus's next square.
@@ -178,20 +180,38 @@ Codex reviews this contract before any code.
 3. **The entry holds the squares Reset changed**, with what was in them: every square that
    held a piece. Rocks are never touched. So `Move` widens from exactly two cells to a list,
    which `ReplayMove` already is.
-4. **A Reset that changes nothing records nothing.** On a board with no pieces, Reset leaves
-   the history as it is, so Undo doesn't spend a press undoing nothing.
-5. **Focus.** Reset clears it, as now. Undoing a Reset returns it to the square it was on
-   before the Reset, or none if there was none.
+4. **A Reset that changes nothing records nothing, and still does the rest.** On a board with
+   no pieces, Reset leaves the history as it is, so Undo doesn't spend a press undoing
+   nothing. It still clears the gesture, the hover, the refusal and the answer, and the
+   cursor, exactly as a Reset that changed something. Not an early return (codex).
+5. **The keyboard's square and browser focus are kept apart** (codex). Reset clears the
+   keyboard's square (`focusedCell`), as now, and the entry remembers the square it was on.
+   - **Undoing a Reset** puts the keyboard's square back on the remembered one. If the Reset
+     had none, it leaves the keyboard's square where it is now, never clears it: with browser
+     focus on a square and the store on none, the next arrow would be spent setting the
+     cursor up instead of moving.
+   - **Browser focus follows the existing rule** (`BoardSquare`'s effect): it moves only if it
+     is already inside the board. So Undo by the button leaves focus on the button, and
+     Ctrl/Cmd+Z on the board moves it to the keyboard's square, so the two stay in step.
 6. **Play again is the same Reset, so it's undoable too.** Undo after Play again brings the
    solved board back, and with it the completion card, since `completed` is recomputed.
    *(One rule, rather than a second kind of Reset. If the user wants Play again to be a clean
    start, that's a separate decision.)*
+   - **The win isn't celebrated twice.** The win sound and vibration fire from a reaction on a
+     board that is solved by the rules but not yet flagged `completed` (`BoardsStore`).
+     `undo()` sets `completed` in the same action as the board, so undoing Play again never
+     passes through that state, and nothing plays. A test holds it.
 7. **Everything else Reset does is unchanged:** it clears the answer, the refusal, the
    gesture and the hover. It counts as one entry towards `MAX_UNDO`, like any move.
 8. **Check across a Reset.** Walking backwards, Check reaches the empty board just after the
    Reset before it could step past it. An empty board of a valid puzzle can always be
-   finished, so the walk stops there, and "undo N moves" never counts undoing a Reset.
-   A test holds this.
+   finished, so when the walk gets there it stops, and "undo N moves" never counts undoing a
+   Reset. **When it gets there** (codex): the walk is bounded by a shared node budget and by
+   20 probes (`MAX_PROBES`), and either can run out first. Then it answers as it does today,
+   `undoSteps: null` ("a piece is wrong", without a number). Neither limit is bypassed.
+9. **Saved progress is unchanged.** What a Reset or an Undo leaves on the board is saved as
+   any board is, and survives a reload. The undo history still isn't saved, so after a
+   reload there's nothing to undo, a Reset included.
 
 **Not in this change**
 - Saving the undo history across a reload (still a separate decision).
@@ -208,10 +228,20 @@ Codex reviews this contract before any code.
   - Play again and Undo bring a solved board and its card back;
   - the 60-entry bound with a Reset in it;
   - Check's walk stopping at the Reset.
-- Browser: Reset, then the Undo button, puts the pieces back on the page; Ctrl/Cmd+Z does the
-  same from the board; Play again, then Undo, brings the card back.
+  - an empty Reset still clears the gesture, hover, refusal, answer and cursor;
+  - undoing a Reset with no remembered square leaves the keyboard's square as it was, and the
+    next arrow moves rather than being spent;
+  - Check's walk with too small a budget, or more than 20 entries, still answers `null`.
+- Browser:
+  - Reset, then the Undo button, puts the pieces back on the page, and focus stays on Undo;
+  - Ctrl/Cmd+Z does the same from the board, and browser focus lands on the keyboard's square;
+  - Play again, then Undo, brings the card back with no second win sound or vibration;
+  - after a Reset and a reload the board is empty and Undo is disabled; after a Reset, an Undo
+    and a reload the board is back and Undo is disabled.
 - Mutations for each rule.
-- Unchanged by design: every existing Reset test that doesn't press Undo afterwards.
+- **One existing test changes on purpose** (codex): `e2e/undo.spec.ts`'s "reset clears every
+  move at once" expects Undo disabled after Reset. Now Undo is enabled there, and pressing it
+  brings the pieces back. Every other existing Reset test stays as it is.
 
 ## Faster and alternative placement
 
