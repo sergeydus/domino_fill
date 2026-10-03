@@ -495,7 +495,11 @@ announcer's content, not speech, so the feature isn't accepted until someone has
 This is a real gate: focus lands on a cell while the full instructions are the description of
 its parent grid, and whether a reader reads a parent's description is exactly what varies.
 Codex reviewed the implementation at `38512ed` (2026-10-01) and found no code blocker, and
-holds final acceptance on these four checks. Only
+holds final acceptance on these four checks.
+
+**Accepted by the user, 2026-10-03, without the listening check** ("is good enough, lets
+continue"). So the speech is **unverified**: no one has heard what a screen reader says on
+the board. The four checks below move back to U1's play-test, unrun, and stay open there. Only
 Narrator is installed on the development PC, and Claude can't hear it, so this is a person's
 check, recorded here with the reader and browser used:
 1. With Narrator (Win+Ctrl+Enter) or NVDA, Tab onto the board in each mode. Is the full
@@ -659,7 +663,7 @@ Two limits:
 
 | # | Idea | Why, and the boundary | Effort | Decision |
 | --- | --- | --- | --- | --- |
-| U1 | Play-test on a phone | Every visual change was checked against the spec and pixel baselines, not against people. Include a first-time player, an experienced one, touch, keyboard and a screen reader, and record what happens, not only opinions (codex). Do this before deciding between design ideas. | A few days | |
+| U1 | Play-test on a phone | Every visual change was checked against the spec and pixel baselines, not against people. Include a first-time player, an experienced one, touch, keyboard and a screen reader, and record what happens, not only opinions (codex). The screen-reader part includes the keyboard polish's four listening checks, accepted without them on 2026-10-03 (see its contract's "Acceptance"). Do this before deciding between design ideas. | A few days | |
 | U2 | Trim the longest comments | About 3,500 of the app's 8,148 lines are comments (measured). Keep the history in git; start from a short current design note (codex). | Medium | |
 | U3 | A short design note | `GRAPHICS-SPEC.md` and `SPEC.md` total about 4,300 lines (measured), much of it correction records. A short note becomes the entry point; the specs stay as history. | Medium | |
 | U4 | Gate by risk | The full gate and review round suited a careful rebuild. A text change needs less than a change to timing, storage, input or content. Never drop the tests that protect a rule (codex). Tests run to about 22,700 lines (measured). | A decision | |
