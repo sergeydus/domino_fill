@@ -239,9 +239,28 @@ entry towards `MAX_UNDO`, are both agreed.
   - after a Reset and a reload the board is empty and Undo is disabled; after a Reset, an Undo
     and a reload the board is back and Undo is disabled.
 - Mutations for each rule.
-- **One existing test changes on purpose** (codex): `e2e/undo.spec.ts`'s "reset clears every
-  move at once" expects Undo disabled after Reset. Now Undo is enabled there, and pressing it
-  brings the pieces back. Every other existing Reset test stays as it is.
+- **Three existing tests change on purpose**, each asserting the old emptied history:
+  - `e2e/undo.spec.ts`, "reset clears every move at once" (codex): Undo is enabled after Reset
+    now, and pressing it brings the pieces back;
+  - `tests/undo.test.ts`, "clears the move stack, so undo cannot write into a cleared board",
+    which becomes "is itself undoable";
+  - `tests/completion-card.test.tsx`, "Replay resets the board it was given": `canUndo` is true
+    after Play again.
+
+  The second and third turned up while building it; the contract named only the first. Every
+  other existing Reset test stays as it is.
+
+**As built:**
+- `Move.cells` is a list, and `anchor` may be null, meaning "leave the keyboard's square where
+  it is". Reset records the squares that differ from the puzzle's start, which covers rocks
+  and anything a definition ever places by construction.
+- **The win test counts the vibration, and the sound only after the win.** The audio pool
+  plays every sound, the win's included, silently on the first press to unlock it on iOS, so
+  a raw count of the win sound's plays was 2 before any Undo.
+- Mutations, 8 of 8 caught: Reset emptying the history again; an empty Reset recording an
+  entry; an empty Reset returning early; no square remembered (by the unit tests, and by
+  browser focus); Undo clearing the square when none was remembered; rocks recorded; Undo
+  leaving `completed` for the reaction, which then celebrated a second time.
 
 ## Faster and alternative placement
 

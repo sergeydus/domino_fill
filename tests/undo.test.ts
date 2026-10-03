@@ -230,14 +230,20 @@ describe('reset', () => {
         expect(s.board[1][1]).toBe(-1)
     })
 
-    it('clears the move stack, so undo cannot write into a cleared board', () => {
+    it('is itself undoable, so Undo puts the board back (Undoable Reset)', () => {
+        // This was "clears the move stack, so undo cannot write into a cleared board". The
+        // stack is kept now and Reset is one entry on it, so undoing it restores the board
+        // the older entries describe. Changed on purpose; tests/undoableReset.test.ts has
+        // the rest.
         const s = session()
         act(() => { s.placeToward([2, 2], 'down') })
+        const played = snapshot(s)
         act(() => { s.reset() })
 
-        expect(s.canUndo).toBe(false)
-        expect(act(() => s.undo())).toBe(false)
         expect(s.board.flat().every(c => c === null)).toBe(true)
+        expect(s.canUndo).toBe(true)
+        expect(act(() => s.undo())).toBe(true)
+        expect(snapshot(s)).toBe(played)
     })
 
     it('clears the completed flag, which is the soft-lock escape hatch', () => {
