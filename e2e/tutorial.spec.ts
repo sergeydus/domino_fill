@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 import { instrument, waitForReady } from './openBoard'
+import { KEY_INSTRUCTIONS } from '../app/dominoFill/keyGuide'
 
 /**
  * The tutorial's escape hatch, at phone size (spec P1-9, carried in from P0-9a).
@@ -31,6 +32,17 @@ test.beforeEach(async ({ page }) => {
 
 test('the tutorial is shown to a first-time player', async ({ page }) => {
     await expect(page.getByRole('heading', { name: /how to play/i })).toBeVisible()
+})
+
+test('it teaches the keys of the controls its board answers to, in words that read', async ({ page }) => {
+    // Read as rendered: a line break before a tag drops the space in JSX, and this sentence
+    // read "places.Esc cancels." until the keyboard polish.
+    await expect(overlay(page).locator('[data-tutorial-keys]')).toHaveText(
+        'By keyboard: arrow keys move, Space selects a square, then an arrow key places a piece '
+        + 'that way. Delete removes one, and Esc cancels.')
+    // Its board is fixed to the default controls, and describes itself so.
+    const id = await overlay(page).locator('[role="grid"]').getAttribute('aria-describedby')
+    await expect(page.locator(`[id="${id}"]`)).toHaveText(KEY_INSTRUCTIONS.drag)
 })
 
 test('the page does not scroll horizontally', async ({ page }) => {

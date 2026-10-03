@@ -27,7 +27,8 @@
   --anchor: #16295e;
   --candidate-edge: #16295e;
   --candidate-wash: oklch(88.2% 0.059 254.128);
-  --cell-focus: #000000;
+  --cell-focus: #093346;
+  --cell-focus-halo: #ffffff;
   --refused-halo: #ffffff;
   --drag-wash: #ffffff;
   --scrim: #000000;
@@ -66,6 +67,7 @@
   --color-candidate-edge: var(--candidate-edge);
   --color-candidate-wash: var(--candidate-wash);
   --color-cell-focus: var(--cell-focus);
+  --color-cell-focus-halo: var(--cell-focus-halo);
   --color-refused-halo: var(--refused-halo);
   --color-drag-wash: var(--drag-wash);
   --color-scrim: var(--scrim);

@@ -46,13 +46,30 @@ describe('P1-5: each state carries a channel besides colour', () => {
         expect(svg.querySelector('[data-wash]')!.getAttribute('fill')).toBe(PALETTE.candidateWash)
     })
 
-    it('the focus is four corner brackets, outside the ring', () => {
+    it('the focus is four corner brackets, bent round, outside the ring', () => {
         const path = markup(MARKS.focus).querySelector('[data-brackets]')!
-        // Four separate strokes, each an L: a move, then two lines.
-        expect(path.getAttribute('d')!.match(/M/g)).toHaveLength(4)
+        // Four separate strokes, each an L bent round its corner: a move, a line, a quarter
+        // circle of the bend's radius, a line.
+        const d = path.getAttribute('d')!
+        expect(d.match(/M/g)).toHaveLength(4)
+        expect(d.match(/A (\S+) (\S+) 0 0 1/g)).toEqual(Array(4).fill(`A ${STATE.focus.bend} ${STATE.focus.bend} 0 0 1`))
         expect(path.getAttribute('fill')).toBe('none')
-        // Its stroke's inner edge clears the ring's outer edge.
-        expect(STATE.focus.inset + STATE.focus.stroke / 2).toBeLessThanOrEqual(STATE.ring.inset - STATE.ring.stroke / 2)
+        expect(path.getAttribute('stroke')).toBe(PALETTE.cellFocus)
+        // Its halo's inner edge clears the ring's outer edge.
+        expect(STATE.focus.inset + STATE.focus.stroke / 2 + STATE.focus.halo)
+            .toBeLessThanOrEqual(STATE.ring.inset - STATE.ring.stroke / 2)
+    })
+
+    it('the soft corners: thin, on a white halo drawn under them', () => {
+        const svg = markup(MARKS.focus)
+        const [halo, brackets] = [svg.querySelector('[data-halo]')!, svg.querySelector('[data-brackets]')!]
+        expect(halo.getAttribute('d')).toBe(brackets.getAttribute('d'))
+        expect(halo.getAttribute('stroke')).toBe(PALETTE.cellFocusHalo)
+        expect(Number(brackets.getAttribute('stroke-width'))).toBe(STATE.focus.stroke)
+        expect(Number(halo.getAttribute('stroke-width'))).toBe(STATE.focus.stroke + 2 * STATE.focus.halo)
+        expect(halo.compareDocumentPosition(brackets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        // Thinner than the brackets they replace, which were 8 wide and 28 long.
+        expect([STATE.focus.stroke, STATE.focus.arm]).toEqual([5, 24])
     })
 
     it('the hint is a filled diamond at the centre', () => {
@@ -86,7 +103,7 @@ describe('P1-6: a refused move is a cross, red on a white halo', () => {
          * the halo's width at each end -- and every point of those discs must be inside the
          * brackets' inner edge.
          */
-        const clear = STATE.focus.inset + STATE.focus.stroke / 2
+        const clear = STATE.focus.inset + STATE.focus.stroke / 2 + STATE.focus.halo
         const { reach: r, stroke, halo } = STATE.refused
         const cap = stroke / 2 + halo
         const nearest = Math.min(...[50 - r, 50 + r].flatMap(e => [e - cap, 100 - (e + cap)]))

@@ -55,9 +55,14 @@ test.describe('Check', () => {
     })
 
     test('announces politely, so it cannot interrupt a move', async ({ page }) => {
-        await expect(advice(page)).toHaveAttribute('role', 'status')
-        await expect(advice(page)).toHaveAttribute('aria-live', 'polite')
-        await expect(advice(page)).toHaveAttribute('aria-atomic', 'true')
+        // Through the announcer, since the keyboard polish: the row is what is visible, and
+        // is no longer live (see AdviceStrip, and e2e/refusalReasons.spec.ts).
+        const announcer = page.locator('[data-announcer]')
+        await expect(announcer).toHaveAttribute('role', 'status')
+        await expect(announcer).toHaveAttribute('aria-live', 'polite')
+        await expect(announcer).toHaveAttribute('aria-atomic', 'true')
+        await page.locator('[data-check]').click()
+        await expect(announcer).toContainText('can still be finished')
     })
 })
 

@@ -318,6 +318,203 @@ The default mode's refused Space and Enter are handled too, in a separate commit
 rock, an occupied cell or a cell with no legal direction the refusal is shown, and Space no
 longer scrolls an overflowing page. Shift+Space and other chords stay the browser's.
 
+### Keyboard polish: implementation contract
+
+**Why.** The user found keyboard play unpolished in three ways: switching pieces, knowing what a
+key does, and the focus marker's look. Codex added a fourth: a refusal says nothing to a screen
+reader (U6). The underlying problem is a rule that changes between modes without saying so. In
+the default mode Space selects and an arrow places; in Pick a piece mode Space places or removes
+at once. The tutorial explains only the first.
+
+**Decided (user, 2026-09-30, from prototype screenshots):**
+- The focus marker becomes **soft corners**.
+- A **one-line key guide** per mode.
+- A refusal's reason is **shown and spoken**.
+- **Switching pieces stays Tab, arrow, Shift+Tab**, explained by the guide. A single key on the
+  board is reconsidered only if that still feels slow after play.
+
+Codex reviews this contract before any code. First review, 2026-09-30: codex would approve it
+with three corrections, now made below (the guide's wording and description, and the refusal
+paths). Second review, the same day: **approved for implementation**, with three details carried
+in below: "Ctrl/Cmd+Z" in the full instructions, the announcer's refusal cleared with the cross,
+and a reason precedence for drags. Codex also moved the real screen-reader check from U1 into
+this feature's acceptance (see "Acceptance").
+
+**1. The focus marker: soft corners**
+- Four rounded corner brackets, thinner than today's, in the accent's edge on a white halo. The
+  prototype drew them 5 units wide on a 9-unit halo, 8 in from the edge, each arm 24 long, with
+  a radius-6 bend. They mean the same thing and follow the same rules as now: drawn while
+  `focusVisible`, above the pieces.
+- **Held to the existing bars, not new ones:**
+  - P1-5's greyscale test: at least 15% from the anchor, candidate, hint and refused marks, and
+    at least 5% of the square, at 38px and 53px.
+  - The same test over a rock and over both dominoes.
+  - The cross's ends still stop short of the brackets.
+  - Contrast: the focus colour on both checker tones at 3:1 or better. As with the cross, the
+    halo can carry it where the colour alone doesn't. `tests/contrast.test.ts` records which does.
+- If the soft corners fail a bar, the drawing changes, not the bar, as with the cross in row 12.
+- The colours become tokens: `cellFocus` changes value, and a halo token is added. They aren't
+  literals.
+
+**As built, section 1:** as prototyped, with one change the bars forced. The accent's edge
+itself is 2.93:1 on the dark checker tone, so `cellFocus` is that hue at 85%, `#093346`,
+which holds 3:1 on both tones alone rather than leaning on the halo. The halo is held as the
+cross's is. Measurements and mutations: GRAPHICS-SPEC, the amendment after row 11.
+
+**2. The key guide** *(corrected at codex's review: the wording, and what the description promises)*
+- **Visible:** one line, in the row under the picker that the Check and Hint messages use.
+  It's accurate even when short:
+  - **Default mode:** "**Space**, then an **arrow**: place · **Delete**: remove". It's two keys
+    in turn, not a chord, so not "Space + arrow".
+  - **Pick a piece:** "**Space**: place or remove · **Tab**: piece picker". Tab reaches the
+    picker, and the picker says the rest: it's a radio group whose arrows switch the piece.
+- **When the visible line shows:** while the board shows keyboard focus (`focusVisible`) and
+  there's no Check or Hint message and no refusal reason. A press or tap hides it, as it hides
+  the focus marker. It also hides when focus leaves the board.
+- **Nothing moves:** one line at 360px in both modes, and the board's size is unchanged when the
+  line appears. Both are tested.
+- **For assistive technology, the full instructions**, mode-specific and never live:
+  - Default: "Arrow keys move. Space or Enter selects a square, then an arrow key places a piece
+    that way. Escape cancels. Delete removes a piece. Ctrl/Cmd+Z undoes."
+  - Pick a piece: "Arrow keys move. Space or Enter places the held piece, or removes a placed
+    one. Delete removes a piece. Ctrl/Cmd+Z undoes. Tab goes to the piece picker, where an arrow
+    key switches the piece; Shift+Tab comes back to the same square."
+  - "Ctrl/Cmd+Z", not "Control+Z", because the board takes either (codex).
+- **Where the full instructions live:** a visually hidden element, **always mounted**, before
+  focus arrives, and referenced by the grid's `aria-describedby`. The visible line is
+  `aria-hidden`, so browse mode doesn't read the same thing twice; its equivalent is the
+  description.
+- **No promise about when it's read.** The game focuses a *cell*, not the grid, and whether a
+  screen reader reads the grid's description as focus lands on a cell varies by reader. The
+  tests can prove the markup, not the speech. A manual check with a real screen reader is part
+  of this feature's acceptance (see "Acceptance").
+- **The tutorial:** one sentence for keyboard players, matching the default mode, since the
+  tutorial is fixed to the default controls.
+
+**As built, section 2:**
+- **The guide** is the row's last choice, after a refusal's reason and a Check or Hint answer,
+  with its keys in bold (`keyGuide.ts`). Measured at 360px on this PC: 290px wide in the
+  default mode and 271px in Pick a piece mode, and the row stays at its 24px minimum. CI's
+  text is wider, and the one-line test runs there too.
+- **The size test runs at two sizes.** At 360x640 the board is limited by the width, so a guide
+  that grew the row only lengthened the page, and passed (mutation-tested). At 1280x800 it's
+  limited by the height, where a taller row would take from the board. Both also hold the row's
+  height.
+- **The description** is a visually hidden paragraph just before the board, named by the
+  grid's `aria-describedby` through `useId`, so the tutorial's board and the page's each have
+  their own. The tutorial's board describes the default mode, which it's fixed to.
+- **The tutorial already had a keyboard sentence**, so it was reworded rather than added: "By
+  keyboard: arrow keys move, Space selects a square, then an arrow key places a piece that way.
+  Delete removes one, and Esc cancels." It rendered as "places.Esc cancels.", a space lost to a
+  line break before a tag in JSX, now held by a test.
+
+**3. A refusal, said in words** *(corrected at codex's review: reasons come from the actual
+paths, and the reason is stored with the refusal)*
+- **The reason is stored when the refusal happens**, alongside `refusedAt` and with the same
+  lifetime. It isn't inferred later from the board.
+- **Every refusal path, and its reason** (read: every `signal('none', …)` in `PuzzleSession`):
+
+  | Path | Reason shown and spoken |
+  | --- | --- |
+  | A tap, Space or Enter on a rock; a drag starting on a rock; Delete on a rock | "That square is a rock." |
+  | Space or Enter on a placed piece, default mode | "Delete removes a piece; Space selects an empty square." |
+  | A tap, Space or Enter on an empty square where no piece fits (default); where the held piece fits neither way (Pick a piece) | "No room for a piece there." / "No room for the upright piece there." (or "flat") |
+  | A drag starting on a placed piece | "Placed pieces can't be dragged; tap one to remove it." |
+  | A drag released on a square that isn't next to its start (diagonal or further) | "Drag to a square next to it." |
+  | A drag, or an arrow after a selection, pointing into a rock or a placed piece | "That way is blocked." |
+  | An arrow after a selection pointing off the board | "That's the edge of the board." |
+  | Anything else that refuses (a malformed piece's removal, which the rules prevent) | "That can't be done there." |
+
+- **Precedence, where a refusal fits more than one row** (codex): the square the move started
+  from is judged before where it was aimed. A drag from a rock says "That square is a rock.",
+  and a drag from a placed piece says it can't be dragged, whether it was released diagonally,
+  on a blocked square or on a legal one.
+- **Not refusals, and they stay silent:**
+  - a pointer released outside the board (deliberately a silent cancellation);
+  - an arrow that simply stops at the edge while moving focus, with nothing selected.
+- **In the row, red,** as Check's problems are, for every refusal, by pointer or key, in both
+  modes, because every refusal draws the cross.
+- **Visible and spoken are separated**, so restoring text never announces it again:
+  - The visible row stops being the live region.
+  - One visually hidden polite status region is the announcer. It receives each new Check or
+    Hint answer (keyed on `adviceTick`, as now) and each new refusal reason (keyed on
+    `rejectionTick`), so a repeat is a new announcement.
+  - While a reason shows, it takes the visible row. When it clears (with the cross), the
+    announcer's copy of it is cleared too (codex), and an earlier Check or Hint message, which
+    survives a refused move, **reappears visually and is not announced again**.
+  - `role="status"` is polite. It doesn't guarantee every rapid message is spoken, so the tests
+    prove the announcer's content, and the manual screen-reader check covers speech.
+- Refusals are unchanged in all other ways: the shake, the cross and the vibration.
+
+**As built, section 3** (three choices the contract left open):
+- **One field for the cross and its reason.** `PuzzleSession.refusal` holds the square and
+  why; `refusedAt` is read from it, so the two can't outlive each other. Each path returns its
+  reason where it refuses (`Refusal` in `PuzzleSession.ts`, worded in `refusalText.ts`).
+- **Each message is in the accessibility tree once.** The contract made only the guide
+  `aria-hidden`. The row's copy of a reason, or of a fresh Check or Hint answer, is hidden too,
+  while the announcer holds it, so reading the page doesn't meet it twice. An answer back in
+  view after a refusal is the row's alone, and readable there.
+- **The announcer has the body type role**, like the row, since the typography audit holds all
+  text, hidden or not, to a role.
+- *Correction at codex's implementation review:* `7dcc1aa` said every path to `signal` had
+  already cleared the refusal, so clearing it there again was an equivalent mutation. That
+  holds on the ordinary paths only. With an anchor pending and an arrow refused, a release
+  that arrives with no press on the board dismisses the anchor, and nothing clears the cross.
+  It used to clear there, and now it stays. Codex judged that right, since nothing was pressed
+  on the board, and a test now holds it: clearing it in `signal` again fails.
+
+**Tests (sections 2 and 3)**
+- The guide:
+  - the visible wording per mode;
+  - shown only with keyboard focus on the board, and hidden by a press, a blur, advice or a refusal;
+  - one line at 360px;
+  - no change to the board's size;
+  - `aria-hidden`;
+  - the description always in the DOM, mode-specific, and referenced by the grid.
+- Refusals:
+  - each path in the table produces its reason, by key and by pointer, in both modes, and the
+    silent cases produce none;
+  - the reason is stored with `refusedAt` and cleared with it;
+  - the announcer's content per refusal, including a repeat;
+  - advice reappearing in the visible row without a change to the announcer.
+
+**4. Switching pieces**
+- No new key. The guide names Tab. The route is unchanged, and was measured: Tab from a square
+  lands on the held chip, an arrow switches, and Shift+Tab returns to the same square.
+- **Revisit after play.** If it's still slow, a key that works only while focus is on the board
+  and is listed in the guide. That would reverse the "no keyboard shortcuts" decision, so it's
+  the user's call.
+
+**Tests (section 1)**
+- The marker: the greyscale and footprint tests at both sizes, over each occupant, and with the
+  cross; contrast; the sheet's `focus` specimen, so this is a visual update.
+- Mutations for each rule, in every section.
+
+**Acceptance: a real screen reader** (codex, second review). The tests prove markup and the
+announcer's content, not speech, so the feature isn't accepted until someone has listened.
+This is a real gate: focus lands on a cell while the full instructions are the description of
+its parent grid, and whether a reader reads a parent's description is exactly what varies.
+Codex reviewed the implementation at `38512ed` (2026-10-01) and found no code blocker, and
+holds final acceptance on these four checks.
+
+**Accepted by the user, 2026-10-03, without the listening check** ("is good enough, lets
+continue"). So the speech is **unverified**: no one has heard what a screen reader says on
+the board. The four checks below move back to U1's play-test, unrun, and stay open there. Only
+Narrator is installed on the development PC, and Claude can't hear it, so this is a person's
+check, recorded here with the reader and browser used:
+1. With Narrator (Win+Ctrl+Enter) or NVDA, Tab onto the board in each mode. Is the full
+   instruction read, at once or with the reader's command for more about an item?
+2. Space on a rock, then on a placed piece in the default mode. Is each reason spoken, and is a
+   second Space on the same rock spoken again?
+3. Check, then a refused Space, then an arrow. Is the Check answer spoken once, and not again
+   when it reappears after the refusal clears?
+4. The picker: Tab from a square, an arrow, Shift+Tab. Is the held piece's name and state read,
+   and does Shift+Tab land on the same square?
+
+**Not in this change:**
+- Full-page Pick a piece baselines (codex, on the chips): U7.
+- The single switch key.
+
 Notes for all of these:
 - **Challenge fairness.** A scheme can change a time a lot. The input study (D14) should compare
   the default, PL1 and PL3 before challenge times are shared as comparable. The share card
@@ -466,12 +663,13 @@ Two limits:
 
 | # | Idea | Why, and the boundary | Effort | Decision |
 | --- | --- | --- | --- | --- |
-| U1 | Play-test on a phone | Every visual change was checked against the spec and pixel baselines, not against people. Include a first-time player, an experienced one, touch, keyboard and a screen reader, and record what happens, not only opinions (codex). Do this before deciding between design ideas. | A few days | |
+| U1 | Play-test on a phone | Every visual change was checked against the spec and pixel baselines, not against people. Include a first-time player, an experienced one, touch, keyboard and a screen reader, and record what happens, not only opinions (codex). The screen-reader part includes the keyboard polish's four listening checks, accepted without them on 2026-10-03 (see its contract's "Acceptance"). Do this before deciding between design ideas. | A few days | |
 | U2 | Trim the longest comments | About 3,500 of the app's 8,148 lines are comments (measured). Keep the history in git; start from a short current design note (codex). | Medium | |
 | U3 | A short design note | `GRAPHICS-SPEC.md` and `SPEC.md` total about 4,300 lines (measured), much of it correction records. A short note becomes the entry point; the specs stay as history. | Medium | |
 | U4 | Gate by risk | The full gate and review round suited a careful rebuild. A text change needs less than a change to timing, storage, input or content. Never drop the tests that protect a rule (codex). Tests run to about 22,700 lines (measured). | A decision | |
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
-| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Later (user, 2026-09-30) |
+| U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
+| U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 
 ## Open questions
 
