@@ -116,32 +116,42 @@ describe('Reset is one entry in the undo history', () => {
 })
 
 describe('a Reset that changes nothing records nothing, and still does the rest (codex)', () => {
-    it('leaves the history as it is', () => {
+    it('leaves the history as it is, an empty one and one with entries in it', () => {
         const s = session([[1, 1]])
         act(() => { s.reset() })
         expect(s.moves).toEqual([])
         expect(s.canUndo).toBe(false)
 
-        // After a move and its undo the board is empty again: still nothing to record.
-        act(() => { s.placeToward([2, 2], 'down'); s.undo() })
+        // A piece placed and then removed: the board is empty again, and the history holds
+        // both moves (codex). Reset records nothing, and keeps them.
+        act(() => { s.placeToward([2, 2], 'down'); s.removePiece(2, 2) })
+        const history = JSON.stringify(s.moves)
+        expect(s.moves).toHaveLength(2)
         act(() => { s.reset() })
-        expect(s.moves).toEqual([])
+        expect(JSON.stringify(s.moves)).toBe(history)
+        // So Undo goes straight to the removal, not to a Reset that did nothing.
+        act(() => { s.undo() })
+        expect([s.board[2][2], s.board[3][2]]).toEqual([1, 0])
     })
 
     it('still clears the gesture, the hover, the refusal, the answer and the cursor', () => {
         const s = session([[1, 1]])
-        act(() => { s.pointerDown([1, 1]); s.pointerUp([1, 1]) })   // a refusal on the rock
-        expect(s.refusal).not.toBeNull()
-        act(() => { s.check() })
-        act(() => { s.pointerDown([1, 1]); s.pointerUp([1, 1]) })
+        act(() => { s.check() })                                     // an answer
         act(() => { s.pointerDown([3, 3]) })                         // a drag in progress
         s.setHover([3, 3])
+        // A refusal last: Space on the rock. A press after it would clear it (codex), and a
+        // key leaves the drag in progress alone.
+        act(() => { s.setFocusedCell([1, 1]); s.handleKey(' ') })
         act(() => { s.setFocusedCell([4, 4]) })
-        expect([s.advice, s.gesture, s.hover, s.focusedCell].every(v => v !== null)).toBe(true)
+        // Every one of them present immediately before the Reset.
+        expect(s.refusal?.reason.kind).toBe('rock')
+        expect(s.gesture?.kind).toBe('drag')
+        expect([s.advice, s.hover, s.focusedCell].every(v => v !== null)).toBe(true)
 
         act(() => { s.reset() })
 
         expect([s.refusal, s.advice, s.gesture, s.hover, s.focusedCell]).toEqual([null, null, null, null, null])
+        expect(s.moves).toEqual([])
     })
 })
 

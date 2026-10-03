@@ -261,6 +261,12 @@ entry towards `MAX_UNDO`, are both agreed.
   entry; an empty Reset returning early; no square remembered (by the unit tests, and by
   browser focus); Undo clearing the square when none was remembered; rocks recorded; Undo
   leaving `completed` for the reaction, which then celebrated a second time.
+- *Corrected at codex's review:* two of the empty-Reset tests couldn't fail. One ended with an
+  empty history (a move and its Undo), and the other's press had cleared the refusal before
+  the Reset. Now the history holds a placement and a removal, and a Space on a rock is the
+  last thing before the Reset. Against the old version of `tests/undoableReset.test.ts`, an
+  empty Reset that emptied the history and a Reset that left the refusal both survived; the
+  corrected file catches them, and an empty Reset recording an entry.
 
 ## Faster and alternative placement
 
