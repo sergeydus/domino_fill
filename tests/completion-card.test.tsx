@@ -116,6 +116,8 @@ describe('the actions do what they say', () => {
 
         expect(s.completed).toBe(false)
         expect(s.board[0][0]).toBeNull()
-        expect(s.canUndo).toBe(false)
+        // Undoable since Undoable Reset: Play again is the same Reset (it was `false`, the
+        // history emptied). Changed on purpose; tests/undoableReset.test.ts has the rest.
+        expect(s.canUndo).toBe(true)
     })
 })

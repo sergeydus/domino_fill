@@ -112,16 +112,19 @@ export const MAX_UNDO = 60
  *
  * Recorded as *prior contents* rather than as "a placement" or "a removal", so undoing is
  * one operation instead of two inverses that could disagree. A placement's `before` is two
- * nulls; a removal's is the domino's two values. Nothing else can produce a move, because
- * the only two methods that write to the board are the ones that record here.
+ * nulls; a removal's is the domino's two values; a Reset's is every square it cleared
+ * (Undoable Reset, its contract in NEXT-STEPS). Nothing else can produce a move: the only
+ * methods that write to the board are the ones that record here.
  *
- * `anchor` is where the focus goes afterwards -- the spec's rule that after removing or
- * undoing, focus lands on the affected anchor.
+ * `anchor` is where the keyboard's square goes afterwards -- the spec's rule that after
+ * removing or undoing, focus lands on the affected anchor. Null leaves it where it is: a
+ * Reset made with no square to remember must not clear one the player has since put the
+ * keyboard on, or the next arrow is spent setting it up again (codex).
  */
 export type Move = {
-    cells: readonly [Cell, Cell]
-    before: readonly [number | null, number | null]
-    anchor: Cell
+    cells: readonly Cell[]
+    before: readonly (number | null)[]
+    anchor: Cell | null
 }
 
 /**
@@ -420,15 +423,32 @@ export class PuzzleSession {
         this.hover = null
     }
 
-    /** Discard all progress and start this puzzle again from its definition. */
+    /**
+     * Start this puzzle again from its definition, as one move Undo can reverse (Controls 1;
+     * Undoable Reset, its contract in NEXT-STEPS).
+     *
+     * It used to empty the undo history too, so one misclick beside Undo lost a nearly
+     * finished board for good. Now it records the squares it clears, with what was in them
+     * and the keyboard's square, as one entry: Undo puts the board back, and the moves before
+     * it are undoable again, since the board they describe is back. The completion card's
+     * Play again is this method, so it is undoable too.
+     *
+     * A Reset that changes nothing records nothing, so Undo doesn't spend a press on it, but
+     * it still does everything below: not an early return (codex).
+     */
     reset() {
-        this.board = cloneInitialBoard(this.definition)
+        const initial = cloneInitialBoard(this.definition)
+        const cells: Cell[] = []
+        const before: (number | null)[] = []
+        this.board.forEach((row, i) => row.forEach((value, j) => {
+            if (value !== initial[i][j]) { cells.push([i, j]); before.push(value) }
+        }))
+        if (cells.length > 0) this.record({ cells, before, anchor: this.focusedCell })
+
+        this.board = initial
         this.completed = false
         this.hover = null
         this.gesture = null
-        // The stack described moves against a board that no longer exists; undoing into it
-        // would write dominoes back onto a freshly cleared grid.
-        this.moves = []
         this.focusedCell = null
         this.focusVisible = false
         this.refusal = null
@@ -1142,8 +1162,11 @@ export class PuzzleSession {
         if (!move) return false
 
         move.cells.forEach(([i, j], index) => { this.board[i][j] = move.before[index] })
+        // In the same action as the board, so the completion reaction (BoardsStore) never
+        // sees a solved board not yet flagged: undoing Play again brings the win back
+        // without celebrating it a second time.
         this.completed = this.completedByRules
-        this.focusedCell = move.anchor
+        if (move.anchor) this.focusedCell = move.anchor
         this.refusal = null
         this.clearAdvice()
         // A gesture in flight was aimed at a board that no longer looks like this.

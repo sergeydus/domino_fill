@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openBoard, waitForBoard } from './openBoard'
+import { playSolution } from './play'
 
 /**
  * Undo and Reset in a real browser (spec P1-3).
@@ -90,17 +91,109 @@ test('undo brings back a domino that was removed', async ({ page }) => {
     await expect(placed).toBeVisible()
 })
 
-test('reset clears every move at once', async ({ page }) => {
+test('reset clears every move at once, as one step Undo can take back', async ({ page }) => {
     const start = (await occupied(page)).size
     await placeOne(page)
     await placeOne(page)
-    expect((await occupied(page)).size).toBe(start + 4)
+    const played = await occupied(page)
+    expect(played.size).toBe(start + 4)
 
     await reset(page).click()
-
     expect((await occupied(page)).size).toBe(start)
-    // And there is nothing left to undo: the stack described a board that no longer exists.
-    await expect(undo(page)).toBeDisabled()
+
+    // Changed on purpose (Undoable Reset): this asserted Undo disabled here, when Reset
+    // emptied the history too. Now Undo puts every piece back, and focus stays on it.
+    await expect(undo(page)).toBeEnabled()
+    await undo(page).click()
+    expect(await occupied(page)).toEqual(played)
+    await expect(undo(page)).toBeFocused()
+})
+
+test.describe('Undoable Reset (its contract in NEXT-STEPS)', () => {
+    test('Ctrl/Cmd+Z on the board undoes a Reset, and focus lands on the square it remembered', async ({ page }) => {
+        // A piece placed from the keyboard, so the keyboard has a square for Reset to remember.
+        const { i, j } = await freeRun(page)
+        await page.locator(`[data-cell="${i},${j}"]`).focus()
+        await page.keyboard.press(' ')
+        await page.keyboard.press('ArrowDown')
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+
+        await reset(page).click()
+        await expect(page.locator('[data-piece="one"], [data-piece="two"]')).toHaveCount(0)
+
+        // Back onto the board on another square, then the shortcut.
+        const other = i === 0 && j === 0 ? '0,1' : '0,0'
+        await page.locator(`[data-cell="${other}"]`).focus()
+        await page.keyboard.press('Control+z')
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+        // Browser focus and the keyboard's square move together.
+        await expect(page.locator(`[data-cell="${i},${j}"]`)).toBeFocused()
+        await expect(page.locator(`[data-focus="${i},${j}"]`)).toHaveCount(1)
+    })
+
+    test('Play again, then Undo: the solved board and its card come back, with no second win', async ({ page }) => {
+        // Count what the win sets off: its 25ms vibration and its sound.
+        await page.evaluate(() => {
+            const w = window as unknown as { wins: string[] }
+            w.wins = []
+            const nav = navigator as unknown as { vibrate?: (pattern: unknown) => boolean }
+            const vibrate = nav.vibrate?.bind(navigator)
+            nav.vibrate = (pattern: unknown) => {
+                if (pattern === 25) w.wins.push('vibrate')
+                return vibrate ? vibrate(pattern) : true
+            }
+            const play = HTMLMediaElement.prototype.play
+            HTMLMediaElement.prototype.play = function () {
+                if (this.src.includes('win')) w.wins.push('sound')
+                return play.call(this)
+            }
+        })
+        const count = (kind: string) => page.evaluate(k => (window as unknown as { wins: string[] }).wins.filter(w => w === k).length, kind)
+
+        await playSolution(page)
+        const card = page.locator('[data-completion-card]')
+        await expect(card).toBeVisible()
+        expect(await count('vibrate'), 'the win, once').toBe(1)
+        // The sound is counted from here: the audio pool also plays every sound, the win's
+        // included, silently on the first press to unlock it on iOS (feedback.ts), so the
+        // total so far is not the number of wins.
+        const sounds = await count('sound')
+        const solved = await occupied(page)
+
+        await page.locator('[data-replay]').click()
+        await expect(card).toHaveCount(0)
+        await undo(page).click()
+
+        await expect(card).toBeVisible()
+        expect(await occupied(page)).toEqual(solved)
+        // Give a stray reaction time to fire, then count again.
+        await page.waitForTimeout(300)
+        expect(await count('vibrate'), 'not vibrated a second time').toBe(1)
+        expect(await count('sound'), 'not sounded a second time').toBe(sounds)
+    })
+
+    test('a reload keeps what Reset and Undo left on the board, and not the history', async ({ page }) => {
+        const start = await occupied(page)
+        await placeOne(page)
+        const played = await occupied(page)
+
+        await reset(page).click()
+        await page.reload()
+        await waitForBoard(page)
+        expect(await occupied(page), 'the Reset was saved').toEqual(start)
+        await expect(undo(page), 'the history was not').toBeDisabled()
+
+        await placeOne(page)
+        const again = await occupied(page)
+        await reset(page).click()
+        await undo(page).click()
+        expect(await occupied(page)).toEqual(again)
+        await page.reload()
+        await waitForBoard(page)
+        expect(await occupied(page), 'the Undo was saved').toEqual(again)
+        await expect(undo(page)).toBeDisabled()
+        expect(played.size).toBe(start.size + 2)
+    })
 })
 
 test('Ctrl+Z undoes through the board handler', async ({ page }) => {
