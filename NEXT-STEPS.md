@@ -47,6 +47,7 @@ Evidence levels:
 | 2026-09-29 | In Pick a piece mode, the held piece governs taps and clicks only. The mode switch sits beside Sound. | A drag keeps today's directional placement. The switch moves only if it doesn't fit the tested layouts. Codex reviews the contract before any code is written. |
 | 2026-10-02 | Merge PR #3, the chips. | The user's visual sign-off on the preview ("pick a piece looks good"). Merge commit `3ba330f`. |
 | 2026-10-02 | In Pick a piece mode, the clicked square takes the piece's **numbered half**: an upright's 1, a flat's 2. | It was the top or left half, which put the 1 under the cursor upright and the blank half under it flat. The user asked why the two differed, and chose the number over the position. See PL2. |
+| 2026-10-04 | No Redo ("seems unnecessary"). | Controls 8 is No, against codex's recommendation, so SPEC P1-3's "No redo, deliberately" stands. A contract was drafted and reviewed by codex, and isn't kept. |
 
 ## Principles
 
@@ -132,19 +133,19 @@ not that a human found them in the recorded time (codex).
 ## Controls
 
 Undoable Reset mattered most: one misclick could wipe a nearly finished board with no way
-back. It's built (item 1, PR #6). The suggested order is 1, 8, 6, 7, then 4. Item 5 waits for the input study (D14).
-Items 2 and 3 are No: there will be no keyboard shortcuts.
+back. It's built (item 1, PR #6). The suggested order is 1, 6, 7, then 4. Item 5 waits for the input study (D14).
+Items 2 and 3 are No: there will be no keyboard shortcuts. Item 8, Redo, is No too.
 
 | # | Idea | Why, and the boundary | Helps | Effort | Decision |
 | --- | --- | --- | --- | --- | --- |
 | 1 | Undo reverses Reset | *Before this change,* Reset cleared the board and the undo history, with no confirmation, next to Undo (`reset()` set `moves = []`). *Now* Reset is one entry in the history, holding the squares it changed and what was in them, so Undo takes it back and the moves before it stay undoable; a Reset that changes nothing records nothing (read: `reset()` in `app/stores/PuzzleSession.ts`). Tests cover Undo straight after Reset, and Reset → move → Undo → Undo (codex). Undo history still doesn't survive a reload (saved progress holds only the board, completion and a timestamp), so whether recovery should is a separate decision. | Both | Small to medium | Yes (user): built in PR #6, contract below |
 | 2 | Faster keyboard placement | Placing takes three presses: an arrow to reach the cell, Space, then an arrow. My earlier Shift+Arrow idea would reverse a deliberate decision: SPEC row 14 gave Shift back to the browser, with tests (read: commit `0c8fce3`), because Shift+Arrow extends a selection and Shift+Space scrolls. Any new key scheme would be a shortcut. | Challenge, keyboard players | — | No |
-| 3 | Shortcuts for Hint and Check, redo, then Reset | The buttons have no keys, and redo doesn't exist. Had they been built, single-letter keys would need board focus or an off switch, per WCAG 2.2's rule on character-key shortcuts (codex). A Redo *button* isn't a shortcut and remains open as item 8. | Both | — | No |
+| 3 | Shortcuts for Hint and Check, redo, then Reset | The buttons have no keys, and redo doesn't exist. Had they been built, single-letter keys would need board focus or an off switch, per WCAG 2.2's rule on character-key shortcuts (codex). A Redo *button* isn't a shortcut, so it was item 8, since decided No. | Both | — | No |
 | 4 | Drag a placed domino to move it | Dragging a placed piece does nothing now (read: `pointerUp` refuses a drag from an occupied cell). Dropping it off the board **cancels** rather than removes, so a missed drag never destroys a move (codex). Tap and Delete stay the ways to remove a piece. Test on touch first. | Casual | Medium, with its own review | |
 | 5 | Place during a drag | Placing the moment the pointer enters the neighbouring cell saves time, but it removes release-to-cancel. Scrolling isn't the risk: the board already suppresses one-finger panning (read: `touch-action: pinch-zoom` on `.board-grid` in `app/globals.css`). Treat it as an experiment: measure speed and error rate first (codex). | Challenge | Small to build, study first | |
 | 6 | Reset safety, after item 1 *(codex C5)* | Once Undo can reverse Reset, test whether casual players still want a confirmation, hold-to-reset or an "Undo Reset" notice. Never a forced dialog on a challenge board. | Casual | Small | |
 | 7 | Controls help on request *(codex C6)* | A short, accessible guide to tap, drag, keyboard and Undo, opened when wanted instead of replaying the tutorial. | Both | Small | |
-| 8 | Redo button | Redo doesn't exist. A button beside Undo reapplies the last undone move, and any new move discards the redo history. There's no key for it. | Both | Small | |
+| 8 | Redo button | Redo doesn't exist. A button beside Undo reapplies the last undone move, and any new move discards the redo history. There's no key for it. | Both | Small | No (user, 2026-10-04): unnecessary. SPEC P1-3's "No redo, deliberately" stands. |
 
 Some controls should stay as they are:
 - a tap places the domino at once when only one direction fits;
@@ -216,7 +217,7 @@ entry towards `MAX_UNDO`, are both agreed.
 **Not in this change**
 - Saving the undo history across a reload (still a separate decision).
 - A confirmation, hold-to-reset or an "Undo Reset" notice: item 6, decided after this ships.
-- Redo: item 8.
+- Redo: item 8, since decided No.
 
 **Tests**
 - Unit:
