@@ -713,6 +713,11 @@ matters because removal is instant, silent, and destructive. Bounded move stack 
 > outright, along with the stack: those moves describe a board that no longer exists, and undoing
 > into a freshly cleared grid would write dominoes back onto it.
 >
+> *Amended by Undoable Reset (NEXT-STEPS, Controls 1; PR #6):* Reset no longer clears the stack.
+> It is one entry on it, holding every square it changed and what was in it, so the moves before
+> it are undone onto the board they describe, never onto the cleared grid. A Reset that changes
+> nothing records nothing. Undoing a Reset sets `completed` from the rules, as any undo does.
+>
 > **Undo gets a button as well as the shortcut, which the spec did not ask for.** `Ctrl/Cmd+Z` is
 > the only affordance named above, but this game is built phone-first (P0-3) and a phone has no
 > Ctrl key: a keyboard-only undo is no undo at all for most of the people playing, while "removal is
@@ -724,6 +729,10 @@ matters because removal is instant, silent, and destructive. Bounded move stack 
 > **Not done: Reset does not confirm.** A single mis-tap discards the whole board, and the stack is
 > cleared so it cannot be undone. This follows the spec's "~5 lines" framing rather than inventing a
 > confirmation flow, but it is a real way to lose work and should be revisited in P2.
+>
+> *Amended by Undoable Reset (PR #6):* Undo now takes a Reset back, within a session. Reset still
+> doesn't confirm; whether it should is NEXT-STEPS Controls 6, decided after that change. The
+> undo history still isn't saved, so after a reload a Reset can't be undone.
 
 **P1-4. Completion feedback.** Winning currently sets `pointerEvents: none` and plays a file named
 `winSilent.mp3` — the game appears to *freeze* at the moment it should celebrate. Needs a visible
@@ -1793,11 +1802,11 @@ easiest to write confidently about.
   (P1-1), and the audio unlocking of rows 20d and 20i, are written to WebKit's documented behaviour
   and tested in Chromium, which is the only engine this harness drives. They need a real
   device. Nothing here should be read as a claim that they were observed working.
-- **Reset has no confirmation.** It discards a board in one press. The argument for leaving
-  it is that Undo is unlimited within a session, so the destructive case is narrow; the
-  argument against is that it is the one control that cannot be taken back after a reload.
-  It was raised against P1-3 and never resolved, and it is a product decision rather than a
-  defect.
+- **Reset has no confirmation.** It clears a board in one press. Since Undoable Reset (PR #6),
+  Undo takes it back within a session, so the destructive case is narrow; the argument
+  against leaving it is that after a reload a Reset can't be taken back, because the undo
+  history isn't saved. NEXT-STEPS Controls 6 decides it. It was raised against P1-3, and it
+  is a product decision rather than a defect.
 - **The corpus runs out in 2035.** By construction (P1-6). `corpus-horizon.yml` warns twelve
   months ahead, monthly, measuring from the last indexed date rather than from a file count.
 
