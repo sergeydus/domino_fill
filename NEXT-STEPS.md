@@ -141,10 +141,12 @@ Drafted 2026-10-09 from the user's decisions above. Codex's first review (2026-1
 corrections, all made below (two tabs, saving assists and failures, expiry without a fetch,
 Undo after a win, clock errors, the legacy rule). Second review: four more (the storage
 fallback, an unsaved finish, the legacy check's empty boards and its own writes, a sticky
-clock error), made below. Third review: four more (a failed clock-error save, the lost-finish
-policy, one authoritative store, "saved" meaning a completed transaction), made below.
-Three rules are proposals awaiting the user, marked **Proposed** (rules 5, 13 and 15); codex
-supports the first two in principle. No implementation until approved.
+clock error). Third review: four more (a failed clock-error save, the lost-finish policy,
+the store, "saved" meaning a completed transaction). Fourth review: three more (the solve's
+own date as evidence, and the fallback's store choice and legacy check, which the user
+settled by accepting loss there; rule 15). All made below. Two rules are proposals awaiting
+the user, marked **Proposed** (rules 5 and 13); codex supports both in principle. No
+implementation until approved.
 
 **How it works today** (read):
 - A date's nine boards have ids from `puzzleIdFor(date, group, level)` (`scripts/corpus.ts`),
@@ -204,15 +206,17 @@ supports the first two in principle. No implementation until approved.
    no result yet (rules 1 and 8). Once fixed, the result never changes.
 7. **Assists.** Using Hint or Check during an attempt marks it *assisted*, and the flag is
    saved (rule 16) *before* the hint or answer is shown, so Reset, leaving the board, or a
-   reload never clear it (codex). If it can't be saved, the hint isn't given. The board can still be
-   finished, and shows as solved with a hint, with no time. Undo and Reset are free: they
-   cost only time.
+   reload never clear it (codex). If it can't be saved, the hint isn't given. The board can
+   still be finished, and shows as solved with a hint, with no time. Undo and Reset are
+   free: they cost only time.
 8. **Giving up.** There's no give-up button. An attempt still unsolved when its date leaves
    the window (for a board dated the 9th, at local midnight starting the 11th) is *given up*,
    with no time. Its clock runs until then. Expiry doesn't wait for a fetch: every open of
-   the app, and every finish, first settles any attempt whose date has left the window as
-   given up (codex). A board solved after that, in a tab left open or offline, is a casual
-   solve and never turns a given-up attempt into a result.
+   the app, and every finish, settles any attempt whose date has left the window as given
+   up (codex), but only *after* rule 14's recovery of a lost finish has run, so a solve
+   that was made in time is never settled as given up (codex). A board solved after the
+   window, in a tab left open or offline, is a casual solve and never turns a given-up
+   attempt into a result.
 9. **A board's result** is one of: not started; in progress; solved, with a time; solved
    with a hint (no time); solved, time unavailable (a clock error, or a finish whose save
    was lost: rule 14); given up (no time).
@@ -228,8 +232,8 @@ supports the first two in principle. No implementation until approved.
     which an Undo clears. After the window, the board is an archive board, casual as now.
 12. **Streak days.** A date keeps the streak when at least one of its boards is solved
     inside the window: with a time, with a hint, or with its time unavailable, whether from
-    a clock error or a lost finish recovered by rule 14 (D9). The streak's
-    own rules (freezes, milestones) are D9's, built later against this.
+    a clock error or a lost finish recovered by rule 14 (D9). The streak's own rules
+    (freezes, milestones) are D9's, built later against this.
 13. **Boards played before the challenge ships** (codex). **Proposed**, and an explicit
     exception to "today and yesterday are always timed": the first time the challenge
     version runs *on this device*, before any Start is offered, it looks once at the
@@ -238,14 +242,15 @@ supports the first two in principle. No implementation until approved.
     before the challenge*, an empty board included: a record exists only because the board
     changed, so an emptied one (place, then Reset) was played too (codex reproduced it).
     Such a board isn't covered, is untimed, and has no result: it doesn't count towards its
-    size's total or the streak. The marks and the flag saying the check ran are written in
-    one transaction (rule 15), so the check counts as done only if every write succeeded,
-    and two tabs opening together run it once. In the `localStorage` fallback the marks and
-    the done flag are one value under one key, written by a single `setItem`, which is all
-    or nothing; two tabs running it together compute and write the same value; if it fails, no Start is offered and it runs
-    again on the next open. `savedAt` is never used as the marker, since it changes with
-    every move. A board with no record is treated as unseen, even if it was looked at,
-    because looking leaves nothing to tell (Principle 5). A device's first run of the
+    size's total or the streak. In IndexedDB, the marks and the flag saying the check ran
+    are written in one transaction (rule 15), so the check counts as done only if every
+    write succeeded, and two tabs opening together run it once; if it fails, no Start is
+    offered and it runs again on the next open. In the `localStorage` fallback it isn't
+    coordinated (rule 15): two tabs can scan different progress, or straddle midnight, and
+    a tab's new challenge progress can be mistaken for play before the challenge, leaving
+    that board untimed. Accepted (user). `savedAt` is never used as the marker, since it
+    changes with every move. A board with no record is treated as unseen, even if it was
+    looked at, because looking leaves nothing to tell (Principle 5). A device's first run of the
     challenge version can be days after the release, so the window it covers is that
     device's today and yesterday, not the release's.
 14. **What is stored.** Each attempt is one record, apart from progress and outside the
@@ -259,40 +264,46 @@ supports the first two in principle. No implementation until approved.
     overwrites a result another tab has saved meanwhile. Until it's saved, Undo, Reset and
     Play again are off on that board, so Practice can't begin and overwrite the solved
     board. The player is warned that it can be lost if the page closes. If it is, the next
-    open finds an attempt in progress with no finish, and decides it by the board's saved
-    progress, the only evidence left (codex):
-    - the saved board is solved, and its `savedAt` is inside the window: *solved, time
-      unavailable*. This holds after the window has closed too, because the solve happened
-      inside it, and it keeps the streak (rule 12);
-    - the saved board is solved but its `savedAt` is after the window: *given up* (rule 8);
-    - no solved board survives (progress writes can fail independently): no evidence of a
-      solve, so the attempt is in progress, its clock still counting from the saved start,
-      and if the window has closed, *given up*.
-15. **One store, and two tabs** (codex). Attempt records live in IndexedDB, and every change to one (Start,
-    either flag, the finish, the given-up settlement, the legacy check) is a read-check-write
-    inside one `readwrite` transaction. IndexedDB runs overlapping `readwrite` transactions
-    one at a time across every tab of the origin (the spec's transaction scheduling: read,
-    not yet tested; a two-tab test must show it before it's relied on), so the check and the
-    write are atomic without any other lock, and two tabs can't both start an attempt, lose
-    a flag, or fix two results. The record only moves forward: a saved start is kept, and a second Start
-    resumes it; neither flag ever clears; a fixed result is never overwritten, and a tab
-    whose finish arrives second shows the result already fixed. Other tabs re-read on a
-    change notice (`BroadcastChannel`) and on regaining focus. **Where IndexedDB isn't
-    usable** (some private modes), **Proposed:** attempts fall back to `localStorage` with
-    weaker guarantees, said plainly: two tabs open on the same board can overwrite each
-    other's start, flags or result after reading a stale record, so a hint, a clock error or
-    a result may be lost. A single tab keeps every guarantee.
+    open finds an attempt in progress with no finish, and decides it from *solve evidence*:
+    at the winning placement, the board's progress record also saves the instant and the
+    device's local date of the solve (`dayKey` then), written with the board itself. The
+    local date is what counts: `savedAt` alone can't say which calendar day a solve fell on
+    once the player changes time zone (codex reproduced 2026-10-10T23:30Z inside an
+    October 9 window in UTC but outside it in Jerusalem). This recovery runs before expiry
+    settlement (rule 8). So:
+    - solve evidence whose local date is inside the window: *solved, time unavailable*.
+      This holds after the window has closed too, because the solve happened inside it, and
+      it keeps the streak (rule 12);
+    - solve evidence dated after the window: *given up* (rule 8);
+    - no solve evidence survives (progress writes can fail independently): the attempt is
+      in progress, its clock still counting from the saved start, and once the window has
+      closed, *given up*.
+15. **The store, and two tabs** (codex). Attempt records live in IndexedDB, and every change
+    to one (Start, either flag, the finish, the given-up settlement, the legacy check) is a
+    read-check-write inside one `readwrite` transaction. IndexedDB runs overlapping
+    `readwrite` transactions one at a time across every tab of the origin (the spec's
+    transaction scheduling: read, not yet tested; a two-tab test must show it before it's
+    relied on), so the check and the write are atomic without any other lock, and two tabs
+    can't both start an attempt, lose a flag, or fix two results. The record only moves
+    forward: a saved start is kept, and a second Start resumes it; neither flag ever clears;
+    a fixed result is never overwritten, and a tab whose finish arrives second shows the
+    result already fixed. Other tabs re-read on a change notice (`BroadcastChannel`) and on
+    regaining focus.
 
-    **There is one authoritative store per device.** It's chosen once, on the device's
-    first run of the challenge version: IndexedDB if a test transaction completes, else
-    `localStorage`. The choice is recorded and never switched. A write that fails later,
-    mid-play, is a failed save under rules 4, 5, 7 and 14 (retry, warn), never a fallback,
-    so two stores can't hold competing histories of one attempt.
+    **Where IndexedDB doesn't open** (some private modes), the tab saves attempts to
+    `localStorage` instead, and it's still timed. The user decided this, 2026-10-09: "we
+    just save and the user will lose it, no big deal". So the fallback promises less, and
+    says so: nothing coordinates it. Each tab picks its store when it opens, so tabs, or one
+    device on different days, can use different stores. Two tabs on one board can overwrite
+    each other's start, flags or result after reading a stale record; a board can be given
+    a second attempt, or a hint, a clock error or a result lost; and the legacy check isn't
+    coordinated (rule 13). A single tab on a browser where IndexedDB works keeps every
+    guarantee.
 16. **"Saved" means the transaction completed** (codex). In IndexedDB a write counts as
     saved only on its transaction's `complete` event, not a request's `success`: a
     transaction can still abort after a request succeeds. Start reveals the board, a hint
-    is shown, and the legacy check counts as done only after `complete`. In `localStorage`,
-    saved means `setItem` returned without throwing.
+    is shown, and the legacy check counts as done only after `complete`. In the
+    `localStorage` fallback, saved means `setItem` returned without throwing.
 
 **Tests this contract needs before IndexedDB is relied on**
 - Two tabs with overlapping `readwrite` transactions on one attempt: one Start wins and
