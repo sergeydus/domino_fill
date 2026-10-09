@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { drag } from './play'
+import { frames, movement, track } from './frames'
 
 /**
  * What assistive technology actually receives (spec P1-8, row 19).
@@ -552,6 +553,48 @@ test.describe('the line targets', () => {
 })
 
 test.describe('reduced motion', () => {
+    /*
+     * Both tests record the grid every animation frame from *before* the refusal, and note
+     * the moment the board refused. They used to sample with round trips after the last
+     * key press, and the shake lasts 150ms (`MOTION.shake`): on a loaded machine the
+     * sampling could start after it had ended, so the shaking test could fail on a board
+     * that shook, and the still one pass without ever watching the shake's interval (codex).
+     * Now each asserts that its frames cover the refusal and well past the shake's end.
+     */
+    const RECORD_MS = 2000
+    const COVER_MS = 400
+
+    /** Arm the recorder and the refusal's timestamp, then press a move the rules refuse. */
+    const refuseWhileRecording = async (page: Page) => {
+        await track(page, 'grid', '.board-grid', RECORD_MS)
+        await page.evaluate(() => {
+            const el = document.querySelector('.board-grid')!
+            const w = window as unknown as { __refusedAt?: number }
+            new MutationObserver((_, observer) => {
+                if (!el.getAttribute('data-rejected')) return
+                w.__refusedAt = performance.now()
+                observer.disconnect()
+            }).observe(el, { attributes: true, attributeFilter: ['data-rejected'] })
+        })
+
+        // A move the rules refuse: into the wall from the top row.
+        await grid(page).focus()
+        await page.keyboard.press('ArrowDown')
+        await page.keyboard.press('Enter')
+        await page.keyboard.press('ArrowUp')
+        await expect(page.locator('.board-grid')).toHaveAttribute('data-rejected', /\d+/)
+
+        const samples = await frames(page, 'grid')
+        const refusedAt = await page.evaluate(() => (window as unknown as { __refusedAt?: number }).__refusedAt)
+        expect(refusedAt, 'the refusal was not seen').toBeDefined()
+        const first = samples[0].t
+        const last = samples[samples.length - 1].t
+        expect(first, 'recording started after the refusal').toBeLessThanOrEqual(refusedAt!)
+        expect(last - refusedAt!, `recording ended ${(last - refusedAt!).toFixed(0)}ms after the refusal`)
+            .toBeGreaterThanOrEqual(COVER_MS)
+        return movement(samples, s => s.tx !== 0 || s.ty !== 0)
+    }
+
     test('the board does not shake when the player asked for less motion', async ({ page }) => {
         /*
          * `MotionConfig reducedMotion="user"` in one place at the client boundary, and
@@ -567,20 +610,8 @@ test.describe('reduced motion', () => {
         await page.reload()
         await page.locator('[data-board-shell]').waitFor()
 
-        // A move the rules refuse: into the wall from the top row.
-        await grid(page).focus()
-        await page.keyboard.press('ArrowDown')
-        await page.keyboard.press('Enter')
-        await page.keyboard.press('ArrowUp')
-
-        const offsets = new Set<string>()
-        for (let i = 0; i < 6; i++) {
-            offsets.add(await page.locator('.board-grid').evaluate(
-                el => getComputedStyle(el).transform))
-            await page.waitForTimeout(30)
-        }
-        // Every sample identical: the grid never moved.
-        expect([...offsets]).toHaveLength(1)
+        // Every frame across the refusal at rest: the grid never moved.
+        expect((await refuseWhileRecording(page)).moved).toBe(false)
     })
 
     test('and shakes when they did not', async ({ page }) => {
@@ -589,17 +620,6 @@ test.describe('reduced motion', () => {
         await page.reload()
         await page.locator('[data-board-shell]').waitFor()
 
-        await grid(page).focus()
-        await page.keyboard.press('ArrowDown')
-        await page.keyboard.press('Enter')
-        await page.keyboard.press('ArrowUp')
-
-        const offsets = new Set<string>()
-        for (let i = 0; i < 8; i++) {
-            offsets.add(await page.locator('.board-grid').evaluate(
-                el => getComputedStyle(el).transform))
-            await page.waitForTimeout(25)
-        }
-        expect(offsets.size).toBeGreaterThan(1)
+        expect((await refuseWhileRecording(page)).moved).toBe(true)
     })
 })
