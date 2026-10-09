@@ -329,7 +329,9 @@ rules, accepted; each slice of the build gets its own contract and review before
 **Why.** The first piece of Ruleset v1 to build: the attempt record, its storage and the
 clock, with nothing on screen yet. Chosen with the user and codex, 2026-10-09: saving is
 what every later slice stands on, and it's where the review found the hard cases. Codex
-reviews this contract before any code.
+reviews this contract before any code. First review (2026-10-09): the split and the dev
+dependency accepted, with two corrections and two test requirements, all made below; then
+ready to implement.
 
 **What this slice builds.** A new folder, `app/challenge/`, used by nothing yet, so the game
 behaves exactly as it does now: no screen changes, no visual baselines change.
@@ -343,6 +345,10 @@ behaves exactly as it does now: no screen changes, no visual baselines change.
 - `clock.ts`, rule 5: elapsed time from the saved start, and the clock-error check, given a
   wall clock and a monotonic clock as arguments: an error when, between two readings, the
   wall clock advanced at least 5000 ms less than the monotonic one.
+- **The other clock-error path** (codex): a finish whose instant is earlier than
+  `startedAt` gives *solved, time unavailable (clock error)* in `attempt.ts`'s finish
+  itself, with or without any earlier check having run. A negative time can never be a
+  result.
 - `attemptStore.ts`, rules 13 to 16: reading and changing attempt records.
   - **IndexedDB**: one database, `dominoFill.challenge`, with an `attempts` store keyed by
     puzzle id and a `meta` store for the legacy check. Every change is one `readwrite`
@@ -354,8 +360,11 @@ behaves exactly as it does now: no screen changes, no visual baselines change.
   - The store is picked when the tab opens and kept for that tab (rule 15).
   - After each saved change it posts the puzzle id on a `BroadcastChannel`, so other tabs
     can re-read; this slice only sends, and a later slice listens.
-  - The legacy check (rule 13), as a function: given the progress records and the window,
-    mark the valid ones and set the done flag, in one transaction.
+  - The legacy check (rule 13), as a function: given the window, the definitions of the
+    boards inside it, and the stored progress records, it validates each record against its
+    own board's definition with `progressFor` (hash, size, rocks, legal cells), marks the
+    valid ones, empty included, and sets the done flag, in one transaction (codex). A record
+    with no definition given isn't marked.
 - Nothing is deleted: attempts sit outside the 14-day cleanup (D6). Nine small records a
   day.
 
@@ -385,21 +394,27 @@ real browser is tested too, below.
   the next day, the day after, a month end, a year end); every result and every forward-only
   refusal; the finish refused outside the window or after a result; the size totals and
   partials; the clock-error threshold just under and at 5000 ms, and forwards never flagged;
-  lost-finish recovery for each of rule 14's three cases, judged by the solve's local date.
+  lost-finish recovery for each of rule 14's three cases, judged by the solve's local date;
+  a finish before `startedAt` giving the clock-error result with no check run first, and no
+  result ever holding a negative time.
 - Unit, store (`tests/challengeStore.test.ts`, with `fake-indexeddb`): saved only on
   `complete`, and nothing saved when a transaction aborts after its request succeeded;
-  two connections: one Start wins and the other resumes it, two finishes fix one result,
-  and a hint against a finish in both orders (rule 15's tests); the legacy check marking
-  valid records, empty ones included, and skipping invalid ones, all or nothing; the
+  two connections to the same database from one factory (codex): one Start wins and the
+  other resumes it, two finishes fix one result, and a hint against a finish in both orders
+  (rule 15's tests); the legacy check marking valid records, empty ones included, and
+  skipping a wrong hash, altered rocks and a malformed placement, all or nothing; the
   fallback's keys and parse-or-missing reads.
 - Browser (`e2e/challengeStorage.spec.ts`, Chromium, two pages in one browser context, which
-  share IndexedDB as two tabs do): the premise rule 15 rests on, measured rather than read.
-  Page A opens a `readwrite` transaction on a test database and keeps it busy; page B's
-  overlapping `readwrite` transaction must not begin until A's has completed. This tests the
+  share IndexedDB as two tabs do): the premise rule 15 rests on, measured rather than read:
+  page A opens a `readwrite` transaction on a test database and keeps it busy. The test
+  proves contention, not just order (codex): page B creates its overlapping `readwrite`
+  transaction while A's is still active (A reports it active after B's creation), and A's
+  `complete` fires before B's first request succeeds. This tests the
   browser, not our module, which nothing on screen uses yet; the two-tab tests through the
   module itself come with the wiring. The harness drives Chromium only, so Firefox and
   Safari aren't measured.
-- Mutation-tested: the window off by a day; a backwards change allowed; saved reported on
+- Mutation-tested: a finish before the start given a time; the window off by a day; a
+  backwards change allowed; saved reported on
   `success`; the threshold at 4999 or 5001; recovery using `savedAt` instead of the local
   date; the legacy check skipping empty boards.
 
