@@ -8,7 +8,7 @@ Domino Fill stays a calm daily puzzle, and gains a LinkedIn-style **Daily Challe
 - one attempt per board, timed;
 - a time per board and a total per size, to share.
 
-Earlier days, in the archive, are the casual, clock-free game.
+Days before yesterday, in the archive, are the casual, clock-free game.
 
 **There are no servers**, so every competitive feature here works on one device, on the
 honour system, and there is no rank. That is why it's called a challenge. Leaderboards and
@@ -38,7 +38,7 @@ Evidence levels:
 | 2026-09-28 | The clock starts only when a board is revealed. | Loading and reading the menu never count. See D3. |
 | 2026-09-28 | The result is one total: the three boards' times added up, with a split per board. | One number to share and beat. See D1. *Superseded 2026-10-09: a time per board and a total per size.* |
 | 2026-09-28 | The boards are played in order: Hard 1, then 2, then 3. | Every player's run is the same. *Superseded 2026-10-09: any order.* |
-| 2026-09-28 | Using a hint on a challenge board means the day's result doesn't count. | This was decided as "unranked". The boards can still be finished; the total is kept, marked as assisted. See D2. |
+| 2026-09-28 | Using a hint on a challenge board means the day's result doesn't count. | This was decided as "unranked". The boards can still be finished; the total is kept, marked as assisted. See D2. *Superseded 2026-10-09: a hint costs that board's time only.* |
 | 2026-09-28 | Undo and Reset stay allowed on challenge boards. | They cost time, which is their own penalty. |
 | 2026-09-28 | Streaks, yes. One challenge board solved in a day keeps a streak alive. | See D9. |
 | 2026-09-28 | Streak freeze: one earned for every 3 days played, at most 3 saved. | A freeze is used on a missed day. See D9. |
@@ -52,16 +52,20 @@ Evidence levels:
 | 2026-10-04 | No Redo ("seems unnecessary"). | Controls 8 is No, against codex's recommendation, so SPEC P1-3's "No redo, deliberately" stands. A contract was drafted and reviewed by codex, and isn't kept. |
 | 2026-10-09 | Reset stays as it is: no confirmation, no notice. | Controls 6 is No. Undo takes a Reset back, and the user tried it. A Reset still can't be undone after a reload. |
 | 2026-10-09 | The Daily Challenge is **all nine** of the day's boards: 6×6, 7×7 and 8×8, three levels each, every one timed. | Each board is covered until the player presses Start, which reveals it and starts its clock (D3). Supersedes the three-8×8 set. See D1. |
-| 2026-10-09 | Today's boards are always timed. There's no untimed way to play them. | Clock-free casual play is the archive's earlier days. Principles 1 and 2 change. Open: D8 lets yesterday's challenge still be started, so whether yesterday is timed or casual needs deciding. |
+| 2026-10-09 | Today's boards are always timed. There's no untimed way to play them. | Clock-free casual play is the archive's earlier days. Principles 1 and 2 change. |
 | 2026-10-09 | The result is a time per board, and a total per size. | A size's total is its three boards' times added up, so finishing one size is a complete result even if the others are skipped. Open (D2): what a size shows with a board unsolved. |
 | 2026-10-09 | The boards can be played in any order. | Each board has its own clock, so the time between boards never counts. |
+| 2026-10-09 | Yesterday's boards are timed too, like today's. | D8's window: a date's challenge can be started while it is today or yesterday on the player's device, so friends in different time zones can play the same date. The archive before yesterday is casual. |
+| 2026-10-09 | A hint costs that board's time only. | The board can still be finished, marked as hinted, with no time. Its size has no total that day; the other sizes are unaffected. |
+| 2026-10-09 | Check counts like a hint. | It tells the player something about the solution. |
+| 2026-10-09 | A size with a board unsolved or given up shows a partial result. | Solved boards keep their times, and the size shows "partial" instead of a total. Any solved board keeps the streak alive. |
 
 ## Principles
 
-1. **Casual play is the archive.** Earlier days are never timed, and a player who plays only
-   them never sees a clock or a streak. Changes to casual play must be better for casual
-   players too. *(Changed 2026-10-09: it was "casual play is the default". Today's boards
-   are now always timed.)*
+1. **Casual play is the archive.** Days before yesterday are never timed, and a player who
+   plays only them never sees a clock or a streak. Changes to casual play must be better for
+   casual players too. *(Changed 2026-10-09: it was "casual play is the default". Today's
+   and yesterday's boards are now always timed.)*
 2. **The challenge is all nine of the day's boards.** They're the same boards for everyone on
    a date, each covered until the player starts it, and only the first attempt counts.
    *(Changed 2026-10-09: it was the three 8×8 boards, opt-in.)*
@@ -110,13 +114,13 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: a hint means the result doesn't count; Undo and Reset are allowed. Still open: Check, **abandoning** a board part-way, and what a size's **partial** total means, such as two boards solved and the third given up. Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). Still open: how a board is **abandoned** part-way, and when an unfinished board counts as given up. Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Ready reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. | Medium | Yes |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. So are archive puzzles outside the challenge window (D8). | Medium | |
 | D6 | Personal stats | Today's time, best, average, the last 30 days and a solved count. They get their own storage, which the 14-day progress cleanup never removes (read: `RETENTION_DAYS = 14` in `app/stores/progressStorage.ts`). | Small | |
 | D7 | Share card *(codex C4, R10)* | A spoiler-free result: the date, the time, whether assists were used, and a link to that date's challenge. Casual players can share a solve without a time. It never posts automatically. | Small to medium | |
-| D8 | Challenge link and window *(codex R8)* | "Today" is the player's local day (read: `DominoClient.tsx` loads the day from `dayKey(new Date())`), so a friend's today can be your yesterday (codex). **Proposed:** a date's challenge can be started, as a first attempt, while that date is today or yesterday on the player's device. The 48-hour window covers every time zone, so a shared link works for both friends. Links name an explicit date, and future dates are refused, even though their files are public. **Open since 2026-10-09:** today's boards are always timed, so whether yesterday's boards, inside this window, are covered and timed too or casual. | Small to medium | |
+| D8 | Challenge link and window *(codex R8)* | "Today" is the player's local day (read: `DominoClient.tsx` loads the day from `dayKey(new Date())`), so a friend's today can be your yesterday (codex). **Proposed:** a date's challenge can be started, as a first attempt, while that date is today or yesterday on the player's device. The 48-hour window covers every time zone, so a shared link works for both friends. Links name an explicit date, and future dates are refused, even though their files are public. Since today is always timed, yesterday's boards inside this window are covered and timed too (user, 2026-10-09). | Small to medium | Yes (user, 2026-10-09) |
 | D9 | Streaks *(codex C7)* | Consecutive days with at least one challenge board solved, plus milestones, as LinkedIn does. Proposed: they use D8's window, so a player who solves yesterday's board just after midnight keeps their streak. Codex's caution still applies, since pressure fights calm play. So no streak is shown to players who never play the challenge. A streak freeze is earned for every 3 days played, at most 3 are saved, and one is used automatically on a missed day. | Small to medium | Yes |
 | D10 | Finish without blocking *(codex R6)* | The clock stops on the winning placement. The result appears without blocking input and is announced once to screen readers. There is no auto-advance in casual play. Also check that no animation blocks input: every duration in `app/dominoFill/motion.ts` is 0.2 s or less (read), but blocking hasn't been checked. | Medium | |
 | D11 | Run receipt *(codex R4)* | Export the puzzle ID, definition hash, ruleset version, time and move log. It's useful for replay and settling disputes among friends, but proves the moves, not who made them or how fast. | Medium | |
@@ -811,7 +815,8 @@ Answered:
 - [x] **In order?** No, any order (2026-10-09; it was Hard 1, then 2, then 3).
 - [x] **Can today's boards be played untimed?** No. Every one is covered until Start, and
   clock-free play is the archive (2026-10-09).
-- [x] **What does a hint do?** The day's result doesn't count.
+- [x] **What does a hint do?** It costs that board's time only (2026-10-09; it was the day's
+  result).
 - [x] **Undo and Reset?** Allowed.
 - [x] **Streaks?** Yes; one challenge board solved keeps one alive.
 - [x] **Streak freeze?** One earned for every 3 days played, at most 3 saved.
@@ -823,17 +828,17 @@ Before any challenge work:
 - [x] **May a board be opened casually, and the challenge still attempted later?** (codex's
   first question.) Answered by the user's 2026-10-09 decision: today's boards have no casual
   way in, so a board's first look is always its timed attempt (D1).
-- [ ] **A hint, now that results are per board.** "The day's result doesn't count" was
-  written for one total. Does a hint void that board's time only, or its size's total too?
-- [ ] **Which dates can a first attempt start on?** Recommended: today or yesterday on the
-  player's device (D8), with streaks following the same window (D9). Since today is always
-  timed, this also decides whether yesterday's boards are covered and timed, or casual.
-- [ ] **Abandoning and partial totals.** What happens to a size's total if a board is given up
-  part way, or only two of its three are solved (D2)? Recommended: a size's total needs all
-  three of its boards, and anything less is kept as a partial result, which still keeps the
-  streak. *(Restated 2026-10-09 for totals per size; it was the day's total.)*
-- [ ] **Check on a challenge board?** Recommended: the result doesn't count, as with Hint,
-  because Check tells you something about the solution.
+- [x] **A hint, now that results are per board.** That board's time only; the board finishes
+  marked as hinted, and its size has no total that day (user, 2026-10-09).
+- [x] **Which dates can a first attempt start on?** Today or yesterday on the player's device
+  (D8), and yesterday's boards are covered and timed like today's (user, 2026-10-09). Streaks
+  follow the same window (D9).
+- [x] **Partial totals.** A size's total needs all three of its boards; anything less shows a
+  partial result, and any solved board keeps the streak (user, 2026-10-09).
+- [ ] **Abandoning.** How a board is given up part way, and when an unfinished board counts
+  as given up (D2).
+- [x] **Check on a challenge board?** It counts like a hint, because it tells you something
+  about the solution (user, 2026-10-09).
 - [ ] **Does a hinted solve keep the streak?** Recommended: yes. The streak rewards playing;
   the hint has already cost the result.
 - [ ] **Does a "day played" for earning a freeze need a challenge board solved?** Recommended:
