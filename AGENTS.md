@@ -72,8 +72,13 @@ In Bash (use your shell's equivalent, with the same five steps and checks):
 ```bash
 # Wait for the socket pool first: under ~100 sockets in TIME_WAIT (see below).
 # Before deleting: confirm you're at the repository root, and that each path resolves inside it.
-# (Through `cd`, because on Windows git prints D:/... and Bash /d/...; compared raw, they never match.)
-[ "$(cd "$(git rev-parse --show-toplevel)" && pwd -P)" = "$(pwd -P)" ] || exit 1
+# Discovery is checked on its own: if git fails it prints nothing, and `cd ""` stays put, so a
+# one-line comparison would pass anywhere (codex). The root is resolved through `cd` because on
+# Windows git prints D:/... and Bash /d/...; compared raw, they never match.
+gate_root=$(git rev-parse --show-toplevel) || exit 1
+[ -n "$gate_root" ] || exit 1
+gate_root=$(cd "$gate_root" && pwd -P) || exit 1
+[ "$gate_root" = "$(pwd -P)" ] || exit 1
 rm -rf .next tsconfig.tsbuildinfo node_modules/.vite node_modules/.vitest
 npx tsc --noEmit;                    echo "tsc=$?"
 npm run lint;                        echo "lint=$?"
