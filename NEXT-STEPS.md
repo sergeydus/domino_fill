@@ -132,6 +132,82 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | D14 | Input fairness study *(codex R5)* | Compare mouse, touch and keyboard times before adding faster controls. If one input is much faster, decide whether to note the input on the share card. | Study first | |
 | D15 | Speedrun categories on archive puzzles | The earlier plan: fixed sets, splits and video-checked runs. It's superseded as the main competition, but could return as an extra. | Medium | |
 
+### Ruleset v1 (D2): contract draft, for codex's review
+
+**Why.** A time means nothing until the rules that produced it are fixed, so they're written
+before any time is saved (codex R1). This is the rules only, not the screens: covering,
+the clock's display, the result card, stats, sharing and streak UI come after, against it.
+Drafted 2026-10-09 from the user's decisions above. Two rules are proposals, marked
+**Proposed**; the rest restate decisions already made.
+
+**How it works today** (read):
+- A date's nine boards have ids from `puzzleIdFor(date, group, level)` (`scripts/corpus.ts`),
+  so a board belongs to exactly one date.
+- "Today" is the device's local date (`dayKey`, `app/stores/progressStorage.ts`).
+- Progress is one `localStorage` key per puzzle: the board, `completed`, the definition's
+  hash and `savedAt`. A record is written only when the board changed (`persist` in
+  `BoardsStore.ts`), so a board that was only looked at has none. Records untouched for 14
+  days are deleted (`RETENTION_DAYS`).
+- Nothing is timed, and nothing records Hint or Check use.
+
+**The rules**
+1. **Which boards.** All nine boards of a date are challenge boards while that date is today
+   or yesterday on the device. From the day after that, they're archive boards: casual and
+   untimed, as every older date is now.
+2. **Covered until Start.** A challenge board with no attempt shows covered: no cells, rocks
+   or line targets. Start is offered only once the board has loaded, and pressing it reveals
+   the board and starts its clock in the same step (D3). Every route to the board (the
+   selectors, Next on the completion card, the archive, a reload) shows it covered until then.
+3. **One attempt per board, per device.** Start begins the board's attempt, and the attempt
+   is its result. Cleared storage or another browser gets another attempt: the honour system
+   (Principle 5).
+4. **The clock.** At Start the attempt saves its start as a wall-clock instant (`Date.now()`),
+   before the board is shown, so a reload resumes the clock and never restarts it (D4). The
+   clock never pauses: a hidden tab, a locked phone, a reload or a closed browser all count.
+   **Proposed:** if the device clock is found to have gone backwards (the finish earlier than
+   the start), the board is solved with no time, as an assisted one is, rather than given a
+   negative or shortened time.
+5. **The finish.** The placement that solves the board by the rules stops the clock, and the
+   time is that placement's instant minus the start. The result is fixed then: undoing the
+   winning move afterwards, or Play again, doesn't reopen or change it.
+6. **Assists.** Using Hint or Check on a board during its attempt marks the attempt
+   *assisted*. The board can still be finished, and shows as solved with a hint, with no
+   time. Undo and Reset are free: they cost only time.
+7. **Giving up.** There's no give-up button. An attempt still unsolved when its date leaves
+   the window (for a board dated the 9th, at local midnight starting the 11th) is *given up*, with no time. Its
+   clock runs until then.
+8. **A board's result** is one of: not started; in progress; solved, with a time; solved
+   with a hint (no time); given up (no time).
+9. **A size's result.** A size (6×6, 7×7, 8×8) has a total when all three of its boards are
+   solved with a time: the three times added up. Otherwise it shows *partial*: the times it
+   has, and the state of each other board.
+10. **Practice.** Once a board's attempt is solved, it can be replayed inside the window as
+    Practice: a fresh copy, timed, labelled Practice everywhere, never changing the attempt's
+    result or its completion mark (D5). Practice isn't offered before the attempt is solved.
+    Archive boards are casual, as now.
+11. **Streak days.** A date keeps the streak when at least one of its boards is solved inside
+    the window, with or without a hint (D9). The streak's own rules (freezes, milestones) are
+    D9's, built later against this.
+12. **Boards played before the challenge ships** (codex). **Proposed:** a challenge board
+    with a saved progress record from before the release can't honestly be a first attempt.
+    It isn't covered; it shows as *played before the challenge*, untimed and with no result,
+    and it doesn't count towards its size's total or the streak. A board with no record is
+    treated as unseen, even if it was looked at, because looking leaves nothing to tell
+    (Principle 5). This touches only the release's today and yesterday.
+13. **What is stored.** Each attempt is saved under its own key, apart from progress and
+    outside the 14-day cleanup (D6): the puzzle id, the definition's hash, the date, the
+    ruleset version (`1`), the start instant, and, once it ends, the result and the finish
+    instant. Practice runs aren't saved as results. A later ruleset never reinterprets a
+    result saved under this one.
+14. **Two tabs.** The saved attempt is the one truth: a second tab that finds a start already
+    saved resumes that attempt, never starts another.
+
+**Not in this contract**
+- The covered board's look, the clock's display, the result and share cards (D7), stats
+  (D6), streak UI (D9), the run receipt (D11), the previous-best split (D12).
+- The timer's behaviour on real devices (D13) and the input-fairness study (D14).
+
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
