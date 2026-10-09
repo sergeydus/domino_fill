@@ -324,6 +324,156 @@ rules, accepted; each slice of the build gets its own contract and review before
   (D6), streak UI (D9), the run receipt (D11), the previous-best split (D12).
 - The timer's behaviour on real devices (D13) and the input-fairness study (D14).
 
+### Challenge slice 1, attempts and the clock: implementation contract
+
+**Why.** The first piece of Ruleset v1 to build: the attempt record, its storage and the
+clock, with nothing on screen yet. Chosen with the user and codex, 2026-10-09: saving is
+what every later slice stands on, and it's where the review found the hard cases. Codex
+reviews this contract before any code. First review (2026-10-09): the split and the dev
+dependency accepted, with two corrections and two test requirements, all made below; then
+ready to implement.
+
+**What this slice builds.** A new folder, `app/challenge/`, used by nothing yet, so the game
+behaves exactly as it does now: no screen changes, no visual baselines change.
+- `window.ts`, rule 1: whether a board's date is inside the window on a device date, and
+  when it leaves it. Pure, on `YYYY-MM-DD` strings (`dayKey`), with no time zone arithmetic.
+- `attempt.ts`, rules 3 to 10 and 14: the attempt record and its result, and each change as
+  a pure function from one record to the next: start, mark assisted, mark clock error,
+  finish, settle as given up, recover a lost finish. Each moves only forward (rule 15): a
+  change that would go backwards returns the record unchanged, and says so. Also a size's
+  result from its three attempts (rule 10).
+- `clock.ts`, rule 5: elapsed time from the saved start, and the clock-error check, given a
+  wall clock and a monotonic clock as arguments: an error when, between two readings, the
+  wall clock advanced at least 5000 ms less than the monotonic one.
+- **The other clock-error path** (codex): a finish whose instant is earlier than
+  `startedAt` gives *solved, time unavailable (clock error)* in `attempt.ts`'s finish
+  itself, with or without any earlier check having run. A negative time can never be a
+  result.
+- `attemptStore.ts`, rules 13 to 16: reading and changing attempt records.
+  - **IndexedDB**: one database, `dominoFill.challenge`, with an `attempts` store keyed by
+    puzzle id and a `meta` store for the legacy check. Every change is one `readwrite`
+    transaction that reads the record, applies the pure function, and writes the result,
+    and it reports *saved* only on the transaction's `complete` (rule 16).
+  - **The fallback**: where IndexedDB doesn't open, `localStorage`, one key per attempt
+    (`dominoFill.challenge.v1.attempt.<puzzleId>`) and one for the legacy marks with their
+    done flag. Saved means `setItem` didn't throw. Uncoordinated, as rule 15 accepts.
+  - The store is picked when the tab opens and kept for that tab (rule 15).
+  - After each saved change it posts the puzzle id on a `BroadcastChannel`, so other tabs
+    can re-read; this slice only sends, and a later slice listens.
+  - The legacy check (rule 13), as a function: given the window, the definitions of the
+    boards inside it, and the stored progress records, it validates each record against its
+    own board's definition with `progressFor` (hash, size, rocks, legal cells), marks the
+    valid ones, empty included, and sets the done flag, in one transaction (codex). A record
+    with no definition given isn't marked.
+- Nothing is deleted: attempts sit outside the 14-day cleanup (D6). Nine small records a
+  day.
+
+**The record** (rule 14): `puzzleId`, `definitionHash`, `date`, `ruleset: 1`, `startedAt`,
+`assisted`, `clockError`, and once it ends, `result` and `finishedAt`. A result is one of
+*solved* with its time in ms, *solved with a hint*, *solved, time unavailable* with a reason
+(*clock error* or *finish lost*), or *given up*. "Not started" is no record, and "in
+progress" is a record without a result. A stored record that doesn't parse reads as no
+attempt, so a Start can overwrite it: one corrupt record costs that board's attempt, under
+the honour system, and nothing else. (Progress storage instead deletes unreadable records
+when it prunes, `pruneStorage`; attempts are never pruned, D6.)
+
+**Not in this slice**
+- Anything on screen: covering, Start, the clock's display, results, Practice (rule 11).
+- Wiring into `PuzzleSession` and `BoardsStore`: the finish on the winning placement, Hint
+  and Check marking the attempt, and saving solve evidence with progress (rule 14). That
+  changes `progressStorage.ts`, so it belongs with the wiring.
+- Listening for other tabs' changes, and the streak (D9).
+
+**A new dev dependency.** The unit tests run in Node, which has no IndexedDB. They'd use
+`fake-indexeddb` (dev only, never shipped), which implements IndexedDB in memory, including
+transactions from two connections, which stand in for two tabs. It's a simulation, so the
+real browser is tested too, below.
+
+**Tests**
+- Unit, pure (`tests/challengeAttempt.test.ts`): the window on its edges (the board's date,
+  the next day, the day after, a month end, a year end); every result and every forward-only
+  refusal; the finish refused outside the window or after a result; the size totals and
+  partials; the clock-error threshold just under and at 5000 ms, and forwards never flagged;
+  lost-finish recovery for each of rule 14's three cases, judged by the solve's local date;
+  a finish before `startedAt` giving the clock-error result with no check run first, and no
+  result ever holding a negative time.
+- Unit, store (`tests/challengeStore.test.ts`, with `fake-indexeddb`): saved only on
+  `complete`, and nothing saved when a transaction aborts after its request succeeded;
+  two connections to the same database from one factory (codex): one Start wins and the
+  other resumes it, two finishes fix one result, and a hint against a finish in both orders
+  (rule 15's tests); the legacy check marking valid records, empty ones included, and
+  skipping a wrong hash, altered rocks and a malformed placement, all or nothing; the
+  fallback's keys and parse-or-missing reads.
+- Browser (`e2e/challengeStorage.spec.ts`, Chromium, two pages in one browser context, which
+  share IndexedDB as two tabs do): the premise rule 15 rests on, measured rather than read:
+  page A opens a `readwrite` transaction on a test database and keeps it busy. The test
+  proves contention, not just order (codex): page B creates its overlapping `readwrite`
+  transaction while A's is still active (A reports it active after B's creation), and A's
+  `complete` fires before B's first request succeeds. This tests the
+  browser, not our module, which nothing on screen uses yet; the two-tab tests through the
+  module itself come with the wiring. The harness drives Chromium only, so Firefox and
+  Safari aren't measured.
+- Mutation-tested: a finish before the start given a time; the window off by a day; a
+  backwards change allowed; saved reported on
+  `success`; the threshold at 4999 or 5001; recovery using `savedAt` instead of the local
+  date; the legacy check skipping empty boards.
+
+**As built** (2026-10-09)
+- `app/challenge/window.ts`, `attempt.ts`, `clock.ts` and `attemptStore.ts`, imported by
+  nothing in the app. `fake-indexeddb` 6.2.5 is the one new dev dependency, with no
+  dependencies of its own; npm 11.19 also moved some `"peer": true` markers in the lockfile.
+- Choices inside the contract:
+  - an attempt both assisted and flagged with a clock error finishes as *solved with a
+    hint*: the hint is the player's own act, and neither result has a time;
+  - a lost finish on an assisted attempt recovers as *solved with a hint*, not *time
+    unavailable*;
+  - a change's outcome says `committed` (the transaction completed, or `setItem` didn't
+    throw), `changed`, and the record storage now holds; when not committed, the record as
+    it was read.
+- **Measured in Chromium:** B's `readwrite` transaction waited for A's even on a *different*
+  store of the same database, which is stricter than the spec requires and harmless here,
+  since every attempt is in one store. With B on a different *database*, B's write succeeded
+  within a millisecond while A was busy, so the wait isn't A's request chain starving B.
+  That finding changed one mutation: "B on another store" was caught only by the final value
+  check, not by the overlap check; "B on another database" replaces it and is caught by the
+  overlap check.
+- **The order is proved by a read, not timestamps.** The first version compared the two
+  pages' `performance.timeOrigin + now()`, and a gate run failed on it: B's success read
+  0.1 ms before A's completion. Two pages' clocks don't agree that finely. Now A makes one
+  last write only after it is released, and B's first request reads the key: B seeing that
+  write means A had committed before B ran. What B read is recorded boxed, so "B hasn't
+  run" can't be mistaken for "B read nothing" (the database mutation first passed the
+  overlap check that way, and failed only later). 10 repeated runs per project passed.
+- Tests: 28 pure unit tests, 15 store tests, and the Chromium test on both projects.
+  Mutation-tested, 14 of 14 caught: a finish before the start given a time, the window off
+  by a day, a fixed result replaced, a second Start restarting, a hint set after the result,
+  saved reported on a request's success, the threshold exclusive, forwards flagged, recovery
+  by the instant instead of the local date, settling before recovering, the legacy check
+  skipping empty boards or running twice, a hinted solve keeping a time, and B on another
+  database.
+- No screen changes, so no visual baselines changed.
+
+**Corrected at codex's review** (2026-10-10). Codex reproduced two gaps:
+- **A stored attempt was checked for types, not sense.** `2026-02-31` passed, and its window
+  quietly ended March 4; and a timed *solved* result on an attempt flagged both assisted and
+  clock error passed, and would have counted towards a size's total. Now a date must be a
+  real calendar date (`isDay`: it survives the round trip), `addDays` refuses one that
+  isn't, and a result must agree with its record: a timed solve has neither flag and a time
+  of exactly finish minus start; a hint needs the assisted flag; *time unavailable* is never
+  on an assisted attempt, and a clock-error one needs that flag; every solve has a finish
+  instant, and no other state does. A test checks that every state the changes produce
+  still passes.
+- **A record wasn't bound to its key.** An otherwise valid record of another board, stored
+  under this board's key, was resumed by Start. In both backends a record now reads as an
+  attempt only under its own puzzle's key, and a change that would file a record under
+  another key saves nothing.
+- And a comment claimed a shortened time can never become a result: an undetected clock
+  change still can, as rule 5 accepts.
+- Mutation-tested, 7 more, all caught: an impossible date accepted, no consistency check, a
+  timed solve on a flagged attempt, a time disagreeing with finish minus start, another
+  board's record read, and each backend filing under another key. With the first 14, 21 of
+  21. (The first 14's "saved on success" probe was rewritten to the moved code and caught.)
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
