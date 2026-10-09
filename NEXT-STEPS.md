@@ -418,6 +418,41 @@ real browser is tested too, below.
   `success`; the threshold at 4999 or 5001; recovery using `savedAt` instead of the local
   date; the legacy check skipping empty boards.
 
+**As built** (2026-10-09)
+- `app/challenge/window.ts`, `attempt.ts`, `clock.ts` and `attemptStore.ts`, imported by
+  nothing in the app. `fake-indexeddb` 6.2.5 is the one new dev dependency, with no
+  dependencies of its own; npm 11.19 also moved some `"peer": true` markers in the lockfile.
+- Choices inside the contract:
+  - an attempt both assisted and flagged with a clock error finishes as *solved with a
+    hint*: the hint is the player's own act, and neither result has a time;
+  - a lost finish on an assisted attempt recovers as *solved with a hint*, not *time
+    unavailable*;
+  - a change's outcome says `committed` (the transaction completed, or `setItem` didn't
+    throw), `changed`, and the record storage now holds; when not committed, the record as
+    it was read.
+- **Measured in Chromium:** B's `readwrite` transaction waited for A's even on a *different*
+  store of the same database, which is stricter than the spec requires and harmless here,
+  since every attempt is in one store. With B on a different *database*, B's write succeeded
+  within a millisecond while A was busy, so the wait isn't A's request chain starving B.
+  That finding changed one mutation: "B on another store" was caught only by the final value
+  check, not by the overlap check; "B on another database" replaces it and is caught by the
+  overlap check.
+- **The order is proved by a read, not timestamps.** The first version compared the two
+  pages' `performance.timeOrigin + now()`, and a gate run failed on it: B's success read
+  0.1 ms before A's completion. Two pages' clocks don't agree that finely. Now A makes one
+  last write only after it is released, and B's first request reads the key: B seeing that
+  write means A had committed before B ran. What B read is recorded boxed, so "B hasn't
+  run" can't be mistaken for "B read nothing" (the database mutation first passed the
+  overlap check that way, and failed only later). 10 repeated runs per project passed.
+- Tests: 28 pure unit tests, 15 store tests, and the Chromium test on both projects.
+  Mutation-tested, 14 of 14 caught: a finish before the start given a time, the window off
+  by a day, a fixed result replaced, a second Start restarting, a hint set after the result,
+  saved reported on a request's success, the threshold exclusive, forwards flagged, recovery
+  by the instant instead of the local date, settling before recovering, the legacy check
+  skipping empty boards or running twice, a hinted solve keeping a time, and B on another
+  database.
+- No screen changes, so no visual baselines changed.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
