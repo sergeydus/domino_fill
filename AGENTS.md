@@ -1,8 +1,20 @@
 # Working on Domino Fill
 
-Rules for an agent implementing changes in this repository. They are how every change so
-far was made, and the reviewer will hold new work to them. Where a rule names a reason, the
-reason is a real incident in this repository's history.
+Rules for any agent planning, building or reviewing changes in this repository. They are
+how every change so far was made. Where a rule names a reason, the reason is a real incident
+in this repository's history.
+
+## Two agents, one set of rules
+
+Two agents work here, Claude and codex, and **both plan and build**. Neither role belongs to
+either agent: for each change, the user says which agent takes it, and **the other agent
+reviews** it, plan and code alike. The user passes messages between the two. Below, "the
+builder" is whichever agent is doing the change and "the reviewer" is the other one.
+
+- Rules apply to the builder and the reviewer alike: a reviewer checks the work against
+  them, and says plainly what it verified itself and what it only read.
+- Don't start a change the user gave the other agent, and don't commit to its branch.
+- A reviewer's recommendation is advice to the user, not a decision.
 
 ## The project
 
@@ -20,13 +32,13 @@ reason is a real incident in this repository's history.
 
 ## The flow for every change
 
-1. **Decision.** Product choices are the user's. Ask; don't infer. A reviewer's
-   recommendation is not the user's decision. Record each decision in NEXT-STEPS's
-   decision log, dated, and in the idea's Decision column.
-2. **Contract first.** Write an implementation contract in NEXT-STEPS before any code:
-   why, how it works today (read from the code, cited), the rules, what's not in it, and
-   the tests. The reviewer reviews it; fix every correction in the contract and say so
-   there. No code until the contract is accepted.
+1. **Decision.** Product choices are the user's, and so is which agent builds the change.
+   Ask; don't infer. Record each decision in NEXT-STEPS's decision log, dated, and in the
+   idea's Decision column.
+2. **Contract first.** The builder writes an implementation contract in NEXT-STEPS before
+   any code: why, how it works today (read from the code, cited), the rules, what's not in
+   it, and the tests. The reviewer reviews it; the builder makes every correction in the
+   contract and says so there. No code until the contract is accepted.
 3. **Build** on a feature branch from `master`, against the contract.
 4. **Mutation-test** every change (below).
 5. **"As built" notes** in the contract: choices made inside it, anything measured, test
@@ -44,6 +56,8 @@ reason is a real incident in this repository's history.
   `gh run download <run id> -n visual-baselines`, and commit only the baseline files that
   differ, in a separate commit.
 - CI uses `cancel-in-progress`: don't push to a branch while a run you need is going.
+- Each agent marks its own commits the way its tools do (Claude ends the message with a
+  `Co-Authored-By: Claude …` trailer), so the history shows who built what.
 
 ## The gate: before every commit, from cold
 
@@ -95,7 +109,7 @@ npm run test:e2e;                    echo "e2e=$?"
   any run failed.
 - **Deviations go into the spec,** as an "Amended" note in SPEC.md or GRAPHICS-SPEC.md, or
   in NEXT-STEPS, never only in a message.
-- Notes to the reviewer start with "Written for: …", naming the reader.
+- Notes to the other agent start with "Written for: …", naming the reader.
 
 ## Constraints
 
@@ -111,6 +125,6 @@ npm run test:e2e;                    echo "e2e=$?"
 - The Daily Challenge: decisions and Ruleset v1 (D2) are in NEXT-STEPS. Slice 1 (the
   attempt record, its store and the clock, `app/challenge/`) is built and reviewed, not yet
   wired into the game. Next: slice 2, the wiring, then slice 3, what's on screen. Each needs
-  its own contract first.
+  its own contract first, by whichever agent the user gives it to.
 - Known flake to diagnose: `e2e/theme.spec.ts:71` read a background as `[0,0,0]`; its
   parser also maps transparent to that, so capture the raw CSS value first.
