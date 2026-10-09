@@ -1,4 +1,4 @@
-import { afterWindow, inWindow } from './window'
+import { afterWindow, inWindow, isDay } from './window'
 
 /**
  * A challenge board's attempt, and every change to it (Ruleset v1, rules 3 to 10 and 14, in
@@ -87,7 +87,8 @@ export const markClockError = (current: Attempt | null): Step =>
  * An assisted attempt is a solve with a hint whatever else happened: the hint is the
  * player's own act, and neither result has a time. Otherwise a clock error -- flagged
  * earlier, or found here as a finish before the start -- leaves the solve without a time, so
- * a negative or shortened time can never become a result.
+ * a negative time can never become a result. A clock change that went undetected can still
+ * shorten one; rule 5 accepts that under the honour system (codex).
  */
 const solvedResult = (attempt: Attempt, now: number): Result => {
     if (attempt.assisted) return { kind: 'hinted' }
@@ -175,9 +176,33 @@ const isResult = (value: unknown): value is Result => {
 }
 
 /**
+ * Whether a result agrees with the rest of its record: the states the changes above can
+ * produce, and no others (codex). Types alone let through a timed solve on an assisted or
+ * clock-error attempt, which would count towards a size's total.
+ *
+ * - No result, or given up: no finish instant.
+ * - Solved: neither flag, and its time is exactly the finish minus the start.
+ * - Solved with a hint: assisted.
+ * - Time unavailable: not assisted (that would be a hint), and a clock error only with the
+ *   flag set; a lost finish may have either.
+ * - Every solve has its finish instant.
+ */
+const consistent = (a: Attempt): boolean => {
+    const result = a.result
+    if (!result || result.kind === 'given-up') return a.finishedAt === undefined
+    if (a.finishedAt === undefined) return false
+    switch (result.kind) {
+        case 'solved': return !a.assisted && !a.clockError && result.ms === a.finishedAt - a.startedAt
+        case 'hinted': return a.assisted
+        case 'untimed': return !a.assisted && (result.reason === 'finish-lost' || a.clockError)
+    }
+}
+
+/**
  * Whether a stored value is an attempt. Storage is hostile -- an older version, another tab
- * mid-write, a devtools console -- so nothing is believed until it's checked. A value that
- * fails reads as no attempt.
+ * mid-write, a devtools console -- so nothing is believed until it's checked: the types, a
+ * real calendar date, and a result that agrees with its record. A value that fails reads as
+ * no attempt.
  */
 export const isAttempt = (value: unknown): value is Attempt => {
     if (typeof value !== 'object' || value === null) return false
@@ -185,11 +210,12 @@ export const isAttempt = (value: unknown): value is Attempt => {
     const instant = (v: unknown) => typeof v === 'number' && Number.isFinite(v)
     return typeof a.puzzleId === 'string'
         && typeof a.definitionHash === 'string'
-        && typeof a.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.date)
+        && typeof a.date === 'string' && isDay(a.date)
         && a.ruleset === RULESET
         && instant(a.startedAt)
         && typeof a.assisted === 'boolean'
         && typeof a.clockError === 'boolean'
         && (a.result === undefined || isResult(a.result))
         && (a.finishedAt === undefined || instant(a.finishedAt))
+        && consistent(a as Attempt)
 }

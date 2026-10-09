@@ -14,6 +14,26 @@
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
 
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** The calendar date `days` after year/month/day, normalised by `Date.UTC`. */
+const shifted = (year: number, month: number, day: number, days: number): string => {
+    const date = new Date(Date.UTC(year, month - 1, day + days))
+    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+}
+
+/**
+ * Whether `day` is a real calendar date as `YYYY-MM-DD`.
+ *
+ * The pattern alone isn't enough: `Date.UTC` quietly normalises `2026-02-31` to March 3, so
+ * an impossible date would get a window ending March 4 (codex reproduced it). A real date is
+ * one that survives the round trip unchanged.
+ */
+export const isDay = (day: string): boolean => {
+    const match = DAY.exec(day)
+    return match !== null && shifted(Number(match[1]), Number(match[2]), Number(match[3]), 0) === day
+}
+
 /**
  * `day` moved by `days` on the calendar.
  *
@@ -22,11 +42,9 @@ const DAY = /^(\d{4})-(\d{2})-(\d{2})$/
  * calendar date again, not an instant.
  */
 export const addDays = (day: string, days: number): string => {
-    const match = DAY.exec(day)
-    if (!match) throw new Error(`not a day: ${day}`)
-    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days))
-    const pad = (n: number) => String(n).padStart(2, '0')
-    return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
+    if (!isDay(day)) throw new Error(`not a day: ${day}`)
+    const [year, month, date] = day.split('-').map(Number)
+    return shifted(year, month, date, days)
 }
 
 /** The last device date on which a board of `boardDate` is still a challenge board. */

@@ -165,6 +165,64 @@ describe('a stored record that doesn\'t parse reads as no attempt', () => {
     })
 })
 
+describe('a record is bound to its key (codex)', () => {
+    /** An otherwise valid attempt of another board. */
+    const elsewhere = (): Attempt =>
+        start(null, { ...BOARD, puzzleId: '2026-10-09-hard-2' }, T0 - 60_000, DAY).next!
+
+    /** A step that would write another board's record under the requested key. */
+    const misfile = () => ({ next: elsewhere(), changed: true })
+
+    it('IndexedDB: another board\'s record under this key is no attempt, and Start makes a fresh one', async () => {
+        const store = await open()
+        const db = await new Promise<IDBDatabase>(resolve => {
+            const request = factory.open('challenge-test')
+            request.onsuccess = () => resolve(request.result)
+        })
+        await new Promise<void>(resolve => {
+            const tx = db.transaction('attempts', 'readwrite')
+            tx.objectStore('attempts').put(elsewhere(), BOARD.puzzleId)
+            tx.oncomplete = () => resolve()
+        })
+        db.close()
+        expect(await store.read(BOARD.puzzleId)).toBeNull()
+        const outcome = await store.change(BOARD.puzzleId, begin())
+        expect(outcome).toMatchObject({ committed: true, changed: true })
+        expect(outcome.attempt?.puzzleId).toBe(BOARD.puzzleId)
+        expect(outcome.attempt?.startedAt).toBe(T0)
+        store.close()
+    })
+
+    it('IndexedDB: a step can\'t file a record under another board\'s key', async () => {
+        const store = await open()
+        expect(await store.change(BOARD.puzzleId, misfile)).toEqual({ committed: false, changed: false, attempt: null })
+        expect(await store.read(BOARD.puzzleId)).toBeNull()
+        store.close()
+    })
+
+    it('localStorage: the same, both ways', async () => {
+        const map = new Map<string, string>()
+        const storage = {
+            get length() { return map.size },
+            clear: () => map.clear(),
+            getItem: (key: string) => map.get(key) ?? null,
+            key: (index: number) => [...map.keys()][index] ?? null,
+            removeItem: (key: string) => { map.delete(key) },
+            setItem: (key: string, value: string) => { map.set(key, value) },
+        } as Storage
+        storage.setItem(LOCAL_ATTEMPT_PREFIX + BOARD.puzzleId, JSON.stringify(elsewhere()))
+        const store = localStorageStore(storage)
+        expect(await store.read(BOARD.puzzleId)).toBeNull()
+
+        expect(await store.change(BOARD.puzzleId, misfile)).toEqual({ committed: false, changed: false, attempt: null })
+        expect(JSON.parse(storage.getItem(LOCAL_ATTEMPT_PREFIX + BOARD.puzzleId)!).puzzleId).toBe('2026-10-09-hard-2')
+
+        const outcome = await store.change(BOARD.puzzleId, begin())
+        expect(outcome.attempt?.puzzleId).toBe(BOARD.puzzleId)
+        expect(JSON.parse(storage.getItem(LOCAL_ATTEMPT_PREFIX + BOARD.puzzleId)!).puzzleId).toBe(BOARD.puzzleId)
+    })
+})
+
 describe('the legacy check (rule 13)', () => {
     /** A 2x2 whose right column is rock: one upright domino in the left column solves it. */
     const definition = (puzzleId: string) => definitionFrom({

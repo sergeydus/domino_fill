@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { addDays, afterWindow, inWindow, lastDay } from '@/app/challenge/window'
+import { addDays, afterWindow, inWindow, isDay, lastDay } from '@/app/challenge/window'
 import { CLOCK_TOLERANCE_MS, elapsed, wentBack } from '@/app/challenge/clock'
 import {
     finish, isAttempt, markAssisted, markClockError, reconcile, recover, RULESET, settle, sizeResult, start,
-    type Attempt, type Board,
+    type Attempt, type Board, type Result,
 } from '@/app/challenge/attempt'
 
 /**
@@ -41,8 +41,14 @@ describe('the window (rule 1)', () => {
         expect(afterWindow('2026-12-31', '2027-01-02')).toBe(true)
     })
 
-    it('refuses what isn\'t a day', () => {
+    it('refuses what isn\'t a day, impossible dates included (codex)', () => {
         expect(() => addDays('2026-10-9', 1)).toThrow()
+        // Date.UTC would quietly make 2026-02-31 into March 3, and its window end March 4.
+        for (const day of ['2026-02-31', '2026-02-29', '2026-13-01', '2026-00-10', '2026-04-31']) {
+            expect(isDay(day), day).toBe(false)
+            expect(() => addDays(day, 1), day).toThrow()
+        }
+        for (const day of ['2028-02-29', '2026-12-31', '2026-01-01']) expect(isDay(day), day).toBe(true)
     })
 })
 
@@ -222,5 +228,49 @@ describe('a stored attempt is checked, never believed', () => {
             { ...a, assisted: 'yes' }, { ...a, result: { kind: 'won' } }, { ...a, result: { kind: 'solved', ms: -1 } },
             { ...a, result: { kind: 'untimed', reason: 'bored' } }, { ...a, finishedAt: Number.NaN },
         ]) expect(isAttempt(bad)).toBe(false)
+    })
+
+    it('refuses an impossible date (codex)', () => {
+        expect(isAttempt({ ...started(), date: '2026-02-31' })).toBe(false)
+    })
+
+    it('refuses a result that disagrees with its record (codex)', () => {
+        const solved: Result = { kind: 'solved', ms: 1000 }
+        const ended = { finishedAt: T0 + 1000 }
+        const cases: [string, Partial<Attempt>][] = [
+            // The case codex reproduced: a timed solve that would count towards a total.
+            ['a timed solve, assisted and clock error', { assisted: true, clockError: true, result: solved, ...ended }],
+            ['a timed solve, assisted', { assisted: true, result: solved, ...ended }],
+            ['a timed solve, clock error', { clockError: true, result: solved, ...ended }],
+            ['a time that is not finish minus start', { result: { kind: 'solved', ms: 999 }, ...ended }],
+            ['a timed solve with no finish', { result: solved }],
+            ['a hint with no assist', { result: { kind: 'hinted' }, ...ended }],
+            ['a clock error with no flag', { result: { kind: 'untimed', reason: 'clock-error' }, ...ended }],
+            ['time unavailable on an assisted attempt', { assisted: true, result: { kind: 'untimed', reason: 'finish-lost' }, ...ended }],
+            ['a solve with no finish', { assisted: true, result: { kind: 'hinted' } }],
+            ['given up with a finish', { result: { kind: 'given-up' }, ...ended }],
+            ['a finish with no result', ended],
+        ]
+        for (const [what, over] of cases) expect(isAttempt({ ...started(), ...over }), what).toBe(false)
+    })
+
+    it('accepts every state the changes produce', () => {
+        const evidence = (on: string) => ({ solvedAt: T0 + 7000, solvedOn: on })
+        const states = [
+            started(),
+            markAssisted(started()).next,
+            markClockError(started()).next,
+            finish(started(), T0 + 1000, '2026-10-09').next,
+            finish(started(), T0 - 1000, '2026-10-09').next,
+            finish(started({ assisted: true }), T0 + 1000, '2026-10-09').next,
+            finish(started({ assisted: true, clockError: true }), T0 + 1000, '2026-10-09').next,
+            finish(started({ clockError: true }), T0 + 1000, '2026-10-09').next,
+            settle(started(), '2026-10-11').next,
+            recover(started(), evidence('2026-10-10')).next,
+            recover(started({ clockError: true }), evidence('2026-10-10')).next,
+            recover(started({ assisted: true }), evidence('2026-10-10')).next,
+            recover(started(), evidence('2026-10-11')).next,
+        ]
+        for (const state of states) expect(isAttempt(state), JSON.stringify(state)).toBe(true)
     })
 })

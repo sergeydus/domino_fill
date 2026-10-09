@@ -453,6 +453,27 @@ real browser is tested too, below.
   database.
 - No screen changes, so no visual baselines changed.
 
+**Corrected at codex's review** (2026-10-10). Codex reproduced two gaps:
+- **A stored attempt was checked for types, not sense.** `2026-02-31` passed, and its window
+  quietly ended March 4; and a timed *solved* result on an attempt flagged both assisted and
+  clock error passed, and would have counted towards a size's total. Now a date must be a
+  real calendar date (`isDay`: it survives the round trip), `addDays` refuses one that
+  isn't, and a result must agree with its record: a timed solve has neither flag and a time
+  of exactly finish minus start; a hint needs the assisted flag; *time unavailable* is never
+  on an assisted attempt, and a clock-error one needs that flag; every solve has a finish
+  instant, and no other state does. A test checks that every state the changes produce
+  still passes.
+- **A record wasn't bound to its key.** An otherwise valid record of another board, stored
+  under this board's key, was resumed by Start. In both backends a record now reads as an
+  attempt only under its own puzzle's key, and a change that would file a record under
+  another key saves nothing.
+- And a comment claimed a shortened time can never become a result: an undetected clock
+  change still can, as rule 5 accepts.
+- Mutation-tested, 7 more, all caught: an impossible date accepted, no consistency check, a
+  timed solve on a flagged attempt, a time disagreeing with finish minus start, another
+  board's record read, and each backend filing under another key. With the first 14, 21 of
+  21. (The first 14's "saved on success" probe was rewritten to the moved code and caught.)
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the

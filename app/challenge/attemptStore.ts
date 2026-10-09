@@ -84,6 +84,17 @@ export const legacyMarks = (
     .filter(definition => progressFor(progress[definition.puzzleId], definition) !== null)
     .map(definition => definition.puzzleId)
 
+/**
+ * A stored value read under `puzzleId`'s key, if it is an attempt *of that puzzle*. A record
+ * is bound to its key: an otherwise valid record of another board, filed under this one's
+ * key, is no attempt here, or Start would resume the wrong puzzle (codex reproduced it).
+ */
+const attemptAt = (value: unknown, puzzleId: string): Attempt | null =>
+    isAttempt(value) && value.puzzleId === puzzleId ? value : null
+
+/** Whether a step's record may be written under `puzzleId`'s key. */
+const belongs = (attempt: Attempt, puzzleId: string): boolean => attempt.puzzleId === puzzleId
+
 /** Tell other tabs. Best effort: a missing channel costs a re-read on focus, not a result. */
 const notify = (puzzleId: string) => {
     try {
@@ -103,7 +114,7 @@ const indexedDbStore = (db: IDBDatabase): AttemptStore => ({
     read: puzzleId => new Promise(resolve => {
         try {
             const request = db.transaction(ATTEMPTS, 'readonly').objectStore(ATTEMPTS).get(puzzleId)
-            request.onsuccess = () => resolve(isAttempt(request.result) ? request.result : null)
+            request.onsuccess = () => resolve(attemptAt(request.result, puzzleId))
             request.onerror = () => resolve(null)
         } catch {
             resolve(null)
@@ -123,11 +134,15 @@ const indexedDbStore = (db: IDBDatabase): AttemptStore => ({
         const store = transaction.objectStore(ATTEMPTS)
         const request = store.get(puzzleId)
         request.onsuccess = () => {
-            read = isAttempt(request.result) ? request.result : null
+            read = attemptAt(request.result, puzzleId)
             // Inside the transaction, so no other tab can write between this read and the
             // put. A step that throws aborts the transaction, and nothing is saved.
             stepped = step(read)
-            if (stepped.changed && stepped.next) store.put(stepped.next, puzzleId)
+            if (stepped.changed && stepped.next) {
+                // Never file a record under another puzzle's key: abort, and nothing is saved.
+                if (!belongs(stepped.next, puzzleId)) throw new Error(`${stepped.next.puzzleId} under ${puzzleId}`)
+                store.put(stepped.next, puzzleId)
+            }
         }
         transaction.oncomplete = () => {
             if (stepped.changed) notify(puzzleId)
@@ -251,8 +266,7 @@ export const localStorageStore = (storage: Storage | null): AttemptStore => {
         }
     }
     const readAttempt = (puzzleId: string): Attempt | null => {
-        const value = get(LOCAL_ATTEMPT_PREFIX + puzzleId)
-        return isAttempt(value) ? value : null
+        return attemptAt(get(LOCAL_ATTEMPT_PREFIX + puzzleId), puzzleId)
     }
     const readLegacy = (): Legacy | null => {
         const value = get(LOCAL_LEGACY_KEY)
@@ -270,6 +284,7 @@ export const localStorageStore = (storage: Storage | null): AttemptStore => {
                 return { committed: false, changed: false, attempt: read }
             }
             if (!stepped.changed || !stepped.next) return { committed: true, changed: false, attempt: stepped.next }
+            if (!belongs(stepped.next, puzzleId)) return { committed: false, changed: false, attempt: read }
             if (!set(LOCAL_ATTEMPT_PREFIX + puzzleId, stepped.next)) return { committed: false, changed: false, attempt: read }
             notify(puzzleId)
             return { committed: true, changed: true, attempt: stepped.next }
