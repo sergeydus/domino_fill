@@ -324,6 +324,85 @@ rules, accepted; each slice of the build gets its own contract and review before
   (D6), streak UI (D9), the run receipt (D11), the previous-best split (D12).
 - The timer's behaviour on real devices (D13) and the input-fairness study (D14).
 
+### Challenge slice 1, attempts and the clock: implementation contract
+
+**Why.** The first piece of Ruleset v1 to build: the attempt record, its storage and the
+clock, with nothing on screen yet. Chosen with the user and codex, 2026-10-09: saving is
+what every later slice stands on, and it's where the review found the hard cases. Codex
+reviews this contract before any code.
+
+**What this slice builds.** A new folder, `app/challenge/`, used by nothing yet, so the game
+behaves exactly as it does now: no screen changes, no visual baselines change.
+- `window.ts`, rule 1: whether a board's date is inside the window on a device date, and
+  when it leaves it. Pure, on `YYYY-MM-DD` strings (`dayKey`), with no time zone arithmetic.
+- `attempt.ts`, rules 3 to 10 and 14: the attempt record and its result, and each change as
+  a pure function from one record to the next: start, mark assisted, mark clock error,
+  finish, settle as given up, recover a lost finish. Each moves only forward (rule 15): a
+  change that would go backwards returns the record unchanged, and says so. Also a size's
+  result from its three attempts (rule 10).
+- `clock.ts`, rule 5: elapsed time from the saved start, and the clock-error check, given a
+  wall clock and a monotonic clock as arguments: an error when, between two readings, the
+  wall clock advanced at least 5000 ms less than the monotonic one.
+- `attemptStore.ts`, rules 13 to 16: reading and changing attempt records.
+  - **IndexedDB**: one database, `dominoFill.challenge`, with an `attempts` store keyed by
+    puzzle id and a `meta` store for the legacy check. Every change is one `readwrite`
+    transaction that reads the record, applies the pure function, and writes the result,
+    and it reports *saved* only on the transaction's `complete` (rule 16).
+  - **The fallback**: where IndexedDB doesn't open, `localStorage`, one key per attempt
+    (`dominoFill.challenge.v1.attempt.<puzzleId>`) and one for the legacy marks with their
+    done flag. Saved means `setItem` didn't throw. Uncoordinated, as rule 15 accepts.
+  - The store is picked when the tab opens and kept for that tab (rule 15).
+  - After each saved change it posts the puzzle id on a `BroadcastChannel`, so other tabs
+    can re-read; this slice only sends, and a later slice listens.
+  - The legacy check (rule 13), as a function: given the progress records and the window,
+    mark the valid ones and set the done flag, in one transaction.
+- Nothing is deleted: attempts sit outside the 14-day cleanup (D6). Nine small records a
+  day.
+
+**The record** (rule 14): `puzzleId`, `definitionHash`, `date`, `ruleset: 1`, `startedAt`,
+`assisted`, `clockError`, and once it ends, `result` and `finishedAt`. A result is one of
+*solved* with its time in ms, *solved with a hint*, *solved, time unavailable* with a reason
+(*clock error* or *finish lost*), or *given up*. "Not started" is no record, and "in
+progress" is a record without a result. A stored record that doesn't parse reads as no
+attempt, so a Start can overwrite it: one corrupt record costs that board's attempt, under
+the honour system, and nothing else. (Progress storage instead deletes unreadable records
+when it prunes, `pruneStorage`; attempts are never pruned, D6.)
+
+**Not in this slice**
+- Anything on screen: covering, Start, the clock's display, results, Practice (rule 11).
+- Wiring into `PuzzleSession` and `BoardsStore`: the finish on the winning placement, Hint
+  and Check marking the attempt, and saving solve evidence with progress (rule 14). That
+  changes `progressStorage.ts`, so it belongs with the wiring.
+- Listening for other tabs' changes, and the streak (D9).
+
+**A new dev dependency.** The unit tests run in Node, which has no IndexedDB. They'd use
+`fake-indexeddb` (dev only, never shipped), which implements IndexedDB in memory, including
+transactions from two connections, which stand in for two tabs. It's a simulation, so the
+real browser is tested too, below.
+
+**Tests**
+- Unit, pure (`tests/challengeAttempt.test.ts`): the window on its edges (the board's date,
+  the next day, the day after, a month end, a year end); every result and every forward-only
+  refusal; the finish refused outside the window or after a result; the size totals and
+  partials; the clock-error threshold just under and at 5000 ms, and forwards never flagged;
+  lost-finish recovery for each of rule 14's three cases, judged by the solve's local date.
+- Unit, store (`tests/challengeStore.test.ts`, with `fake-indexeddb`): saved only on
+  `complete`, and nothing saved when a transaction aborts after its request succeeded;
+  two connections: one Start wins and the other resumes it, two finishes fix one result,
+  and a hint against a finish in both orders (rule 15's tests); the legacy check marking
+  valid records, empty ones included, and skipping invalid ones, all or nothing; the
+  fallback's keys and parse-or-missing reads.
+- Browser (`e2e/challengeStorage.spec.ts`, Chromium, two pages in one browser context, which
+  share IndexedDB as two tabs do): the premise rule 15 rests on, measured rather than read.
+  Page A opens a `readwrite` transaction on a test database and keeps it busy; page B's
+  overlapping `readwrite` transaction must not begin until A's has completed. This tests the
+  browser, not our module, which nothing on screen uses yet; the two-tab tests through the
+  module itself come with the wiring. The harness drives Chromium only, so Firefox and
+  Safari aren't measured.
+- Mutation-tested: the window off by a day; a backwards change allowed; saved reported on
+  `success`; the threshold at 4999 or 5001; recovery using `savedAt` instead of the local
+  date; the legacy check skipping empty boards.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
