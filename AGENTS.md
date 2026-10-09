@@ -1,8 +1,9 @@
 # Working on Domino Fill
 
-Rules for any agent planning, building or reviewing changes in this repository. They are
-how every change so far was made. Where a rule names a reason, the reason is a real incident
-in this repository's history.
+Rules for any agent planning, building or reviewing changes in this repository. They're
+required from here on. They grew out of the work so far, which didn't always meet them: where
+a rule names a reason, the reason is a real incident in this repository's history, often a
+breach of the rule.
 
 ## Two agents, one set of rules
 
@@ -28,7 +29,8 @@ builder" is whichever agent is doing the change and "the reviewer" is the other 
   `app/dominoFill/` (components), `app/challenge/` (the Daily Challenge, Ruleset v1),
   `app/palette.ts` and `app/controls.ts` (design tokens; `npm run tokens` regenerates the
   CSS). Tests: `tests/` (unit), `e2e/` (browser), `visual-tests/` (pixel baselines).
-- The user's machine is Windows; shell commands are Git Bash.
+- The user's machine is Windows. The agents' shells differ (Claude's runs Git Bash,
+  codex's PowerShell), so commands here are Bash examples: use your shell's equivalent.
 
 ## The flow for every change
 
@@ -65,8 +67,13 @@ Every step's exit code is checked separately, and the commit is a separate step 
 only if all of them were 0. Never decide on a `grep` of the output: a commit once went in
 with a failing test because grep matched "1 failed".
 
+In Bash (use your shell's equivalent, with the same five steps and checks):
+
 ```bash
 # Wait for the socket pool first: under ~100 sockets in TIME_WAIT (see below).
+# Before deleting: confirm you're at the repository root, and that each path resolves inside it.
+# (Through `cd`, because on Windows git prints D:/... and Bash /d/...; compared raw, they never match.)
+[ "$(cd "$(git rev-parse --show-toplevel)" && pwd -P)" = "$(pwd -P)" ] || exit 1
 rm -rf .next tsconfig.tsbuildinfo node_modules/.vite node_modules/.vitest
 npx tsc --noEmit;                    echo "tsc=$?"
 npm run lint;                        echo "lint=$?"
@@ -75,6 +82,9 @@ npm run build;                       echo "build=$?"
 npm run test:e2e;                    echo "e2e=$?"
 ```
 
+- **From cold** means deleting the build and test caches first. A recursive delete is
+  destructive: verify the repository root and that every resolved path is one of those
+  four caches inside it before deleting anything (codex).
 - **Unit stderr must be 0 bytes.** A noisy suite has hidden real failures here before.
 - **Socket exhaustion on this machine.** A full browser run leaves thousands of sockets in
   TIME_WAIT, and the next run then fails with `net::ERR_NO_BUFFER_SPACE`. Before the gate,
