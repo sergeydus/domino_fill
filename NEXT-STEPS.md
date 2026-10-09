@@ -307,8 +307,11 @@ implementation until approved.
 
 **Tests this contract needs before IndexedDB is relied on**
 - Two tabs with overlapping `readwrite` transactions on one attempt: one Start wins and
-  the other resumes it; a hint in one and a finish in the other give *solved with a hint*;
-  two finishes fix one result.
+  the other resumes it; two finishes fix one result; and a hint in one tab against a
+  finish in the other, in both orders (codex):
+  - the hint commits first: the finish gives *solved with a hint*;
+  - the finish commits first: that result stays fixed, the later hint's transaction
+    finds it, sets nothing and shows no hint, and that tab shows the fixed result.
 - A transaction aborted after its request succeeded: nothing counts as saved, the board
   stays covered (Start), the hint isn't shown, and the legacy check runs again.
 
