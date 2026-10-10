@@ -70,6 +70,7 @@ Evidence levels:
 | 2026-10-09 | Boards played before the challenge ships stay untimed. | Marked "played before the challenge": no result, outside totals and the streak (rule 13). |
 | 2026-10-10 | Codex builds Daily Challenge slice 2, the wiring; Claude reviews its plan and code (user, 2026-10-10). | Contract first, from merged `master` at `11b87a1`. Public activation waits for slice 3's covered boards and Start controls. |
 | 2026-10-10 | Start clears existing progress when creating an attempt on a board with no legacy mark (user, 2026-10-10). | The first timed attempt begins empty, including after writes by an old-version tab. A failed Start preserves that progress; marked legacy boards remain untouched and existing attempts resume their own progress. See slice 2, item 5. |
+| 2026-10-10 | Where neither storage backend is usable when the tab opens, play timed but unsaved (user, 2026-10-10). | Today's and yesterday's boards remain covered until Start, then receive normal clocks and results in tab memory. Closing/reloading loses them and permits another attempt. A persistent store that fails later keeps the existing failed-save rules; it never switches to unsaved play. See rule 15 and slice 2's opening capability check. |
 
 ## Principles
 
@@ -125,7 +126,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commit 1 accepted by Claude at `ba0b18c` (2026-10-10); commit 2 built, awaiting code review. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 authorized. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -308,6 +309,13 @@ rules, accepted; each slice of the build gets its own contract and review before
     a second attempt, or a hint, a clock error or a result lost; and the legacy check isn't
     coordinated (rule 13). A single tab on a browser where IndexedDB works keeps every
     guarantee.
+
+    **Amended 2026-10-10 (user):** if neither backend is usable when the tab opens, use
+    tab memory: covered until Start, timed and given normal results, explicitly unsaved.
+    Closing/reloading loses the attempt and result and permits another attempt. Choose this
+    only at opening, after IndexedDB and localStorage capability checks; a chosen persistent
+    store failing later retains rules 4, 5, 7 and 14 and never switches to memory. In memory,
+    an operation is applied in this tab before reveal, with no claim of durable saving.
 16. **"Saved" means the transaction completed** (codex). In IndexedDB a write counts as
     saved only on its transaction's `complete` event, not a request's `success`: a
     transaction can still abort after a request succeeds. Start reveals the board, a hint
@@ -483,7 +491,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract and commit 1 accepted by Claude; commit 2 built, awaiting code review.**
+**Status (2026-10-10): contract and commits 1 and 2 accepted by Claude; user chose timed but unsaved and authorized commit 3.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -500,6 +508,17 @@ regression cases below implement that decision. Claude accepted the revised cont
 `4376e7d` (2026-10-10), reading the plan only; Claude did not rerun the gate. Codex independently
 checked CI run `38007303802`: success on that exact head. The reviewers' recommendations
 are not product decisions.
+
+**Commit-2 review, Claude (2026-10-10), on `6591360`.** Accepted, with a product question
+before the coordinator is built: when neither IndexedDB nor localStorage is usable,
+`localStorageStore(null).readAll()` returns `null`, and item 4's initialization retry
+would leave challenge boards permanently covered. The earlier acceptance of losses in
+unreliable fallback storage does not decide this case. The user must choose covered with
+an explanation, timed but unsaved, or untimed; record the answer in the decision log,
+D2 and the affected contract rules/tests before implementing commit 3. No choice has
+been inferred from Claude's recommendation. **Resolved by the user (2026-10-10): timed but
+unsaved, detected at tab opening; later persistent-store failures retain their existing
+rules.** The user authorized proceeding with commit 3 after recording this clarification.
 
 **Why.** Slice 1 supplies the attempt rules, transactions and clock arithmetic, but no
 game code uses them. This slice connects those rules to real sessions and progress, behind
@@ -574,6 +593,24 @@ timing while the public board is already visible would break rules 2 and 4.
    IndexedDB serializes the single check; a second tab uses the first committed marks and
    never rescans challenge play. The accepted uncoordinated fallback stays uncoordinated.
    Marked boards are untimed and uncovered, with no challenge result.
+   **Opening capability check, approved by the user (2026-10-10):** `openAttemptStore`
+   first attempts IndexedDB's existing completed-transaction probe. If that fails, obtain
+   localStorage and probe a fresh temporary key with write, matching read, and removal;
+   never overwrite existing keys. A missing/throwing API or failed probe selects an
+   explicit `memory` backend for this tab. The coordinator reads this backend kind; a
+   `readAll()` failure is not a capability signal. The backend choice is fixed for the
+   service's mounted lifetime, including a setup-cleanup-setup lifecycle; later failed
+   reads, Starts, assists, flags, finishes and progress writes on a persistent backend
+   stay retryable under rules 4, 5, 7 and 14, never silently enabling another attempt.
+   The memory backend runs the same pure attempt steps and one-time legacy scan in memory,
+   with no BroadcastChannel/storage coordination. Its `committed` outcome means applied
+   in this tab, not saved durably. Expose `unsaved` separately from a failed-save error.
+   Start still begins empty and enables timing; assists, results, Practice and expiry
+   follow the same rules. Challenge-bound progress/evidence stays in memory and is never
+   sent to localStorage in this mode, including if storage later becomes available.
+   Reload/new tab has a fresh backend and no retained attempt/result. Surviving old casual
+   progress, if readable at opening, still participates in the legacy scan. Definitions
+   must still load completely before that scan; a network failure remains retryable.
 5. Start captures a wall instant and its local date at the press, then invokes slice 1's
    transactional `start`. Reveal only after a committed, identity-matching outcome with
    an attempt. An existing start is resumed, not replaced. Failed or aborted saves reveal
@@ -676,6 +713,8 @@ timing while the public board is already visible would break rules 2 and 4.
     roots and unbound casual/Tutorial sessions retain today's persistence behaviour:
     `persist` advances its baseline even on a failed write. A general casual retry fix is
     a separate change, and this slice does not silently make it.
+    In the explicit memory mode, enabled progress is retained only in tab memory without
+    a persistent-write retry queue. Never interpret later persistent failures as memory mode.
 11. On reopening, use only validated solve evidence that survived with progress and matches
     the saved attempt's start stamp as well as its key/hash. Run slice
     1's `reconcile` before expiry: an in-window lost finish is hinted if assistance was
@@ -824,6 +863,20 @@ notes. Push it, let needed CI finish, and report the exact head for Claude's rev
 the next implementation commit. If the accepted plan requires regrouping a dependency,
 record it here first; do not push a temporarily enabled or partially guarded public game.
 
+**Opening capability tests added to commit 3 (2026-10-10)**
+- IndexedDB wins when its opening probe succeeds, without touching localStorage.
+- A usable fallback passes its temporary-key probe, leaves existing keys unchanged and
+  removes the probe. Missing/throwing localStorage, a write/read/remove failure or a
+  readback mismatch selects memory; no unrelated keys are changed.
+- Two memory stores are independent: Start, flags, result and legacy check work within
+  one instance and vanish in a new instance. Memory mode performs no persistent writes
+  or cross-tab notifications, and exposes unsaved state without retrying nonexistent saves.
+- A chosen persistent backend failing initialization/readAll or later writes remains
+  that backend and retryable; it never switches to memory. Disabled roots still open nothing.
+- Mutations: choose memory after a later failed read/write; choose persistent fallback
+  without its opening probe; retain a probe key; overwrite an existing key; persist or
+  broadcast a memory operation; share memory across instances; bypass Start in memory mode.
+
 **As built: implementation commit 1, optional progress metadata (2026-10-10)**
 - Extended progress v2 in place with `attemptStartedAt` and `solveEvidence` (instant,
   local day, column/row target strings). Required fields, storage keys, v1 migration and
@@ -940,8 +993,31 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   only the attempt store, its named test file and this document changed; no changed assets.
   The first failed browser run remains recorded above. This passing rerun establishes
   intermittency in the startup test, not its cause; separate diagnosis/fix remains required.
+- Claude accepted `6591360` (2026-10-10). Claude reports independently running the
+  attempt-store suite (41 passing tests) and type-checking, plus two passing scratch probes:
+  IndexedDB enumeration rejects numeric keys, misfiled records and junk while matching
+  individual reads; fallback enumeration ignores progress/lookalike keys and reports a
+  thrown getItem as failure. Claude did not rerun the full gate or mutation sweep.
+  Codex independently checked CI run `38014373602`: completed successfully on the full
+  head `6591360f9209c9f2d903a54461d5c2808e8a7ba7`.
+
+**Known flaky browser tests (separate changes, builder not yet assigned)**
+- `e2e/theme.spec.ts:71`: a background was read as `[0,0,0]`; its parser also maps
+  transparent to that value. Capture the raw CSS value when diagnosing it. This is the
+  previously recorded failure, not a new run or a confirmed cause.
+- `e2e/archive.spec.ts:360`, phone-360: board startup timed out during commit 2's first
+  gate; the complete cold rerun passed. The failure and diagnostic limitations are
+  recorded above; its cause remains unknown. Diagnose and fix under a separate assigned
+  contract. Neither flaky test is silently skipped or fixed in slice 2.
 
 **Validation and review record**
+- No-storage decision document gate (2026-10-10), first cold run: socket count 37;
+  TypeScript 0, lint 0, unit 0 (60 files, 1340 tests; stderr 0 bytes), build 0,
+  browser 0 (651 passed, 1 existing conditional skip). No failed gate run. Build stderr
+  was 1512 bytes of stale baseline-browser-mapping warnings; browser stderr was 5245
+  bytes of NO_COLOR/FORCE_COLOR warnings. Only this document changed; diff check passed.
+  This records the user's decision and the planned mechanism/tests, not runtime proof.
+  No runtime mutations are claimed for this documentation-only clarification.
 - Draft evidence: code read and checkout measured; no claims yet about the proposed wiring.
 - Draft gate (2026-10-10), first cold run: socket count 67; TypeScript 0, lint 0,
   unit 0 (60 files, 1266 tests passed; stderr exactly 0 bytes), build 0, browser 0
