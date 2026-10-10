@@ -5,7 +5,7 @@ import { RootStore } from '@/app/stores/RootStore'
 import type { DayEntry } from '@/app/stores/corpus'
 import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import {
-    KEY_PREFIX, LEGACY_KEY, RETENTION_DAYS, readAllProgress, readProgress,
+    KEY_PREFIX, LEGACY_KEY, RETENTION_DAYS, readAllProgress, readProgress, writeProgress,
 } from '@/app/stores/progressStorage'
 
 /**
@@ -104,6 +104,55 @@ afterEach(() => {
 })
 
 describe('a board in progress comes back', () => {
+    it('ordinary gameplay still produces no challenge metadata', () => {
+        runInAction(() => { root.boardsStore.setDay(solvableResponse()) })
+        winIt(root.boardsStore)
+        const saved = readProgress('easy-1')!
+        expect(saved.completed).toBe(true)
+        expect(saved).not.toHaveProperty('attemptStartedAt')
+        expect(saved).not.toHaveProperty('solveEvidence')
+    })
+
+    it('stores solved board, stamp and evidence in one write without touching another puzzle', () => {
+        runInAction(() => { root.boardsStore.setDay(solvableResponse()) })
+        winIt(root.boardsStore)
+        const ordinary = readProgress('easy-1')!
+        expect(writeProgress('untouched', ordinary)).toBe(true)
+        const untouched = window.localStorage.getItem(`${KEY_PREFIX}untouched`)
+        const tagged = { ...ordinary, attemptStartedAt: 123, solveEvidence: {
+            solvedAt: 456, solvedOn: '2026-09-01', columnTargets: '1,0', rowTargets: '1,0',
+        } }
+        const setItem = vi.spyOn(window.localStorage, 'setItem')
+        try {
+            expect(writeProgress('easy-1', tagged)).toBe(true)
+            expect(setItem.mock.calls).toEqual([[`${KEY_PREFIX}easy-1`, JSON.stringify(tagged)]])
+            expect(readProgress('easy-1')).toEqual(tagged)
+            expect(readAllProgress()['easy-1']).toEqual(tagged)
+            expect(window.localStorage.getItem(`${KEY_PREFIX}untouched`)).toBe(untouched)
+        } finally {
+            setItem.mockRestore()
+        }
+    })
+
+    it('a refused metadata write preserves the earlier board and evidence', () => {
+        runInAction(() => { root.boardsStore.setDay(solvableResponse()) })
+        winIt(root.boardsStore)
+        const ordinary = readProgress('easy-1')!
+        const before = window.localStorage.getItem(`${KEY_PREFIX}easy-1`)
+        const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+            throw new DOMException('Full', 'QuotaExceededError')
+        })
+        try {
+            expect(writeProgress('easy-1', { ...ordinary, attemptStartedAt: 123, solveEvidence: {
+                solvedAt: 456, solvedOn: '2026-09-01', columnTargets: '1,0', rowTargets: '1,0',
+            } })).toBe(false)
+            expect(window.localStorage.getItem(`${KEY_PREFIX}easy-1`)).toBe(before)
+            expect(readProgress('easy-1')).toEqual(ordinary)
+        } finally {
+            setItem.mockRestore()
+        }
+    })
+
     it('saves a move and restores it into a new store', () => {
         runInAction(() => { root.boardsStore.setDay(response()) })
         runInAction(() => { root.boardsStore.currentBoard!.placeToward([1, 1], 'down') })

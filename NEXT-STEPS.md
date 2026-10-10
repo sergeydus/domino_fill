@@ -21,7 +21,8 @@ other rows are folded into them.
 **Nothing in the Daily Challenge or the new input schemes should be built yet** (codex,
 2026-09-29). Their open questions come first. The casual fixes (Controls 1, A1, A2) don't
 depend on them. *Amended 2026-10-10: that was the pre-decision hold. Ruleset v1 is now
-accepted, challenge slice 1 is merged, and slice 2's contract below awaits Claude's review.
+accepted, challenge slice 1 is merged, and Claude accepted slice 2's contract at `4376e7d`
+(2026-10-10). Slice 2 is being built in the five reviewed commits below.
 Each later slice still needs its own accepted contract before implementation.*
 
 Evidence levels:
@@ -124,7 +125,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract below awaits review. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); first implementation commit built, awaiting code review. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -482,7 +483,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 plan before implementation.
 
-**Status (2026-10-10): draft, awaiting Claude's review.** No implementation has begun.
+**Status (2026-10-10): contract accepted by Claude on `4376e7d`; commit 1 built, awaiting code review.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Corrections requested in review will be recorded here before any code is written.
@@ -494,8 +495,10 @@ and drops the unreachable first-solve Undo and its probe. It also removes chat t
 the decision log, states what the non-cryptographic hash establishes, cites the existing
 browser harness and sets out a commit sequence. The user approved clearing unmarked
 pre-existing progress on a new Start (2026-10-10); the ordering, progress association and
-regression cases below implement that decision. The revised contract awaits Claude's
-acceptance; the reviewers' recommendations are not product decisions.
+regression cases below implement that decision. Claude accepted the revised contract on
+`4376e7d` (2026-10-10), reading the plan only; he did not rerun the gate. Codex independently
+checked CI run `38007303802`: success on that exact head. The reviewers' recommendations
+are not product decisions.
 
 **Why.** Slice 1 supplies the attempt rules, transactions and clock arithmetic, but no
 game code uses them. This slice connects those rules to real sessions and progress, behind
@@ -817,6 +820,54 @@ notes. Push it, let needed CI finish, and report the exact head for Claude's rev
 the next implementation commit. If the accepted plan requires regrouping a dependency,
 record it here first; do not push a temporarily enabled or partially guarded public game.
 
+**As built: implementation commit 1, optional progress metadata (2026-10-10)**
+- Extended progress v2 in place with `attemptStartedAt` and `solveEvidence` (instant,
+  local day, column/row target strings). Required fields, storage keys, v1 migration and
+  retention retain their meanings. Both v2 parsing and v1 entry validation sanitize each
+  optional field independently; malformed metadata does not discard a valid casual board.
+- Evidence validation reconstructs the canonical definition from saved rocks/targets and
+  requires its hash, a square full board, legal domino ownership and both target sums.
+  It accepts evidence before the completion reaction (`completed: false`), preserving the
+  saved instant/day rather than deriving either from `savedAt` or the reader's timezone.
+  No corpus fetch, producer, coordinator or gameplay guard is added in this commit.
+- Added `solveEvidenceFor` for future recovery callers: it revalidates evidence and requires
+  the saved attempt's hash and finite matching start stamp. The caller must read progress
+  under the attempt's puzzle ID; neither the hash nor stamp binds the storage key itself.
+- Deliberate test changes: extended `progressStorage.test.ts` for format compatibility,
+  independent malformed-field handling, canonical evidence checks and attempt association;
+  extended `persistence.test.ts` for board/metadata in one write, unrelated-key preservation,
+  refused-write preservation and ordinary gameplay emitting no challenge metadata.
+  Added 51 cases: 48 format/validation cases and 3 persistence cases. In the cold gate,
+  those two files passed 87 and 48 tests respectively (135 total).
+- Preliminary validation: 133 targeted tests passed, TypeScript and targeted lint exited 0.
+  After adding two explicit winning-instant/local-day assertions, the count is 135 in the
+  full gate. The initial `npx` invocation was blocked by PowerShell script policy before
+  tests ran; invoking `npx.cmd` succeeded. No source change was needed for that shell issue.
+- Mutation sweep: **25 of 25 caught at the intended assertion**, source restored byte-for-byte.
+  Probes: bump the v2 key version; trust a malformed stamp; omit stamp finiteness; drop a
+  valid stamp; drop valid evidence; omit solve-instant finiteness; omit calendar validation;
+  swap target axes; omit board fullness; omit square shape; omit domino legality; omit the
+  definition hash check; omit rocks from reconstruction; omit column sums; omit row sums;
+  replace the winning instant with `savedAt`; reconstruct the saved local day; discard a
+  casual record for bad evidence; trust legacy metadata; accept the wrong attempt stamp;
+  accept a missing attempt stamp; accept the wrong attempt hash; trust typed recovery
+  evidence without revalidation; strip metadata on write; lose evidence during enumeration.
+  Each probe ran its named regression test alone and checked the failed assertion's source
+  location in Vitest's JSON report. Two harness setup runs stopped at probe 1: Windows
+  command quoting selected zero tests, then the verifier expected assertion text absent
+  from JSON's stack-only error. Fixed the harness to invoke Vitest through Node arguments
+  and verify the reported source line; the final complete sweep had no weak/escaped probe.
+- Commit-1 cold gate, first run: waited for the socket prerequisite (prechecks reached 240;
+  the gate started at 99). TypeScript 0, lint 0 (no warnings), unit 0 (60 files, 1317 tests
+  passed; stderr exactly 0 bytes), build 0 and browser 0 (651 passed, 1 existing conditional
+  skip at `keyboard.spec.ts:184`, page not scrollable). No failed gate run. Build stderr:
+  1512 bytes, stale `baseline-browser-mapping` warnings; browser stderr: 5246 bytes,
+  `NO_COLOR` versus `FORCE_COLOR` warnings. `git diff --check` passed; only the storage
+  module, the two named test files and this document changed, with no changed assets.
+- The first precommit wrapper stopped before staging because an extra PowerShell array
+  wrapper counted the JSON mutation array as one item. Corrected that wrapper and verified
+  25 results, zero uncaught; this was a precommit-script error, not a failed gate or probe.
+
 **Validation and review record**
 - Draft evidence: code read and checkout measured; no claims yet about the proposed wiring.
 - Draft gate (2026-10-10), first cold run: socket count 67; TypeScript 0, lint 0,
@@ -841,9 +892,10 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   browser stderr: 5244 bytes, `NO_COLOR` versus `FORCE_COLOR` warnings. Only
   `NEXT-STEPS.md` changed; `git diff --check` passed. This gates the revised documentation;
   no implementation or runtime mutation probes are claimed.
-- Claude's first review: corrections recorded above; revised-plan acceptance pending.
+- Claude's first review: corrections recorded above; revised plan accepted on `4376e7d`.
   Start-over-progress decision: approved by the user (2026-10-10), recorded in the decision
-  log, D3 and item 5. Implementation and its mutation sweep: not started.
+  log, D3 and item 5. Commit 1's implementation and checks are recorded above; later commits
+  await the preceding head's review as agreed.
 
 ### Would need a server (rejected)
 

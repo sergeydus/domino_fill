@@ -1,5 +1,7 @@
-import type { PuzzleDefinition } from "./PuzzleDefinition"
+import { definitionFrom, type PuzzleDefinition } from "./PuzzleDefinition"
 import { CELL_VALUES, isBoardFull, targetsMatch, wellFormed } from "./boardRules"
+import type { Attempt } from "../challenge/attempt"
+import { isDay } from "../challenge/window"
 
 /**
  * Saved progress (spec P1-7).
@@ -25,7 +27,11 @@ import { CELL_VALUES, isBoardFull, targetsMatch, wellFormed } from "./boardRules
  * rather than as the type it claims to be.
  */
 
-/** Bump for any shape change; `migrateLegacy` brings the previous version forward. */
+/**
+ * Bump when required fields or their meanings change; `migrateLegacy` brings the previous
+ * version forward. Optional, independently validated fields remain compatible with v2:
+ * older readers ignore them, and their absence does not invalidate ordinary progress.
+ */
 export const SCHEMA_VERSION = 2
 
 /** Versioned in the key, so a rollback cannot read forward data. */
@@ -38,6 +44,15 @@ export const LEGACY_KEY = 'dominoFill.progress.v1'
 export const RETENTION_DAYS = 14
 
 const DAY_MS = 86_400_000
+
+/** Winning-placement evidence, validated against the saved board without a corpus fetch. */
+export type ProgressSolveEvidence = {
+    readonly solvedAt: number
+    /** The device's local date at the placement, never reconstructed from an instant. */
+    readonly solvedOn: string
+    readonly columnTargets: string
+    readonly rowTargets: string
+}
 
 export type PuzzleProgress = {
     /**
@@ -60,7 +75,13 @@ export type PuzzleProgress = {
      * to destroy data.
      */
     savedAt: number
+    /** Associates enabled progress with a saved attempt; not cryptographic protection. */
+    attemptStartedAt?: number
+    /** Only first-attempt solves produce this; Practice/casual producers omit it. */
+    solveEvidence?: ProgressSolveEvidence
 }
+
+type ProgressBoard = Omit<PuzzleProgress, 'attemptStartedAt' | 'solveEvidence'>
 
 /**
  * The local day, as `YYYY-MM-DD`.
@@ -89,7 +110,7 @@ const isBoard = (value: unknown): value is (number | null)[][] => {
         && row.every(cell => cell === null || CELL_VALUES.includes(cell as number)))
 }
 
-const isProgress = (value: unknown): value is PuzzleProgress => {
+const isProgress = (value: unknown): value is ProgressBoard & Record<string, unknown> => {
     if (typeof value !== 'object' || value === null) return false
     const record = value as Record<string, unknown>
     return typeof record.definitionHash === 'string'
@@ -99,15 +120,73 @@ const isProgress = (value: unknown): value is PuzzleProgress => {
         && isBoard(record.board)
 }
 
+/** A hash binds the rocks/targets to the saved definition; FNV-1a is not tamper protection. */
+const validatedSolveEvidence = (
+    record: ProgressBoard,
+    value: unknown,
+): ProgressSolveEvidence | null => {
+    if (typeof value !== 'object' || value === null) return null
+    const evidence = value as Record<string, unknown>
+    if (typeof evidence.solvedAt !== 'number' || !Number.isFinite(evidence.solvedAt)
+        || typeof evidence.solvedOn !== 'string' || !isDay(evidence.solvedOn)
+        || typeof evidence.columnTargets !== 'string' || typeof evidence.rowTargets !== 'string') {
+        return null
+    }
+    const size = record.board.length
+    if (!isBoardFull(record.board, size) || !wellFormed(record.board, size)) return null
+    const definition = definitionFrom({
+        // The hash excludes the opaque id. The caller binds the storage key separately.
+        puzzleId: 'saved-progress',
+        board: record.board,
+        boardHorizontalNumbers: evidence.columnTargets,
+        boardVerticalNumbers: evidence.rowTargets,
+    })
+    if (definition.definitionHash !== record.definitionHash
+        || !targetsMatch(record.board, definition)) return null
+    return {
+        solvedAt: evidence.solvedAt,
+        solvedOn: evidence.solvedOn,
+        columnTargets: evidence.columnTargets,
+        rowTargets: evidence.rowTargets,
+    }
+}
+
+/** Validate optional fields independently; a bad field must not cost a casual board. */
+const validatedRecord = (value: unknown): PuzzleProgress | null => {
+    if (!isProgress(value)) return null
+    const { attemptStartedAt, solveEvidence, ...base } = value
+    const record: PuzzleProgress = { ...base }
+    if (typeof attemptStartedAt === 'number' && Number.isFinite(attemptStartedAt)) {
+        record.attemptStartedAt = attemptStartedAt
+    }
+    const evidence = validatedSolveEvidence(record, solveEvidence)
+    if (evidence) record.solveEvidence = evidence
+    return record
+}
+
 /** Parse one stored record, or null for anything that is not one. */
 export const parseRecord = (raw: string | null): PuzzleProgress | null => {
     if (raw === null) return null
     try {
         const parsed: unknown = JSON.parse(raw)
-        return isProgress(parsed) ? parsed : null
+        return validatedRecord(parsed)
     } catch {
         return null
     }
+}
+
+/**
+ * Evidence for this attempt generation only. The caller must read the record under
+ * `attempt.puzzleId`; neither the definition hash nor the stamp establishes its storage key.
+ */
+export const solveEvidenceFor = (
+    record: PuzzleProgress | null | undefined,
+    attempt: Pick<Attempt, 'definitionHash' | 'startedAt'>,
+): ProgressSolveEvidence | null => {
+    if (!record || record.definitionHash !== attempt.definitionHash
+        || typeof record.attemptStartedAt !== 'number' || !Number.isFinite(record.attemptStartedAt)
+        || record.attemptStartedAt !== attempt.startedAt) return null
+    return validatedSolveEvidence(record, record.solveEvidence)
 }
 
 /**
@@ -395,7 +474,8 @@ export const legacyEntries = (raw: string): Record<string, PuzzleProgress> | nul
         if (savedAt === null) continue
         delete legacy.savedOn
         const candidate = { ...legacy, savedAt }
-        if (isProgress(candidate)) entries[puzzleId] = candidate
+        const record = validatedRecord(candidate)
+        if (record) entries[puzzleId] = record
     }
     return entries
 }
