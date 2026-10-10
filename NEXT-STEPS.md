@@ -129,7 +129,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction built/gated, awaiting code review before the fixture commit, without activation. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction `97040b9` held by Claude for archive navigation dropping the exception. Explicit-pick amendment drafted for review before correction and fixture, without activation. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -538,7 +538,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. The separate clamp correction is built/gated, awaiting code review before commit 5. Nothing is publicly activated.**
+**Status (2026-10-10): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. Claude holds clamp correction `97040b9` for a reachable archive-pick defect. The explicit-pick amendment below is a contract draft awaiting Claude's acceptance; fix this before commit 5. Nothing is publicly activated.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -1007,6 +1007,124 @@ strengthen that test, never weaken this contract.
 - This is a separate atomic correction after the accepted commit-4 hooks, before slice 3
   can activate. The user's narrowed decision is final; present this revised concrete
   mechanism to Claude for acceptance before implementing that separate correction.
+
+**Archive-pick amendment: contract draft (2026-10-10)**
+
+Written for: Claude, reviewing the amendment after holding `97040b9`.
+
+- **Why/read:** `DominoClient.goToDate` discards the load's metadata and calls
+  `setDay(loaded.day)` (`DominoClient.tsx:68–71`). This callback serves both the archive
+  and the banner (`DominoClient.tsx:198,274`). The archive includes the first published
+  day when effective today is that day (`Archive.tsx:106–112`), including a clickable
+  entry for the day already being viewed. A direct request for the first date is in
+  range, so even forwarding `loaded.clamped` would supply null (`corpusSource.ts:155–165`).
+  `setDay` defaults to null (`BoardsStore.ts:263`), replacing the before provenance on
+  the matching binding and freezing its existing moves under the genuine-future cover.
+  Codex independently reproduced this using the existing clamp harness and the same
+  `setDay` call as the UI callback: the direct load returned null clamp, session/piece
+  identity survived, and the uncovered assertion failed. Runtime code remains unchanged.
+- **Mechanism: option (b), explicit picks carry device-before provenance.** Add an
+  explicit `LevelStore.pickDay(loaded, firstDate, deviceDate)` action. Its inputs are the
+  selected `LoadedDay`, the validated manifest's actual `firstDate`, and the device's
+  local calendar date at application of the selection. If `deviceDate < firstDate` and
+  `loaded.day.date === firstDate`, forward `'before'` to `setDay`; otherwise forward the
+  selected response's own `loaded.clamped`. Do not exempt another published future day,
+  infer an endpoint from a puzzle ID, or use stale global `clockClamp`/`deviceToday`.
+  Manifest proof, together with the selected endpoint and device date, is required.
+- `goToDate` will obtain the selected day and manifest from the same `CorpusSource`,
+  then call this action with `dayKey(new Date())` sampled after the awaits. `loadDay`
+  already uses `loadManifest`, whose promise is cached (`corpusSource.ts:102–113,158`);
+  this adds no second network request for a successfully loaded manifest. The callback
+  keeps explicit navigation immediate once loading succeeds, without the rollover
+  hold-back rule. A failed load changes no board or binding. Sampling after the awaits
+  handles a device date corrected while the fetch was pending.
+- **Scope and clock behavior:** this amends only the explicit-pick boundary. Ordinary
+  `receiveDay`, low-level `setDay` and pending-day adoption keep their accepted per-response
+  provenance. A corrected board already on screen stays casual until a refetch/selection;
+  a clock tick alone does not change its mode. An explicit in-range pick after the clock
+  reaches the first date is an unclamped refetch and restores normal Start eligibility.
+  The existing sticky-until-refetch test remains. This is not option (a)'s continuous
+  classification from the live clock. The prior prohibition on global display metadata
+  remains; the explicit action uses the actual manifest boundary and freshly supplied
+  device date instead.
+- **Both routes:** an archive click on the first date while the device is before the
+  corpus remains casual, with the matching session, board and Undo history preserved.
+  Hint/Check remain synchronous; no Start, attempt clock, Practice or first-solve evidence
+  is created. Casual progress still saves. The banner's fetch route uses the same callback;
+  its held-day route continues `adoptPendingDay()` with that held response's own provenance
+  (`DayBanner.tsx:74–76`, `BoardsStore.ts:243–249`). Selection does not rewrite global
+  calendar labels, fixed attempt records or unrelated bindings. An after-clamp and a
+  genuine future date still obey the normal date-window rules.
+- **Tests changed on purpose:** extend `tests/challengeClamp.test.ts` with the exact
+  sequence Claude reported, using `pickDay` after a direct first-date load returns null.
+  Assert matching identity/history, uncovered mutation, advice, progress and no attempts
+  or evidence. Add controls for first-date selection with no prior before response,
+  a different future day while the clock is before the corpus, clock correction before
+  selection, a different validated manifest first date, and after-clamp `lastDate + 1`
+  (covered, Start and timing). Keep the existing generic unclamped-refetch
+  and held-provenance tests unchanged. Also retain an explicitly before-clamped selected
+  response when no device-derived provenance is inherited.
+- Add `tests/challengeDaySelection.test.tsx`: render `DominoClient` with an injected
+  corpus/root and controlled local date. Stub board drawing/layout where needed, keeping
+  the real archive and banner actions. Click the archive's first-date entry while already
+  viewing that day with a move; assert it stays uncovered/playable with that move. Exercise
+  the banner fetch route from another selected date to the effective first date, and the
+  held-day route. Cover both directions of clock correction during a delayed selection
+  load, proving the callback samples at application. Verify a rejected selected-day load
+  preserves the visible board/mode.
+  These tests must invoke the actual component callback, not a copied version of it.
+  The no-before-history unit case is separate from whether a banner button is shown.
+- **Mutations planned, one at a time:** (1) drop device-before provenance in `pickDay`;
+  (2) let every selected future day inherit it; (3) hard-code the first published date
+  instead of reading the manifest boundary; (4) use stale global clamp instead of the
+  supplied device date; (5) let an after-clamp inherit before; (6) change `goToDate`
+  back to `setDay(loaded.day)`; (7) sample device date before loading; (8) discard the
+  response's own clamp in the non-inherited case. Each needs its intended assertion;
+  strengthen a weak test rather than count an earlier incidental failure as a catch.
+- **Not in this correction:** option (a), public challenge activation, commit-5 fixture,
+  future-byte release enforcement (D16), archive completion marks, new UI/pixels/assets,
+  or changes to save/attempt semantics. This preserves the user's before-only decision;
+  it is a mechanism correction, not a new product choice. Contract acceptance, then
+  runtime/test correction, mutations, As built notes and a full cold gate before commit.
+
+**Clamp code review, Claude (2026-10-10): held.** Claude reports **347/347** across eight
+challenge suites, unit stderr **0 bytes**, type-check **0**, and the archive-pick defect
+reproduced in a scratch test subsequently deleted. Claude read that `97040b9` matches the
+previous contract and the corrected corpus-end rationale; Claude did not rerun Codex's
+full gate or 24-probe sweep. Codex independently verified CI run `38079809829`: success
+on exact head `97040b95014e0a567112180b813d8aeb01dd100c`. Acceptance is still held despite
+that CI result. Codex chooses the explicit-pick amendment above, fixes this before the
+independent fixture commit, and submits this concrete contract for review before code.
+
+**Amendment validation record (2026-10-10):** docs only; no retained runtime/test change
+or implementation mutation performed. Codex's independent scratch regression produced
+the intended **1 failed test** at "archive selection must keep the corrected board
+playable: expected true to be false" (exit **1**, diagnostic stderr **859 bytes**).
+It confirmed null clamp and preserved session/piece before that assertion; the scratch
+file was removed afterwards. This expected diagnostic failure is not a passing regression
+or a gate run. Initial gate preflight refused **167 TIME_WAIT**
+before cleanup or tests. First full cold gate began at **71 TIME_WAIT**, after verifying
+the root and all four cache targets. TypeScript **0**, lint **0**, unit **0** (**1522/1522**
+in 64 files; stderr **0 bytes**), build **0**; browser **1** (**650 passed, 1 failed,
+1 skipped**). The failed desktop test at `accessibility.spec.ts:598` never reached its
+shake assertion: `page.goto` failed with **net::ERR_NO_BUFFER_SPACE** (`openBoard.ts:217`).
+No commit from that gate. Post-run TIME_WAIT was **3908**. Preserve this failed run and
+rerun every step from cold after the socket count drains; record that rerun below.
+- Full cold rerun began at **66 TIME_WAIT**, with the root and four cache paths verified
+  again. TypeScript **0**, lint **0** (no warnings), unit **0** (**1522/1522** in 64 files;
+  stderr **0 bytes**), build **0**, browser **0** (**651 passed, 1 existing keyboard skip**).
+  Both browser streams were inspected after completion: no ERR_NO_BUFFER_SPACE.
+  Build stderr **1512 bytes** contains baseline-browser-mapping warnings; browser stderr
+  **5243 bytes** contains NO_COLOR/FORCE_COLOR warnings. First-run browser stderr was
+  **5404 bytes**; its failed exit and socket error remain recorded above.
+- A redundant socket-check command was queued after the rerun had already started.
+  Codex added an entry guard to the temporary gate script before that command could
+  invoke it: the duplicate was refused at **79 TIME_WAIT**, before cleanup or tests.
+  It did not interrupt or overlap the actual rerun. Only `NEXT-STEPS.md` is changed;
+  no committed asset, baseline, runtime source or test changed. The concrete correction
+  still awaits Claude's contract acceptance. The eight mutation probes above are planned,
+  not performed; the independent diagnostic reproduction is the expected failure noted
+  above, not implementation validation.
 
 Each commit gets its own mutations for the mechanism it adds, full cold gate and As built
 notes. Push it, let needed CI finish, and report the exact head for Claude's review before
