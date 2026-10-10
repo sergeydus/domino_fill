@@ -136,7 +136,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction `97040b9` held by Claude for archive navigation dropping the exception. Explicit-pick amendment `adab8db` accepted by Claude; its correction is now authorized before the fixture, without activation. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction `97040b9` held by Claude for archive navigation dropping the exception. Explicit-pick amendment `adab8db` accepted by Claude; its correction is built/gated and awaits code review before the fixture, without activation. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -546,7 +546,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. Claude holds clamp correction `97040b9` for a reachable archive-pick defect. Explicit-pick amendment `adab8db` accepted by Claude; build and review its correction before commit 5. Nothing is publicly activated.**
+**Status (2026-10-11): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. Claude held clamp correction `97040b9` for a reachable archive-pick defect. Explicit-pick amendment `adab8db` accepted by Claude; its correction is built and mutation-tested, with gate results recorded below and code review required before commit 5. Nothing is publicly activated.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -1650,6 +1650,48 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   visual asset or public activation is included in this correction. Full gate results
   follow after their actual completion.
 
+**As built: explicit date-pick correction (2026-10-11)**
+- `LevelStore.pickDay(loaded, firstDate, deviceDate)` applies the accepted two-condition
+  before exception and otherwise keeps the selected response's own clamp. `goToDate`
+  loads the selected day and cached manifest together, then samples the local calendar
+  date and invokes that action. Both existing archive and banner callbacks use it.
+  `receiveDay`, generic `setDay`, held-day adoption, coordinator rules, attempts and save
+  retries are unchanged. Public roots remain disabled for challenges; no pixels or assets
+  change. The separate decision commit `1b9bdca` records the user's Wordle/LinkedIn
+  direction and explicit choice to keep all nine boards, without changing Ruleset v1.
+- Added **8 unit tests** to `challengeClamp.test.ts` (**25** now). They cover the exact
+  archive sequence, moves/history/Undo/advice/progress with no attempt or evidence,
+  first-date selection without earlier before provenance, another future date, correction
+  with stale display metadata, a different manifest first date, preserving selected
+  response provenance, after-clamp timing, and an existing fixed result. All **17** earlier
+  clamp tests remain unchanged, including generic refetch and held-response behavior.
+- Added `challengeDaySelection.test.tsx`, **7 component tests**. They render the actual
+  client, archive, banner and navigation buttons with a real root/coordinator. Board
+  drawing, auxiliary controls, layout measurement and audio are stubbed. Fake system
+  time replaces only Date, and the coordinator reads Date.now; real async test timers
+  remain available. Actual archive clicks and both banner routes run the real callback.
+  Both delayed clock directions, selection failure and default casual roots are covered.
+  The banner-fetch setup uses a reachable race: an archive request starts before clock
+  correction, the rollover serves FIRST, then the older explicit request finishes.
+- First targeted run: **32/32 passed** across these two suites; stderr **0 bytes**.
+  Added **15 tests** over `1b9bdca`. No targeted test failed. An initial mutation-runner
+  launch returned **0** with **191 skipped tests in 6 files**, executing no tests because
+  shell quoting split the filter arguments. It was invalid validation, not an escaped
+  mutation or a passing sweep. Preserved its logs, restored both sources, and changed the
+  scratch runner to invoke Vitest's Node entry with separate arguments, without a shell.
+- Corrected sweep: **8/8 caught at the intended assertion**, with both runtime sources
+  restored byte for byte after every probe. Deliberate probes and intended checks:
+  1. Drop inherited before provenance: exact archive sequence's uncovered assertion.
+  2. Inherit it for any future day: different-date cover assertion.
+  3. Hard-code the corpus start: alternate manifest boundary's uncovered assertion.
+  4. Use stale global clamp: clock-corrected selection's covered assertion.
+  5. Exempt an after-clamped selection: lastDate + 1 cover assertion.
+  6. Revert the UI callback to `setDay(loaded.day)`: real archive-click uncovered assertion.
+  7. Sample device date before loading: delayed forward-correction cover assertion.
+  8. Discard the response's own clamp: non-inherited before-response uncovered assertion.
+- No deviation from the accepted contract. The full cold gate passed as recorded below;
+  report the correction head to Claude before building the independent fixture commit.
+
 **As built: before-corpus clamp correction (2026-10-10)**
 - `LevelStore` now keeps visible-response `viewingClamp` and held-response
   `pendingDayClamp` separately from global display `clockClamp`. `receiveDay` forwards
@@ -1715,6 +1757,19 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   24. uncover ordinary challenge when initialization failed.
 
 **Validation and review record**
+- Explicit date-pick correction cold gate, first run (2026-10-11): TIME_WAIT **30**;
+  verified Git root and all four cache paths before deletion. TypeScript **0**, lint **0**
+  (no warnings), unit **0** (**1537/1537 tests in 65 files**, stderr **0 bytes**), build
+  **0**, browser **0** (**651 passed, 1 existing conditional keyboard skip at
+  `keyboard.spec.ts:184`). No failed cold gate for this implementation. The invalid
+  mutation-runner launch and corrected **8/8** sweep are recorded in As built above.
+  Build stderr **1512 bytes** of baseline-browser-mapping warnings; browser stderr
+  **5246 bytes** of NO_COLOR/FORCE_COLOR warnings. Both browser streams inspected after
+  completion: no ERR_NO_BUFFER_SPACE. Scope check passed: the five intended document,
+  runtime and test paths only; no committed assets or baselines changed. Independently
+  verified parent `1b9bdca` CI run `38082333656` succeeded before the correction push.
+  Code review of this correction is required before commit 5; no public activation.
+
 - Before-corpus correction cold gate, first run (2026-10-10): TIME_WAIT **49**;
   verified Git root independently and all four cache targets before deletion. TypeScript
   **0**, lint **0** (no warnings), unit **0** (**1522 tests in 64 files**, stderr **0 bytes**),

@@ -260,6 +260,13 @@ export class LevelStore {
         return !!session && !session.completed && session.hasMoves
     }
 
+    /** Explicit picks also know the manifest boundary and the device date after loading. */
+    pickDay(loaded: LoadedDay, firstDate: string, deviceDate: string) {
+        const clamp = deviceDate < firstDate && loaded.day.date === firstDate
+            ? 'before' : loaded.clamped
+        this.setDay(loaded.day, clamp)
+    }
+
     setDay(day: DayEntry, clamp: LoadedDay['clamped'] = null) {
         const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
         const before = this.currentDefinition?.puzzleId ?? null
