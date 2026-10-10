@@ -54,6 +54,8 @@ export type LegacyOutcome = { readonly committed: boolean, readonly legacy: Lega
 export interface AttemptStore {
     readonly kind: 'indexeddb' | 'localStorage'
     read(puzzleId: string): Promise<Attempt | null>
+    /** All validated, key-bound attempts; null on read failure, with partial results discarded. */
+    readAll(): Promise<readonly Attempt[] | null>
     /** Read, step, write if the step changed it -- as one transaction where there is one. */
     change(puzzleId: string, step: (current: Attempt | null) => Step): Promise<Outcome>
     /**
@@ -116,6 +118,28 @@ const indexedDbStore = (db: IDBDatabase): AttemptStore => ({
             const request = db.transaction(ATTEMPTS, 'readonly').objectStore(ATTEMPTS).get(puzzleId)
             request.onsuccess = () => resolve(attemptAt(request.result, puzzleId))
             request.onerror = () => resolve(null)
+        } catch {
+            resolve(null)
+        }
+    }),
+
+    readAll: () => new Promise(resolve => {
+        const attempts: Attempt[] = []
+        try {
+            const transaction = db.transaction(ATTEMPTS, 'readonly')
+            // A cursor request may succeed and the transaction still abort. Only a complete
+            // transaction supplies history; a partial list must not hide unfinished attempts.
+            transaction.oncomplete = () => resolve(attempts)
+            transaction.onabort = () => resolve(null)
+            transaction.onerror = () => resolve(null)
+            const request = transaction.objectStore(ATTEMPTS).openCursor()
+            request.onsuccess = () => {
+                const cursor = request.result
+                if (!cursor) return
+                const attempt = typeof cursor.key === 'string' ? attemptAt(cursor.value, cursor.key) : null
+                if (attempt) attempts.push(attempt)
+                cursor.continue()
+            }
         } catch {
             resolve(null)
         }
@@ -275,6 +299,24 @@ export const localStorageStore = (storage: Storage | null): AttemptStore => {
     return {
         kind: 'localStorage',
         read: async puzzleId => readAttempt(puzzleId),
+        readAll: async () => {
+            if (!storage) return null
+            const attempts: Attempt[] = []
+            try {
+                const length = storage.length
+                for (let index = 0; index < length; index++) {
+                    const key = storage.key(index)
+                    if (!key?.startsWith(LOCAL_ATTEMPT_PREFIX)) continue
+                    // Read directly: get() deliberately conflates a failed single read with
+                    // missing data, but enumeration must report an unreadable scan for retry.
+                    const attempt = attemptAt(parse(storage.getItem(key)), key.slice(LOCAL_ATTEMPT_PREFIX.length))
+                    if (attempt) attempts.push(attempt)
+                }
+                return attempts
+            } catch {
+                return null
+            }
+        },
         change: async (puzzleId, step) => {
             const read = readAttempt(puzzleId)
             let stepped: Step

@@ -125,7 +125,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); first implementation commit built, awaiting code review. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commit 1 accepted by Claude at `ba0b18c` (2026-10-10); commit 2 built, awaiting code review. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -481,12 +481,13 @@ real browser is tested too, below.
 
 ### Challenge slice 2, session wiring: implementation contract
 
-Written for: Claude, reviewing codex's slice-2 plan before implementation.
+Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract accepted by Claude on `4376e7d`; commit 1 built, awaiting code review.**
+**Status (2026-10-10): contract and commit 1 accepted by Claude; commit 2 built, awaiting code review.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
-Corrections requested in review will be recorded here before any code is written.
+Plan corrections were recorded before implementation. Code-review corrections are recorded
+under the owning commit's As built notes before the next implementation commit.
 
 **First review, Claude (2026-10-10), on `aa732fc`.** Claude read the cited code and fixture
 precedent; no tests or CI rerun. This revision scopes the progress retry to enabled roots,
@@ -496,7 +497,7 @@ the decision log, states what the non-cryptographic hash establishes, cites the 
 browser harness and sets out a commit sequence. The user approved clearing unmarked
 pre-existing progress on a new Start (2026-10-10); the ordering, progress association and
 regression cases below implement that decision. Claude accepted the revised contract on
-`4376e7d` (2026-10-10), reading the plan only; he did not rerun the gate. Codex independently
+`4376e7d` (2026-10-10), reading the plan only; Claude did not rerun the gate. Codex independently
 checked CI run `38007303802`: success on that exact head. The reviewers' recommendations
 are not product decisions.
 
@@ -607,7 +608,10 @@ timing while the public board is already visible would break rules 2 and 4.
    same-puzzle last-write-wins behaviour still applies. The stamp associates progress with
    an attempt generation; it is not cryptographic protection or a new fallback lock.
 6. Add `readAll()` to `AttemptStore`, in both backends, returning only validated, key-bound
-   records. Initialization reconciles every unfinished saved attempt, not just the nine
+   records (an array on success, `null` on read failure). A genuinely empty store returns
+   `[]`; discard collected records if the scan fails, so initialization can retry rather
+   than silently missing history. The fallback retains its accepted lack of an atomic
+   cross-tab snapshot. Initialization reconciles every unfinished saved attempt, not just the nine
    fetched boards. On focus, visible return and the one-second check, refresh the raw
    device date and reconcile expired attempts without waiting for a day refetch. Enumerate
    permanent history on initialization, focus and a changed local date, not every timer tick.
@@ -867,6 +871,75 @@ record it here first; do not push a temporarily enabled or partially guarded pub
 - The first precommit wrapper stopped before staging because an extra PowerShell array
   wrapper counted the JSON mutation array as one item. Corrected that wrapper and verified
   25 results, zero uncaught; this was a precommit-script error, not a failed gate or probe.
+- **Code review, Claude (2026-10-10), on `ba0b18c`: accepted.** Claude reports rerunning
+  the two changed suites (87 and 48 tests) and TypeScript, plus five scratch probes for
+  good evidence, swapped axes, junk targets, wrong/missing tags and impossible dates.
+  His first scratch control used a non-square board and failed; correcting that fixture
+  produced five passing probes. Claude did not rerun the full gate or mutation sweep.
+  Codex independently checked CI run `38012398426`: success on that exact head.
+  Fixed the stale review wording above. The nonblocking suggestion to move `isDay` to a
+  neutral date module is recorded for later consideration; commit 2 does not move it.
+
+**As built: implementation commit 2, attempt enumeration (2026-10-10)**
+- Added `AttemptStore.readAll(): Promise<readonly Attempt[] | null>` to both backends.
+  IndexedDB enumerates the attempts store with one readonly cursor transaction and returns
+  records only on transaction completion; abort, error or setup failure returns `null`.
+  String keys are checked against each record's puzzle ID using the same validation as
+  single-record reads. A bad record or non-string key is skipped and the cursor continues.
+- The fallback enumerates only the attempt-key prefix, parsing and validating each record
+  against the ID in its key. Missing storage or an exception from length/key/getItem returns
+  `null`, discarding previously collected records. Corrupt JSON is an invalid individual
+  record and is skipped. No writes, pruning, backend switch or new cross-tab lock is added;
+  a fallback scan is not promised to be an atomic snapshot against another tab's edits.
+- Both backends include permanent finished and unfinished history regardless of fetched
+  definitions or board date, and re-read the latest committed flags/results on every call.
+  No coordinator or gameplay caller is added in this commit.
+- Deliberate test changes: extended `challengeStore.test.ts` by 23 cases (12 shared backend
+  cases, 6 IndexedDB cases, 5 fallback cases), preserving its existing 18 cases. The new
+  cases check empty versus failure, all dates/results/opaque IDs, malformed and misfiled
+  records, unrelated namespaces, latest cross-connection writes, readonly completion,
+  abort after cursor success, cursor setup failure, closed connection, corrupt JSON,
+  untouched storage, absent storage and exceptions from length/key/getItem.
+- Preliminary validation before strengthening the abort cases: all 40 targeted tests passed;
+  TypeScript and targeted lint exited 0. The strengthened suite contains 41 cases.
+- Mutation sweep: **26 of 26 caught at the intended assertion**, source restored byte-for-byte.
+  IndexedDB probes: trust malformed records; ignore key binding; coerce non-string keys;
+  stop the cursor early; lose the latest flags/result; omit finished attempts; filter out
+  unserved dates; use readwrite; resolve on cursor success; return collected history on
+  abort; report cursor setup failure as empty; report a closed connection as empty; return
+  collected history on request error. Fallback probes: trust malformed records; ignore key
+  binding; read unrelated namespaces; stop after a malformed record; skip the last key;
+  swallow getItem failure; return collected history on length/key/getItem failure (three
+  separate probes); report missing storage as empty; remove enumerated keys; rewrite valid
+  records; fail the whole scan for corrupt JSON.
+  The first sweep stopped after 10 probes: 9 caught, 1 escaped. The cursor-abort test had
+  aborted with another request pending, so the error handler returned `null` before the
+  broken abort handler could publish partial history. Strengthened it into separate pending-
+  request and end-of-cursor abort cases and added a request-error probe. The complete rerun
+  caught all 26 at their named regression assertion, verified from Vitest's reported source
+  location; no weak or escaped probe remains. This changed the test, not the contract.
+- Commit-2 cold gate, first run: socket count 38; TypeScript 0, lint 0 (no warnings),
+  unit 0 (60 files, 1340 tests passed; stderr exactly 0 bytes), build 0, browser 1
+  (650 passed, 1 failed, 1 existing conditional skip). Failure: phone-360,
+  `archive.spec.ts:360`, "a clock past the corpus plays the last day and says so": the
+  board did not render within 15000 ms. Diagnostics returned `hydrated: false`, readyState
+  complete and body `no board`. That test's `openAt` helper bypasses `instrument`, so its
+  elapsed `-1` and empty fetch/error/network lists do not establish that nothing failed.
+  It also uses `page.clock.install` rather than the calendar-only `pinDay` helper. The
+  startup failure's cause is not established; no `readAll` caller is added in game code.
+  Build stderr: 1512 bytes of stale `baseline-browser-mapping` warnings; browser stderr:
+  5410 bytes of `NO_COLOR` versus `FORCE_COLOR` warnings. No commit after this failed gate;
+  rerun the entire gate from cold, leaving runtime/tests unchanged. Any startup-flake fix
+  belongs to a separate assigned contract/change, as excluded by this slice's scope.
+- Commit-2 cold gate, second run, runtime/tests unchanged: waited for sockets to drain;
+  starting count 39. TypeScript 0, lint 0 (no warnings), unit 0 (60 files, 1340 tests passed;
+  stderr exactly 0 bytes), build 0, browser 0 (651 passed, 1 existing conditional skip
+  at `keyboard.spec.ts:184`, page not scrollable). The attempt-store suite passed 41 cases.
+  Build stderr: 1512 bytes of stale `baseline-browser-mapping` warnings; browser stderr:
+  5242 bytes of `NO_COLOR` versus `FORCE_COLOR` warnings. `git diff --check` passed;
+  only the attempt store, its named test file and this document changed; no changed assets.
+  The first failed browser run remains recorded above. This passing rerun establishes
+  intermittency in the startup test, not its cause; separate diagnosis/fix remains required.
 
 **Validation and review record**
 - Draft evidence: code read and checkout measured; no claims yet about the proposed wiring.
@@ -894,7 +967,7 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   no implementation or runtime mutation probes are claimed.
 - Claude's first review: corrections recorded above; revised plan accepted on `4376e7d`.
   Start-over-progress decision: approved by the user (2026-10-10), recorded in the decision
-  log, D3 and item 5. Commit 1's implementation and checks are recorded above; later commits
+  log, D3 and item 5. The implementation and checks for commits 1 and 2 are recorded above; later commits
   await the preceding head's review as agreed.
 
 ### Would need a server (rejected)
