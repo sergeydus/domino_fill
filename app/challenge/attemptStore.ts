@@ -30,14 +30,15 @@ const ATTEMPTS = 'attempts'
 const META = 'meta'
 const LEGACY = 'legacy'
 
-/** Other tabs hear of each saved change here, by puzzle id. This slice only sends. */
+/** The store sends saved puzzle-ID notices here; the coordinator listens. */
 export const CHANNEL = 'dominoFill.challenge'
 
 export const LOCAL_ATTEMPT_PREFIX = 'dominoFill.challenge.v1.attempt.'
 export const LOCAL_LEGACY_KEY = 'dominoFill.challenge.v1.legacy'
 
 /**
- * A change's outcome. `committed` is whether storage now holds `attempt`; when it is false,
+ * A change's outcome. `committed` means the backend applied `attempt`; in memory this is
+ * not a durable save. When it is false,
  * nothing was saved, and `attempt` is the record as it was read.
  */
 export type Outcome = { readonly committed: boolean, readonly changed: boolean, readonly attempt: Attempt | null }
@@ -52,7 +53,7 @@ export type Legacy = { readonly checked: true, readonly marks: readonly string[]
 export type LegacyOutcome = { readonly committed: boolean, readonly legacy: Legacy | null }
 
 export interface AttemptStore {
-    readonly kind: 'indexeddb' | 'localStorage'
+    readonly kind: 'indexeddb' | 'localStorage' | 'memory'
     read(puzzleId: string): Promise<Attempt | null>
     /** All validated, key-bound attempts; null on read failure, with partial results discarded. */
     readAll(): Promise<readonly Attempt[] | null>
@@ -355,6 +356,88 @@ const browserStorage = (): Storage | null => {
     }
 }
 
-/** This tab's store: IndexedDB where it works, else the `localStorage` fallback (rule 15). */
-export const openAttemptStore = async (): Promise<AttemptStore> =>
-    (await openIndexedDbStore()) ?? localStorageStore(browserStorage())
+/** An unsaved tab's records. Each instance is independent; it never broadcasts or writes. */
+export const memoryAttemptStore = (): AttemptStore => {
+    const attempts = new Map<string, Attempt>()
+    let legacy: Legacy | null = null
+    return {
+        kind: 'memory',
+        read: async id => attempts.get(id) ?? null,
+        readAll: async () => [...attempts.values()],
+        change: async (id, step) => {
+            const current = attempts.get(id) ?? null
+            try {
+                const next = step(current)
+                if (next.next && !belongs(next.next, id)) return { committed: false, changed: false, attempt: current }
+                if (next.changed && next.next) attempts.set(id, next.next)
+                return { committed: true, changed: next.changed, attempt: next.next }
+            } catch {
+                return { committed: false, changed: false, attempt: current }
+            }
+        },
+        readLegacy: async () => legacy,
+        legacyCheck: async scan => {
+            try {
+                legacy ??= { checked: true, marks: [...scan()] }
+                return { committed: true, legacy }
+            } catch { return { committed: false, legacy: null } }
+        },
+        close: () => {},
+    }
+}
+
+/** A selected persistent backend that cannot reopen: failure, never a switch of backend. */
+const unavailable = (kind: 'indexeddb'): AttemptStore => ({
+    kind, read: async () => null, readAll: async () => null,
+    change: async () => ({ committed: false, changed: false, attempt: null }),
+    legacyCheck: async () => ({ committed: false, legacy: null }),
+    readLegacy: async () => null, close: () => {},
+})
+
+export type OpeningOptions = {
+    factory?: IDBFactory | null
+    storage?: () => Storage | null
+    /** Retain the choice through lifecycle restart; never reclassify a later failure. */
+    kind?: AttemptStore['kind']
+}
+
+const probeToken = (): string => {
+    try { return crypto.randomUUID() }
+    catch { return `${Date.now()}.${Math.random()}` }
+}
+
+/** Capability is decided once at opening, separately from a later failed operation. */
+export const openAttemptStore = async (options: OpeningOptions = {}): Promise<AttemptStore> => {
+    if (options.kind === 'memory') return memoryAttemptStore()
+    if (options.kind !== 'localStorage') {
+        let indexed: AttemptStore | null = null
+        try {
+            const factory = options.factory === undefined ? globalThis.indexedDB : options.factory ?? undefined
+            indexed = factory ? await openIndexedDbStore(factory) : null
+        } catch { /* Access to the API itself may be blocked. */ }
+        if (indexed) return indexed
+        if (options.kind === 'indexeddb') return unavailable('indexeddb')
+    }
+    let storage: Storage | null = null
+    try { storage = (options.storage ?? browserStorage)() } catch { /* Blocked getter. */ }
+    if (options.kind === 'localStorage') return localStorageStore(storage)
+    if (storage) {
+        // A new key, with collision checking: no existing data is overwritten by the probe.
+        let key: string | null = null
+        let wrote = false
+        try {
+            key = `dominoFill.challenge.probe.${probeToken()}`
+            if (storage.getItem(key) !== null) return memoryAttemptStore()
+            storage.setItem(key, key)
+            wrote = true
+            if (storage.getItem(key) !== key) return memoryAttemptStore()
+            storage.removeItem(key)
+            wrote = false
+            return localStorageStore(storage)
+        } catch { /* Not usable at opening: explicitly unsaved for this tab. */ }
+        finally {
+            if (wrote && key !== null) { try { storage.removeItem(key) } catch { /* Removal also blocked. */ } }
+        }
+    }
+    return memoryAttemptStore()
+}

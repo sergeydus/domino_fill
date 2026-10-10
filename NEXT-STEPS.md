@@ -126,7 +126,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 authorized. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 built and gated, awaiting Claude's review. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -491,7 +491,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract and commits 1 and 2 accepted by Claude; user chose timed but unsaved and authorized commit 3.**
+**Status (2026-10-10): contract and commits 1 and 2 accepted by Claude; commit 3 built and gated, awaiting Claude's review. User's timed-but-unsaved decision is recorded and implemented in the opening/coordinator foundation.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -772,7 +772,7 @@ timing while the public board is already visible would break rules 2 and 4.
   its finished mark in an enabled fixture. Slice 2 protects the fixed result and derived
   challenge finished state; it does not claim that the old archive UI already consumes it.
 - A general progress-retry fix for the public casual game; item 10 is enabled-root scoped.
-- A fix for the known theme/shake flakes, native storage, real-phone timing claims or
+- A fix for the known theme/archive flakes, native storage, real-phone timing claims or
   stronger fallback guarantees. Those need their own assigned changes.
 - Pixel changes or baseline regeneration. The ordinary public page remains inactive;
   browser fixtures are compiled only in the existing visual-test build.
@@ -1009,6 +1009,127 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   gate; the complete cold rerun passed. The failure and diagnostic limitations are
   recorded above; its cause remains unknown. Diagnose and fix under a separate assigned
   contract. Neither flaky test is silently skipped or fixed in slice 2.
+
+**As built: implementation commit 3, inactive coordinator (2026-10-10)**
+- Added an explicitly enabled, per-root coordinator. The public provider still constructs
+  a default inactive root; its new effect owns start/disposal, with no challenge work in
+  that default. Standalone/Tutorial sessions have no daily binding. Daily sessions bind
+  to their definition and explicit corpus date; matching sessions survive refetches.
+- Opening selects IndexedDB after its transaction probe, otherwise localStorage after a
+  fresh-key write/readback/removal probe, otherwise a separate memory instance. Probe keys
+  are collision-checked; cleanup is best effort if removal itself is blocked. An unavailable
+  UUID API uses a different suffix and is not mistaken for blocked storage. `kind: memory`
+  exposes explicitly unsaved play; its applied outcomes are not durable saves. A persistent
+  backend remains selected through later failures and lifecycle reopen; failed IndexedDB
+  reopen reports failure as IndexedDB rather than selecting another backend. Memory state
+  survives effect setup-cleanup-setup within this root; a new root/store has none of it.
+- Initialization completes the legacy check using both requested calendar dates, rebuilding
+  the window across midnight and excluding clamped substitutes. Partial/failed loads and
+  failed commits stay retryable. The scan includes valid empty records. Persistent roots
+  retain migration and 14-day cleanup; memory roots read old casual progress without
+  migrating/deleting it. All unfinished saved attempts reconcile transactionally, including
+  unfetched IDs, with validated solve evidence before expiry. Failed history reads are
+  failures, not empty history or a signal to switch to memory.
+- Operations serialize by puzzle ID; adoption checks ID/hash/date and suppresses disposed
+  completions. One timer and owned focus/visibility listeners provide raw-device-date and
+  wall/monotonic checks. Persistent mode also listens to storage events and validated ID
+  notices on BroadcastChannel, rereading records rather than accepting message data. Memory
+  keeps local focus/visibility checks, with no cross-tab channel/storage-event coordination.
+  Pending clock flags are sticky and merge into later transactions. New-session reconciliation
+  failures can retry on the same store; stale operations cannot attach effects after disposal.
+- Enabled daily bindings retain failed progress with a generation and original `savedAt`.
+  A newer local snapshot supersedes it; completion of an older generation cannot clear the
+  newer one. Only changed local boards/metadata queue writes. Retired bindings remain while
+  progress or transactions are pending, then retire; this does not copy another tab's board
+  over local edits. Memory progress stays in the root's map without persistent writes/retries.
+  Disabled casual persistence still advances its baseline on failure and does not retry it.
+- Fixed attempt results drive challenge first-unsolved selection despite a changed replay
+  board; casual archive completion still counts after a given-up challenge. Newly served
+  results reconcile before selection, and a delayed completion cannot override navigation
+  made meanwhile. The archive's visible marks remain slice 3's work.
+- The Start/assist/finish action guards, winning-placement capture, Practice producer/state,
+  empty-on-Start ordering and pending-first-finish retention are still commit 4, together as
+  accepted. This commit provides their serialized transaction/binding/persistence foundations;
+  it adds no public activation or fixture and does not claim those later hooks are built.
+- Deliberate tests: added `challengeOpening.test.ts` and `challengeLifecycle.test.ts` for
+  capability selection, independent unsaved records, initialization, history/evidence,
+  lifecycle, clock flags, binding retries, progress generations, retention and selection.
+  Added one provider setup-cleanup-setup ownership test. Existing persistence/store tests
+  keep their assertions; new enabled persistence cases live with the coordinator lifecycle
+  tests so their injected store/clock/write failures share the same harness.
+- Preliminary targeted run: 48 of 50 passed; two failures. The month-boundary fixture's
+  timestamp was outside retention and was corrected. A real missing-observability problem
+  in the optional start stamp was corrected by initializing it explicitly. The next run
+  passed all 145 tests across five suites; later additions and their counts are recorded
+  with the final checks below. Targeted lint initially found one prefer-const error and
+  unused imports/parameters; corrected them, without weakening any contract rule.
+- Own read-through found and corrected three additional issues before the gate: the opening
+  mode needs observability even when read before initialization; a newly bound session needs
+  a retry path after temporary failure; unsaved mode still needs local focus clock checks.
+  Added independent regression assertions and mutation probes for each. Probe entropy,
+  persistent cleanup and delayed first-unsolved selection also have regression probes.
+- Final targeted validation: **161 of 161 passed** across five suites: opening 17,
+  lifecycle 48, provider 7, existing attempt store 41 and persistence 48. Added **66 tests**
+  over commit 2 (17 opening, 48 lifecycle, 1 provider). Intermediate strengthened runs
+  passed 147, 152 and 156 tests as cases were added. One intermediate type-check failed
+  because a zero-argument mock's call tuple was indexed for the new listener mode;
+  giving the mock the listener's actual signature corrected it. The full cold gate below
+  checks the final types/lint as well as all tests.
+- Mutation sweep: **64 of 64 caught at their intended assertion**, source restored
+  byte-for-byte. Probes:
+  - 1–4: enable default roots; bypass Start in memory; reveal a stored future attempt;
+    substitute an inferred binding date.
+  - 5–11: omit yesterday's definitions; skip empty legacy progress; accept a failed legacy
+    commit; ignore midnight during loading; scan a clamped substitute; trust a response
+    for the wrong requested date; rescan a committed legacy check.
+  - 12–19: treat failed history as empty; reconcile only fetched attempts; omit durable
+    recovery evidence; accept expired evidence despite blocked cleanup; ignore bound hash
+    or date (separate probes); restore missing or mismatched stamps (separate probes).
+  - 20–29: enumerate every tick; miss a changed device date; lose a pending clock flag;
+    lose its immediate model state; overlap per-puzzle transactions; publish a disposed
+    result; allow late initialization after disposal; leak timer or listeners (separate
+    probes); forget the selected backend on lifecycle restart.
+  - 30–41: discard a failed progress generation; restamp a retry; let an older successful
+    generation erase a newer failure; write unchanged enabled sessions; write persistent
+    progress in memory mode; retire pending progress early; never retire after success;
+    omit the start stamp; route enabled progress through the casual dropped-write path;
+    select from mutable completion; omit provider start or disposal (separate probes).
+  - 42–51: ignore working IndexedDB; omit the fallback capability probe; retain a successful
+    probe key; overwrite a colliding probe key; accept mismatched readback; switch a selected
+    persistent backend to memory on reopen failure; broadcast memory writes; share memory
+    attempts across instances; rescan memory legacy; ignore memory key binding.
+  - 52–58: make start stamp, solve evidence or opening mode unobservable (three separate
+    probes); open a cross-tab channel in memory; omit local focus sampling; prevent a
+    failed new binding from retrying; mistake unavailable UUID support for blocked storage.
+  - 59–64: skip persistent progress cleanup; delete progress in memory mode; omit delayed
+    new-day selection; select before bindings reconcile; override navigation after delayed
+    results; lose casual archive completion after a given-up challenge.
+  First sweep stopped after 35 caught probes: probe 36 used an invalid empty `if` body,
+  so compilation failed and zero tests ran. Corrected that scratch mutation to a valid
+  no-op; this was not counted as a caught probe or an escaped feature assertion. Subsequent
+  complete sweeps caught 55 of 55, then 58 of 58 as read-through regressions were added.
+  After the retention/selection changes, the complete final sweep caught all 64. No weak
+  assertion or escaped valid probe remains. Scratch reports/scripts are outside the repo.
+- Commit-3 gate preflight declined at 106 TIME_WAIT sockets, before deleting any cache or
+  running any of the five steps. Subsequent counts were 130 and 145; waited for fewer
+  than 100 before beginning the cold gate. This is separate from the actual gate runs.
+- First commit-3 cold run began at 34 TIME_WAIT sockets: TypeScript 0, lint 0 (no
+  warnings), unit 0 (62 files, 1406 passed; stderr exactly 0 bytes), build 0, browser 0
+  (651 passed, 1 existing conditional skip). Build stderr was 1512 bytes of stale
+  baseline-browser-mapping warnings. Browser stderr was 5581 bytes: NO_COLOR/FORCE_COLOR
+  warnings and one bootstrap ERR_NO_BUFFER_SPACE report, recovered by the existing
+  startup retry. There was no failed test or nonzero gate step, but this run was not
+  accepted for committing: applied AGENTS.md's socket-error rule and reran the entire
+  cold gate after waiting for the socket pool. No source/test changes followed this run.
+- Complete commit-3 cold rerun began at 33 TIME_WAIT sockets: TypeScript 0, lint 0
+  (no warnings), unit 0 (62 files, **1406 passed**; stderr exactly **0 bytes**), build 0,
+  browser 0 (**651 passed, 1 existing conditional skip**). Build stderr was 1512 bytes
+  of stale baseline-browser-mapping warnings; browser stderr was 5246 bytes of
+  NO_COLOR/FORCE_COLOR warnings, with no socket-exhaustion report. Diff check passed;
+  only the nine intended code/test/document paths changed, with no asset changes.
+  This rerun is the accepted gate for commit 3; both runs and preliminary failures are
+  recorded above. The separate decision-document commit `d08736e` was pushed first;
+  independently verified its CI passed (run `38015562525`). Commit 4 waits for review.
 
 **Validation and review record**
 - No-storage decision document gate (2026-10-10), first cold run: socket count 37;

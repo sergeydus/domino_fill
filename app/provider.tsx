@@ -1,5 +1,5 @@
 "use client"
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { RootStore } from "@/app/stores/RootStore";
 
@@ -11,6 +11,10 @@ export const StoreContext = createContext<RootStore | null>(null);
 export const StoreWrapper = ({ children }: { children: React.ReactNode }) => {
     // Lazy initialiser: constructed once per mount, never on re-render.
     const [store] = useState(() => new RootStore());
+    useEffect(() => {
+        void store.start()
+        return () => store.dispose()
+    }, [store]);
 
     /*
      * `reducedMotion="user"` covers every animation in the app at once (spec P1-8, row 19).

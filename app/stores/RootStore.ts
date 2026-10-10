@@ -4,6 +4,7 @@ import { SizeStore } from "./SizeStore";
 import { CorpusSource } from "./corpusSource";
 import { SoundStore } from "./SoundStore";
 import { ControlStore } from "./ControlStore";
+import { ChallengeCoordinator, type CoordinatorOptions } from '../challenge/coordinator';
 
 /**
  * The store graph.
@@ -28,12 +29,22 @@ export class RootStore {
     sound: SoundStore
     /** The control mode, remembered, and the piece held in Pick a piece mode. */
     controls: ControlStore
+    readonly challenge: ChallengeCoordinator | null
 
-    constructor(corpus: CorpusSource = new CorpusSource()) {
+    constructor(corpus: CorpusSource = new CorpusSource(), options: { challenge?: boolean, coordinator?: Partial<CoordinatorOptions> } = {}) {
         this.corpus = corpus
         this.sound = new SoundStore()
         this.controls = new ControlStore(this)
         this.boardsStore = new LevelStore(this)
         this.sizeStore = new SizeStore(this)
+        this.challenge = options.challenge ? new ChallengeCoordinator({
+            loadDay: date => this.corpus.loadDay(date),
+            hydrated: id => { this.boardsStore.lastSaved[id] = this.boardsStore.progressSnapshot[id] },
+            initialized: () => this.boardsStore.selectFirstUnsolved(),
+            ...options.coordinator,
+        }) : null
     }
+
+    start() { return this.challenge?.start() }
+    dispose() { this.challenge?.dispose() }
 }

@@ -1,5 +1,6 @@
 "use client"
-import { makeAutoObservable, observable, reaction } from "mobx"
+import { makeAutoObservable, observable, reaction, runInAction } from "mobx"
+import { inWindow } from '../challenge/window'
 import { type DayEntry } from "./corpus"
 import { type LoadedDay } from "./corpusSource"
 import { RootStore } from "./RootStore"
@@ -294,8 +295,8 @@ export class LevelStore {
          * came straight back onto the screen having just been deleted.
          */
         const now = Date.now()
-        const fromLegacy = migrateLegacy(now)
-        pruneStorage(now)
+        const fromLegacy = this.rootStore.challenge ? {} : migrateLegacy(now)
+        if (!this.rootStore.challenge) pruneStorage(now)
         this.saved = live({ ...fromLegacy, ...readAllProgress() }, now)
         this.reconcileSessions(definitions)
 
@@ -314,6 +315,7 @@ export class LevelStore {
         // save would write all nine puzzles, eight of them empty boards nobody has touched.
         this.lastSaved = this.progressSnapshot
         this.beginPersisting()
+        this.selectAfterBindings()
     }
 
     /** Whether the player is on the current day's puzzles. */
@@ -375,6 +377,7 @@ export class LevelStore {
             snapshot[definition.puzzleId] = {
                 definitionHash: session.definition.definitionHash,
                 ...session.snapshot,
+                ...this.rootStore.challenge?.bindings.get(session)?.metadata,
             }
         }
         return snapshot
@@ -407,6 +410,13 @@ export class LevelStore {
     persist(snapshot: Record<string, SessionSnapshot>) {
         const savedAt = Date.now()
         for (const [puzzleId, next] of Object.entries(snapshot)) {
+            const session = this.sessions.get(puzzleId)
+            const challenge = this.rootStore.challenge
+            const binding = session && challenge?.bindings.get(session)
+            if (challenge && binding) {
+                challenge.captureProgress(binding, next)
+                continue
+            }
             const mine = this.lastSaved[puzzleId]
             // Unchanged here since this store last looked, so whatever storage holds for it
             // belongs to someone else and is left exactly as it is.
@@ -425,7 +435,7 @@ export class LevelStore {
     selectFirstUnsolved() {
         const definitions = this.definitionsFor(this.difficulty)
         if (!definitions || definitions.length === 0) return
-        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        const index = definitions.findIndex(d => !this.isFinished(d.puzzleId))
         this.setLevel((index === -1 ? definitions.length : index + 1) as Level)
     }
 
@@ -473,8 +483,12 @@ export class LevelStore {
             // owns that judgement -- hash, size and rock positions -- so there is no path
             // that restores without it.
             const saved = progressFor(this.saved[definition.puzzleId], definition)
-            if (saved) session.restore(saved)
+            if (saved && !this.rootStore.challenge) session.restore(saved)
             this.sessions.set(definition.puzzleId, session)
+        }
+        if (this.rootStore.challenge && this.viewingDate) {
+            for (const session of this.sessions.values()) this.rootStore.challenge.bind(session, this.viewingDate)
+            this.rootStore.challenge.retain(new Set(this.sessions.values()))
         }
     }
 
@@ -511,12 +525,35 @@ export class LevelStore {
         // Land on the first unsolved level of the new difficulty, or the last if all are done.
         const definitions = this.definitionsFor(dif)
         if (!definitions) return
-        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        const index = definitions.findIndex(d => !this.isFinished(d.puzzleId))
         this.setLevel((index === -1 ? 3 : index + 1) as Level)
+        this.selectAfterBindings()
     }
 
     get currentDefinition(): PuzzleDefinition | null {
         return this.definitionsFor(this.difficulty)?.[this.level - 1] ?? null
+    }
+
+    private isFinished(id: string): boolean {
+        const session = this.sessions.get(id)
+        if (!session) return false
+        const challenge = this.rootStore.challenge
+        const binding = challenge?.bindings.get(session)
+        if (binding?.ready && binding.attempt) return binding.finished
+            || (!inWindow(binding.date, challenge!.deviceDate) && session.completed)
+        return session.completed
+    }
+
+    /** New sessions reconcile asynchronously. Preserve any navigation made meanwhile. */
+    private selectAfterBindings() {
+        const challenge = this.rootStore.challenge
+        if (!challenge || challenge.status !== 'ready') return
+        const session = this.currentBoard, difficulty = this.difficulty, date = this.viewingDate
+        void challenge.whenBound([...this.sessions.values()]).then(() => runInAction(() => {
+            if (challenge.active && session === this.currentBoard && difficulty === this.difficulty && date === this.viewingDate) {
+                this.selectFirstUnsolved()
+            }
+        }))
     }
 
     /**
