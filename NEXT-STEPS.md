@@ -71,6 +71,8 @@ Evidence levels:
 | 2026-10-10 | Codex builds Daily Challenge slice 2, the wiring; Claude reviews its plan and code (user, 2026-10-10). | Contract first, from merged `master` at `11b87a1`. Public activation waits for slice 3's covered boards and Start controls. |
 | 2026-10-10 | Start clears existing progress when creating an attempt on a board with no legacy mark (user, 2026-10-10). | The first timed attempt begins empty, including after writes by an old-version tab. A failed Start preserves that progress; marked legacy boards remain untouched and existing attempts resume their own progress. See slice 2, item 5. |
 | 2026-10-10 | Where neither storage backend is usable when the tab opens, play timed but unsaved (user, 2026-10-10). | Today's and yesterday's boards remain covered until Start, then receive normal clocks and results in tab memory. Closing/reloading loses them and permits another attempt. A persistent store that fails later keeps the existing failed-save rules; it never switches to unsaved play. See rule 15 and slice 2's opening capability check. |
+| 2026-10-10 | A board served by a corpus clamp plays casually and uncovered, with its honest served-date label (user, 2026-10-10). | A badly wrong clock must still produce a playable board. Carry the response's clamp provenance into its daily binding; genuinely future, unclamped boards remain covered and cannot Start. Required before activation; keep the fix separate from commit 4's session hooks. |
+| 2026-10-10 | Prevent early access to future boards; low priority for later. Past boards need no restriction (user, 2026-10-10). | Record D16's release/exposure requirements now. The current device-date guard and public month files cannot enforce this against changed clocks or direct reads. No release architecture, trusted date policy or implementation is approved yet. |
 
 ## Principles
 
@@ -126,7 +128,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 built and gated, awaiting Claude's review. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 accepted by Claude at `34f792f`; commit 4 authorized. Corpus-clamped boards stay casual/uncovered (user, 2026-10-10); separate correction required before activation. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -140,6 +142,50 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | D13 | Test the timer on real devices *(codex R9)* | Background tabs, sleep and wake, phone lock, reload and clock changes, on real phones and browsers. | Study first | |
 | D14 | Input fairness study *(codex R5)* | Compare mouse, touch and keyboard times before adding faster controls. If one input is much faster, decide whether to note the input on the share card. | Study first | |
 | D15 | Speedrun categories on archive puzzles | The earlier plan: fixed sets, splits and video-checked runs. It's superseded as the main competition, but could return as an extra. | Medium | |
+| D16 | Prevent early access to future boards | Keep tomorrow's and later boards unavailable before their release, including direct content access and advancing the device clock. Past boards remain unrestricted. See the draft requirements below; stronger release protection requires withholding future readable content rather than only hiding the board. | Study first | Later, low priority (user, 2026-10-10). Requirements only now; release-date policy and implementation need their own decisions/contract. |
+
+### Future-board release protection (D16): draft requirements, low priority
+
+**User's scope (2026-10-10).** Prevent someone seeing or playing tomorrow's or later
+boards early. Do not restrict past boards. This records a future requirement; it is not
+part of slice 2, an accepted implementation contract, or a change to the no-server rule.
+
+**What is possible today, read and inspected locally.** `DominoClient.tsx` requests the
+device's `dayKey(new Date())`; moving that clock forward changes which published board
+loads. The archive filters dates after its effective today, and the enabled challenge
+refuses dates ahead of its device date, but neither supplies an independent date authority.
+`CorpusSource` fetches `/puzzles/index.json` and whole public month chunks. Those chunks
+include future days, including all nine boards for 2026-10-11 in the checkout inspected
+on 2026-10-10. Reading that chunk exposes them without using the game UI. These files are
+also in the public source repository. This is code/data inspection, not an adversarial
+browser experiment; no future-board access protection is claimed by the current cover.
+
+**Required outcome and acceptance evidence for a later contract.**
+- Define an independently enforceable release boundary first. Local device dates and
+  timezones differ, so decide when a board becomes public and what "future" means at the
+  same instant for two players. A clock/timezone change must not release withheld content.
+- Before that boundary, the readable future definition and any information sufficient to
+  reconstruct it must be absent from public delivery: URLs, month chunks, page/build
+  assets, preload/offline caches and public source/history or exposed generator inputs.
+  A hidden grid, renamed file, client-side secret or additional UI guard alone is not
+  evidence of this property. Already published copies cannot be made secret again.
+- Prove absence by inspecting the actual release artifacts and direct content requests,
+  not only by testing a disabled date button. Exercise advancing the device date/timezone,
+  requesting a future date and downloading a current-month file before release; none may
+  return an unreleased readable board. Include a genuine future-date control distinct
+  from the approved casual corpus-clamp correction.
+- At release, the intended board must become playable reliably. Keep published puzzle IDs,
+  hashes and definitions stable; keep the past archive and saved progress accessible.
+  Test month boundaries, extension/deployment and stale caches without exposing later days.
+- A future design could investigate scheduled publication of only released static data,
+  without a competitive game server. That is an option to study, not an approved solution:
+  it still needs a trusted release schedule, a timezone policy and protection against
+  exposure through source/history. Decide offline future-content availability explicitly.
+
+**Limits/open choices.** Strong prevention is incompatible with shipping readable future
+content publicly in advance. The current local-date/on-device rules remain on the honour
+system until a separately reviewed release design meets the evidence above. No new server,
+daily deployment scheme, encryption, timezone policy or corpus rewrite is authorized here.
 
 ### Ruleset v1 (D2): contract
 
@@ -491,7 +537,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract and commits 1 and 2 accepted by Claude; commit 3 built and gated, awaiting Claude's review. User's timed-but-unsaved decision is recorded and implemented in the opening/coordinator foundation.**
+**Status (2026-10-10): contract and implementation commits 1–3 accepted by Claude. Commit 4 is authorized. The user's corpus-clamp decision is recorded for a separate correction before public activation.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -519,6 +565,18 @@ D2 and the affected contract rules/tests before implementing commit 3. No choice
 been inferred from Claude's recommendation. **Resolved by the user (2026-10-10): timed but
 unsaved, detected at tab opening; later persistent-store failures retain their existing
 rules.** The user authorized proceeding with commit 3 after recording this clarification.
+
+**Commit-3 review, Claude (2026-10-10), on `34f792f`.** Accepted as code. Claude reports
+running six affected/dependent suites: 183 tests passed, unit stderr 0 bytes; type-checking
+passed. Claude read the enabled-only integration, opening capability and coordinator rules,
+but did not rerun the gate or 64-probe sweep. Codex independently checked CI run
+`38022117973`: success on that exact head. Claude authorized commit 4 and requested shorter
+coordinator lines and one statement per line; format that file with the session hooks.
+Claude also found the before-corpus clock case: binding the clamped served date makes it
+look genuinely future, so it stays covered forever. The user approved casual, uncovered
+play for corrected boards, with the existing honest label (2026-10-10). This does not
+change the genuine-future rule. The separate correction and its contract are below;
+Claude explicitly says it does not block commit 4.
 
 **Why.** Slice 1 supplies the attempt rules, transactions and clock arithmetic, but no
 game code uses them. This slice connects those rules to real sessions and progress, behind
@@ -856,7 +914,30 @@ strengthen that test, never weaken this contract.
    the session tests and their mutations. Keep these together: a guarded session must not
    briefly ship with an unguarded direct Hint/Check or an uncaptured winning placement.
 5. The visual-only fixture, integrated Chromium cases and production-exclusion assertions.
-   Runtime tests accompany their owning commit rather than waiting for this final step.
+  Runtime tests accompany their owning commit rather than waiting for this final step.
+
+**Required separate correction before activation: corpus-clamped boards (2026-10-10)**
+- Why/read: `CorpusSource.loadDay` deliberately returns a playable endpoint and reports
+  `clamped` for an out-of-range requested date (`corpusSource.ts:155–169`). `receiveDay`
+  retains the honest effective/requested dates, but daily challenge bindings currently
+  receive only the served date. `isCovered` therefore mistakes a before-corpus correction
+  for a genuine future puzzle. Nothing is publicly enabled yet.
+- Carry each served response's explicit clamp provenance into its binding. Do not infer it
+  from the opaque puzzle ID, a global selected date, or merely being ahead of the clock.
+  A binding served through a clamp is casual/uncovered: no Start, first-attempt mutation,
+  Practice clock or first-attempt solve evidence from that response. Keep its served-date
+  label and ordinary casual progress/assistance. An unclamped future binding remains
+  covered and cannot Start. Existing fixed attempts are not rewritten by this exception.
+- Preserve matching-session/refetch behaviour, with provenance updated from the response
+  that actually serves the board; pending responses must not change the active board's
+  mode. Do not bypass unrelated initialization/save failures for ordinary challenge boards.
+- Add before/after-clamp tests using `receiveDay`, an unclamped-future control, matching
+  refetch and held-back-day assertions. Check casual placement/Hint/Check and absence of
+  challenge writes/evidence; mutation-test dropped/inferred provenance and accidental
+  permission for a genuine future day. No assets, pixels or public activation in the fix.
+- This is a separate atomic correction after the accepted commit-4 hooks, before slice 3
+  can activate. The user's decision is final; present this concrete mechanism to Claude
+  for review with commit 4 before implementing that separate correction.
 
 Each commit gets its own mutations for the mechanism it adds, full cold gate and As built
 notes. Push it, let needed CI finish, and report the exact head for Claude's review before
@@ -1132,6 +1213,14 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   independently verified its CI passed (run `38015562525`). Commit 4 waits for review.
 
 **Validation and review record**
+- Commit-3 review/decision documentation gate (2026-10-10), first cold run: socket
+  count 36; TypeScript 0, lint 0 (no warnings), unit 0 (62 files, 1406 tests passed;
+  stderr exactly 0 bytes), build 0, browser 0 (651 passed, 1 existing conditional skip).
+  No failed gate run. Build stderr was 1512 bytes of stale baseline-browser-mapping
+  warnings; browser stderr was 5245 bytes of NO_COLOR/FORCE_COLOR warnings, with no
+  socket-exhaustion report. Only NEXT-STEPS changed; diff check passed. This separately
+  records acceptance, the clamp choice and D16's future requirements, not code for them;
+  no runtime mutation claim is made for this documentation-only commit.
 - No-storage decision document gate (2026-10-10), first cold run: socket count 37;
   TypeScript 0, lint 0, unit 0 (60 files, 1340 tests; stderr 0 bytes), build 0,
   browser 0 (651 passed, 1 existing conditional skip). No failed gate run. Build stderr
