@@ -42,6 +42,8 @@ export class LevelStore {
     rootStore: RootStore
     difficulty: Difficulty = 'easy'
     level: Level = 1
+    /** Invalidates an asynchronous answer even after navigating away and back. */
+    navigationVersion = 0
     hasBegan: boolean = false
 
     /** Immutable puzzle content, by difficulty. */
@@ -149,6 +151,7 @@ export class LevelStore {
             // view derives from, and making the records observable would deep-convert every
             // saved board into a proxy for no reader's benefit.
             saved: false,
+            navigationVersion: false,
             disposePersist: false,
             // Content on its way to the screen, observed by reference for the same reason
             // the definition lists are: the puzzles inside are frozen, and deep-converting
@@ -173,6 +176,8 @@ export class LevelStore {
         reaction(
             () => {
                 const session = this.currentBoard
+                const binding = session && this.rootStore.challenge?.bindings.get(session)
+                if (binding && !this.rootStore.challenge!.canCelebrate(binding)) return null
                 return session && session.completedByRules && !session.completed
                     ? session
                     : null
@@ -258,6 +263,7 @@ export class LevelStore {
         // Adopting a day cancels any held-back one: whatever was waiting is either this day
         // or older than it, and in both cases it is no longer news.
         if (this.pendingDay && this.pendingDay.date <= day.date) this.pendingDay = null
+        if (this.viewingDate !== day.date) this.navigationVersion++
         this.viewingDate = day.date
         this.easyBoards = build(day.easyBoards)
         this.mediumBoards = build(day.mediumBoards)
@@ -501,7 +507,10 @@ export class LevelStore {
         }
     }
 
-    setLevel(level: Level) { this.level = level }
+    setLevel(level: Level) {
+        if (this.level !== level) this.navigationVersion++
+        this.level = level
+    }
 
     /** Whether there is a further level in this difficulty; drives the Next affordance. */
     get hasNextLevel() {
@@ -521,6 +530,7 @@ export class LevelStore {
     }
 
     setDifficulty(dif: Difficulty) {
+        if (this.difficulty !== dif) this.navigationVersion++
         this.difficulty = dif
         // Land on the first unsolved level of the new difficulty, or the last if all are done.
         const definitions = this.definitionsFor(dif)

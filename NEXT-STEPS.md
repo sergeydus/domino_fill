@@ -128,7 +128,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 accepted by Claude at `34f792f`; commit 4 authorized. Corpus-clamped boards stay casual/uncovered (user, 2026-10-10); separate correction required before activation. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commit 3 accepted by Claude at `34f792f`; commit 4 built and gated, awaiting Claude review. Corpus-clamped boards stay casual/uncovered (user, 2026-10-10); separate correction required before activation. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -537,7 +537,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract and implementation commits 1–3 accepted by Claude. Commit 4 is authorized. The user's corpus-clamp decision is recorded for a separate correction before public activation.**
+**Status (2026-10-10): contract and implementation commits 1–3 accepted by Claude. Commit 4 is built and gated, awaiting Claude review before commit 5. The user's corpus-clamp decision is recorded for a separate correction before public activation.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -1211,6 +1211,201 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   This rerun is the accepted gate for commit 3; both runs and preliminary failures are
   recorded above. The separate decision-document commit `d08736e` was pushed first;
   independently verified its CI passed (run `38015562525`). Commit 4 waits for review.
+
+**As built: implementation commit 4, session hooks (2026-10-10)**
+- Explicit daily session methods expose Start and asynchronous Hint/Check requests; no
+  selector, refetch, completion flag or navigation synthesizes a Start. Direct placement,
+  removal, Reset, Undo, pointer and keyboard calls share the binding's action guard. Direct
+  synchronous Hint/Check return no answer for an active first attempt; casual/unbound and
+  post-result answers retain synchronous behaviour. The real controls use the request path,
+  which still answers synchronously in default roots. No public activation or new UI is added.
+- Start freezes the target binding while its attempt commits. It samples the press instant,
+  rechecks the live outcome date, and prepares stamped progress before releasing the cover
+  or action guard, in one synchronous action. Failed/aborted starts keep old progress.
+  New starts clear the board, completion, history and evidence unless freshly read matching
+  progress belongs to that attempt. Duplicate starts preserve locally edited state/history;
+  untouched duplicates resume matching other-tab moves. Newly arrived matching solve evidence
+  is reconciled before reveal, without inventing a timed finish or celebrating hydration.
+- Empty progress failure does not undo a saved Start. Its retry retains the original
+  generation/time; while untouched it adopts validated matching external progress instead
+  of overwriting it. After a local mutation, ordinary same-puzzle last-write-wins applies.
+  Own failed snapshots take precedence during same-root hydration; reloads cannot see that
+  in-memory cache and still require durable matching stamps/evidence.
+- Assistance freezes that board until its transaction completes, merges current stored
+  flags, and publishes only for a matching, still-active attempt in the live window.
+  Already-assisted unchanged success is sufficient. A fixed concurrent result, failed save,
+  disposal or obsolete navigation produces no new answer. Level/difficulty navigation uses
+  a version as well as session identity, so going away and back cannot revive an answer.
+- Each successful placement calls the hook inside its existing action. A first solve
+  captures the wall instant/local date, freezes further edits immediately and saves its
+  canonical targets/evidence with the winning board before the surrounding action can
+  run reactions. Completion feedback remains independent of storage latency. Reset,
+  removal and Undo also call the mutation hook, but cannot manufacture a first finish.
+- Pending finishes keep their captured instant/date across failures, navigation and
+  reconciliation. A root that still owns that capture can retry a timed finish; a new root
+  with only durable evidence recovers a lost finish without time. Older durable other-tab
+  evidence is recovered first. Latest stored assistance and sticky clock flags are merged;
+  fixed results dominate. Timer, focus/visible reconciliation, explicit retry and later
+  board saves retry pending finishes, with one finish request in flight per binding and
+  the existing per-puzzle transaction queue. Retain unserved failed finishes until resolved.
+  Successful attempt completion can unlock input even if progress saving still fails.
+- Successful post-result changes inside the window start Practice from their resulting
+  board; refused placement, empty Undo/Reset and advice do not start it. Solves freeze only
+  that run; a later successful change begins another run. Reset/Play again remains undoable.
+  Removing a completed piece recomputes its enabled completion so Practice remains editable.
+  Practice and archive changes clear first-attempt evidence, preserving the first result
+  and start stamp. Shared clock sampling clears Practice when its date leaves the window.
+  Same-root remount may discard its Practice clock, while retaining memory-mode results
+  and progress. A fresh memory root has no retained result.
+- Older archive boards can persist while challenge initialization is retryable. If opening
+  has not selected a backend yet, retain the changed snapshot without writing; flush it only
+  after selection, in memory when appropriate. A not-yet-hydrated binding may save only actual
+  local casual edits, never a metadata change caused by adopting an old attempt. This guards
+  existing progress against an empty initialization write. Disabled-root retries stay unchanged.
+- Reformatted the coordinator for Claude's nit: no lines over 110 characters and no
+  semicolon-separated statements. This does not activate the challenge. The corpus-clamp
+  exception is a separately recorded correction awaiting review, before activation;
+  D16 remains a low-priority requirements document with no release implementation.
+- Deliberate tests: new `challengeSession.test.ts` covers these session/save boundaries,
+  six shared placement paths, real Hint/Check controls, observable availability and Practice,
+  failed saves, cross-tab records, raw-date changes, reload and memory-only play. Two existing
+  lifecycle retry tests now Start before placing; the retirement test waits for the new
+  first-finish save so it continues isolating progress retirement. Existing casual
+  advice/Undo/Reset assertions are unchanged. The existing given-up/archive regression
+  retains its assertion and caught the premature unhydrated write described above.
+- Preliminary targeted checks: first run **143/145 passed, 2 failed**, the two lifecycle
+  cases that placed without a Start. Corrected their preconditions as above, not the guards;
+  the second run passed 145/145, then 148/148 with added regressions. An intermediate run
+  passed **153/154, 1 failed**: the unchanged given-up/archive check caught a real premature
+  metadata write before hydration. Required actual local edits for that early casual path;
+  rerun passed 154/154. Subsequent strengthened checks passed 284/284, 296/296 and 298/298.
+  Final pre-mutation targeted validation passed **300/300** across six suites: new sessions
+  97, lifecycle 48, existing advice 13, Undoable Reset 14, progress parser 87 and attempt
+  store 41. Added **97 tests** over commit 3. Initial targeted lint reported one unused
+  import; an intermediate type-check caught an untyped zero-argument mock's indexed call
+  tuple. Corrected both; subsequent targeted lint/type-check passed. Mutation/gate results
+  are recorded after their actual completion below.
+- The separate product/review document was committed and pushed first as `f622f72`;
+  independently checked CI run `38052892359`: success on that exact head. Future-board
+  inspection is data/code evidence; no hard early-access protection is claimed.
+
+- Mutation validation: final sweep **93/93 caught at their intended assertion**. Each
+  probe runs only its named regression and restores the source before the next; the
+  runner verified all four runtime files were restored byte for byte. The first sweep
+  stopped at probe 22: **21/22 caught**, one passed because replacing matching progress
+  with null triggered the existing empty-write retry, which adopted that same matching
+  progress before any write. Revised that probe to replace matching moves with a stamped
+  empty board, actually discarding them; the unchanged cross-tab test caught it. No runtime
+  correction or weakened assertion was needed for that recovered mutation. Restarted
+  the whole sweep, yielding the final tally above. Probes 46–51 remove the shared capture
+  hook separately against each reachable placement path.
+
+  Deliberate probes, one at a time:
+  1. direct placement before Start.
+  2. direct removal during pending finish.
+  3. Reset during pending finish.
+  4. Undo during pending finish.
+  5. pointer press before initialization.
+  6. pointer release during assistance.
+  7. keyboard during pending finish.
+  8. direct Hint skips its saved flag.
+  9. direct Check skips its saved flag.
+  10. Hint button uses unsafe synchronous call.
+  11. Check button uses unsafe synchronous call.
+  12. unbound casual placement blocked.
+  13. casual request made asynchronous.
+  14. Start timestamps transaction instead of press.
+  15. adopted attempt uncovers before empty progress.
+  16. input opens between adoption and board reset.
+  17. Start state loses observability.
+  18. accept aborted Start with a valid read record.
+  19. new Start keeps old casual pieces.
+  20. running duplicate Start clears locally edited progress.
+  21. untouched duplicate ignores matching cross-tab progress.
+  22. new concurrent Start discards matching moves.
+  23. Start progress omits attempt association.
+  24. restore old-version unstamped write.
+  25. untouched empty retry overwrites matching moves.
+  26. empty retry accepts wrong attempt stamp.
+  27. matching external moves replace locally edited progress.
+  28. local mutation is never recorded as an edit.
+  29. Start omits outcome-date reconciliation.
+  30. Start omits newly arrived solve recovery.
+  31. future existing attempt allows Start.
+  32. future attempt permits board edits.
+  33. legacy boards can Start.
+  34. stale committed Start clears old board.
+  35. publish assistance before transaction completes.
+  36. assistance does not save its flag.
+  37. failed assistance write is accepted.
+  38. already-assisted unchanged success is refused.
+  39. late already-assisted answer ignores fixed result.
+  40. assistance loses observable input freeze.
+  41. navigation return allows obsolete answer.
+  42. level navigation is not recorded.
+  43. difficulty navigation is not recorded.
+  44. disposed assisted outcome publishes advice.
+  45. late advice ignores outcome date.
+  46. winning capture omitted: direct.
+  47. winning capture omitted: tap.
+  48. winning capture omitted: drag.
+  49. winning capture omitted: keyboard.
+  50. winning capture omitted: pick-tap.
+  51. winning capture omitted: pick-keyboard.
+  52. winning evidence relies on reactions.
+  53. producer swaps target axes.
+  54. finish uses callback wall instant.
+  55. finish uses callback calendar date.
+  56. own pending finish is wrongly recovered as lost.
+  57. ignore older durable solve before finish.
+  58. unserved pending finish has no owner.
+  59. clear pending finish even after save fails.
+  60. fixed result leaves input locked by pending finish.
+  61. pending finish loses observability.
+  62. a failed unserved finish retires early.
+  63. finished result waits for progress save too.
+  64. finish retries queue duplicate operations.
+  65. timer does not retry a failed finish.
+  66. later board saves do not retry pending finishes.
+  67. pending clock flag omitted from finish.
+  68. finish overwrites latest stored assistance with local flags.
+  69. finish removes a competing fixed result.
+  70. completion flag manufactures a first finish.
+  71. restoration manufactures a first finish.
+  72. celebration waits for finish persistence.
+  73. result adoption celebrates a second time.
+  74. Practice forgets the first result.
+  75. Practice emits first-attempt solve evidence.
+  76. refused placement starts Practice.
+  77. empty Undo starts Practice.
+  78. empty Reset starts Practice.
+  79. Practice solve loses its frozen time.
+  80. next Practice run uses previous run start.
+  81. Practice begins without clearing live evidence.
+  82. completed removal stays inert in Practice.
+  83. Practice clock not presented.
+  84. Practice is not observable before its first run.
+  85. expired Practice remains active.
+  86. archive edit keeps first-solve evidence.
+  87. legacy assistance is routed through challenge save.
+  88. old archive cannot save during initialization failure.
+  89. writes progress before opening mode is selected.
+  90. opening does not flush queued casual memory progress.
+  91. hydration loses own failed snapshot.
+  92. attempt adoption overwrites unhydrated casual board.
+  93. memory mode writes persistent progress.
+
+- Commit-4 cold gate, first run (2026-10-10): TIME_WAIT **57**, independently verified
+  repository root and all four cache targets before deletion. TypeScript **0**, lint **0**
+  (no warnings), unit **0** (**1503 tests in 63 files**, stderr exactly **0 bytes**),
+  build **0**, browser **0** (**651 passed, 1 existing conditional keyboard skip** at
+  `keyboard.spec.ts:184`, page not scrollable). No failed cold gate run for this commit;
+  the earlier targeted failures and recovered/revised mutation are recorded above.
+  Build stderr **1512 bytes** of baseline-browser-mapping warnings; browser stderr
+  **5247 bytes** of NO_COLOR/FORCE_COLOR warnings. Inspected browser stdout/stderr:
+  no ERR_NO_BUFFER_SPACE. Final diff/changed-file checks passed: only the seven intended
+  source/test/document paths; no committed assets or visual baselines changed.
+  New head is for Claude's review; commit 5 and the separate clamp correction await review.
 
 **Validation and review record**
 - Commit-3 review/decision documentation gate (2026-10-10), first cold run: socket

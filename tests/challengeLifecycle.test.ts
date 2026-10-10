@@ -524,6 +524,7 @@ describe('enabled-only progress retry', () => {
         const store = { ...memoryAttemptStore(), kind: 'localStorage' as const }
         const h = harness({ writeProgress: writer }, store)
         await h.service.start()
+        await begin(h)
         h.session.placeToward([0, 0], 'down')
         expect(writer).toHaveBeenCalled()
         expect(h.binding.progressSaveFailed).toBe(true)
@@ -566,7 +567,9 @@ describe('enabled-only progress retry', () => {
         const writer = vi.fn(() => false)
         const h = harness({ writeProgress: writer }, { ...memoryAttemptStore(), kind: 'localStorage' as const })
         await h.service.start()
+        await begin(h)
         h.session.placeToward([0, 0], 'down')
+        await vi.waitFor(() => expect(h.binding.attempt?.result).toBeDefined())
         h.root.boardsStore.setDay(day(addDays(DAY, -1)))
         expect(h.service.bindings.has(h.session)).toBe(true)
         writer.mockReturnValue(true); h.service.retryProgress()
