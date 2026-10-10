@@ -44,7 +44,9 @@ export class ChallengeBinding {
     pending: PendingProgress | null = null
     generation = 0
 
-    constructor(readonly session: PuzzleSession, readonly date: string) {
+    constructor(
+        readonly session: PuzzleSession, readonly date: string, public clamp: LoadedDay['clamped'] = null,
+    ) {
         this.baseline = { definitionHash: session.definition.definitionHash, ...session.snapshot }
         makeAutoObservable(this, {
             session: false, baseline: false, pending: observable.ref,
@@ -54,6 +56,7 @@ export class ChallengeBinding {
     }
 
     get puzzleId() { return this.session.definition.puzzleId }
+    get beforeClamp() { return this.clamp === 'before' }
     get definition() { return this.session.definition }
     get finished() { return !!this.attempt?.result && this.attempt.result.kind !== 'given-up' }
     get progressSaveFailed() { return this.pending !== null }
@@ -159,6 +162,7 @@ export class ChallengeCoordinator {
     get unsaved() { return this.selectedKind === 'memory' }
     get deviceDate() { return dayKey(new Date(this.now.wall)) }
     isCovered(binding: ChallengeBinding): boolean {
+        if (binding.beforeClamp) return false
         if (binding.date > this.deviceDate) return true
         if (binding.date < addDays(this.deviceDate, -1)) return false
         if (!binding.ready || this.status !== 'ready') return true
@@ -169,10 +173,12 @@ export class ChallengeCoordinator {
         return dayKey(new Date((this.options.clock ?? read)().wall))
     }
     isCasual(binding: ChallengeBinding, date = this.currentDate()): boolean {
-        return binding.date < addDays(date, -1) || !!this.legacy?.marks.includes(binding.puzzleId)
+        return binding.beforeClamp || binding.date < addDays(date, -1)
+            || !!this.legacy?.marks.includes(binding.puzzleId)
     }
     canStart(binding: ChallengeBinding): boolean {
         return this.active && this.status === 'ready' && binding.ready && binding.served
+            && !binding.beforeClamp
             && !binding.starting && !binding.assisting && !binding.pendingFinish
             && binding.error !== 'identity' && inWindow(binding.date, this.currentDate())
             && !this.legacy?.marks.includes(binding.puzzleId)
@@ -180,7 +186,7 @@ export class ChallengeCoordinator {
     canMutate(binding: ChallengeBinding): boolean {
         if (binding.starting || binding.assisting || binding.pendingFinish || !binding.served) return false
         const date = this.currentDate()
-        if (binding.date > date || binding.error === 'identity') return false
+        if ((binding.date > date && !binding.beforeClamp) || binding.error === 'identity') return false
         if (this.isCasual(binding, date)) return true
         return this.active && this.status === 'ready' && binding.ready && !!binding.attempt
     }
@@ -193,19 +199,24 @@ export class ChallengeCoordinator {
     }
     elapsedFor(binding: ChallengeBinding): number | null {
         const attempt = binding.attempt
-        if (!attempt || !inWindow(binding.date, this.deviceDate)) return null
+        if (binding.beforeClamp || !attempt || !inWindow(binding.date, this.deviceDate)) return null
         return attempt.result?.kind === 'solved' ? attempt.result.ms
             : attempt.result ? null : Math.max(0, elapsed(attempt.startedAt, this.now.wall))
     }
 
-    bind(session: PuzzleSession, date: string): ChallengeBinding {
+    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null): ChallengeBinding {
         if (!isDay(date)) throw new Error('Binding requires a real calendar date')
         const previous = this.bindings.get(session)
         if (previous && previous.date === date) {
             previous.served = true
+            previous.clamp = clamp
+            if (previous.beforeClamp) {
+                previous.practice = null
+                previous.solveEvidence = undefined
+            }
             return previous
         }
-        const binding = new ChallengeBinding(session, date)
+        const binding = new ChallengeBinding(session, date, clamp)
         this.bindings.set(session, binding)
         if (this.status === 'ready' && this.active) {
             const epoch = this.epoch
@@ -625,7 +636,7 @@ export class ChallengeCoordinator {
                     ? saved && saved.attemptStartedAt === attempt.startedAt ? saved : null : saved
                 if (restore) this.restoreAttemptProgress(binding, restore)
                 else if (attempt) this.restoreAttemptProgress(binding, null)
-                binding.solveEvidence = restore?.solveEvidence
+                binding.solveEvidence = binding.beforeClamp ? undefined : restore?.solveEvidence
                 binding.practice = null
                 binding.baseline = this.snapshot(binding)
                 binding.ready = true

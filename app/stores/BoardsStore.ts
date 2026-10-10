@@ -82,6 +82,8 @@ export class LevelStore {
     today: string | null = null
     deviceToday: string | null = null
     clockClamp: 'before' | 'after' | null = null
+    /** Provenance of the response actually serving the visible sessions. */
+    viewingClamp: LoadedDay['clamped'] = null
 
     /**
      * A newer day, fetched and held back rather than applied.
@@ -94,6 +96,7 @@ export class LevelStore {
      * acceptance criterion rather than a note.
      */
     pendingDay: DayEntry | null = null
+    pendingDayClamp: LoadedDay['clamped'] = null
 
     /** Whether the archive is on screen. */
     archiveOpen = false
@@ -230,17 +233,20 @@ export class LevelStore {
         if (this.viewingDate !== null && this.viewingDate !== day.date
             && (wasFollowingToday === false || this.currentIsInPlay)) {
             this.pendingDay = day
+            this.pendingDayClamp = loaded.clamped
             return
         }
-        this.setDay(day)
+        this.setDay(day, loaded.clamped)
     }
 
     /** Apply a day that was held back. The player asked; there is nothing to protect. */
     adoptPendingDay() {
         if (!this.pendingDay) return
         const day = this.pendingDay
+        const clamp = this.pendingDayClamp
         this.pendingDay = null
-        this.setDay(day)
+        this.pendingDayClamp = null
+        this.setDay(day, clamp)
     }
 
     /**
@@ -254,14 +260,18 @@ export class LevelStore {
         return !!session && !session.completed && session.hasMoves
     }
 
-    setDay(day: DayEntry) {
+    setDay(day: DayEntry, clamp: LoadedDay['clamped'] = null) {
         const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
         const before = this.currentDefinition?.puzzleId ?? null
 
         // Adopting a day cancels any held-back one: whatever was waiting is either this day
         // or older than it, and in both cases it is no longer news.
-        if (this.pendingDay && this.pendingDay.date <= day.date) this.pendingDay = null
+        if (this.pendingDay && this.pendingDay.date <= day.date) {
+            this.pendingDay = null
+            this.pendingDayClamp = null
+        }
         this.viewingDate = day.date
+        this.viewingClamp = clamp
         this.easyBoards = build(day.easyBoards)
         this.mediumBoards = build(day.mediumBoards)
         this.hardBoards = build(day.hardBoards)
@@ -490,7 +500,9 @@ export class LevelStore {
             this.sessions.set(definition.puzzleId, session)
         }
         if (this.rootStore.challenge && this.viewingDate) {
-            for (const session of this.sessions.values()) this.rootStore.challenge.bind(session, this.viewingDate)
+            for (const session of this.sessions.values()) {
+                this.rootStore.challenge.bind(session, this.viewingDate, this.viewingClamp)
+            }
             this.rootStore.challenge.retain(new Set(this.sessions.values()))
         }
     }
