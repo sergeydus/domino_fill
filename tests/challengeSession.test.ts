@@ -545,6 +545,31 @@ describe('save-before-answer assistance', () => {
             expect(h.session.adviceTick).toBe(0)
             expect(h.binding.attempt?.assisted).toBe(true)
         })
+    it('day navigation away and back replaces the session and rejects an already committed answer', async () => {
+        const h = harness()
+        await begin(h)
+        const original = h.store.change.bind(h.store)
+        const committed = deferred<void>()
+        const release = deferred<void>()
+        vi.spyOn(h.store, 'change').mockImplementationOnce(async (id, step) => {
+            const outcome = await original(id, step)
+            committed.resolve()
+            await release.promise
+            return outcome
+        })
+        const answer = h.session.requestHint()
+        await committed.promise
+        expect((await h.store.read(h.binding.puzzleId))?.assisted).toBe(true)
+        h.root.boardsStore.setDay(day('2026-10-09'))
+        h.root.boardsStore.setDay(day())
+        const returned = h.root.boardsStore.currentBoard!
+        expect(returned).not.toBe(h.session)
+        release.resolve()
+        expect(await answer).toBeNull()
+        expect(h.session.adviceTick).toBe(0)
+        expect(returned.adviceTick).toBe(0)
+        expect(returned.advice).toBeNull()
+    })
     it('disposal suppresses an obsolete answer and releases its action state', async () => {
         const h = harness()
         await begin(h)
@@ -914,6 +939,28 @@ describe('winning placement, durable evidence and pending finish', () => {
         expect(evidence?.solvedAt).toBe(T0 + 80)
         expect(reopened.session.board).toEqual(solved)
         expect(reopened.binding.pendingFinish).toBeNull()
+    })
+    it('reload normalizes a stamped winning board without another celebration or result', async () => {
+        const h = harness()
+        await begin(h)
+        win(h)
+        await fixed(h)
+        expect(winFeedback).toHaveBeenCalledTimes(1)
+        const saved = readProgress(h.binding.puzzleId)!
+        writeProgress(h.binding.puzzleId, { ...saved, completed: false })
+        h.root.dispose()
+        vi.mocked(winFeedback).mockClear()
+        const reopened = harness()
+        reopened.setTime(T0 + 500)
+        await open(reopened)
+        reopened.root.boardsStore.setLevel(1)
+        expect(reopened.root.boardsStore.currentBoard).toBe(reopened.session)
+        expect(reopened.session.board).toEqual(solved)
+        expect(winFeedback).not.toHaveBeenCalled()
+        expect(reopened.session.completed).toBe(true)
+        expect(reopened.binding.attempt?.result).toEqual({ kind: 'solved', ms: 200 })
+        expect(reopened.binding.pendingFinish).toBeNull()
+        expect(reopened.binding.practice).toBeNull()
     })
     it('reload with both failed saves has no solve to recover', async () => {
         const writer = vi.fn<(id: string, value: PuzzleProgress) => boolean>((id, value) => writeProgress(id, value))

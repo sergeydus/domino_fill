@@ -538,7 +538,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-10): contract and implementation commits 1–4 accepted by Claude. Two redundant commit-4 additions will be removed in a separate review correction before commit 5. The user chose a before-clamp-only exception; its revised correction contract awaits Claude's acceptance before clamp code.**
+**Status (2026-10-10): contract and implementation commits 1–4 accepted by Claude. The separate review correction removes two redundant commit-4 additions and is built/gated, awaiting Claude review before commit 5. The user chose a before-clamp-only exception; its revised correction contract awaits Claude's acceptance before clamp code.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -1461,7 +1461,47 @@ record it here first; do not push a temporarily enabled or partially guarded pub
   source/test/document paths; no committed assets or visual baselines changed.
   New head is for Claude's review; commit 5 and the separate clamp correction await review.
 
+**As built: commit-4 review correction (2026-10-10)**
+- Removed the celebration eligibility call and its now-unused coordinator helper. Normal
+  completion detection still runs independently of finish-save latency. Enabled progress
+  hydration already normalizes a winning board's completion flag inside its action; no
+  reachable gameplay path needed the extra guard. This conclusion is from reading the
+  restoration/placement paths and the new reachable reload regression, not an impossible
+  unstarted solved-state probe.
+- Removed only the navigation counter increment in `setDay`. Retired daily sessions are
+  dropped from the active map, so returning to a date gets a new session. Kept the
+  selected-session check and level/difficulty counters, which protect same-session
+  away-and-back answers. An unserved binding's guard also remains in place.
+- Added two tests in `challengeSession.test.ts`: reload a correctly stamped winning board
+  with a false saved completion flag and explicitly select it; verify normalized completion,
+  no second celebration, and unchanged first result. Also hold a real already-committed
+  Hint outcome, navigate A→B→A, verify replacement session identity, then release and
+  verify no old/new-session advice is published. Existing assertions are unchanged.
+- Measured targeted check: **154/154 passed**, three suites (sessions **99**, lifecycle
+  **48**, provider **7**), unit stderr **0 bytes**. Added **2 tests** over `8b1e435`.
+  No failed targeted run for this correction. Mutation sweep **2/2 caught at the intended
+  assertion**, source restored byte for byte: omit restored winning-board completion
+  normalization → the no-second-celebration assertion; keep unserved daily sessions →
+  the replacement-session assertion. These test the assurances that make the removed
+  additions redundant, rather than pretending reintroducing redundancy changes behavior.
+- Claude's independently reported **7/9** and two uncaught additions are preserved in
+  the review notes; no claim is made that Codex reran those nine probes. The separate
+  narrowed decision/contract is already committed as `38d6a1b`; no clamp behavior, fixture,
+  visual asset or public activation is included in this correction. Full gate results
+  follow after their actual completion.
+
 **Validation and review record**
+- Review-correction cold gate, first run (2026-10-10): TIME_WAIT **52**; verified the
+  repository root and four cache paths before deletion. TypeScript **0**, lint **0**
+  (no warnings), unit **0** (**1505 tests in 63 files**, stderr **0 bytes**), build **0**,
+  browser **0** (**651 passed**, one existing conditional keyboard skip at
+  `keyboard.spec.ts:184`). No failed gate run for this correction. Build stderr
+  **1512 bytes** of baseline-browser-mapping warnings; browser stderr **5081 bytes** of
+  NO_COLOR/FORCE_COLOR warnings. No ERR_NO_BUFFER_SPACE in browser stdout or stderr.
+  Final diff/scope checks passed: four intended document/source/test paths, no committed
+  assets or baselines changed. Send this correction head and the narrowed clamp contract
+  to Claude for review; no clamp implementation, fixture, PR or merge yet.
+
 - Commit-4 review / narrowed clamp decision document gate (2026-10-10), first cold run:
   TIME_WAIT **51**; verified root and all four cache targets before deletion. TypeScript
   **0**, lint **0** (no warnings), unit **0** (**1503 tests in 63 files**, stderr **0 bytes**),

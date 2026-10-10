@@ -187,11 +187,6 @@ export class ChallengeCoordinator {
     needsAssistanceSave(binding: ChallengeBinding): boolean {
         return !this.isCasual(binding) && !binding.attempt?.result
     }
-    canCelebrate(binding: ChallengeBinding): boolean {
-        return !binding.hydrating && !binding.starting
-            && (this.isCasual(binding) || (binding.ready && !!binding.attempt
-                && binding.date <= this.deviceDate))
-    }
     practiceElapsed(binding: ChallengeBinding): number | null {
         if (!binding.practice || !inWindow(binding.date, this.deviceDate)) return null
         return binding.practice.ms ?? Math.max(0, elapsed(binding.practice.startedAt, this.now.wall))

@@ -176,8 +176,6 @@ export class LevelStore {
         reaction(
             () => {
                 const session = this.currentBoard
-                const binding = session && this.rootStore.challenge?.bindings.get(session)
-                if (binding && !this.rootStore.challenge!.canCelebrate(binding)) return null
                 return session && session.completedByRules && !session.completed
                     ? session
                     : null
@@ -263,7 +261,6 @@ export class LevelStore {
         // Adopting a day cancels any held-back one: whatever was waiting is either this day
         // or older than it, and in both cases it is no longer news.
         if (this.pendingDay && this.pendingDay.date <= day.date) this.pendingDay = null
-        if (this.viewingDate !== day.date) this.navigationVersion++
         this.viewingDate = day.date
         this.easyBoards = build(day.easyBoards)
         this.mediumBoards = build(day.mediumBoards)
