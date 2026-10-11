@@ -1974,8 +1974,14 @@ decisions are accepted; suggested slice-3 features remain proposals.
 
 Written for: codex, reviewing Claude's slice-3a contract and, later, its code.
 
-**Status (2026-10-11): revised after codex's first review, awaiting its second. No code
+**Status (2026-10-11): revised after codex's second review, awaiting its third. No code
 until it is accepted.**
+
+**Second review, codex (2026-10-11), on `359436e`: held, for one correction, made in
+rule 16.** On a restored empty board, Practice called `reset()`, which changes no cells
+and so never starts Practice: the button would have done nothing. Codex reproduced it in a
+scratch test, deleted after, and accepted the rest of the revision, and its CI check of
+`359436e` passed both jobs.
 
 **First review, codex (2026-10-11), on `5935d68`: held, for four corrections and four
 clarifications, all made below.** Codex accepted keeping version 1 (rule 5). It found:
@@ -2191,8 +2197,19 @@ holds: casual play never shows a clock.
    results screen shows given-up boards. `casual` and `legacy` keep today's rule.
 16. Its actions on a challenge board: "Next board" goes to `nextChallengeBoard()`, across
    sizes (the user's choice, 2026-10-11), setting difficulty and level, and is hidden
-   when there is none: in 3a nothing replaces it, and in 3b the results screen does. "Play again" becomes "Practice" inside
-   the window: it still calls `reset()`, which starts Practice (rule 11). Casual boards
+   when there is none: in 3a nothing replaces it, and in 3b the results screen does.
+   "Play again" becomes "Practice" inside the window, and calls a new
+   `session.beginPractice()`. On a board with pieces it is `reset()`, which starts Practice
+   through the mutation hook as today (rule 11), and stays undoable. **On a board with
+   nothing to clear** (codex reproduced it: a fixed result whose progress was lost restores
+   an empty board, and `reset()` notifies the coordinator only when cells changed,
+   `PuzzleSession.ts:505`), it calls a new `coordinator.beginPractice(binding)` instead:
+   allowed only for a `result` view whose result is a solve, inside the window, with no
+   Practice run. It starts a Practice run at that instant and clears the binding's solve
+   evidence, as a Practice change does, and changes nothing else. There is no board change,
+   so no Undo entry and no progress write; the fixed result is untouched. The card then
+   unmounts (rule 15: a Practice run in progress), and the clock line shows
+   "Practice · 0:00", running. Casual boards
    keep "Next level" and "Play again" exactly as now. Focus still moves to the primary
    action on mount. The card shows from the first solve, before the save, as today: the
    celebration never waits for storage (slice 2, item 7).
@@ -2264,6 +2281,11 @@ holds: casual play never shows a clock.
   view's `elapsed` unchanged across ticks and after a failed finish save.
   `nextChallengeBoard` with the other eight done: during the last solve's held finish
   (null, never the current board), and after it commits (null).
+- `tests/challengeUi.test.tsx` also (codex): a committed solve whose progress is missing,
+  the card shown over the empty board; clicking the real Practice button dismisses the
+  card, shows "Practice · 0:00" running, leaves the fixed result and `moves` unchanged
+  (no Undo entry) and writes no progress. And the same click on a board with pieces still
+  resets it, undoably, into Practice.
 - `tests/controls.test.ts`, changed on purpose: its exact source-button inventory (24 since
   slice 2's fixture) grows by each new `<button>`, the cover's Start and Try again and the
   card's Try again, so 27, with an inclusion assertion naming their files. "Next board"
@@ -2296,7 +2318,9 @@ review: the `finishing` clock reading `elapsedFor`; `nextChallengeBoard` allowin
 current board, then allowing a `finishing` one; `history` taking an older snapshot over a
 newer commit, then a snapshot removing an entry, then a failed read clearing it;
 `markForDay` dropping each identity check in turn; the card mounting on `session.completed`
-for a covered view; the clock row absent in covered views (caught by the box test).
+for a covered view; the clock row absent in covered views (caught by the box test);
+`beginPractice` dropping its empty-board transition (the Practice click does nothing);
+`coordinator.beginPractice` allowed with no result, or adding an Undo entry.
 
 **Commits planned**
 1. Rules 1–5: the ruleset amendment and its changed tests.
@@ -2338,6 +2362,16 @@ before the next.
   stderr **0 bytes**), build **0**, browser **0** (**683 passed, 1 skipped**, 0 socket
   errors). No failed run. Rule 14's layout numbers come from a separate temporary
   Playwright script on the public build (7 viewports x 3 sizes, 7 passed), deleted after.
+- Rule 16's Practice correction (docs only), gate from cold, first run (2026-10-11),
+  **failed, so no commit**: TIME_WAIT **52** at the start, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1537**, stderr **0 bytes**), build **0**, browser **1**: **682
+  passed, 1 failed, 1 skipped**. The failure was `[layout] layout.spec.ts:335` "no inset
+  means no change": `page.goto` got `net::ERR_NO_BUFFER_SPACE` (`openBoard.ts:217`),
+  socket exhaustion on this machine mid-run (2 socket-error lines in the log). The whole
+  gate is rerun from cold.
+- Full cold rerun (2026-10-11): TIME_WAIT **45**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1537**, stderr **0 bytes**), build **0**, browser **0** (**683
+  passed, 1 skipped**, 0 socket errors). Committed after it.
 
 ### Would need a server (rejected)
 
