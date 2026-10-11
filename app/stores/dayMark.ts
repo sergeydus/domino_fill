@@ -1,5 +1,6 @@
 import { definitionFrom, type StoredPuzzle } from "./PuzzleDefinition"
 import { isExpired, progressFor, type PuzzleProgress } from "./progressStorage"
+import type { Attempt } from "../challenge/attempt"
 
 /**
  * How a day looks in the archive (spec P1-6/P1-7, row 18d).
@@ -22,6 +23,16 @@ import { isExpired, progressFor, type PuzzleProgress } from "./progressStorage"
 export type DayMark = 'none' | 'started' | 'partial' | 'complete'
 
 /**
+ * A challenge day's attempts (slice 3a, rule 18): the coordinator's `history`, and the date
+ * of the chunk day they are judged against, passed in from the chunk rather than parsed out
+ * of an id.
+ */
+export type DayAttempts = {
+    readonly date: string
+    readonly attempts: ReadonlyMap<string, Attempt>
+}
+
+/**
  * Judge one day from its own puzzles and the records on hand.
  *
  * `puzzles` are the day's nine, straight from the chunk — so the ids are the real ones and
@@ -29,15 +40,31 @@ export type DayMark = 'none' | 'started' | 'partial' | 'complete'
  *
  * `definitionFrom` hashes a board, so it is only ever reached for a puzzle that actually has
  * a record. A month of thirty untouched days therefore costs thirty lookups and no hashing.
+ *
+ * **A board with a challenge attempt is judged by the attempt** (slice 3a, rule 18): played,
+ * and done when its result is a solve, timed or not; given up is played, not done. Progress
+ * can't answer for it: Practice clears the board the result was won on, and progress ages
+ * out after `RETENTION_DAYS`, while the result is permanent. An attempt counts only if it is
+ * this published board's: its puzzle ID, definition hash and date must all match (codex),
+ * since `isAttempt` checks a record's shape, not whose it is. Otherwise the board is judged
+ * from progress, as before.
  */
 export const markForDay = (
     puzzles: readonly StoredPuzzle[],
     progress: Record<string, PuzzleProgress>,
     now: number,
+    challenge?: DayAttempts,
 ): DayMark => {
     let played = 0
     let done = 0
     for (const stored of puzzles) {
+        const attempt = challenge?.attempts.get(stored.puzzleId)
+        if (attempt && attempt.puzzleId === stored.puzzleId && attempt.date === challenge!.date
+            && attempt.definitionHash === definitionFrom(stored).definitionHash) {
+            played++
+            if (attempt.result && attempt.result.kind !== 'given-up') done++
+            continue
+        }
         const record = progress[stored.puzzleId]
         if (!record || isExpired(record.savedAt, now)) continue
         const valid = progressFor(record, definitionFrom(stored))

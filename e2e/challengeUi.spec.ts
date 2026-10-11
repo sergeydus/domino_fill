@@ -213,6 +213,19 @@ test('yesterday\'s board says it ends at midnight, on the cover and the clock', 
     await expect(clock(page)).toHaveText(/ · ends at midnight$/)
 })
 
+test('the archive keeps a challenge day\'s mark after a Practice Undo (rule 18)', async ({ page }) => {
+    await open(page)
+    await start(page)
+    await playSolution(page)
+    await expect(page.locator('[data-completion-card]')).toContainText(/no hints/)
+    // Undo takes the winning piece off: a Practice run, and the board's progress no longer
+    // says solved, so a mark read from progress alone would fall back to "in progress".
+    await page.getByRole('button', { name: 'Undo', exact: true }).click()
+    await expect(clock(page)).toHaveText(/^Practice · /)
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await expect(page.locator(`[data-archive-day="${LATE_IN_A_MONTH}"]`)).toHaveAttribute('data-mark', 'partial')
+})
+
 test('the public page stays casual: no cover, no clock', async ({ page }) => {
     await pinDay(page, LATE_IN_A_MONTH)
     await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))

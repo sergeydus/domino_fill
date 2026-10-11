@@ -6,6 +6,7 @@ import type { CorpusSource } from '../stores/corpusSource'
 import { addMonths, datesIn, monthOf, type Chunk, type Manifest } from '../stores/corpus'
 import { readAllProgress, type PuzzleProgress } from '../stores/progressStorage'
 import { markForDay, type DayMark } from '../stores/dayMark'
+import type { Attempt } from '../challenge/attempt'
 import { control } from '../controls'
 
 /**
@@ -68,6 +69,11 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
     // Read once, at open. Another tab may have played since; the store's own `saved` is
     // filtered to the day it is serving, so it cannot answer for the rest of the archive.
     const [progress] = useState<Record<string, PuzzleProgress>>(() => readAllProgress())
+    // The challenge's results, read at the same moment (slice 3a, rule 18): a board with an
+    // attempt is judged by it, so Practice clearing the board, or its progress ageing out,
+    // never unmarks a day the player finished. Empty with the challenge off.
+    const [attempts] = useState<ReadonlyMap<string, Attempt>>(
+        () => new Map(boardsStore.rootStore.challenge?.history))
     // One instant for the whole panel, taken when it opens: retention is measured against
     // it, and a mark that changed halfway down the grid would be a worse answer than a
     // slightly stale one.
@@ -158,7 +164,8 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                         const puzzles = entry
                             ? [...entry.easyBoards, ...entry.mediumBoards, ...entry.hardBoards]
                             : []
-                        const mark: DayMark = markForDay(puzzles, progress, now)
+                        const mark: DayMark = markForDay(puzzles, progress, now,
+                            entry && { date: entry.date, attempts })
                         return (
                             <button
                                 key={date}

@@ -2700,6 +2700,47 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   build **0**, browser **0** (**716 passed, 1 skipped**, 4 more; 0 socket errors).
   Committed after it.
 
+**As built: implementation commit 4, archive marks from attempts (rule 18, 2026-10-11)**
+- Codex accepted commit 3 at `ad7bd32`: 176/176 focused unit tests (stderr 0 bytes),
+  type-checking, Chromium UI 88/88 (four repeats, four workers, retries off; each new focus
+  regression 8/8), the fixture exclusion checks against the production build, and CI run
+  `38165168352`. Its first combined run had 12 failures, all three Git-dependent bundle
+  assertions run without the Git wrapper; they passed 3/3 with it.
+- **`markForDay`** (`dayMark.ts`) takes an optional fourth argument, `{ date, attempts }`
+  (`DayAttempts`). For each of the day's puzzles, an attempt under its ID counts only if its
+  own `puzzleId`, `date` (against the chunk day's date passed in) and `definitionHash`
+  (against `definitionFrom(stored)`) all match. A matching attempt makes the board played,
+  and done when its result is `solved` or `untimed`; `given-up`, or no result yet, is played
+  but not done. The attempt decides even where progress disagrees (a board solved casually
+  after it was given up stays not done, as the rule says). A board with no matching attempt
+  is judged from progress exactly as before, including after a mismatched attempt. The
+  hash is computed only when an attempt or a live record exists, as before.
+- **`Archive`** reads `coordinator.history` once at open, into its own `Map`, alongside
+  `readAllProgress()`, and passes `{ date: entry.date, attempts }` for each day whose chunk
+  entry is loaded (nothing for a day still loading, which stays `none` as before). With the
+  challenge off, `challenge` is null and the map is empty, so every mark is what it was.
+- **New tests:** `tests/dayMark.test.ts` +7 (19): no attempts gives today's marks; a day
+  stays complete after Practice clears every board (progress alone says `started`); an
+  untimed solve, of either reason, is done; given up is played, not done, even over a
+  solved progress record; an attempt still in play is played, not done; a challenge day
+  keeps its mark after its progress ages out; and an attempt with the wrong puzzle ID,
+  hash or date is each ignored, the board then judged from its progress (`started`, or
+  `none` with none). `e2e/challengeUi.spec.ts` +1 (12 x 2 projects): solve a board, press
+  Undo (the winning piece comes off and Practice starts), open the archive, and today's
+  mark is still `partial`.
+- **Mutations: 9 of 9 caught at the intended test,** files restored byte for byte. Unit,
+  8: attempts ignored altogether (all five attempt tests fail, the intended "keeps a day
+  complete" among them; this sweep's script required every failure to be the intended
+  test, so it printed this one as missed, and I judged it caught); the puzzle ID, date and
+  hash checks each dropped; given up counted done; an attempt in play counted done; an
+  untimed solve not done; a foreign attempt hiding the board's progress. Browser, 1: the
+  archive reading no history, failing in both projects at the mark (expected `partial`,
+  received `started`).
+- Cold gate, first run (2026-10-11): TIME_WAIT **31**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1600** in 67 files, 7 more than `ad7bd32`; stderr **0 bytes**), build
+  **0**, browser **0** (**718 passed, 1 skipped**, 2 more; 0 socket errors). No failed run.
+  Committed after it.
+
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an
   earlier start was refused by the gate script at TIME_WAIT **141**, before deleting or
