@@ -17,10 +17,13 @@ export const RULESET = 1
 /**
  * How an attempt ended (rule 9). "Not started" is no record at all, and "in progress" is a
  * record without a result, so neither is a result.
+ *
+ * There is no "solved with a hint" any more (amended 2026-10-11, user): a hint keeps the
+ * clock, as LinkedIn's games do, so an assisted solve is `solved` with a time, and the
+ * attempt's own `assisted` flag is what says "hints used".
  */
 export type Result =
     | { readonly kind: 'solved', readonly ms: number }
-    | { readonly kind: 'hinted' }
     | { readonly kind: 'untimed', readonly reason: 'clock-error' | 'finish-lost' }
     | { readonly kind: 'given-up' }
 
@@ -84,14 +87,13 @@ export const markClockError = (current: Attempt | null): Step =>
 /**
  * The result an attempt ends with when it's solved at `now`.
  *
- * An assisted attempt is a solve with a hint whatever else happened: the hint is the
- * player's own act, and neither result has a time. Otherwise a clock error -- flagged
- * earlier, or found here as a finish before the start -- leaves the solve without a time, so
- * a negative time can never become a result. A clock change that went undetected can still
- * shorten one; rule 5 accepts that under the honour system (codex).
+ * Assisted or not, the same: a hint keeps the clock (rule 7, amended 2026-10-11), and the
+ * attempt's `assisted` flag carries the mark. A clock error -- flagged earlier, or found
+ * here as a finish before the start -- leaves the solve without a time, so a negative time
+ * can never become a result. A clock change that went undetected can still shorten one;
+ * rule 5 accepts that under the honour system (codex).
  */
 const solvedResult = (attempt: Attempt, now: number): Result => {
-    if (attempt.assisted) return { kind: 'hinted' }
     if (attempt.clockError || now < attempt.startedAt) return { kind: 'untimed', reason: 'clock-error' }
     return { kind: 'solved', ms: now - attempt.startedAt }
 }
@@ -127,15 +129,16 @@ export type SolveEvidence = { readonly solvedAt: number, readonly solvedOn: stri
  * Runs before `settle`, so a solve made in time is never settled as given up.
  *
  * Solved inside the window: the solve counts, with no time, even when this runs after the
- * window has closed. Solved after it: given up. No evidence, or evidence from before the
- * board's date, which no attempt can have: nothing to decide, so the attempt is left as it
- * is, still running, and `settle` gives it up once the window closes.
+ * window has closed. An assisted attempt too: its time is lost with the finish, and its
+ * `assisted` flag still says "hints used" (amended 2026-10-11; it was "solved with a
+ * hint"). Solved after it: given up. No evidence, or evidence from before the board's date,
+ * which no attempt can have: nothing to decide, so the attempt is left as it is, still
+ * running, and `settle` gives it up once the window closes.
  */
 export const recover = (current: Attempt | null, evidence: SolveEvidence | null): Step => {
     if (!current || current.result || !evidence) return same(current)
     if (inWindow(current.date, evidence.solvedOn)) {
-        const result: Result = current.assisted ? { kind: 'hinted' } : { kind: 'untimed', reason: 'finish-lost' }
-        return to({ ...current, result, finishedAt: evidence.solvedAt })
+        return to({ ...current, result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: evidence.solvedAt })
     }
     if (afterWindow(current.date, evidence.solvedOn)) return to({ ...current, result: { kind: 'given-up' } })
     return same(current)
@@ -150,14 +153,21 @@ export const reconcile = (current: Attempt | null, evidence: SolveEvidence | nul
 
 /**
  * A size's result from its three boards' attempts (rule 10): a total when all three were
- * solved with a time, otherwise partial.
+ * solved with a time, otherwise partial. A total that includes a hinted board says so, as
+ * `assisted` (amended 2026-10-11): it is shown "with hints", never refused.
  */
-export type SizeResult = { readonly kind: 'total', readonly ms: number } | { readonly kind: 'partial' }
+export type SizeResult =
+    | { readonly kind: 'total', readonly ms: number, readonly assisted: boolean }
+    | { readonly kind: 'partial' }
 
 export const sizeResult = (attempts: readonly (Attempt | null)[]): SizeResult => {
     const times = attempts.map(a => (a?.result?.kind === 'solved' ? a.result.ms : null))
     return attempts.length === 3 && times.every(t => t !== null)
-        ? { kind: 'total', ms: times.reduce<number>((sum, t) => sum + (t as number), 0) }
+        ? {
+            kind: 'total',
+            ms: times.reduce<number>((sum, t) => sum + (t as number), 0),
+            assisted: attempts.some(a => a!.assisted),
+        }
         : { kind: 'partial' }
 }
 
@@ -168,7 +178,6 @@ const isResult = (value: unknown): value is Result => {
     const r = value as Record<string, unknown>
     switch (r.kind) {
         case 'solved': return typeof r.ms === 'number' && Number.isFinite(r.ms) && r.ms >= 0
-        case 'hinted':
         case 'given-up': return true
         case 'untimed': return r.reason === 'clock-error' || r.reason === 'finish-lost'
         default: return false
@@ -177,14 +186,14 @@ const isResult = (value: unknown): value is Result => {
 
 /**
  * Whether a result agrees with the rest of its record: the states the changes above can
- * produce, and no others (codex). Types alone let through a timed solve on an assisted or
- * clock-error attempt, which would count towards a size's total.
+ * produce, and no others (codex). Types alone let through a timed solve on a clock-error
+ * attempt, which would count towards a size's total.
  *
  * - No result, or given up: no finish instant.
- * - Solved: neither flag, and its time is exactly the finish minus the start.
- * - Solved with a hint: assisted.
- * - Time unavailable: not assisted (that would be a hint), and a clock error only with the
- *   flag set; a lost finish may have either.
+ * - Solved: no clock error, and its time is exactly the finish minus the start. Assisted
+ *   or not: a hint keeps the clock (amended 2026-10-11).
+ * - Time unavailable: a clock error only with the flag set; a lost finish may have either.
+ *   Assisted or not.
  * - Every solve has its finish instant.
  */
 const consistent = (a: Attempt): boolean => {
@@ -192,9 +201,8 @@ const consistent = (a: Attempt): boolean => {
     if (!result || result.kind === 'given-up') return a.finishedAt === undefined
     if (a.finishedAt === undefined) return false
     switch (result.kind) {
-        case 'solved': return !a.assisted && !a.clockError && result.ms === a.finishedAt - a.startedAt
-        case 'hinted': return a.assisted
-        case 'untimed': return !a.assisted && (result.reason === 'finish-lost' || a.clockError)
+        case 'solved': return !a.clockError && result.ms === a.finishedAt - a.startedAt
+        case 'untimed': return result.reason === 'finish-lost' || a.clockError
     }
 }
 

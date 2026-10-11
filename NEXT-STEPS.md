@@ -1974,8 +1974,8 @@ decisions are accepted; suggested slice-3 features remain proposals.
 
 Written for: codex, reviewing Claude's slice-3a contract and, later, its code.
 
-**Status (2026-10-11): revised after codex's second review, awaiting its third. No code
-until it is accepted.**
+**Status (2026-10-11): accepted by codex at `92286c3`. Implementation commit 1 (hints keep
+the clock) is built, mutation-tested and gated, awaiting codex's code review.**
 
 **Second review, codex (2026-10-11), on `359436e`: held, for one correction, made in
 rule 16.** On a restored empty board, Practice called `reset()`, which changes no cells
@@ -2337,6 +2337,45 @@ before the next.
 - Rule 14: the measured margins, the three-part trigger, and the legend-row fallback in
   place of the banner, which codex's point showed would cost the same row.
 - Rule 7: forward-only `history`, keyed on the attempt's `startedAt`.
+
+**Third review, codex (2026-10-11), on `92286c3`: accepted.** Codex checked rule 16's
+amendment against `reset()` and the coordinator's Practice hook, and that only
+`NEXT-STEPS.md` changed. It did not rerun the gates.
+
+**As built: implementation commit 1, hints keep the clock (rules 1–5, 2026-10-11)**
+- `attempt.ts`: `solvedResult` no longer special-cases `assisted`, so an assisted solve is
+  `solved` with its time, and a clock error still gives `untimed: clock-error`, hinted or
+  not (it used to give `hinted`, a hint winning over the clock error). `recover` gives
+  every lost finish `untimed: finish-lost`. `hinted` is gone from `Result` and `isResult`.
+  `consistent` accepts `solved` and `untimed` with or without `assisted`; `solved` still
+  never with `clockError`. `sizeResult`'s total carries `assisted`. `RULESET` stays 1.
+  Comments carry the amendment and its date. Nothing else in `app/` named the removed kind.
+- **Tests changed on purpose**, as the contract listed; no assertion was dropped, and each
+  now also asserts the `assisted` flag where it expected `hinted`:
+  - `challengeAttempt.test.ts`: "after a hint" is timed (5000 ms), and hint plus clock
+    error is `clock-error`; the hinted lost finish is `finish-lost`; the total is
+    `{ ms, assisted: false }`; a new test totals a size with a hinted board
+    (`assisted: true`); "partial" now uses an assisted lost finish in place of the hinted
+    board; the refused-records list drops "a timed solve, assisted" (now a real state) and
+    gains "the removed hinted kind" and "a lost finish with no finish"; the accepted states
+    gain an assisted timed solve and an assisted lost finish. 31 tests became 32.
+  - `challengeStore.test.ts` (2 tests), `challengeOpening.test.ts` (1, now `clock-error`),
+    `challengeSession.test.ts` (3), and `e2e/challengeSession.spec.ts`'s Hint/Check versus
+    finish cases: `solved` both ways, with `assisted` true exactly when the advice
+    committed first.
+- Measured: before the test changes, the amendment failed exactly **12** unit tests across
+  four files, every one asserting the old rule. After: the seven challenge suites pass,
+  **269/269**, unit stderr **0 bytes**; `tsc --noEmit` 0.
+- **Mutations: 9 of 9 caught at the intended test**, `attempt.ts` restored byte for byte
+  (compared with `cmp`): an assisted finish untimed again; a hint beating a clock error
+  again; an assisted lost finish given up; `consistent` refusing an assisted timed solve;
+  refusing an assisted lost finish; allowing a timed solve with a clock error;
+  `sizeResult` dropping `assisted`; refusing a hinted board's time; `isResult` accepting
+  the removed `hinted` kind.
+- Cold gate, first run (2026-10-11): TIME_WAIT **23**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1538** tests in 65 files, one more than before; stderr
+  **0 bytes**), build **0**, browser **0** (**683 passed, 1 skipped**, 0 socket errors),
+  the amended `e2e/challengeSession.spec.ts` cases included. No failed run.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an

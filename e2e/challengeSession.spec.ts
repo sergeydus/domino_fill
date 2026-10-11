@@ -252,7 +252,10 @@ for (const advice of ['Hint', 'Check'] as const) {
             expect((await state(page)).advice).toBeNull()
             await release(owner)
             const finished = await result(other)
-            expect(finished.kind).toBe(first === 'advice' ? 'hinted' : 'solved')
+            // Timed either way since 2026-10-11 (a hint keeps the clock); the advice that
+            // committed first is what marks the attempt as hinted.
+            expect(finished.kind).toBe('solved')
+            expect((await state(other)).attempt!.assisted).toBe(first === 'advice')
             await expect.poll(async () => (await state(page)).assisting).toBe(false)
             if (first === 'finish') expect((await state(page)).advice, 'late advice is suppressed').toBeNull()
             else await expect.poll(async () => (await state(page)).advice).not.toBeNull()

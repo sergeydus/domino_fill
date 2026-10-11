@@ -90,7 +90,10 @@ describe('unsaved tab records', () => {
         await store.change(board.puzzleId, markClockError)
         await store.change(board.puzzleId, markAssisted)
         const outcome = await store.change(board.puzzleId, current => finish(current, 200, board.date))
-        expect(outcome.attempt?.result).toEqual({ kind: 'hinted' })
+        // A clock error costs the time whatever the hints (amended 2026-10-11: a hint used
+        // to win over it, as "solved with a hint").
+        expect(outcome.attempt?.result).toEqual({ kind: 'untimed', reason: 'clock-error' })
+        expect(outcome.attempt?.assisted).toBe(true)
         expect((await store.change(board.puzzleId, begin)).attempt).toEqual(outcome.attempt)
         expect(await memoryAttemptStore().readAll()).toEqual([])
     })
