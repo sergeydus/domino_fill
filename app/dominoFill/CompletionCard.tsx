@@ -87,7 +87,13 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
         cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
         const onFocus = (focus: FocusEvent) => {
             if (cardRef.current?.contains(focus.target as Node)) holder.current = focus.target as HTMLElement
-            else owed.current = false
+            else {
+                // Gone from the card, so nothing in it holds focus any more: a button that
+                // disappears later hands nothing on, even once focus has fallen to the page
+                // (codex).
+                owed.current = false
+                holder.current = null
+            }
         }
         document.addEventListener('focusin', onFocus)
         return () => document.removeEventListener('focusin', onFocus)
@@ -95,9 +101,9 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
     useEffect(() => {
         const action = nextRef.current ?? replayRef.current ?? retryRef.current
         if (!action) return
-        const active = document.activeElement
+        // A holder is kept only while focus stays in the card, so one that has gone took
+        // focus with it, down to the page.
         const dropped = !!holder.current && !holder.current.isConnected
-            && (active === null || active === document.body)
         if (!owed.current && !dropped) return
         owed.current = false
         action.focus({ preventScroll: true })

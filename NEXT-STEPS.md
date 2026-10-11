@@ -2226,8 +2226,11 @@ holds: casual play never shows a clock.
    debt is cancelled as soon as focus goes anywhere outside the card, so a late action
    never takes focus back. And when the focused action itself goes (Try again, once a
    retry saves), focus, which fell to the page, passes to the action that replaced it,
-   unless the player had moved it elsewhere first. The card shows from the first solve, before the save, as today: the
-   celebration never waits for storage (slice 2, item 7).
+   unless the player had moved it elsewhere first. **Amended again after codex's review of
+   the correction:** focus leaving the card also forgets which button held it, so even if
+   focus later falls back to the page (a click on plain text), a button that disappears
+   after that hands nothing on. The card shows from the first solve, before the save, as
+   today: the celebration never waits for storage (slice 2, item 7).
 
 *F. Warnings*
 17. One `ChallengeNotice` line above the board, at most one message, in this order:
@@ -2548,8 +2551,10 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   with the public desktop and phone pixel baselines unchanged. Committed after it.
 
 **As built: correction after codex's review of commit 3 (rules 11 and 16, 2026-10-11)**
-- Codex held commit 3 (`2c67385`) for two focus bugs it reproduced in Chromium, with
-  scratch regressions that failed 2/2 at their focus assertions. It verified 362/362
+- Codex held commit 3 (`2c67385`) for two focus bugs, with scratch regressions that
+  failed 2/2 at their focus assertions. (Corrected after codex's next review: those
+  regressions were jsdom tests. This note said Chromium, which I had inferred, not read.
+  Codex's Chromium evidence for the card came in that next review.) It verified 362/362
   focused unit tests (stderr 0 bytes), type-checking, 68/68 Chromium checks (retries off,
   0 socket errors) and CI run `38145224230` on that head; it read the gate history and the
   30-probe record without repeating them. No product decision was needed.
@@ -2599,6 +2604,36 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   **0**, unit **0** (**1590** in 67 files, 6 more than commit 3; stderr **0 bytes**), build
   **0**, browser **0** (**712 passed, 1 skipped**, 2 more than commit 3; 0 socket errors).
   No failed run. Committed after it.
+
+**As built: second correction, after codex's review of `512b695` (rule 16, 2026-10-11)**
+- Codex accepted the Start fix and held the card's. Reproduced in Chromium, desktop and
+  phone: on the last board, fail the finish save (Try again takes focus); hold the retry's
+  transaction; move focus to Archive, then click the clock's text, so focus is on the page;
+  release the retry, and Practice took focus back. The cause: focus outside the card
+  cleared `owed` but left `holder` on Try again, so its disappearance looked like a handoff
+  still due. Codex verified 173/173 focused unit tests (stderr 0 bytes), type-checking,
+  52/52 Chromium checks with retries off (six independent checks confirming delayed
+  Practice focus, Try again to Practice, and cancellation with Archive keeping focus),
+  its extra regression failing 2/2 (desktop and phone) at the focus assertion, 0 socket
+  errors, and CI run `38151901069` on that head.
+- **Fix:** focus outside the card now also sets `holder` to null. That made the page-focus
+  check in `dropped` (`activeElement` null or `body`) redundant: a holder survives only
+  while focus stays inside the card, so a holder that has gone took focus down to the page
+  with it. Its probe survived the first sweep (7 of 8 on the card's side, below), so the
+  check was removed rather than kept untested.
+- **New test:** `tests/challengeUi.test.tsx` +1 (27): codex's case, with the click on plain
+  text as a blur from Archive to the page. It failed on `512b695`'s card (1 of 27) and
+  passes now.
+- **Mutations: 8 of 8 caught at the intended test** (unit), files restored byte for byte:
+  the seven earlier unit probes still applicable, plus (9) leaving the card keeping the
+  holder, caught by the new test (and by "but not when the player had already moved on
+  from Try again"). The first sweep, before the redundant check was removed, was 8 of 9:
+  probe (7), "the handoff even when focus is elsewhere", survived because the new release
+  of `holder` covers it. The browser probe from the first correction concerns the cover,
+  which is unchanged, and wasn't rerun.
+- Cold gate, first run (2026-10-11): TIME_WAIT **46**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1591** in 67 files, 1 more; stderr **0 bytes**), build **0**, browser
+  **0** (**712 passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an

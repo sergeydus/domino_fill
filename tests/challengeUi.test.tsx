@@ -470,6 +470,28 @@ describe('the finish (rules 15-16)', () => {
         expect(document.activeElement).toBe(archive)
     })
 
+    it('nor once the player has left the card and focus has fallen to the page (codex)', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        await pressStart()
+        const failing = vi.spyOn(m.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        await win(m, T0 + 5_000)
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+        expect(document.activeElement).toBe(retry)
+        const archive = screen.getByRole('button', { name: 'Archive' })
+        act(() => { archive.focus() })
+        // A click on plain text: focus leaves Archive for the page.
+        act(() => { archive.blur() })
+        expect(document.activeElement).toBe(document.body)
+        failing.mockRestore()
+        await act(async () => { await m.root.challenge!.retry() })
+        const practice = await screen.findByRole('button', { name: 'Practice' })
+        expect(retry.isConnected).toBe(false)
+        expect(document.activeElement, 'Practice took focus back').not.toBe(practice)
+        expect(document.activeElement).toBe(document.body)
+    })
+
     it('a covered board never shows a card, whatever its old completion says', async () => {
         const m = await mount()
         await act(async () => { m.session().setCompleted(true) })
