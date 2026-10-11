@@ -1969,6 +1969,286 @@ decisions are accepted; suggested slice-3 features remain proposals.
   log, D3 and item 5. The implementation and checks for commits 1 and 2 are recorded above; later commits
   await the preceding head's review as agreed.
 
+### Challenge slice 3a, the playable challenge: implementation contract
+
+Written for: codex, reviewing Claude's slice-3a contract and, later, its code.
+
+**Status (2026-10-11): draft, awaiting codex's review. No code until it is accepted.**
+The user assigned slice 3 to Claude, with codex reviewing (2026-10-11). Branch:
+`feature/challenge-ui`, from `master` at `522358a` (PR #10's merge). Slice 3 ships as two
+PRs and goes live only after both (user, 2026-10-11): this one, 3a, makes the challenge
+playable on screen and leaves it switched off; 3b adds the results screen, Share, the
+streak and the countdown, and switches it on.
+
+**Why.** Slice 2 wired Ruleset v1 into the game behind `RootStore`'s `challenge` option, and
+exposed state but drew nothing: an enabled root today would show the board with no cover,
+no Start and no clock, which breaks rules 2 and 4. This slice draws them, and amends one
+rule the user changed (hints keep the clock).
+
+**Decisions it rests on** (decision log, 2026-10-11): the clock is always visible on a
+timed board; after a challenge solve the Solved! card shows that board's time and a way
+on, and the results screen (3b) opens at the end; hints keep the clock, marked "hints
+used"; nothing goes live until 3b. Principle 6 (Wordle/LinkedIn feel) shapes the look:
+one obvious Start, a clean cover, a visible clock, a clear finish. Principle 1 still
+holds: casual play never shows a clock.
+
+**How it works today** (read in code at `522358a`; nothing here is newly measured)
+- `provider.tsx:13` builds `new RootStore()` with the challenge off; `start()`/`dispose()`
+  are no-ops then. An enabled root is `new RootStore(corpus, { challenge: true })`, as
+  `app/visual/challenge/ChallengeFixture.tsx` does.
+- `DominoClient.tsx` renders, in the measured column: `banner` (198), the difficulty
+  buttons, `<ClientBoard>` (338), the piece `legend` (209), the `completion` card when
+  `currentBoard.completed` (215), the advice strip, `controls` (230) and navigation. Every
+  `data-chrome` row is subtracted from the board's height budget (`useAvailableBoardBox`).
+- `ClientBoard` draws the grid (`role="grid"`, cells with accessible names), the line
+  targets (`HorizontalNumbers`, `VerticalNumbers`) and rocks. Covering means not rendering
+  it at all: an inert or hidden grid still puts the puzzle in the DOM (slice 2, item 3).
+- `GameControls.tsx`: Check and Hint call `requestCheck`/`requestHint` and are disabled
+  only when `completed` (57, 66); Undo by `canUndo` (75); Reset is never disabled (81),
+  though `reset()` is a no-op when `canChange` is false.
+- `CompletionCard.tsx`: "Solved!", the board's name, "Next level" within the difficulty
+  (106, hidden on level 3) and "Play again" (`session.reset()`, 122). Focus moves to the
+  primary action on mount.
+- The coordinator (`app/challenge/coordinator.ts`) exposes `status`
+  (`idle | loading | ready | retry`), `unsaved`, `retry()`, `isCovered` (164), `canStart`
+  (179), `canMutate` (186), `practiceElapsed` (196), `elapsedFor` (200), and per binding:
+  `attempt`, `starting`, `assisting`, `pendingFinish`, `error` (`identity | save`),
+  `clockErrorPending`, `progressSaveFailed`, `practice`, `beforeClamp`. `tick()` (724) runs
+  every second and replaces the observable `now`, so anything reading `elapsedFor`
+  re-renders once a second. It keeps no observable history of attempts: `enumerate` (653)
+  reads them all but only reconciles.
+- `attempt.ts`: an assisted attempt finishes as `{ kind: 'hinted' }` with no time (94); a
+  recovered lost finish of an assisted attempt is `hinted` too (137); `consistent` refuses
+  a timed solve with `assisted` (195); `sizeResult` (157) totals only unassisted timed
+  solves.
+- Archive marks: `Archive.tsx:70` reads all progress once at open and `markForDay`
+  (`dayMark.ts:33`) counts a board done when its valid record is `completed`. A Practice
+  Undo clears `completed`, so an enabled root could lose a challenge day's mark (slice 2,
+  "Not in this slice").
+- `LevelStore.isFinished` (`BoardsStore.ts:563`) already uses the attempt for an enabled,
+  in-window board; `selectFirstUnsolved` lands on the first unfinished level of a size.
+
+**The rules**
+
+*A. Hints keep the clock (Ruleset v1, amended in place)*
+1. `finish` gives an assisted attempt a timed result, `{ kind: 'solved', ms }`, exactly as
+   an unassisted one; the attempt's `assisted` flag is what says "hints used". A clock
+   error still gives `untimed: clock-error`, assisted or not. `recover` gives any lost
+   finish `untimed: finish-lost`, assisted or not.
+2. Remove `hinted` from `Result`. `consistent` accepts `solved` with or without
+   `assisted` (still never with `clockError`, and still `ms === finishedAt - startedAt`);
+   `untimed` with or without `assisted`.
+3. `sizeResult` returns `{ kind: 'total', ms, assisted }` when all three boards are solved
+   with a time, `assisted` true if any of them is; otherwise `{ kind: 'partial' }`.
+4. Save-before-showing for Hint and Check is unchanged (rule 7, slice 2 item 12): the
+   "hints used" mark is only honest because the flag is committed before the hint appears.
+5. **The ruleset stays version 1.** "Store the ruleset version with every result, so a
+   later change never reinterprets old times" protects saved results, and no public build
+   has ever saved one: the public root has never been enabled, and slice 2's browser test
+   "the production public page remains casual and writes no challenge records or legacy
+   check" asserts it. Attempts exist only on the visual-build test origin (port 3101).
+   There, a stored `hinted` record now fails `isAttempt` and reads as no attempt, so that
+   test board is offered Start again. Accepted: it is test data on a test origin. If codex
+   prefers a version 2 instead, that is a contract change to make before code.
+
+*B. What the screen is told: one selector*
+6. Add `boardView(session)` to the coordinator: a pure, observable function returning one
+   discriminated union per board, so every component reads the same answer and the cases
+   are unit-testable without a browser:
+   - `casual`: unbound, archive, before-clamp, or the challenge off. Nothing new drawn.
+   - `legacy`: rule 13's played-before-the-challenge mark. Untimed, uncovered.
+   - `preparing`: initialization loading. Covered, no Start.
+   - `unprepared`: initialization failed (`status: 'retry'`). Covered, with Try again.
+   - `future`: an unclamped board dated after the device date. Covered, no Start.
+   - `mismatch`: `error: 'identity'`. Covered, no Start.
+   - `ready`: covered, `canStart`. With `startFailed` when the last Start failed to save.
+   - `starting`: covered, Start pending.
+   - `playing`: the attempt in progress: `elapsed`, `assisted`, `clockError` (saved or
+     pending), `assisting`, `closesTonight` (yesterday's board: given up at midnight).
+   - `finishing`: a first solve waiting to save: `saveFailed` once a save attempt failed.
+   - `result`: the fixed result, and `practice` (`{ elapsed, solved }` or null) inside the
+     window. A `given-up` result is `result` too.
+   The order of the checks follows `isCovered`, `canStart` and `canMutate` exactly; the
+   unit test asserts the selector agrees with those three for every state it produces.
+7. Add an observable `history`: the latest committed attempt per puzzle known to this
+   root, filled by `enumerate` and by every committed `transact` outcome, in memory mode
+   too. It is read by the archive (rule 18) and by 3b's results and streak. It is not a
+   new store: storage stays the authority, and a refresh replaces entries.
+8. Add `LevelStore.nextChallengeBoard()`: the next board of the viewing date, in the order
+   Easy 1–3, Medium 1–3, Hard 1–3 after the current one and wrapping, whose `boardView`
+   is not `result`, `legacy` or `casual`. Null when there is none.
+
+*C. The cover*
+9. When a board's view is covered (`preparing`, `unprepared`, `future`, `mismatch`,
+   `ready`, `starting`), `DominoClient` renders a new `ChallengeCover` **instead of**
+   `ClientBoard` and the piece legend. No grid, cells, rocks, line targets, previews or
+   their accessible names exist in the DOM. The difficulty buttons, level arrows, banner,
+   archive and settings stay as they are, so a player can move between boards freely.
+10. The cover takes the board's own footprint: the square size the session already
+   computes, times the board's size, plus the line-target gutters, so Start replaces it
+   without the page jumping. It shows the board's name ("Easy · 6×6 · puzzle 1 of 3"), whose
+   challenge it is ("Today's challenge", or "Yesterday's challenge · ends at midnight"),
+   the line "Your time starts when you press Start", and Start as the page's primary
+   control. By state: `preparing` "Getting the challenge ready…" and no Start;
+   `unprepared` "The challenge couldn't be prepared." with Try again (`coordinator.retry()`);
+   `future` "This board opens on {date}." and no Start; `mismatch` "This board's saved
+   record doesn't match it, so it can't be started here." and no Start; `starting` Start
+   disabled, reading "Starting…"; `ready` with `startFailed`, "Your start couldn't be saved,
+   so your time hasn't started." above Start.
+11. Start calls `session.startChallenge()`. If Start had focus when the board is revealed,
+   focus moves to the board's grid (the Start button no longer exists, and focus would
+   otherwise fall to the page). Nothing focuses Start automatically on arrival. Start is a
+   real button: Tab, Enter and Space, no new key binding.
+12. While covered, Check, Hint, Undo and Reset are visibly disabled: `disabled` follows
+   `canChange` as well as today's conditions. Reset gains `disabled={!canChange}`; in a
+   casual root `canChange` is always true, so nothing changes there.
+
+*D. The clock line*
+13. A new `ChallengeClock`, a `data-chrome` row directly above the board, for the
+   `playing`, `finishing` and `result` views only. `playing`: the elapsed time, `m:ss`
+   below an hour and `h:mm:ss` from one, in tabular figures, with "· hints used" once
+   assisted and "· ends at midnight" on yesterday's board. A pending or saved clock error
+   replaces the time with "Clock changed: no time for this board". `finishing`: the frozen
+   time. `result`: the result (the same words as the card, rule 15). Practice:
+   "Practice · m:ss", with the result beside it. `role="timer"`, which is not announced
+   each second; the result is announced once, by the card.
+14. It is the visible clock the user chose; it never appears for `casual` or `legacy`
+   boards (Principle 1); a `legacy` board instead gets "Played before the challenge ·
+   untimed" in the same row, so the missing Start explains itself. **Measured before it is
+   kept:** the row costs board height, and an 8×8 board at 1280×800 was within a few pixels
+   of its 38px cell floor (`DominoClient.tsx` comment at 236). The layout suite's floors
+   must hold on the enabled page; if one doesn't, the clock moves into the banner row
+   rather than lowering a floor, and the As built notes say which.
+
+*E. The finish*
+15. The Solved! card, for a challenge board: the outcome line stays "Solved!"; below the
+   board's name it says the result, "1:23 · no hints", "1:23 · hints used", "Time
+   unavailable: the device clock changed", or "Time unavailable: the finish wasn't saved
+   in time" (a recovered lost finish); `finishing` reads "Saving your time…", and with
+   `saveFailed` "Your time isn't saved yet. Keep this page open; it's still trying.",
+   with Try again (`coordinator.retry()`). A Practice solve says "Practice · 0:45" and
+   "Your result: 1:23 · no hints". A given-up board says "Given up: not solved in time".
+   Principle 5: nothing says "verified" or "official".
+16. Its actions on a challenge board: "Next board" goes to `nextChallengeBoard()`, across
+   sizes (setting difficulty and level), and is hidden when there is none: in 3a nothing
+   replaces it, and in 3b the results screen does. "Play again" becomes "Practice" inside
+   the window: it still calls `reset()`, which starts Practice (rule 11). Casual boards
+   keep "Next level" and "Play again" exactly as now. Focus still moves to the primary
+   action on mount. The card shows from the first solve, before the save, as today: the
+   celebration never waits for storage (slice 2, item 7).
+
+*F. Warnings*
+17. One `ChallengeNotice` line above the board, at most one message, in this order:
+   unsaved mode, "This browser can't save the challenge: your times last until you close
+   this tab." (rule 15's amendment); a failed save of a clock error, "The clock change
+   couldn't be saved yet."; failed progress saves on the board, "Your moves aren't being
+   saved. Keep this page open." It is `role="status"`, so a change is announced once. It
+   only exists while one applies, so it costs no height otherwise.
+
+*G. Archive marks*
+18. `markForDay` takes the attempts too: a board with an attempt counts as played, and as
+   done when its result is a solve (timed or untimed); given up is played, not done. A
+   board without one is judged from progress, as now. `Archive` reads the coordinator's
+   `history` at open, with progress, so a Practice Undo no longer clears a challenge
+   day's mark, and a challenge day keeps its mark after the 14-day progress cleanup. With
+   the challenge off, `history` is empty and every mark is what it is today.
+
+*H. Nothing goes live*
+19. `provider.tsx` stays `new RootStore()`. Every new component renders nothing new unless
+   its board's view is a challenge view, so the public page is pixel-for-pixel unchanged:
+   the existing desktop and phone baselines must pass untouched in this PR.
+20. A visual-build-only page, `app/visual/daily/page.visual.tsx`, mounts the real
+   `DominoClient` inside an enabled root with the real corpus, behind the existing
+   `DOMINO_VISUAL_SHEET` page-extension gate. It is what the browser tests play.
+   `e2e/bundle.spec.ts` extends its exclusion checks to it.
+
+**Not in this slice**
+- 3b: the day results screen, totals per size on screen, Share, streak and freezes, the
+  countdown, opening results after the ninth board or a whole size, and switching the
+  challenge on (with its new public baselines).
+- Stats (D6), receipts (D11), the previous-best split (D12), real-device timer tests
+  (D13), future-board protection (D16), the known theme/archive flakes.
+- Any change to slice 2's storage, reconciliation or save rules beyond rules 1–3 and 7.
+- New keyboard shortcuts (none), new settings (none), a confirmation before Hint (not
+  needed now that hints keep the clock).
+
+**Tests**
+- Changed on purpose, for rules 1–3: `tests/challengeAttempt.test.ts` (an assisted finish
+  is timed; an assisted lost finish is `finish-lost`; `consistent` cases; `sizeResult`
+  with `assisted`), `tests/challengeStore.test.ts` (65, 136, 352),
+  `tests/challengeOpening.test.ts` (93), `tests/challengeSession.test.ts` (519, 527, 862)
+  and `e2e/challengeSession.spec.ts` (255): each expected `{ kind: 'hinted' }` and now
+  expects a timed `solved` with `assisted: true`, or `finish-lost` with `assisted: true`.
+  No assertion is dropped.
+- New `tests/challengeView.test.ts`: every `boardView` state from real coordinator
+  transitions, its agreement with `isCovered`/`canStart`/`canMutate`; `history` after
+  enumerate, Start, finish, another tab's result and in memory mode; `nextChallengeBoard`
+  order, wrapping, skipping results and legacy boards, and null.
+- New `tests/challengeUi.test.tsx` (jsdom, components with an enabled root): the cover
+  renders no grid, cell, rock or target and no accessible description of them, in every
+  covered state; each state's words and controls; the clock's formatting (59 s, 1:00,
+  59:59, 1:00:00); the card's result lines and actions; controls disabled while covered;
+  the notice's order.
+- `tests/dayMark.test.ts`, extended: attempts override progress, given
+  up is not done, a Practice Undo keeps a day complete, no attempts gives today's marks.
+- New `e2e/challengeUi.spec.ts` on `/visual/daily`, with `pinDay`: the covered board has
+  no `[data-cell]`, no grid role and no target text, in the accessibility tree too; Start
+  reveals it and focus moves to the grid when Start had it; the clock advances; a solve
+  shows the card's time; a hint keeps the clock and shows "hints used"; reload resumes the
+  clock rather than restarting it (the shown time after reload is not below the one
+  before it, read on the same page); "Next board" crosses sizes; Practice is labelled;
+  yesterday's board says when it ends; the archive keeps a challenge day's mark after a
+  Practice Undo; the layout floors hold at the suite's phone and desktop sizes with the
+  clock row.
+- `e2e/bundle.spec.ts`: `/visual/daily` and its sentinel are absent from production.
+- The existing public suites and baselines run unchanged: they are the proof that 3a
+  changes nothing public.
+
+**Mutation probes planned**, one at a time, each against its intended assertion: an
+assisted finish untimed again; an assisted lost finish `hinted`; `consistent` refusing an
+assisted timed solve; `sizeResult` dropping `assisted`; `boardView` ordering `ready` before
+`preparing`; `future` offering Start; the cover rendering the grid hidden instead of
+absent; the cover rendering targets; Start leaving focus on the page; Reset enabled while
+covered; the clock shown on a casual board; the clock ignoring a clock error; the card
+saying a time for an untimed result; "Next board" staying in one size; "Practice" label
+on a casual board; the notice's order reversed; `history` missing another tab's result;
+`markForDay` ignoring attempts; the visual page in production.
+
+**Commits planned**
+1. Rules 1–5: the ruleset amendment and its changed tests.
+2. Rules 6–8: `boardView`, `history`, `nextChallengeBoard`, with their unit tests.
+3. Rules 9–17 and 19–20: the cover, clock, card, controls and notice, the visual page,
+   component and browser tests. If the clock row fails a floor, the fallback is in here.
+4. Rule 18: archive marks from attempts.
+Each gets its own mutations, cold gate and As built notes, and goes to codex for review
+before the next.
+
+**For codex to check in particular**
+- Rule 5, keeping version 1. The alternative is version 2 with `hinted` still readable.
+- Rule 16, "Next board" crossing sizes. It follows "any order" (D1) and the user's
+  "a way on", but it is Claude's proposal: the user hasn't chosen it over "Next level".
+- Rule 14's fallback, the banner row, if the clock row breaks a floor.
+
+**Validation record**
+- Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an
+  earlier start was refused by the gate script at TIME_WAIT **141**, before deleting or
+  running anything; the run itself began at TIME_WAIT **90**, with the repository root
+  verified before the delete. TypeScript **0**, lint **0**, unit **0** (**1537** tests in
+  65 files, stderr **0 bytes**), build **0**, browser **0** (**683 passed, 1 skipped**,
+  0 socket errors). No failed run. No runtime mutation is claimed for a docs commit.
+- This contract's commit, gate from cold, first run (2026-10-11), **failed, so no
+  commit**: TIME_WAIT **64**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1537**, stderr **0 bytes**), build **0**, browser **1**: **682 passed, 1 failed,
+  1 skipped**, 0 socket errors. The failure: `[phone-360] motion.spec.ts:52` "a piece
+  arrives inside the limits" timed out in `waitForRest` (`rest.ts:32`) after 15 s, with
+  four motion elements (two pieces, the target-over outline and the completion card)
+  still at `opacity:0` mid-transform. Only `NEXT-STEPS.md` differs from `784e7af`, whose
+  gate passed this test, so this is inferred to be a flake, not diagnosed. Added to the
+  known flakes (`theme.spec.ts:71`, `archive.spec.ts:360`); the whole gate is rerun.
+- Full cold rerun (2026-10-11): TIME_WAIT **11**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1537**, stderr **0 bytes**), build **0**, browser **0** (**683
+  passed, 1 skipped**, 0 socket errors), `motion.spec.ts:52` included. Committed after it.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
