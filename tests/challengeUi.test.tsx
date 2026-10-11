@@ -492,6 +492,41 @@ describe('the finish (rules 15-16)', () => {
         expect(document.activeElement).toBe(document.body)
     })
 
+    it('keeps the hold across a move between the card\'s own buttons', async () => {
+        const m = await mount()
+        await pressStart()
+        const failing = vi.spyOn(m.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        await win(m, T0 + 5_000)
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+        const next = screen.getByRole('button', { name: 'Next board' })
+        expect(document.activeElement, 'the primary action, at mount').toBe(next)
+        act(() => { retry.focus() })
+        failing.mockRestore()
+        await act(async () => { await m.root.challenge!.retry() })
+        await screen.findByRole('button', { name: 'Practice' })
+        expect(retry.isConnected).toBe(false)
+        expect(document.activeElement, 'passed on from the Try again that went').toBe(next)
+    })
+
+    it('nor after Try again is blurred straight to the page (codex)', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        await pressStart()
+        const failing = vi.spyOn(m.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        await win(m, T0 + 5_000)
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+        expect(document.activeElement).toBe(retry)
+        // A click on plain text: focus goes to the page with no focusin anywhere.
+        act(() => { retry.blur() })
+        expect(document.activeElement).toBe(document.body)
+        failing.mockRestore()
+        await act(async () => { await m.root.challenge!.retry() })
+        const practice = await screen.findByRole('button', { name: 'Practice' })
+        expect(retry.isConnected).toBe(false)
+        expect(document.activeElement, 'Practice took focus back').not.toBe(practice)
+    })
+
     it('a covered board never shows a card, whatever its old completion says', async () => {
         const m = await mount()
         await act(async () => { m.session().setCompleted(true) })

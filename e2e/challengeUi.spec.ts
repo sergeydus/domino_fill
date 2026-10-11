@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, pinDayAcrossReloads, LATE_IN_A_MONTH } from './calendar'
-import { playSolution } from './play'
+import { playSolution, solutionFor } from './play'
 import { arm, heldWrite, instrument, release } from './challengeTransaction'
 
 /*
@@ -32,6 +32,59 @@ const seconds = async (page: Page) => {
     if (!match) throw new Error(`no time in the clock line: ${text}`)
     return Number(match[1] ?? 0) * 3600 + Number(match[2]) * 60 + Number(match[3])
 }
+
+/** Solve the board on screen through the store, from the solver's placements: setup only. */
+const solveThroughStore = async (page: Page) => {
+    const placements = (await solutionFor(page)).map(({ from, direction }) => ({ from, direction }))
+    await page.evaluate(placements => {
+        const session = window.dailyFixture!.root.boardsStore.currentBoard!
+        for (const { from, direction } of placements) {
+            if (!session.placeToward([from[0], from[1]], direction)) throw new Error(`refused at ${from}`)
+        }
+    }, placements)
+}
+/** The other eight boards of the day solved and saved, then Easy puzzle 1 on screen, covered. */
+const lastBoardLeft = async (page: Page) => {
+    for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+        for (const level of [1, 2, 3] as const) {
+            if (difficulty === 'easy' && level === 1) continue
+            await page.evaluate(place => window.dailyFixture!.root.boardsStore.goToBoard(place), { difficulty, level })
+            await start(page)
+            await solveThroughStore(page)
+            await expect(page.locator('[data-completion-result]')).toHaveText(/no hints/)
+        }
+    }
+    await page.evaluate(() => window.dailyFixture!.root.boardsStore.goToBoard({ difficulty: 'easy', level: 1 }))
+    await expect(page.locator('[data-challenge-cover="ready"]')).toBeVisible()
+}
+/** Let the held write fail, then hold the next one, with no gap for a retry to slip through. */
+const failThenHold = (page: Page) => page.evaluate(async () => {
+    const probe = window.challengeTransaction
+    probe.abort = true
+    probe.release = true
+    while (probe.active) await new Promise(resolve => setTimeout(resolve, 0))
+    Object.assign(probe, { armed: 'attempts', active: false, release: false, abort: false, writes: [], completed: false })
+})
+/**
+ * The last board solved, its finish failed (so Try again, its only action, has focus), and
+ * Try again pressed from the keyboard, with that retry held.
+ */
+const retryHeldOnLastBoard = async (page: Page) => {
+    await open(page)
+    await lastBoardLeft(page)
+    await start(page)
+    await arm(page)
+    await solveThroughStore(page)
+    await heldWrite(page)
+    await failThenHold(page)
+    const retry = page.getByRole('button', { name: 'Try again' })
+    await expect(retry).toBeFocused()
+    await page.keyboard.press('Enter')
+    await heldWrite(page)
+    await expect(retry, 'still offered while its retry saves').toBeVisible()
+    return retry
+}
+const activeIsPage = (page: Page) => page.evaluate(() => document.activeElement === document.body)
 
 test('a covered board puts nothing of the puzzle on the page, nor in the accessibility tree', async ({ page }) => {
     await open(page)
@@ -69,6 +122,24 @@ test('a keyboard Start leaves focus where the player moved it while the start sa
     // Past the frame in which the handoff would have run.
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     await expect(page.getByRole('button', { name: 'Archive' })).toBeFocused()
+})
+
+test('on the last board, a Try again that goes hands focus to Practice', async ({ page }) => {
+    await retryHeldOnLastBoard(page)
+    await release(page)
+    await expect(page.getByRole('button', { name: 'Practice' })).toBeFocused()
+})
+
+test('but a click on plain text while the retry saves leaves focus on the page (codex)', async ({ page }) => {
+    await retryHeldOnLastBoard(page)
+    await clock(page).click()
+    expect(await activeIsPage(page), 'the click left Try again for the page').toBe(true)
+    await release(page)
+    const practice = page.getByRole('button', { name: 'Practice' })
+    await expect(practice).toBeVisible()
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await expect(practice, 'Practice took focus back').not.toBeFocused()
+    expect(await activeIsPage(page)).toBe(true)
 })
 
 test('Start swaps the cover for a board of exactly its size, and nothing else moves', async ({ page }) => {

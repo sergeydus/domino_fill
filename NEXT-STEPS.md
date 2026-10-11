@@ -2229,8 +2229,10 @@ holds: casual play never shows a clock.
    unless the player had moved it elsewhere first. **Amended again after codex's review of
    the correction:** focus leaving the card also forgets which button held it, so even if
    focus later falls back to the page (a click on plain text), a button that disappears
-   after that hands nothing on. The card shows from the first solve, before the save, as
-   today: the celebration never waits for storage (slice 2, item 7).
+   after that hands nothing on. **And a third time:** a click on plain text straight from
+   a focused button blurs it with no `focusin` anywhere, so the blur itself forgets the
+   holder (codex). The card shows from the first solve, before the save, as today: the
+   celebration never waits for storage (slice 2, item 7).
 
 *F. Warnings*
 17. One `ChallengeNotice` line above the board, at most one message, in this order:
@@ -2634,6 +2636,69 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
 - Cold gate, first run (2026-10-11): TIME_WAIT **46**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1591** in 67 files, 1 more; stderr **0 bytes**), build **0**, browser
   **0** (**712 passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
+
+**As built: third correction, after codex's review of `5cb2f2d` (rule 16, 2026-10-11)**
+- Codex kept Start accepted and held the card for a shorter sequence, reproduced in
+  Chromium on desktop and phone: Try again focused on the last board, its retry held, a
+  click **directly** on the clock's text (focus to the page, no `focusin` anywhere), the
+  retry released, and Practice took focus back. The card heard only `focusin`, so the
+  holder survived the blur. Codex verified 174/174 focused unit tests (stderr 0 bytes),
+  type-checking, Chromium 26 passed and 2 failed with retries off (both failures its
+  direct-click regression, at the intended assertion; 0 socket errors), and CI run
+  `38153644774` on that head. It confirmed the jsdom correction above is accurate, and asked
+  for a committed Chromium regression.
+- **Fix:** a document `focusout` listener lets go of the holder, a microtask later, if the
+  holder is still the button that blurred. Two things were measured on the way, and the
+  first is a correction of my own reasoning:
+  - **Chromium does fire `focusout` when the focused button is removed,** with the button
+    still connected while the event runs. I first concluded the opposite from a probe that
+    survived, and simplified the listener to let go at once. That version failed the new
+    handoff test 6 of 6 under four workers (it had passed when run alone), and a logging
+    run showed the `focusout` on Try again's removal, then the removal. The probe had
+    survived because of ordering, not a missing event.
+  - **The microtask is what keeps the handoff:** React runs the handoff effect as it
+    commits the removal, before the microtask (measured: letting go at once fails the
+    Chromium handoff test 8 of 8; deferring passes). A check that the blurred button is
+    still connected was tried and removed: its probe survived 16 of 16 Chromium runs and a
+    jsdom emulation of Chromium's removal blur, so no flow reaches it. Were React ever to
+    run the effect after the microtask, the handoff would not happen and focus would stay
+    on the page, never be taken.
+  - The second correction's `holder = null` on focus outside the card is gone: the blur
+    that precedes that `focusin` already lets go (its probe survived once the blur
+    listener existed).
+- **Fixture:** `/visual/daily` now sets `window.dailyFixture = { root }` (visual build only),
+  so a browser test can solve the other eight boards through the store, from the solver's
+  placements, instead of playing them by drag.
+- **New tests:** `e2e/challengeUi.spec.ts` +2 (11 × 2 projects), each on the last board with
+  the finish failed (the save hold's abort) and the retry held: a Try again that goes hands
+  focus to Practice; and codex's direct click on the clock's text leaves focus on the page.
+  `tests/challengeUi.test.tsx` +2 (29): Try again blurred straight to the page hands nothing
+  on; and the hold survives a move between the card's own buttons (Next board to Try again,
+  on a board that isn't the last, then Next board gets focus when Try again goes), which is
+  what the `holder === left` comparison is for.
+- **Against `5cb2f2d`,** codex's direct-click test failed in Chromium 8 of 8 (4 repeats × 2
+  projects) at "Practice took focus back".
+- **Mutations: 12 of 12 caught at the intended test,** files restored byte for byte. Unit,
+  9: the eight from the first two corrections still applicable (Start's three, the card's
+  owed debt, its cancellation, the handoff, the holder recorded, and the blur probe), plus
+  the blur letting go whatever holds focus now, caught by the move between the card's
+  buttons. Browser, 3, each failing all 8 of 8 runs (4 repeats × 2 projects, four workers):
+  the blur keeping the holder (caught by the direct-click test); letting go at once,
+  removal included (caught by the handoff test); and no handoff from a Try again that went
+  (the same). Probes tried and their code removed, as above: the connected check (survived
+  16/16), and the second correction's `holder = null` (survived).
+- Cold gate: one start refused by the gate script at TIME_WAIT **141**, after the probe
+  sweeps, before deleting or running anything. First run (2026-10-11), **failed, so no
+  commit**: TIME_WAIT **31**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1593** in 67 files, stderr **0 bytes**), build **0**, browser **1** (**715 passed, 1
+  failed, 1 skipped**). The failure was `[desktop] pickAPiece.spec.ts:313` "a drag still
+  places what its direction makes, whatever is held": `page.goto` got
+  `net::ERR_NO_BUFFER_SPACE` (1 socket-error line), socket exhaustion on this machine, not
+  the change. The whole gate is rerun from cold.
+- Full cold rerun (2026-10-11): TIME_WAIT **23**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1593** in 67 files, 2 more than `5cb2f2d`; stderr **0 bytes**),
+  build **0**, browser **0** (**716 passed, 1 skipped**, 4 more; 0 socket errors).
+  Committed after it.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an

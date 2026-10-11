@@ -17,11 +17,23 @@ export const DAILY_SENTINEL = 'domino-daily-fixture-5c0e7a31'
  *
  * Compiled only into the `DOMINO_VISUAL_SHEET` build, like the rest of `app/visual`.
  */
+/**
+ * The root, for a browser test that needs a day's other boards already solved: playing eight
+ * boards by drag to reach the last would cost more than what is under test.
+ */
+declare global {
+    interface Window { dailyFixture?: { root: RootStore } }
+}
+
 export default function DailyFixture() {
     const [root] = useState(() => new RootStore(new CorpusSource(), { challenge: true }))
     useEffect(() => {
+        window.dailyFixture = { root }
         void root.start()
-        return () => root.dispose()
+        return () => {
+            root.dispose()
+            delete window.dailyFixture
+        }
     }, [root])
     return (
         <MotionConfig reducedMotion="user">

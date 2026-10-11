@@ -87,16 +87,30 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
         cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
         const onFocus = (focus: FocusEvent) => {
             if (cardRef.current?.contains(focus.target as Node)) holder.current = focus.target as HTMLElement
-            else {
-                // Gone from the card, so nothing in it holds focus any more: a button that
-                // disappears later hands nothing on, even once focus has fallen to the page
-                // (codex).
-                owed.current = false
-                holder.current = null
-            }
+            else owed.current = false
+        }
+        /*
+         * A blur lets go of the holder: a move out of the card, and a click on plain text,
+         * which moves focus to the page with no `focusin` anywhere (codex). A move to another
+         * button in the card sets it again with that button's `focusin`.
+         *
+         * But Chromium also fires `focusout` when the focused button is *removed* (measured),
+         * and that is the handoff case: let go at once, and the removal Practice replaces
+         * would hand nothing on. So the letting go waits a microtask, and the handoff effect,
+         * which React runs as it commits the removal, comes first (measured in Chromium and
+         * jsdom). Were React ever to run it later, the handoff would simply not happen and
+         * focus would stay on the page: never a steal.
+         */
+        const onBlur = (blur: FocusEvent) => {
+            const left = blur.target
+            queueMicrotask(() => { if (holder.current === left) holder.current = null })
         }
         document.addEventListener('focusin', onFocus)
-        return () => document.removeEventListener('focusin', onFocus)
+        document.addEventListener('focusout', onBlur)
+        return () => {
+            document.removeEventListener('focusin', onFocus)
+            document.removeEventListener('focusout', onBlur)
+        }
     }, [])
     useEffect(() => {
         const action = nextRef.current ?? replayRef.current ?? retryRef.current
