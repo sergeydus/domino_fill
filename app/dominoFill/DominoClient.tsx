@@ -60,14 +60,14 @@ const DominoClient: React.FC = () => {
   /*
    * Go to a date because the player said so.
    *
-   * `setDay` rather than `receiveDay`: the hold-back rule protects someone from having a
+   * `pickDay` rather than `receiveDay`: the hold-back rule protects someone from having a
    * board taken away by a *clock*, and there is nothing to protect them from when they are
    * the one asking. Their position on the day they leave is saved and reachable again from
    * the archive, which is the whole point of it existing.
    */
   const goToDate = useCallback(async (date: string) => {
-    const loaded = await corpus.loadDay(date)
-    boardsStore.setDay(loaded.day)
+    const [loaded, manifest] = await Promise.all([corpus.loadDay(date), corpus.loadManifest()])
+    boardsStore.pickDay(loaded, manifest.firstDate, dayKey(new Date()))
   }, [boardsStore, corpus])
 
   useEffect(() => {

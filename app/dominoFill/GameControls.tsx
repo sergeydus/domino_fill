@@ -53,7 +53,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
             type="button"
             data-check
             className={control('primary')}
-            onClick={() => boardsStore.check()}
+            onClick={() => { void boardsStore.requestCheck() }}
             disabled={boardsStore.completed}
         >
             Check
@@ -62,7 +62,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
             type="button"
             data-hint
             className={control('secondary')}
-            onClick={() => boardsStore.hint()}
+            onClick={() => { void boardsStore.requestHint() }}
             disabled={boardsStore.completed}
         >
             Hint

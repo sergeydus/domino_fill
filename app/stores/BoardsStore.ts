@@ -1,5 +1,6 @@
 "use client"
-import { makeAutoObservable, observable, reaction } from "mobx"
+import { makeAutoObservable, observable, reaction, runInAction } from "mobx"
+import { inWindow } from '../challenge/window'
 import { type DayEntry } from "./corpus"
 import { type LoadedDay } from "./corpusSource"
 import { RootStore } from "./RootStore"
@@ -41,6 +42,8 @@ export class LevelStore {
     rootStore: RootStore
     difficulty: Difficulty = 'easy'
     level: Level = 1
+    /** Invalidates an asynchronous answer even after navigating away and back. */
+    navigationVersion = 0
     hasBegan: boolean = false
 
     /** Immutable puzzle content, by difficulty. */
@@ -79,6 +82,8 @@ export class LevelStore {
     today: string | null = null
     deviceToday: string | null = null
     clockClamp: 'before' | 'after' | null = null
+    /** Provenance of the response actually serving the visible sessions. */
+    viewingClamp: LoadedDay['clamped'] = null
 
     /**
      * A newer day, fetched and held back rather than applied.
@@ -91,6 +96,7 @@ export class LevelStore {
      * acceptance criterion rather than a note.
      */
     pendingDay: DayEntry | null = null
+    pendingDayClamp: LoadedDay['clamped'] = null
 
     /** Whether the archive is on screen. */
     archiveOpen = false
@@ -148,6 +154,7 @@ export class LevelStore {
             // view derives from, and making the records observable would deep-convert every
             // saved board into a proxy for no reader's benefit.
             saved: false,
+            navigationVersion: false,
             disposePersist: false,
             // Content on its way to the screen, observed by reference for the same reason
             // the definition lists are: the puzzles inside are frozen, and deep-converting
@@ -226,17 +233,20 @@ export class LevelStore {
         if (this.viewingDate !== null && this.viewingDate !== day.date
             && (wasFollowingToday === false || this.currentIsInPlay)) {
             this.pendingDay = day
+            this.pendingDayClamp = loaded.clamped
             return
         }
-        this.setDay(day)
+        this.setDay(day, loaded.clamped)
     }
 
     /** Apply a day that was held back. The player asked; there is nothing to protect. */
     adoptPendingDay() {
         if (!this.pendingDay) return
         const day = this.pendingDay
+        const clamp = this.pendingDayClamp
         this.pendingDay = null
-        this.setDay(day)
+        this.pendingDayClamp = null
+        this.setDay(day, clamp)
     }
 
     /**
@@ -250,14 +260,25 @@ export class LevelStore {
         return !!session && !session.completed && session.hasMoves
     }
 
-    setDay(day: DayEntry) {
+    /** Explicit picks also know the manifest boundary and the device date after loading. */
+    pickDay(loaded: LoadedDay, firstDate: string, deviceDate: string) {
+        const clamp = deviceDate < firstDate && loaded.day.date === firstDate
+            ? 'before' : loaded.clamped
+        this.setDay(loaded.day, clamp)
+    }
+
+    setDay(day: DayEntry, clamp: LoadedDay['clamped'] = null) {
         const build = (list: StoredPuzzle[]) => list.map(definitionFrom)
         const before = this.currentDefinition?.puzzleId ?? null
 
         // Adopting a day cancels any held-back one: whatever was waiting is either this day
         // or older than it, and in both cases it is no longer news.
-        if (this.pendingDay && this.pendingDay.date <= day.date) this.pendingDay = null
+        if (this.pendingDay && this.pendingDay.date <= day.date) {
+            this.pendingDay = null
+            this.pendingDayClamp = null
+        }
         this.viewingDate = day.date
+        this.viewingClamp = clamp
         this.easyBoards = build(day.easyBoards)
         this.mediumBoards = build(day.mediumBoards)
         this.hardBoards = build(day.hardBoards)
@@ -294,8 +315,8 @@ export class LevelStore {
          * came straight back onto the screen having just been deleted.
          */
         const now = Date.now()
-        const fromLegacy = migrateLegacy(now)
-        pruneStorage(now)
+        const fromLegacy = this.rootStore.challenge ? {} : migrateLegacy(now)
+        if (!this.rootStore.challenge) pruneStorage(now)
         this.saved = live({ ...fromLegacy, ...readAllProgress() }, now)
         this.reconcileSessions(definitions)
 
@@ -314,6 +335,7 @@ export class LevelStore {
         // save would write all nine puzzles, eight of them empty boards nobody has touched.
         this.lastSaved = this.progressSnapshot
         this.beginPersisting()
+        this.selectAfterBindings()
     }
 
     /** Whether the player is on the current day's puzzles. */
@@ -375,6 +397,7 @@ export class LevelStore {
             snapshot[definition.puzzleId] = {
                 definitionHash: session.definition.definitionHash,
                 ...session.snapshot,
+                ...this.rootStore.challenge?.bindings.get(session)?.metadata,
             }
         }
         return snapshot
@@ -407,6 +430,13 @@ export class LevelStore {
     persist(snapshot: Record<string, SessionSnapshot>) {
         const savedAt = Date.now()
         for (const [puzzleId, next] of Object.entries(snapshot)) {
+            const session = this.sessions.get(puzzleId)
+            const challenge = this.rootStore.challenge
+            const binding = session && challenge?.bindings.get(session)
+            if (challenge && binding) {
+                challenge.captureProgress(binding, next)
+                continue
+            }
             const mine = this.lastSaved[puzzleId]
             // Unchanged here since this store last looked, so whatever storage holds for it
             // belongs to someone else and is left exactly as it is.
@@ -425,7 +455,7 @@ export class LevelStore {
     selectFirstUnsolved() {
         const definitions = this.definitionsFor(this.difficulty)
         if (!definitions || definitions.length === 0) return
-        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        const index = definitions.findIndex(d => !this.isFinished(d.puzzleId))
         this.setLevel((index === -1 ? definitions.length : index + 1) as Level)
     }
 
@@ -473,8 +503,14 @@ export class LevelStore {
             // owns that judgement -- hash, size and rock positions -- so there is no path
             // that restores without it.
             const saved = progressFor(this.saved[definition.puzzleId], definition)
-            if (saved) session.restore(saved)
+            if (saved && !this.rootStore.challenge) session.restore(saved)
             this.sessions.set(definition.puzzleId, session)
+        }
+        if (this.rootStore.challenge && this.viewingDate) {
+            for (const session of this.sessions.values()) {
+                this.rootStore.challenge.bind(session, this.viewingDate, this.viewingClamp)
+            }
+            this.rootStore.challenge.retain(new Set(this.sessions.values()))
         }
     }
 
@@ -487,7 +523,10 @@ export class LevelStore {
         }
     }
 
-    setLevel(level: Level) { this.level = level }
+    setLevel(level: Level) {
+        if (this.level !== level) this.navigationVersion++
+        this.level = level
+    }
 
     /** Whether there is a further level in this difficulty; drives the Next affordance. */
     get hasNextLevel() {
@@ -507,16 +546,40 @@ export class LevelStore {
     }
 
     setDifficulty(dif: Difficulty) {
+        if (this.difficulty !== dif) this.navigationVersion++
         this.difficulty = dif
         // Land on the first unsolved level of the new difficulty, or the last if all are done.
         const definitions = this.definitionsFor(dif)
         if (!definitions) return
-        const index = definitions.findIndex(d => !this.sessions.get(d.puzzleId)?.completed)
+        const index = definitions.findIndex(d => !this.isFinished(d.puzzleId))
         this.setLevel((index === -1 ? 3 : index + 1) as Level)
+        this.selectAfterBindings()
     }
 
     get currentDefinition(): PuzzleDefinition | null {
         return this.definitionsFor(this.difficulty)?.[this.level - 1] ?? null
+    }
+
+    private isFinished(id: string): boolean {
+        const session = this.sessions.get(id)
+        if (!session) return false
+        const challenge = this.rootStore.challenge
+        const binding = challenge?.bindings.get(session)
+        if (binding?.ready && binding.attempt) return binding.finished
+            || (!inWindow(binding.date, challenge!.deviceDate) && session.completed)
+        return session.completed
+    }
+
+    /** New sessions reconcile asynchronously. Preserve any navigation made meanwhile. */
+    private selectAfterBindings() {
+        const challenge = this.rootStore.challenge
+        if (!challenge || challenge.status !== 'ready') return
+        const session = this.currentBoard, difficulty = this.difficulty, date = this.viewingDate
+        void challenge.whenBound([...this.sessions.values()]).then(() => runInAction(() => {
+            if (challenge.active && session === this.currentBoard && difficulty === this.difficulty && date === this.viewingDate) {
+                this.selectFirstUnsolved()
+            }
+        }))
     }
 
     /**

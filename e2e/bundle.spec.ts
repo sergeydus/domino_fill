@@ -36,8 +36,8 @@ const SENTINEL = (() => {
 })()
 
 /** Every file under `dir` whose bytes contain the sentinel, as paths relative to it. */
-const filesContaining = (dir: string) => {
-    const needle = Buffer.from(SENTINEL, 'utf8')
+const filesContaining = (dir: string, sentinel = SENTINEL) => {
+    const needle = Buffer.from(sentinel, 'utf8')
     const found: string[] = []
     const walk = (at: string) => {
         for (const entry of fs.readdirSync(at, { withFileTypes: true })) {
@@ -67,6 +67,41 @@ test('the sentinel is declared in exactly one file in the repository', () => {
     // If it were anywhere else, zero bytes in the build would say less than it claims.
     const grep = spawnSync('git', ['grep', '--untracked', '-l', '-F', SENTINEL], { cwd: ROOT, encoding: 'utf8' })
     expect(grep.stdout.trim().split('\n')).toEqual(['app/visual/Sheet.tsx'])
+})
+
+const CHALLENGE_SOURCE = path.join(ROOT, 'app', 'visual', 'challenge', 'ChallengeFixture.tsx')
+const CHALLENGE_SENTINEL = (() => {
+    const match = /export const CHALLENGE_SENTINEL = '([^']+)'/.exec(fs.readFileSync(CHALLENGE_SOURCE, 'utf8'))
+    if (!match) throw new Error(`no CHALLENGE_SENTINEL declaration in ${CHALLENGE_SOURCE}`)
+    return match[1]
+})()
+
+test.describe('the challenge fixture is compiled only into the visual build', () => {
+    test('the sentinel is declared once and present in the visual output', () => {
+        const grep = spawnSync('git', ['grep', '--untracked', '-l', '-F', CHALLENGE_SENTINEL],
+            { cwd: ROOT, encoding: 'utf8' })
+        expect(grep.status).toBe(0)
+        expect(grep.stdout.trim().split('\n')).toEqual(['app/visual/challenge/ChallengeFixture.tsx'])
+        expect(filesContaining(path.join(ROOT, '.next-visual'), CHALLENGE_SENTINEL).length).toBeGreaterThan(0)
+    })
+
+    test('the production output contains zero fixture bytes', () => {
+        expect(filesContaining(path.join(ROOT, '.next'), CHALLENGE_SENTINEL),
+            'challenge fixture compiled into production').toEqual([])
+    })
+
+    test('the route listing and manifest include it only in the visual build', () => {
+        const route = /^[┌├└]\s+\S+\s+\/visual\/challenge$/m
+        expect(route.test(listing('visual')), listing('visual')).toBe(true)
+        expect(manifestRoutes('.next-visual')).toContain('/visual/challenge')
+        expect(route.test(listing('production')), listing('production')).toBe(false)
+        expect(manifestRoutes('.next')).not.toContain('/visual/challenge')
+    })
+
+    test('a direct request succeeds only on the visual server', async ({ request }) => {
+        expect((await request.get(`${VISUAL_URL}/visual/challenge`)).status()).toBe(200)
+        expect((await request.get(`${BASE_URL}/visual/challenge`)).status()).toBe(404)
+    })
 })
 
 test.describe('the sheet build carries the sheet (positive control)', () => {

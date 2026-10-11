@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import {
     legacyMarks, localStorageStore, openIndexedDbStore, LOCAL_ATTEMPT_PREFIX, LOCAL_LEGACY_KEY,
     type AttemptStore,
 } from '@/app/challenge/attemptStore'
-import { finish, markAssisted, start, type Attempt, type Board } from '@/app/challenge/attempt'
+import { finish, markAssisted, settle, start, type Attempt, type Board } from '@/app/challenge/attempt'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import type { PuzzleProgress } from '@/app/stores/progressStorage'
 
@@ -31,6 +31,230 @@ const open = async (): Promise<AttemptStore> => {
 }
 
 beforeEach(() => { factory = new IDBFactory() })
+
+const memoryStorage = (): Storage => {
+    const map = new Map<string, string>()
+    return {
+        get length() { return map.size },
+        clear: () => map.clear(), getItem: key => map.get(key) ?? null,
+        key: index => [...map.keys()][index] ?? null,
+        removeItem: key => { map.delete(key) }, setItem: (key, value) => { map.set(key, value) },
+    }
+}
+const rawDatabase = (): Promise<IDBDatabase> => new Promise((resolve, reject) => {
+    const request = factory.open('challenge-test')
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+})
+const putRaw = async (entries: readonly (readonly [IDBValidKey, unknown])[]) => {
+    const db = await rawDatabase()
+    try {
+        await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('attempts', 'readwrite')
+            for (const [key, value] of entries) tx.objectStore('attempts').put(value, key)
+            tx.oncomplete = () => resolve()
+            tx.onabort = () => reject(tx.error)
+        })
+    } finally { db.close() }
+}
+const attempt = (puzzleId: string, date = DAY): Attempt =>
+    start(null, { ...BOARD, puzzleId, date }, T0, date).next!
+const history = (): Attempt[] => [
+    attempt('opaque-active'), attempt('__proto__'), attempt('future', '2030-12-31'),
+    finish(attempt('solved'), T0 + 500, DAY).next!,
+    finish(markAssisted(attempt('hinted')).next, T0 + 700, DAY).next!,
+    finish(attempt('clock-error'), T0 - 1, DAY).next!,
+    settle(attempt('old-given-up', '2020-01-01'), '2020-01-03').next!,
+]
+const seed = async (kind: AttemptStore['kind'], entries: readonly (readonly [string, unknown])[]) => {
+    const storage = memoryStorage()
+    const store = kind === 'indexeddb' ? await open() : localStorageStore(storage)
+    if (kind === 'indexeddb') await putRaw(entries)
+    else for (const [key, value] of entries) storage.setItem(LOCAL_ATTEMPT_PREFIX + key, JSON.stringify(value))
+    return { store, storage }
+}
+
+describe.each(['indexeddb', 'localStorage'] as const)('readAll in %s', kind => {
+    it('distinguishes an empty store from a read failure', async () => {
+        const { store } = await seed(kind, [])
+        try { expect(await store.readAll()).toEqual([]) } finally { store.close() }
+    })
+
+    it('enumerates every permanent attempt, including finished, old, future and opaque IDs', async () => {
+        const records = history()
+        const { store } = await seed(kind, records.map(a => [a.puzzleId, a] as const))
+        try {
+            const all = await store.readAll()
+            expect(all).toHaveLength(records.length)
+            expect(all).toEqual(expect.arrayContaining(records))
+        } finally { store.close() }
+    })
+
+    it('skips malformed records and continues to later valid records', async () => {
+        const first = attempt('a-valid')
+        const last = attempt('z-valid')
+        const { store } = await seed(kind, [
+            [first.puzzleId, first], ['b-null', null], ['c-number', 42],
+            ['d-day', { ...attempt('d-day'), date: '2026-02-31' }],
+            ['e-rules', { ...attempt('e-rules'), ruleset: 99 }],
+            ['f-instant', { ...attempt('f-instant'), startedAt: Number.POSITIVE_INFINITY }],
+            ['g-result', { ...attempt('g-result'), result: { kind: 'solved', ms: 10 }, finishedAt: T0 + 20 }],
+            [last.puzzleId, last],
+        ])
+        try {
+            expect(await store.readAll()).toEqual([first, last])
+        } finally { store.close() }
+    })
+
+    it('rejects otherwise valid records filed under another puzzle key', async () => {
+        const { store } = await seed(kind, [['wrong-key', attempt('elsewhere')]])
+        try { expect(await store.readAll()).toEqual([]) } finally { store.close() }
+    })
+
+    it('excludes legacy metadata and other storage namespaces', async () => {
+        const saved = attempt('saved')
+        const { store, storage } = await seed(kind, [[saved.puzzleId, saved]])
+        try {
+            await store.legacyCheck(() => ['previously-played'])
+            storage.setItem('dominoFill.progress.v2.saved', JSON.stringify(attempt('progress')))
+            storage.setItem('dominoFill.challenge.v1.attemptFake', JSON.stringify(attempt('Fake')))
+            storage.setItem('other', JSON.stringify(attempt('other')))
+            expect(await store.readAll()).toEqual([saved])
+            expect(await store.readLegacy()).toEqual({ checked: true, marks: ['previously-played'] })
+        } finally { store.close() }
+    })
+
+    it('reads the latest committed flags and finish from another connection', async () => {
+        const saved = attempt(BOARD.puzzleId)
+        const { store, storage } = await seed(kind, [[saved.puzzleId, saved]])
+        const other = kind === 'indexeddb' ? await open() : localStorageStore(storage)
+        try {
+            expect(await store.readAll()).toEqual([saved])
+            await other.change(saved.puzzleId, markAssisted)
+            const done = await other.change(saved.puzzleId, end(T0 + 1000))
+            expect(done.committed).toBe(true)
+            expect(done.attempt?.result).toEqual({ kind: 'hinted' })
+            expect(await store.readAll()).toEqual([done.attempt])
+        } finally { other.close(); store.close() }
+    })
+})
+
+describe('IndexedDB enumeration completes as one readonly transaction', () => {
+    it('rejects non-string keys instead of coercing them into puzzle IDs', async () => {
+        const store = await open()
+        try {
+            await putRaw([[77, attempt('77')], [['array-key'], attempt('array-key')]])
+            expect(await store.readAll()).toEqual([])
+        } finally { store.close() }
+    })
+
+    it('waits for transaction completion and uses readonly access', async () => {
+        const store = await open()
+        const saved = attempt('saved')
+        await putRaw([[saved.puzzleId, saved]])
+        const db = await rawDatabase()
+        const proto = Object.getPrototypeOf(db) as IDBDatabase
+        const transaction = proto.transaction
+        let completed = false
+        const spy = vi.spyOn(proto, 'transaction').mockImplementation(function (this: IDBDatabase, ...args) {
+            const tx = transaction.apply(this, args)
+            tx.addEventListener('complete', () => { completed = true })
+            return tx
+        })
+        try {
+            const all = await store.readAll()
+            expect(completed, 'enumeration must wait for the transaction').toBe(true)
+            expect(spy.mock.calls).toEqual([['attempts', 'readonly']])
+            expect(all).toEqual([saved])
+        } finally { spy.mockRestore(); db.close(); store.close() }
+    })
+
+    it.each(['pending-request', 'end-of-cursor'] as const)(
+        'discards collected attempts if the cursor transaction aborts after success (%s)', async mode => {
+        const store = await open()
+        await putRaw([['a', attempt('a')], ['z', attempt('z')]])
+        const db = await rawDatabase()
+        const proto = Object.getPrototypeOf(db.transaction('attempts').objectStore('attempts')) as IDBObjectStore
+        const openCursor = proto.openCursor
+        let successes = 0
+        const spy = vi.spyOn(proto, 'openCursor').mockImplementation(function (this: IDBObjectStore, ...args) {
+            const request = openCursor.apply(this, args)
+            request.addEventListener('success', () => {
+                const cursor = request.result
+                if (!cursor) {
+                    if (mode === 'end-of-cursor') this.transaction.abort()
+                    return
+                }
+                successes++
+                if (mode === 'pending-request') {
+                    const next = cursor.continue.bind(cursor)
+                    cursor.continue = key => { next(key); this.transaction.abort() }
+                }
+            })
+            return request
+        })
+        try {
+            expect(await store.readAll(), 'aborted scan must not return partial history').toBeNull()
+            expect(successes).toBe(mode === 'pending-request' ? 1 : 2)
+        } finally { spy.mockRestore(); db.close(); store.close() }
+    })
+
+    it('reports cursor setup failure rather than an empty history', async () => {
+        const store = await open()
+        const db = await rawDatabase()
+        const proto = Object.getPrototypeOf(db.transaction('attempts').objectStore('attempts')) as IDBObjectStore
+        const spy = vi.spyOn(proto, 'openCursor').mockImplementation(() => { throw new Error('Unreadable') })
+        try { expect(await store.readAll()).toBeNull() }
+        finally { spy.mockRestore(); db.close(); store.close() }
+    })
+
+    it('reports a closed connection rather than an empty history', async () => {
+        const store = await open()
+        store.close()
+        expect(await store.readAll()).toBeNull()
+    })
+})
+
+describe('localStorage enumeration reads without rewriting and reports failures', () => {
+    it('skips corrupt JSON and never reads or writes unrelated keys', async () => {
+        const storage = memoryStorage()
+        storage.setItem(LOCAL_ATTEMPT_PREFIX + 'broken', '{not JSON')
+        storage.setItem(LOCAL_ATTEMPT_PREFIX + 'valid', JSON.stringify(attempt('valid')))
+        storage.setItem(LOCAL_LEGACY_KEY, JSON.stringify({ checked: true, marks: ['old'] }))
+        storage.setItem('unrelated', 'kept')
+        const get = vi.spyOn(storage, 'getItem')
+        const set = vi.spyOn(storage, 'setItem')
+        const remove = vi.spyOn(storage, 'removeItem')
+        try {
+            const all = await localStorageStore(storage).readAll()
+            expect(set).not.toHaveBeenCalled()
+            expect(remove).not.toHaveBeenCalled()
+            expect(all).toEqual([attempt('valid')])
+            expect(get.mock.calls).toEqual([[LOCAL_ATTEMPT_PREFIX + 'broken'], [LOCAL_ATTEMPT_PREFIX + 'valid']])
+        } finally { get.mockRestore(); set.mockRestore(); remove.mockRestore() }
+        expect(storage.getItem(LOCAL_ATTEMPT_PREFIX + 'broken')).toBe('{not JSON')
+        expect(storage.getItem('unrelated')).toBe('kept')
+    })
+
+    it('reports missing storage rather than an empty history', async () => {
+        expect(await localStorageStore(null).readAll()).toBeNull()
+    })
+
+    it.each(['length', 'key', 'getItem'] as const)('discards the scan when %s throws', async operation => {
+        const storage = memoryStorage()
+        storage.setItem(LOCAL_ATTEMPT_PREFIX + 'a', JSON.stringify(attempt('a')))
+        storage.setItem(LOCAL_ATTEMPT_PREFIX + 'z', JSON.stringify(attempt('z')))
+        const spy = operation === 'length'
+            ? vi.spyOn(storage, 'length', 'get').mockImplementation(() => { throw new Error('Blocked') })
+            : vi.spyOn(storage, operation).mockImplementation((value: string | number) => {
+                if (value === 0) return LOCAL_ATTEMPT_PREFIX + 'a'
+                if (value === LOCAL_ATTEMPT_PREFIX + 'a') return JSON.stringify(attempt('a'))
+                throw new Error('Blocked after first record')
+            })
+        try { expect(await localStorageStore(storage).readAll()).toBeNull() }
+        finally { spy.mockRestore() }
+    })
+})
 
 /**
  * Make every `put` on this factory's object stores abort its transaction the moment the

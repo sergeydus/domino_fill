@@ -302,6 +302,53 @@ export class PuzzleSession {
         this.advice = null
     }
 
+    /** Daily bindings alone participate; standalone and Tutorial sessions stay casual. */
+    get challengeBinding() {
+        return this.rootStore.challenge?.bindings.get(this) ?? null
+    }
+
+    get canChange() {
+        const binding = this.challengeBinding
+        return !binding || this.rootStore.challenge!.canMutate(binding)
+    }
+
+    startChallenge(): Promise<boolean> {
+        const binding = this.challengeBinding
+        return binding ? this.rootStore.challenge!.startBoard(binding) : Promise.resolve(false)
+    }
+
+    private canAnswerSynchronously(): boolean {
+        const binding = this.challengeBinding
+        return !binding || (this.canChange && !this.rootStore.challenge!.needsAssistanceSave(binding))
+    }
+
+    private requestAdvice(kind: 'hint' | 'check'): Advice | null | Promise<Advice | null> {
+        const binding = this.challengeBinding
+        if (!binding || !this.rootStore.challenge!.needsAssistanceSave(binding)) {
+            return kind === 'hint' ? this.hint() : this.check()
+        }
+        const levels = this.rootStore.boardsStore
+        const navigation = levels.navigationVersion
+        return this.rootStore.challenge!.assist(binding, () => this.say(kind === 'hint'
+            ? hintFor(this.definition, this.board, { moves: this.moves })
+            : checkPosition(this.definition, this.board, { moves: this.moves })),
+        () => levels.navigationVersion === navigation && levels.currentBoard === this)
+    }
+
+    /** Enabled first attempts use an explicit save-before-answer path. Casual answers stay synchronous. */
+    requestHint(): Advice | null | Promise<Advice | null> {
+        return this.requestAdvice('hint')
+    }
+
+    requestCheck(): Advice | null | Promise<Advice | null> {
+        return this.requestAdvice('check')
+    }
+
+    private changed(placement = false) {
+        const binding = this.challengeBinding
+        if (binding) this.rootStore.challenge!.boardChanged(binding, placement)
+    }
+
     /**
      * Is this position still finishable? (spec P1-5, row 18e)
      *
@@ -310,12 +357,14 @@ export class PuzzleSession {
      * asking the question cannot change the answer to any other question -- including
      * whether Undo is available, and what persistence is about to save.
      */
-    check(): Advice {
+    check(): Advice | null {
+        if (!this.canAnswerSynchronously()) return null
         return this.say(checkPosition(this.definition, this.board, { moves: this.moves }))
     }
 
     /** One forced cell, if there is one. Reveals; never places. */
-    hint(): Advice {
+    hint(): Advice | null {
+        if (!this.canAnswerSynchronously()) return null
         return this.say(hintFor(this.definition, this.board, { moves: this.moves }))
     }
 
@@ -437,6 +486,7 @@ export class PuzzleSession {
      * it still does everything below: not an early return (codex).
      */
     reset() {
+        if (!this.canChange) return
         const initial = cloneInitialBoard(this.definition)
         const cells: Cell[] = []
         const before: (number | null)[] = []
@@ -453,6 +503,7 @@ export class PuzzleSession {
         this.focusVisible = false
         this.refusal = null
         this.clearAdvice()
+        if (cells.length > 0) this.changed()
     }
 
     /** Sum of pips in each column; compared against `definition.columnTargets`. */
@@ -665,6 +716,7 @@ export class PuzzleSession {
      * half in one and the top half in the other.
      */
     placeToward(anchor: Cell, direction: Direction): boolean {
+        if (!this.canChange) return false
         if (!this.canPlace(anchor, direction)) return false
         const { cells, values } = dominoFrom(anchor, direction)
         // `canPlace` has already established both cells are empty, so the prior contents
@@ -676,6 +728,7 @@ export class PuzzleSession {
             anchor,
         })
         cells.forEach(([i, j], index) => { this.board[i][j] = values[index] })
+        this.changed(true)
         return true
     }
 
@@ -786,6 +839,7 @@ export class PuzzleSession {
      * aimed at would replace the anchor it was offered for.
      */
     pointerDown(cell: Cell) {
+        if (!this.canChange) return
         this.focusedCell = cell
         this.focusVisible = false
         this.refusal = null
@@ -805,6 +859,7 @@ export class PuzzleSession {
      * itself tap rules apply.
      */
     pointerUp(cell: Cell | null): PlacementOutcome {
+        if (!this.canChange) return 'none'
         const pending = this.pendingAnchor
         if (pending && cell) {
             const direction = directionBetween(pending, cell)
@@ -979,6 +1034,7 @@ export class PuzzleSession {
      * -- arrows must still scroll the page when the board did not use them.
      */
     handleKey(key: string, modifiers: Modifiers = {}): boolean {
+        if (!this.canChange) return false
         /*
          * A refused move's cross lasts until the board does something (P1-6), and only a key
          * the board *handles* is the board doing something. Tab, a letter, an Escape with
@@ -1125,6 +1181,7 @@ export class PuzzleSession {
      * Returns whether anything was removed; callers use it for feedback and undo.
      */
     removePiece(i: number, j: number): boolean {
+        if (!this.canChange) return false
         const pair = this.pairAt(i, j)
         if (!pair) return false // rejected: nothing is mutated
 
@@ -1136,12 +1193,13 @@ export class PuzzleSession {
         })
         this.board[ai][aj] = null
         this.board[bi][bj] = null
+        this.changed()
         return true
     }
 
     /** Whether there is anything to undo. Drives the button's disabled state. */
     get canUndo() {
-        return this.moves.length > 0
+        return this.canChange && this.moves.length > 0
     }
 
     /**
@@ -1158,6 +1216,7 @@ export class PuzzleSession {
      * reached by the very action meant to escape one.
      */
     undo(): boolean {
+        if (!this.canChange) return false
         const move = this.moves.pop()
         if (!move) return false
 
@@ -1171,6 +1230,7 @@ export class PuzzleSession {
         this.clearAdvice()
         // A gesture in flight was aimed at a board that no longer looks like this.
         this.gesture = null
+        this.changed()
         return true
     }
 

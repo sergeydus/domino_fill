@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
     KEY_PREFIX, SCHEMA_VERSION, RETENTION_DAYS,
-    dayKey, isExpired, legacyEntries, parseRecord, progressFor,
-    type PuzzleProgress,
+    dayKey, isExpired, legacyEntries, parseRecord, progressFor, solveEvidenceFor,
+    type PuzzleProgress, type ProgressSolveEvidence,
 } from '@/app/stores/progressStorage'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 
@@ -46,6 +46,225 @@ const record = (over: Partial<PuzzleProgress> = {}): PuzzleProgress => ({
 })
 
 const days = (n: number) => n * 86_400_000
+
+// Three rocks, two vertical pieces and one horizontal: axes differ, so swapping the
+// saved target strings cannot accidentally validate. The definition strips placed pieces.
+const solvedBoard = (): (number | null)[][] => [[1, -1, 1], [0, -1, 0], [-1, 0, 2]]
+const evidence = (over: Partial<ProgressSolveEvidence> = {}): ProgressSolveEvidence => ({
+    solvedAt: AT + 500,
+    // Intentionally differs from both savedAt and the instant's UTC date.
+    solvedOn: '2028-02-29',
+    columnTargets: '1,0,3',
+    rowTargets: '2,0,2',
+    ...over,
+})
+const solvedRecord = (over: Partial<PuzzleProgress> = {}): PuzzleProgress => ({
+    definitionHash: definitionFrom({
+        puzzleId: 'solved', board: solvedBoard(),
+        boardHorizontalNumbers: '1,0,3', boardVerticalNumbers: '2,0,2',
+    }).definitionHash,
+    board: solvedBoard(),
+    // Evidence describes the winning placement, before the completion reaction.
+    completed: false,
+    savedAt: AT + 900,
+    attemptStartedAt: AT,
+    solveEvidence: evidence(),
+    ...over,
+})
+
+describe('optional challenge metadata keeps progress v2 compatible', () => {
+    it('keeps the existing v2 prefix and restores an ordinary untagged record', () => {
+        expect(SCHEMA_VERSION).toBe(2)
+        expect(KEY_PREFIX).toBe('dominoFill.progress.v2.')
+        const ordinary = record()
+        const parsed = parseRecord(JSON.stringify(ordinary))!
+        expect(parsed).toEqual(ordinary)
+        expect(progressFor(parsed, definition('p'))).toEqual(ordinary)
+        expect(parsed).not.toHaveProperty('attemptStartedAt')
+        expect(parsed).not.toHaveProperty('solveEvidence')
+    })
+
+    it.each([0, -1, AT])('preserves a finite start stamp %s without requiring evidence', stamp => {
+        const before = record({ attemptStartedAt: stamp })
+        expect(parseRecord(JSON.stringify(before))).toEqual(before)
+    })
+
+    it.each([null, '123', {}, []])('drops malformed start stamp %j but keeps the casual board', stamp => {
+        const parsed = parseRecord(JSON.stringify({ ...record(), attemptStartedAt: stamp }))!
+        expect(parsed, 'malformed stamp must not discard casual progress').toEqual(record())
+        expect(progressFor(parsed, definition('p'))).toEqual(record())
+    })
+
+    it('drops an overflowing numeric stamp independently of valid evidence', () => {
+        const before = solvedRecord()
+        const raw = JSON.stringify(before).replace(`"attemptStartedAt":${AT}`, '"attemptStartedAt":1e999')
+        const parsed = parseRecord(raw)!
+        expect(parsed).not.toHaveProperty('attemptStartedAt')
+        expect(parsed.solveEvidence).toEqual(evidence())
+        expect(parsed.board).toEqual(before.board)
+    })
+
+    it('preserves evidence without a stamp, but cannot use it for attempt recovery', () => {
+        const before = solvedRecord()
+        delete before.attemptStartedAt
+        const parsed = parseRecord(JSON.stringify(before))!
+        expect(parsed.solveEvidence).toEqual(evidence())
+        expect(solveEvidenceFor(parsed, { definitionHash: before.definitionHash, startedAt: AT })).toBeNull()
+    })
+
+    it('validates optional fields in legacy entries without discarding their board', () => {
+        const before = record()
+        const old = { definitionHash: before.definitionHash, board: before.board, completed: before.completed }
+        const parsed = legacyEntries(JSON.stringify({ version: 1, puzzles: {
+            p: { ...old, savedOn: '2026-09-15', attemptStartedAt: 'bad', solveEvidence: {} },
+        } }))!.p
+        expect(parsed.board).toEqual(before.board)
+        expect(parsed.definitionHash).toBe(before.definitionHash)
+        expect(parsed).not.toHaveProperty('attemptStartedAt')
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(progressFor(parsed, definition('p'))).not.toBeNull()
+    })
+})
+
+describe('solve evidence is validated against the saved rocks and both target axes', () => {
+    it('round-trips a solved board before completion and preserves its original local day', () => {
+        const before = solvedRecord()
+        const parsed = parseRecord(JSON.stringify(before))!
+        expect(parsed).toEqual(before)
+        expect(parsed.solveEvidence?.solvedOn).toBe('2028-02-29')
+        expect(parsed.solveEvidence?.solvedAt).toBe(AT + 500)
+        expect(parsed.completed).toBe(false)
+    })
+
+    it('keeps the winning instant instead of the later progress-save instant', () => {
+        expect(parseRecord(JSON.stringify(solvedRecord()))!.solveEvidence?.solvedAt).toBe(AT + 500)
+    })
+
+    it('keeps the saved local solve day instead of deriving it from savedAt or solvedAt', () => {
+        expect(parseRecord(JSON.stringify(solvedRecord()))!.solveEvidence?.solvedOn).toBe('2028-02-29')
+    })
+
+    it.each([
+        ['absent', undefined], ['null', null], ['string', 'solved'], ['array', []],
+        ['no instant', { ...evidence(), solvedAt: undefined }],
+        ['string instant', { ...evidence(), solvedAt: '123' }],
+        ['no day', { ...evidence(), solvedOn: undefined }],
+        ['numeric day', { ...evidence(), solvedOn: 20280229 }],
+        ['impossible day', { ...evidence(), solvedOn: '2026-02-31' }],
+        ['non-leap day', { ...evidence(), solvedOn: '2026-02-29' }],
+        ['noncanonical day', { ...evidence(), solvedOn: '2028-2-29' }],
+        ['no columns', { ...evidence(), columnTargets: undefined }],
+        ['numeric columns', { ...evidence(), columnTargets: 103 }],
+        ['no rows', { ...evidence(), rowTargets: undefined }],
+        ['array rows', { ...evidence(), rowTargets: [2, 0, 2] }],
+    ])('discards %s evidence independently of the board and stamp', (_label, value) => {
+        const before = solvedRecord()
+        const parsed = parseRecord(JSON.stringify({ ...before, solveEvidence: value }))!
+        expect(parsed).toEqual({ ...before, solveEvidence: undefined })
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.attemptStartedAt).toBe(AT)
+    })
+
+    it('discards an overflowing solve instant without discarding progress', () => {
+        const raw = JSON.stringify(solvedRecord()).replace(`"solvedAt":${AT + 500}`, '"solvedAt":1e999')
+        const parsed = parseRecord(raw)!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(solvedBoard())
+        expect(parsed.attemptStartedAt).toBe(AT)
+    })
+
+    it.each(['columns', 'rows', 'rocks', 'hash'])('rejects evidence associated with different %s', changed => {
+        const before = solvedRecord()
+        if (changed === 'columns') before.solveEvidence = evidence({ columnTargets: '0,1,3' })
+        if (changed === 'rows') before.solveEvidence = evidence({ rowTargets: '0,2,2' })
+        if (changed === 'rocks') {
+            // Move a rock: metadata must bind to the canonical rocks, not just the targets.
+            before.board = [[1, 1, -1], [0, 0, -1], [-1, 0, 2]]
+            before.solveEvidence = evidence({ columnTargets: '1,1,2' })
+        }
+        if (changed === 'hash') before.definitionHash = 'different'
+        const parsed = parseRecord(JSON.stringify(before))!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(before.board)
+        expect(parsed.attemptStartedAt).toBe(AT)
+    })
+
+    it('rejects an unfinished legal board even with matching hash and sums', () => {
+        const board = solvedBoard()
+        board[0][0] = null
+        board[1][0] = null
+        const d = definitionFrom({ puzzleId: 'unfinished', board,
+            boardHorizontalNumbers: '0,0,3', boardVerticalNumbers: '1,0,2' })
+        const parsed = parseRecord(JSON.stringify(solvedRecord({ board,
+            definitionHash: d.definitionHash,
+            solveEvidence: evidence({ columnTargets: '0,0,3', rowTargets: '1,0,2' }),
+        })))!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(board)
+    })
+
+    it('rejects a rectangular full board even with its own matching hash and sums', () => {
+        const board = [[0, 2, -1], [0, 2, -1]]
+        const d = definitionFrom({ puzzleId: 'rectangle', board,
+            boardHorizontalNumbers: '0,4', boardVerticalNumbers: '2,2' })
+        const parsed = parseRecord(JSON.stringify(solvedRecord({ board,
+            definitionHash: d.definitionHash,
+            solveEvidence: evidence({ columnTargets: '0,4', rowTargets: '2,2' }),
+        })))!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(board)
+    })
+
+    it('rejects illegal dominoes even with a full board, matching hash and matching sums', () => {
+        const board = solvedBoard()
+        board[0][0] = 2 // No 0 to its left; the 0 below is now orphaned.
+        const d = definitionFrom({ puzzleId: 'illegal', board,
+            boardHorizontalNumbers: '2,0,3', boardVerticalNumbers: '3,0,2' })
+        const parsed = parseRecord(JSON.stringify(solvedRecord({ board,
+            definitionHash: d.definitionHash,
+            solveEvidence: evidence({ columnTargets: '2,0,3', rowTargets: '3,0,2' }),
+        })))!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(board)
+    })
+
+    it.each(['columns', 'rows'])('rejects wrong %s sums even with the corresponding canonical hash', axis => {
+        const targets = axis === 'columns'
+            ? { columnTargets: '2,0,3', rowTargets: '2,0,2' }
+            : { columnTargets: '1,0,3', rowTargets: '3,0,2' }
+        const d = definitionFrom({ puzzleId: 'wrong-sums', board: solvedBoard(),
+            boardHorizontalNumbers: targets.columnTargets, boardVerticalNumbers: targets.rowTargets })
+        const parsed = parseRecord(JSON.stringify(solvedRecord({
+            definitionHash: d.definitionHash, solveEvidence: evidence(targets),
+        })))!
+        expect(parsed).not.toHaveProperty('solveEvidence')
+        expect(parsed.board).toEqual(solvedBoard())
+    })
+})
+
+describe('recovery evidence belongs to the saved attempt generation', () => {
+    const attempt = { definitionHash: solvedRecord().definitionHash, startedAt: AT }
+
+    it('returns evidence only for the matching hash and finite start stamp', () => {
+        expect(solveEvidenceFor(solvedRecord(), attempt)).toEqual(evidence())
+    })
+
+    it.each([undefined, AT - 1, Number.POSITIVE_INFINITY, Number.NaN])('refuses missing or mismatched stamp %s', stamp => {
+        expect(solveEvidenceFor(solvedRecord({ attemptStartedAt: stamp }), attempt)).toBeNull()
+    })
+
+    it('refuses the wrong attempt hash even when its start stamp matches', () => {
+        expect(solveEvidenceFor(solvedRecord(), { ...attempt, definitionHash: 'other' })).toBeNull()
+    })
+
+    it.each([null, undefined])('has no evidence for missing progress %s', missing => {
+        expect(solveEvidenceFor(missing, attempt)).toBeNull()
+    })
+
+    it('revalidates board evidence rather than trusting a typed caller', () => {
+        expect(solveEvidenceFor(solvedRecord({ solveEvidence: evidence({ rowTargets: '0,0,0' }) }), attempt)).toBeNull()
+    })
+})
 
 describe('the storage keys', () => {
     it('carry the schema version, so a rollback cannot read forward data', () => {

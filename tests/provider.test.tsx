@@ -4,6 +4,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { StoreWrapper } from '@/app/provider'
 import { useStores } from '@/app/hooks/useStore'
 import { RootStore } from '@/app/stores/RootStore'
+import { StrictMode } from 'react'
 
 /**
  * P0-2: the store graph must be per-mount, not a module singleton.
@@ -24,6 +25,18 @@ const Probe = ({ label }: { label: string }) => {
 }
 
 describe('StoreWrapper', () => {
+    it('owns start and disposal through setup-cleanup-setup while its public root stays inactive', () => {
+        const start = vi.spyOn(RootStore.prototype, 'start')
+        const dispose = vi.spyOn(RootStore.prototype, 'dispose')
+        try {
+            const view = render(<StrictMode><StoreWrapper><Probe label="lifecycle" /></StoreWrapper></StrictMode>)
+            expect(seen.at(-1)!.challenge).toBeNull()
+            expect(start).toHaveBeenCalledTimes(2)
+            expect(dispose).toHaveBeenCalledTimes(1)
+            view.unmount()
+            expect(dispose).toHaveBeenCalledTimes(2)
+        } finally { start.mockRestore(); dispose.mockRestore() }
+    })
     it('exposes a RootStore with both sub-stores', () => {
         render(<StoreWrapper><Probe label="a" /></StoreWrapper>)
         const store = seen.at(-1)!
