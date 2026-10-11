@@ -14,6 +14,16 @@ import {
 
 type Difficulty = 'easy' | 'normal' | 'hard'
 type Level = 1 | 2 | 3
+/** One of a date's nine boards, by where the selectors put it. */
+export type BoardPlace = { readonly difficulty: Difficulty, readonly level: Level }
+
+/**
+ * The order "Next board" walks a date's nine boards in (slice 3a, rule 8). Levels from
+ * `Array.from`, not a literal triple: the palette audit reads any three numbers in visual
+ * source as a possible colour.
+ */
+const BOARD_ORDER: readonly BoardPlace[] = (['easy', 'normal', 'hard'] as const)
+    .flatMap(difficulty => Array.from({ length: 3 }, (_, index) => ({ difficulty, level: (index + 1) as Level })))
 
 /** A session's saved state before it is stamped with a time. See `persist`. */
 type SessionSnapshot = Omit<PuzzleProgress, 'savedAt'>
@@ -526,6 +536,45 @@ export class LevelStore {
     setLevel(level: Level) {
         if (this.level !== level) this.navigationVersion++
         this.level = level
+    }
+
+    /**
+     * The next challenge board of this date still to play (slice 3a, rule 8), in the order
+     * Easy 1-3, Medium 1-3, Hard 1-3 after the current one, wrapping.
+     *
+     * Never the current board: with the other eight done, wrapping would otherwise come
+     * back to the board just solved while its finish saves, and "Next board" would go
+     * nowhere (codex). Nor a board that has its result, is saving one, or isn't a
+     * challenge board at all. Null when nothing is left.
+     */
+    nextChallengeBoard(): BoardPlace | null {
+        const challenge = this.rootStore.challenge
+        const current = this.currentBoard
+        if (!challenge || !current) return null
+        const here = BOARD_ORDER.findIndex(place =>
+            place.difficulty === this.difficulty && place.level === this.level)
+        // Steps 1 to 8: the walk stops one short of coming back round, which is what keeps
+        // the current board out, whatever state it is in.
+        for (let step = 1; step < BOARD_ORDER.length; step++) {
+            const place = BOARD_ORDER[(here + step) % BOARD_ORDER.length]
+            const definition = this.definitionsFor(place.difficulty)?.[place.level - 1]
+            const session = definition ? this.sessions.get(definition.puzzleId) : undefined
+            if (!session) continue
+            const kind = challenge.boardView(session).kind
+            if (kind === 'result' || kind === 'finishing' || kind === 'legacy' || kind === 'casual') continue
+            return place
+        }
+        return null
+    }
+
+    /**
+     * Go straight to one board (slice 3a, rule 16). Not `setDifficulty`, which lands on
+     * the first unsolved level of the size: "Next board" has already chosen the level.
+     */
+    goToBoard(place: BoardPlace) {
+        if (this.difficulty !== place.difficulty) this.navigationVersion++
+        this.difficulty = place.difficulty
+        this.setLevel(place.level)
     }
 
     /** Whether there is a further level in this difficulty; drives the Next affordance. */

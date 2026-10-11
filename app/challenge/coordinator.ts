@@ -9,7 +9,7 @@ import {
 } from '../stores/progressStorage'
 import {
     finish, markAssisted, markClockError, recover, settle, start as startAttempt,
-    type Attempt, type Step,
+    type Attempt, type Result, type Step,
 } from './attempt'
 import {
     CHANNEL, legacyMarks, openAttemptStore, type AttemptStore, type Legacy, type Outcome,
@@ -21,6 +21,62 @@ export type Snapshot = Omit<PuzzleProgress, 'savedAt'>
 type PendingProgress = { generation: number, record: PuzzleProgress }
 type PendingFinish = { solvedAt: number, solvedOn: string }
 type Practice = { startedAt: number, ms?: number }
+
+/**
+ * What one board looks like to the player (slice 3a, rule 6): the single answer every
+ * component reads, so the cover, the clock, the card and the controls can never disagree.
+ *
+ * Covered views are `preparing`, `unprepared`, `future`, `mismatch`, `ready` and
+ * `starting`: no puzzle content is drawn for them. The order the cases are decided in
+ * follows `isCovered`, `canStart` and `canMutate`, and a unit test holds them together.
+ */
+export type BoardView =
+    /** Unbound, archive, before-clamp, or the challenge off: today's game, untouched. */
+    | { readonly kind: 'casual' }
+    /** Played before the challenge (rule 13): untimed and uncovered. */
+    | { readonly kind: 'legacy' }
+    | { readonly kind: 'preparing' }
+    /** Initialization failed and is waiting for a retry. */
+    | { readonly kind: 'unprepared' }
+    /** A genuinely future board: covered, never startable. */
+    | { readonly kind: 'future' }
+    /** The saved record doesn't match this board. */
+    | { readonly kind: 'mismatch' }
+    | { readonly kind: 'ready', readonly startFailed: boolean }
+    | { readonly kind: 'starting' }
+    | {
+        readonly kind: 'playing', readonly elapsed: number, readonly assisted: boolean,
+        readonly clockError: boolean, readonly assisting: boolean, readonly closesTonight: boolean,
+    }
+    | {
+        readonly kind: 'finishing', readonly elapsed: number, readonly saveFailed: boolean,
+        readonly assisted: boolean, readonly clockError: boolean,
+    }
+    | {
+        readonly kind: 'result', readonly result: Result, readonly assisted: boolean,
+        readonly practice: { readonly elapsed: number, readonly solved: boolean } | null,
+    }
+
+export const CASUAL_VIEW: BoardView = { kind: 'casual' }
+
+/** The views that hide the puzzle: nothing of the board is rendered for these. */
+export const isCoveredView = (view: BoardView): boolean =>
+    view.kind === 'preparing' || view.kind === 'unprepared' || view.kind === 'future'
+    || view.kind === 'mismatch' || view.kind === 'ready' || view.kind === 'starting'
+
+const sameAttempt = (a: Attempt, b: Attempt) =>
+    a.puzzleId === b.puzzleId && a.definitionHash === b.definitionHash
+    && a.date === b.date && a.startedAt === b.startedAt
+
+/**
+ * Whether `incoming` may replace `held` in `history` (slice 3a, rule 7). Records only move
+ * forward -- a result never goes away, and neither flag ever clears -- so an incoming
+ * record of the same attempt that is behind on any of them is an older read, not news.
+ */
+const notBehind = (incoming: Attempt, held: Attempt) =>
+    (!!incoming.result || !held.result)
+    && (incoming.assisted || !held.assisted)
+    && (incoming.clockError || !held.clockError)
 
 /** One explicit daily identity; never derive a date from the opaque puzzle ID. */
 export class ChallengeBinding {
@@ -145,6 +201,12 @@ export class ChallengeCoordinator {
     private progressMemory = new Map<string, PuzzleProgress>()
     private hydrations = new Map<ChallengeBinding, Promise<void>>()
     private finishes = new Map<ChallengeBinding, Promise<void>>()
+    /**
+     * The latest committed attempt per puzzle this root knows of (slice 3a, rule 7), for the
+     * archive and 3b's results and streak. Storage stays the authority; this only collects
+     * what enumeration and this root's own transactions have read, and only moves forward.
+     */
+    readonly history = new Map<string, Attempt>()
 
     constructor(private readonly options: CoordinatorOptions) {
         this.now = (options.clock ?? read)()
@@ -155,7 +217,7 @@ export class ChallengeCoordinator {
             epoch: false, initializing: false, refreshing: false, disposeListeners: false,
             disposeTimer: false, lastDate: false, unfinished: false, clockFlags: false,
             serial: false, progressMemory: false, hydrations: false, finishes: false,
-            bindings: observable.shallow, legacy: observable.ref,
+            bindings: observable.shallow, legacy: observable.ref, history: observable.shallow,
         })
     }
 
@@ -202,6 +264,51 @@ export class ChallengeCoordinator {
         if (binding.beforeClamp || !attempt || !inWindow(binding.date, this.deviceDate)) return null
         return attempt.result?.kind === 'solved' ? attempt.result.ms
             : attempt.result ? null : Math.max(0, elapsed(attempt.startedAt, this.now.wall))
+    }
+
+    /** The board as the player sees it (slice 3a, rule 6). See `BoardView`. */
+    boardView(session: PuzzleSession): BoardView {
+        const binding = this.bindings.get(session)
+        if (!binding || binding.beforeClamp) return CASUAL_VIEW
+        const today = this.deviceDate
+        if (binding.date < addDays(today, -1)) return CASUAL_VIEW
+        if (binding.date > today) return { kind: 'future' }
+        if (binding.error === 'identity') return { kind: 'mismatch' }
+        if (this.status === 'retry') return { kind: 'unprepared' }
+        if (!binding.ready || this.status !== 'ready') return { kind: 'preparing' }
+        if (binding.starting) return { kind: 'starting' }
+        if (this.legacy?.marks.includes(binding.puzzleId)) return { kind: 'legacy' }
+        const attempt = binding.attempt
+        if (!attempt) return { kind: 'ready', startFailed: binding.error === 'save' }
+        const flags = { assisted: attempt.assisted, clockError: attempt.clockError || binding.clockErrorPending }
+        if (attempt.result) {
+            const ran = this.practiceElapsed(binding)
+            return {
+                kind: 'result', result: attempt.result, assisted: attempt.assisted,
+                practice: ran === null ? null : { elapsed: ran, solved: binding.practice?.ms !== undefined },
+            }
+        }
+        if (binding.pendingFinish) {
+            // The captured instant, not `elapsedFor`, which keeps counting until a result
+            // exists: the time on screen must not run on while the finish saves (codex).
+            return {
+                kind: 'finishing', ...flags, saveFailed: binding.error === 'save',
+                elapsed: Math.max(0, elapsed(attempt.startedAt, binding.pendingFinish.solvedAt)),
+            }
+        }
+        return {
+            kind: 'playing', ...flags, assisting: binding.assisting,
+            elapsed: this.elapsedFor(binding) ?? 0, closesTonight: binding.date < today,
+        }
+    }
+
+    /** Fold one committed record into `history`, forward only (rule 7). */
+    private remember(attempt: Attempt, committed: boolean) {
+        const held = this.history.get(attempt.puzzleId)
+        if (!held) this.history.set(attempt.puzzleId, attempt)
+        else if (sameAttempt(attempt, held)) {
+            if (notBehind(attempt, held)) this.history.set(attempt.puzzleId, attempt)
+        } else if (committed) this.history.set(attempt.puzzleId, attempt)
     }
 
     bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null): ChallengeBinding {
@@ -429,6 +536,7 @@ export class ChallengeCoordinator {
             })
             if (this.alive(epoch)) runInAction(() => {
                 if (outcome.committed) {
+                    if (outcome.attempt) this.remember(outcome.attempt, true)
                     if (outcome.attempt?.clockError || outcome.attempt?.result) this.clockFlags.delete(id)
                     if (outcome.attempt && !outcome.attempt.result) this.unfinished.set(id, outcome.attempt)
                     else this.unfinished.delete(id)
@@ -654,6 +762,9 @@ export class ChallengeCoordinator {
         const all = await store.readAll()
         if (!this.alive(epoch)) return
         if (all === null) throw new Error('History read failed')
+        // A snapshot: it may be older than a transaction committed while it was read, so it
+        // only moves `history` forward, and what it lacks is "not read", never "gone".
+        runInAction(() => { for (const attempt of all) this.remember(attempt, false) })
         for (const attempt of all) {
             if (!this.alive(epoch)) return
             if (!attempt.result) {

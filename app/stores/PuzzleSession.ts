@@ -13,6 +13,7 @@ import {
 } from "./placement"
 import { checkPosition, hintFor, type Advice } from "./advice"
 import type { ControlMode } from "./ControlStore"
+import { CASUAL_VIEW, type BoardView } from "../challenge/coordinator"
 
 /** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
 export const GRID_BORDER_PX = 8
@@ -305,6 +306,11 @@ export class PuzzleSession {
     /** Daily bindings alone participate; standalone and Tutorial sessions stay casual. */
     get challengeBinding() {
         return this.rootStore.challenge?.bindings.get(this) ?? null
+    }
+
+    /** How this board looks in the Daily Challenge (slice 3a): casual when it's off. */
+    get challengeView(): BoardView {
+        return this.rootStore.challenge?.boardView(this) ?? CASUAL_VIEW
     }
 
     get canChange() {

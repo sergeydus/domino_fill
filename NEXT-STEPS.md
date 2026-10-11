@@ -1975,7 +1975,8 @@ decisions are accepted; suggested slice-3 features remain proposals.
 Written for: codex, reviewing Claude's slice-3a contract and, later, its code.
 
 **Status (2026-10-11): accepted by codex at `92286c3`. Implementation commit 1 (hints keep
-the clock) is built, mutation-tested and gated, awaiting codex's code review.**
+the clock) is accepted by codex at `065b743`; commit 2 (the view, history and Next board)
+is built, mutation-tested and gated, awaiting codex's code review.**
 
 **Second review, codex (2026-10-11), on `359436e`: held, for one correction, made in
 rule 16.** On a restored empty board, Practice called `reset()`, which changes no cells
@@ -2376,6 +2377,67 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   lint **0**, unit **0** (**1538** tests in 65 files, one more than before; stderr
   **0 bytes**), build **0**, browser **0** (**683 passed, 1 skipped**, 0 socket errors),
   the amended `e2e/challengeSession.spec.ts` cases included. No failed run.
+
+**As built: implementation commit 2, the view, history and Next board (rules 6–8, 2026-10-11)**
+- Codex accepted commit 1 at `065b743`: it ran the seven challenge suites (269/269,
+  stderr 0 bytes), type-checking, and five scratch tests of its own (assisted negative
+  and zero-length finishes, recovery with a clock-error flag, the removed kind refused,
+  totals with every board assisted; 5/5, deleted after), and saw CI run `38128248002` pass
+  on that head. It read the probe record without repeating it.
+- `coordinator.ts`: exports `BoardView`, `CASUAL_VIEW` and `isCoveredView`, and adds
+  `boardView(session)`. Its order: unbound or before-clamp, then archive (casual); future;
+  mismatch; `unprepared` (status `retry`); `preparing`; `starting`; `legacy`; `ready`
+  (`startFailed` from the binding's save error); then `result`, `finishing`, `playing`.
+  `finishing.elapsed` is `pendingFinish.solvedAt − startedAt`; `playing.clockError`
+  includes a flag not yet saved; `closesTonight` is a board dated before today.
+  `history` is an observable map filled by a private `remember(attempt, committed)`: every
+  committed transaction outcome, and each record of an `enumerate` snapshot, which is
+  applied only after a successful read. Same attempt (puzzle, hash, date, `startedAt`):
+  replaced only when not behind on the result or either flag. A different attempt:
+  replaced only from a committed transaction. Nothing is ever removed.
+- `PuzzleSession.challengeView`: the session's view, `casual` when the challenge is off.
+- `LevelStore.nextChallengeBoard()` walks steps 1–8 from the current board through the
+  nine in order, so it never comes back round to the current board, and skips `result`,
+  `finishing`, `legacy` and `casual` boards. `goToBoard(place)` sets difficulty and level
+  directly, without `setDifficulty`'s first-unsolved landing. A first version also skipped
+  `session === current` inside the loop; its probe survived, because the loop bound already
+  excludes the current board, so the check was removed and a test added for the case only
+  the bound covers: the current board still `ready` or `playing` with the other eight done.
+- New `tests/challengeView.test.ts`, **24 tests**: all eleven views from real transitions,
+  each checked against `isCovered`, `canStart` and `canMutate`; history at opening, after
+  this root's Start and finish, from another tab on refresh, in memory mode, under a held
+  older snapshot (every value the entry takes is recorded, since refresh's own
+  per-board transaction re-reads storage afterwards and would hide a transient rollback),
+  a snapshot lacking an entry, a failed read, and a different attempt in a snapshot (an
+  unbound board's record, which only enumeration touches); and Next board's order,
+  wrapping, skips, the current board, a finishing board, the last board while its finish
+  saves and after, and `goToBoard`. A first draft of two history tests used `toBe` on
+  bound boards and failed (2 of 23): refresh replaces those entries with equal new objects.
+  The tests were wrong, not the code; they now use an unbound board or the recorded values.
+- Measured: nine challenge suites **300/300**, stderr **0 bytes**; type-check and lint 0.
+- **Mutations: 23 of 23 caught at the intended test**, both files restored byte for byte.
+  The first sweep was 22 of 23 (the current-board check above); after the fix the whole
+  sweep was rerun. Probes: ready before preparing; future, unprepared, mismatch, legacy and
+  starting each not decided; `startFailed` never set; `finishing` reading `elapsedFor`;
+  never `saveFailed`; a pending clock error hidden; `closesTonight` never set; Practice
+  never solved; a snapshot replacing unconditionally; clearing what it lacks; a failed read
+  clearing history; a snapshot of a different attempt replacing; transactions not
+  remembered; the walk coming back round to the current board; a finishing board offered;
+  results not skipped; legacy not skipped; no wrapping; `goToBoard` landing on the first
+  unsolved level.
+- Cold gate, first run (2026-10-11), **failed, so no commit**: TIME_WAIT **23**, root
+  verified. TypeScript **0**, lint **0**, unit **1** (**1561 passed, 1 failed** of 1562;
+  stderr **1206 bytes**, the failure's report), build **0**, browser **0** (**683 passed,
+  1 skipped**; one `ERR_NO_BUFFER_SPACE` on the tutorial's bootstrap, which the harness
+  reloaded once and recovered). The failure was mine: `tests/palette.test.ts`'s audit
+  flags any three numbers in visual source as a possible colour, and `BOARD_ORDER`'s
+  `[1, 2, 3]` at `BoardsStore.ts:22` tripped it, as a literal triple did in slice 2's
+  fixture. My targeted runs hadn't included that suite. The levels now come from
+  `Array.from`, with a comment saying why; the audit, the view tests (40/40) and the whole
+  23-probe sweep pass again (23 of 23). The whole gate is rerun from cold.
+- Full cold rerun (2026-10-11): TIME_WAIT **70**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1562** tests in 66 files, 24 more than commit 1; stderr **0 bytes**),
+  build **0**, browser **0** (**683 passed, 1 skipped**, 0 socket errors). Committed after it.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an
