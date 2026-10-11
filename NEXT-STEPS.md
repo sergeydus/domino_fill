@@ -136,7 +136,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | # | Idea | What it means | Effort | Decision |
 | --- | --- | --- | --- | --- |
 | D1 | The Daily Challenge set | All nine of the day's boards: Easy (6×6), Medium (7×7) and Hard (8×8), levels 1–3 each, played in any order. Each is covered until the player presses Start, and every one is timed: there's no untimed way to play today's boards. The result is a time per board and a total per size. *(Changed 2026-10-09: it was the three 8×8 boards in order, one total, with "Play untimed" as the way around it.)* | Medium to large | Yes (user, 2026-10-09) |
-| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction `97040b9` held by Claude for archive navigation dropping the exception. Explicit-pick amendment `adab8db` accepted by Claude; its correction is built/gated and awaits code review before the fixture, without activation. |
+| D2 | Ruleset v1, written first *(codex R1)* | Define start, finish, first-attempt rule, assists, reload, a hidden tab and errors, before any time is saved. Decided so far: Undo and Reset are allowed; a hint, or a Check, costs that board's time only, and the board can still be finished, marked as hinted; a size with a board unsolved or given up shows a partial result, not a total (user, 2026-10-09). There's no give-up button: a started board left unfinished counts as given up when its date leaves the today-or-yesterday window, and its clock runs until then (user, 2026-10-09). D2 must also say what happens to boards already seen or played before the challenge ships: they can't honestly become unseen first attempts (codex). Store the ruleset version with every result, so a later change never reinterprets old times. | Design first | Yes: Ruleset v1 below, accepted (user and codex, 2026-10-09). Slice 2: codex builds, Claude reviews (user, 2026-10-10); contract accepted by Claude at `4376e7d` (2026-10-10); commits 1 and 2 accepted by Claude at `ba0b18c` and `6591360` (2026-10-10). Timed but unsaved where no backend is usable at opening, approved by the user (2026-10-10); later save failures retain retries. Commits 3 and 4 accepted by Claude at `34f792f` and `8b1e435`; review correction `2ecc453` accepted. Only before-corpus-clamped boards stay casual/uncovered (user, 2026-10-10), narrowing the earlier decision; after-clamps retain ordinary date-window rules. Revised before-only correction contract `38d6a1b` accepted by Claude; clamp correction `97040b9` held by Claude for archive navigation dropping the exception. Explicit-pick amendment `adab8db`, correction `97d3add` and decision notes `1b9bdca` accepted by Claude (2026-10-11). Commit 5 is built/gated and awaits code review by Claude; no activation. |
 | D3 | The clock starts at the reveal *(codex R2)* | Each challenge board loads covered; pressing Start reveals it and starts its clock in the same step, so loading time never counts. Each board has its own clock, so the time between boards never counts. A new Start clears unmarked existing progress so the first attempt begins empty; an existing attempt resumes its own progress. | Medium | Yes; clear on new Start approved (user, 2026-10-10). |
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
@@ -546,7 +546,7 @@ real browser is tested too, below.
 
 Written for: Claude, reviewing codex's slice-2 contract and implementation.
 
-**Status (2026-10-11): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. Claude held clamp correction `97040b9` for a reachable archive-pick defect. Explicit-pick amendment `adab8db` accepted by Claude; its correction is built and mutation-tested, with gate results recorded below and code review required before commit 5. Nothing is publicly activated.**
+**Status (2026-10-11): contract, implementation commits 1–4, and review correction `2ecc453` accepted by Claude. Before-only clamp contract `38d6a1b` accepted. Claude held clamp correction `97040b9` for a reachable archive-pick defect. Explicit-pick amendment `adab8db`, correction `97d3add` and decision notes `1b9bdca` accepted by Claude. Commit 5 is built, mutation-tested and cold-gated; its code review is next. Nothing is publicly activated.**
 The user assigned this slice to codex; Claude reviews both this contract and the code.
 Branch: `feature/challenge-wiring`, from `master` at `11b87a1` (PR #9's merge).
 Plan corrections were recorded before implementation. Code-review corrections are recorded
@@ -929,6 +929,9 @@ timing while the public board is already visible would break rules 2 and 4.
   metadata included in change detection,
   unrelated puzzle keys unchanged, and failed progress writes never fabricating recovery.
   Existing assertions change only where they deliberately pin the new evidence/retry rules.
+- Update `tests/controls.test.ts`'s exact source-button inventory from 20 to 24 for the
+  fixture's four controls, with a fixture-specific inclusion assertion. Keep the existing
+  variant/own-look audits and public control behavior intact.
 - Extend `tests/provider.test.tsx` for inactive default and enabled start/disposal ownership.
   Keep the existing casual controls/Undo/Reset/completion suites' behavioural assertions.
 - New `app/visual/challenge/page.visual.tsx` and its fixture, behind the existing
@@ -1692,6 +1695,110 @@ record it here first; do not push a temporarily enabled or partially guarded pub
 - No deviation from the accepted contract. The full cold gate passed as recorded below;
   report the correction head to Claude before building the independent fixture commit.
 
+**Explicit-pick code review, Claude (2026-10-11), on `97d3add` and `1b9bdca`.**
+Claude accepts both and authorizes commit 5. Claude reports measuring 362/362 in nine
+challenge suites, zero unit stderr, type-check exit 0 and three correctly caught mutation
+probes (endpoint guard, original UI callback, pre-load clock sampling). Claude notes that
+its first clock probe did not use the sampled value and was invalid; the corrected probe
+was caught. Claude did not rerun codex's gate or eight-probe sweep. Codex independently
+checked CI run `38095797381`: success on exact head `97d3add`. The direction and nine-board
+decisions are accepted; suggested slice-3 features remain proposals.
+**As built: implementation commit 5, compiled browser integration (2026-10-11)**
+- The new `app/visual/challenge/page.visual.tsx` imports an enabled-root fixture only in
+  the existing visual build. The fixture supplies nine deterministic 2-by-2 definitions,
+  owns the real coordinator, persistence and sessions, and renders the actual board,
+  GameControls and AdviceStrip. Fixture-only Initialize, Retry, Start and board-selection
+  controls expose the model; they are not slice 3's cover or result presentation. No
+  production module/configuration, puzzle asset or existing pixel baseline changes.
+- `e2e/challengeSession.spec.ts` adds **14 browser cases**, run on both desktop and 360px
+  phone (**28 executions**). The module's real IndexedDB transactions are intercepted
+  without replacing reads, pure steps or writes. A pending chain of actual requests holds
+  the writing transaction open; tests observe put.success before allowing commit/abort.
+  The second tab creates its readwrite transaction while the first remains active, and
+  the final record read from storage establishes the outcome. No page timestamps are
+  compared. Every page is calendar-pinned before load; animation clocks keep running.
+- Covered cases: Start request-success/abort/input guards and real board gestures;
+  abort/retry of the legacy check; competing Starts and finishes; Hint and Check aborts;
+  each assist versus finish in both commit orders; pending-finish Reset guard; a real
+  reload recovering saved winning-board evidence; Practice preserving the result/finished
+  state and omitting evidence; actual BroadcastChannel and focus listeners; and the public
+  page accepting Hint and a real placement with no challenge database or fallback records/legacy check.
+- Test controls for explicit race/channel cases defer progress storage notices, installed
+  before the coordinator's listeners, and await previous tab reconciliation before arming
+  the writing transaction. This isolates the stated save order or notification channel.
+  Focus-only cases disable BroadcastChannel and prove the result is absent before the
+  explicit focus event. BroadcastChannel-only cases use no synthetic wake. The aborted
+  finish test stops retry ownership, aborts, checks the attempt is unfinished in storage,
+  then reloads; the real initializer performs recovery. Reload selects the next unsolved
+  board normally, so the fixture's Board one button returns to the recovered identity.
+- Existing test deliberately changed: `tests/controls.test.ts` retains its button-variant
+  and own-look audits, updates the exact inventory from 20 to 24 for the four authorized
+  fixture buttons, and asserts all four fixture declarations are included. This is the
+  accepted fixture's inventory update; no public-control behavioral assertion is changed.
+  The fixture uses `control` variants and the `text-meta` role, and generates level indices
+  with Array.from rather than a triple that the existing color audit treats as RGB.
+- `e2e/bundle.spec.ts` adds **4 build tests**: one sentinel declaration and visual-byte
+  positive control, zero production bytes, visual-only listing/manifest, and direct
+  visual 200/production 404. The sentinel is rendered, not an unused constant. The existing
+  server builds/serves both variants; no alternate browser command or server was added.
+- Preliminary checks: first two type-checks failed: wrong persistence method name and
+  a result/attempt field mismatch; both corrected. First lint failed on a redundant effect
+  state update; the fixture now uses the existing per-mount store ownership pattern, and
+  subsequent lint/type checks passed. These were preliminary checks, not cold gates.
+- Targeted browser history (before mutation): run 1 **22 passed / 5 failed** (27 desktop
+  cases); runs 2 and 3 each **35 passed / 6 failed** (41 cases); run 4 **34 passed / 7 failed**;
+  run 5 **38 passed / 3 failed**; run 6 **41/41 passed**, exit 0. No test was skipped.
+  Corrections: hold a writing transaction rather than an unchanged reconciliation; dismiss
+  the public tutorial; select the recovered identity after automatic next-board navigation;
+  install notice controls before existing listeners; drain earlier focus/Start work; start
+  in the finishing tab so its clean time uses its own clock. The initial finish-order
+  setups also allowed another tab to recover shared evidence before the owner's save;
+  they did not establish the promised explicit-save ordering. The later remaining clean
+  expectation failures were cross-page pinned-clock differences, not runtime changes.
+- Compiled browser mutation sweep: **12/12 caught at their intended assertions**. Every
+  runtime/config source was restored byte for byte by the scratch runner's finally block;
+  Git's final diff confirms no runtime or configuration changes. All twelve filtered runs
+  exited 1 on an assertion, not a build error. An intermediate runner guard rejected probe
+  9 before editing or running because its multiline anchor used LF against CRLF. It was
+  invalid validation, not a miss; normalized matching then ran probes 9–12 successfully.
+  The first eight and final four logs/tallies are preserved separately. Probe list:
+  1. Enable the public root: public-page challenge-database absence.
+  2. Resolve Start at put.success: cover remains true before transaction completion.
+  3. Permit placement while Start is pending: placement returns false.
+  4. Publish Hint before assistance commit: advice remains null.
+  5. Resolve legacy migration at put.success: aborted initialization requires retry.
+  6. Ignore BroadcastChannel notices: other tab adopts the fixed result.
+  7. Remove focus wake: other tab adopts the fixed result after focus.
+  8. Ignore durable solve evidence: reload has a fixed recovered result.
+  9. Produce evidence on a Practice solve: Practice progress has no evidence.
+  10. Allow Reset during pending finish: winning board remains unchanged.
+  11. Allow finish to replace an existing result: the first transaction's result stands.
+  12. Compile visual extensions in production: production contains zero fixture bytes.
+- Cold gate 1 failed, so no commit: TIME_WAIT **59**, root/four cache paths verified;
+  type-check **0**, lint **0**, unit **1** (**1532 passed / 5 failed**, 65 files, stderr
+  **4027 bytes**). Build and browser steps did not run. The fixture's four unstyled buttons
+  tripped the inventory and variant/own-look audits (three failures), `text-xs` tripped the
+  typography audit, and the level-index array `[1, 2, 3]` tripped the RGB-literal audit.
+  Corrected the fixture to use existing control/text roles and generate the three indices;
+  updated only the exact authorized button inventory, retaining every audit rule.
+- Corrected audit suites: **47/47 passed** in controls/palette/typography, exit 0, stderr
+  **0 bytes**. Correction probes: **4/4 caught at the intended unit assertions**, each
+  fixture source restored byte for byte: remove a control variant (variant assertion),
+  remove a fixture button (exact inventory), restore `text-xs` (role audit), and restore
+  the numeric triple (color audit). Total owning-commit mutations: **16/16** (12 compiled
+  browser probes + 4 audit probes). The whole cold gate is rerun, not resumed after unit.
+- Cold gate 2 passed from cold: TIME_WAIT **47**, root/all four caches verified;
+  TypeScript **0**, lint **0** (no warnings), unit **0** (**1537/1537 in 65 files**, stderr
+  **0 bytes**), production build **0**, browser **0** (**683 passed / 1 existing conditional
+  keyboard skip at `keyboard.spec.ts:184`**, 684 executions). Build stderr **1512 bytes**
+  of baseline-browser-mapping warnings; browser stderr **5242 bytes** of NO_COLOR/FORCE_COLOR
+  warnings. Both browser streams inspected after completion: no ERR_NO_BUFFER_SPACE.
+  Final scope check: exactly six intended document/fixture/test files; no runtime/config
+  files, assets or baselines changed. This full browser run also passes the public real
+  placement and the corrected fixture styles. Gate 1's five audit failures remain recorded.
+  A post-gate note-update command first failed to parse a quote and changed no files;
+  corrected it and recorded these results. The new head is for Claude's review.
+  No public activation, PR or merge.
 **As built: before-corpus clamp correction (2026-10-10)**
 - `LevelStore` now keeps visible-response `viewingClamp` and held-response
   `pendingDayClamp` separately from global display `clockClamp`. `receiveDay` forwards

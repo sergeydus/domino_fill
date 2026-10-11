@@ -212,9 +212,10 @@ describe('every button is one variant, and says nothing else about its look', ()
 
     it('reads the app: every button there is, found', () => {
         // A positive control: a scan that found no buttons would pass everything below.
-        // 20 since the picker's chips: Pick a piece's mode switch, and one `<button>` for the
-        // picker's two pieces, which were two elements until then (21).
-        expect(all.length).toBe(20)
+        // 20 existing declarations plus the challenge fixture's four test-only controls.
+        expect(all.length).toBe(24)
+        expect(all.filter(button => button.at.replace(/\\/g, '/')
+            .startsWith('app/visual/challenge/ChallengeFixture.tsx:'))).toHaveLength(4)
     })
 
     it('recognises a button\'s own look, however it is written', () => {
