@@ -2142,7 +2142,12 @@ holds: casual play never shows a clock.
 11. Start calls `session.startChallenge()`. If Start had focus when the board is revealed,
    focus moves to the board's grid (the Start button no longer exists, and focus would
    otherwise fall to the page). Nothing focuses Start automatically on arrival. Start is a
-   real button: Tab, Enter and Space, no new key binding.
+   real button: Tab, Enter and Space, no new key binding. **Amended after codex's review
+   of commit 3:** the start saves before the reveal, and the player may move on meanwhile.
+   The handoff is checked at the reveal, not at the press: it's cancelled if focus went
+   anywhere other than Start since the press, or if the board that was started is no
+   longer the one selected. Codex reproduced the first: held the start's save, moved
+   focus to Archive, released it, and the board took focus from Archive.
 12. While covered, Check, Hint, Undo and Reset are visibly disabled: `disabled` follows
    `canChange` as well as today's conditions. Reset gains `disabled={!canChange}`; in a
    casual root `canChange` is always true, so nothing changes there.
@@ -2213,7 +2218,15 @@ holds: casual play never shows a clock.
    unmounts (rule 15: a Practice run in progress), and the clock line shows
    "Practice · 0:00", running. Casual boards
    keep "Next level" and "Play again" exactly as now. Focus still moves to the primary
-   action on mount. The card shows from the first solve, before the save, as today: the
+   action on mount. **Amended after codex's review of commit 3:** on the last of the nine
+   boards, while its finish saves, the card has no action at all (no Next board, and no
+   Practice until the save commits), and codex reproduced the focus staying on the board
+   once Practice appeared. So focus is owed from the card's mount and given to the first
+   action that appears: Practice once the save commits, or Try again once it fails. The
+   debt is cancelled as soon as focus goes anywhere outside the card, so a late action
+   never takes focus back. And when the focused action itself goes (Try again, once a
+   retry saves), focus, which fell to the page, passes to the action that replaced it,
+   unless the player had moved it elsewhere first. The card shows from the first solve, before the save, as today: the
    celebration never waits for storage (slice 2, item 7).
 
 *F. Warnings*
@@ -2533,6 +2546,59 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   **0**, unit **0** (**1584** in 67 files, 22 more than commit 2; stderr **0 bytes**), build
   **0**, browser **0** (**710 passed, 1 skipped**, 27 more than before; 0 socket errors),
   with the public desktop and phone pixel baselines unchanged. Committed after it.
+
+**As built: correction after codex's review of commit 3 (rules 11 and 16, 2026-10-11)**
+- Codex held commit 3 (`2c67385`) for two focus bugs it reproduced in Chromium, with
+  scratch regressions that failed 2/2 at their focus assertions. It verified 362/362
+  focused unit tests (stderr 0 bytes), type-checking, 68/68 Chromium checks (retries off,
+  0 socket errors) and CI run `38145224230` on that head; it read the gate history and the
+  30-probe record without repeating them. No product decision was needed.
+- **Start (rule 11):** `ChallengeCover` no longer decides at the press. A keyboard press
+  listens for `focusin` until the reveal; in the frame after a successful start it moves
+  focus to the grid only if no other element took focus and `levels.currentBoard` is still
+  the started session. A pointer press (Start didn't have focus) adds no listener and never
+  moves focus, as before.
+- **The card (rule 16):** `CompletionCard` keeps an `owed` flag, true at mount, and a
+  `focusin` listener for its lifetime: focus outside the card clears the flag, and focus
+  inside records which button holds it. An effect after every render gives focus to the
+  first action (Next, then Practice, then Try again) if it's owed, or if the button that
+  held it is gone and focus is on the page. Casual boards behave as before: the card
+  mounts with Next level or Play again and focuses it at once.
+- **Tests changed on purpose:** the IndexedDB save hold (`instrument`, `probe`, `arm`,
+  `release`, `heldWrite`) moved, unchanged, from `e2e/challengeSession.spec.ts` into
+  `e2e/challengeTransaction.ts`, so the slice 3a spec can hold a start's save the same
+  way. `e2e/challengeUi.spec.ts`'s `open` now installs it too, armed only when a test asks.
+- **New tests:** `tests/challengeUi.test.tsx` +6 (26): Start doesn't take focus back after
+  the player moves to Archive while the start saves; doesn't focus another board picked
+  while it saves; on the last board (the other eight seeded as solved), the card focuses
+  Practice once the held finish commits; doesn't when the player moved to Archive first;
+  a late Try again takes focus and hands it to Practice once the retry saves; and doesn't
+  hand it on when the player had moved to Archive. `e2e/challengeUi.spec.ts` +1 (9 × 2
+  projects): codex's Start case in Chromium, with the real start transaction held.
+- **Against the reviewed head,** the new unit tests failed **5 of 6**. The sixth (a late
+  action leaves focus where the player put it) passed there, because the old card never
+  focused a late action at all; it guards the new owed-focus code, and probe 5 below shows
+  it does. The browser test failed on the reviewed head's cover at `toBeFocused` (Archive
+  "inactive").
+- **Mutations: 9 of 9 caught at the intended test,** files restored byte for byte. Unit,
+  8: (1) Start ignoring focus moved while it saves; (2) ignoring which board is selected;
+  (3) a pointer Start going through the handoff, caught by "a pointer Start leaves focus
+  alone"; (4) the card paying focus only on mount; (5) focus elsewhere never cancelling the
+  debt; (6) no handoff from an action that went; (7) the handoff even when focus is
+  elsewhere; (8) focus inside the card not recorded. Browser, 1: probe 1, caught at
+  `toBeFocused`.
+- The card's cases are tested in jsdom only, through the real `DominoClient`, not in
+  Chromium: the last board needs eight others solved first, which in a browser means
+  eight drag solves or seeding attempts with each board's definition hash. The Start case,
+  where the browser's own focus behaviour while a button is disabled matters most, is
+  tested in both.
+- First draft that failed and was mine: the probe script expected LF endings after a
+  `git stash` round trip had left the two components with CRLF; they were converted back to
+  LF (as the rest of the tree is) before the probes ran.
+- Cold gate, first run (2026-10-11): TIME_WAIT **36**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1590** in 67 files, 6 more than commit 3; stderr **0 bytes**), build
+  **0**, browser **0** (**712 passed, 1 skipped**, 2 more than commit 3; 0 socket errors).
+  No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an

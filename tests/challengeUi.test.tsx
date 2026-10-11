@@ -11,7 +11,7 @@ import { noticeFor } from '@/app/dominoFill/ChallengeNotice'
 import { formatTime, resultWords } from '@/app/dominoFill/challengeText'
 import { localStorageStore, memoryAttemptStore, type AttemptStore } from '@/app/challenge/attemptStore'
 import type { CoordinatorOptions } from '@/app/challenge/coordinator'
-import { start } from '@/app/challenge/attempt'
+import { finish, start } from '@/app/challenge/attempt'
 import { readProgress } from '@/app/stores/progressStorage'
 
 /*
@@ -87,6 +87,35 @@ const expectNoPuzzle = () => {
 const pressStart = async () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start' })) })
     await waitFor(() => expect(cover()).toBeNull())
+}
+/** Hold every save until released, then let them through to the real store. */
+const holdSaves = (store: AttemptStore) => {
+    const real = store.change.bind(store)
+    const gate = deferred<void>()
+    const spy = vi.spyOn(store, 'change').mockImplementation(async (...args) => {
+        await gate.promise
+        return real(...args)
+    })
+    return async () => {
+        spy.mockRestore()
+        await act(async () => { gate.resolve() })
+    }
+}
+const nextFrame = () => act(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())))
+/** The other eight boards of the day already solved, so the board on screen is the last. */
+const solveAllBut = async (store: AttemptStore, last: string) => {
+    const probe = new RootStore(new CorpusSource())
+    probe.boardsStore.setDay(day())
+    for (const difficulty of ['easy', 'normal', 'hard'] as const) {
+        for (const level of [1, 2, 3] as const) {
+            probe.boardsStore.goToBoard({ difficulty, level })
+            const { puzzleId, definitionHash } = probe.boardsStore.currentBoard!.definition
+            if (puzzleId === last) continue
+            await store.change(puzzleId, current =>
+                finish(start(current, { puzzleId, definitionHash, date: DAY }, T0, DAY).next, T0 + 1_000, DAY))
+        }
+    }
+    probe.boardsStore.disposePersist?.()
 }
 const win = async (m: Mounted, at: number) => {
     await act(async () => { expect(m.session().placeToward([0, 0], 'down')).toBe(true) })
@@ -202,6 +231,40 @@ describe('the cover (rules 9-12)', () => {
         await pressStart()
         await new Promise(resolve => requestAnimationFrame(resolve))
         expect(document.activeElement).toBe(outside)
+    })
+
+    it('a keyboard Start doesn\'t take focus back after the player moves on while it saves (codex)', async () => {
+        const m = await mount()
+        const button = screen.getByRole('button', { name: 'Start' })
+        button.focus()
+        const release = holdSaves(m.store)
+        await act(async () => { fireEvent.click(button) })
+        expect(cover()?.getAttribute('data-challenge-cover')).toBe('starting')
+        const archive = screen.getByRole('button', { name: 'Archive' })
+        act(() => { archive.focus() })
+        await release()
+        await waitFor(() => expect(cover()).toBeNull())
+        await nextFrame()
+        expect(document.activeElement, 'focus where the player put it').toBe(archive)
+    })
+
+    it('a keyboard Start doesn\'t focus another board picked while it saves (codex)', async () => {
+        const m = await mount()
+        // Puzzle 2 already revealed, so it has a grid that could be focused by mistake.
+        await act(async () => { m.root.boardsStore.goToBoard({ difficulty: 'easy', level: 2 }) })
+        await pressStart()
+        await act(async () => { m.root.boardsStore.goToBoard({ difficulty: 'easy', level: 1 }) })
+        const first = m.session()
+        const button = screen.getByRole('button', { name: 'Start' })
+        button.focus()
+        const release = holdSaves(m.store)
+        await act(async () => { fireEvent.click(button) })
+        // Picked without moving focus, as a board change from the store would be.
+        await act(async () => { m.root.boardsStore.goToBoard({ difficulty: 'easy', level: 2 }) })
+        await release()
+        await waitFor(() => expect(first.challengeView.kind).toBe('playing'))
+        await nextFrame()
+        expect(screen.getByRole('grid').contains(document.activeElement), 'puzzle 2 took focus').toBe(false)
     })
 })
 
@@ -341,6 +404,70 @@ describe('the finish (rules 15-16)', () => {
         expect(m.root.challenge!.bindings.get(m.session())!.attempt?.result).toEqual({ kind: 'solved', ms: 5_000 })
         await m.setTime(T0 + 12_000)
         expect(clock()).toBe('Practice · 0:03 · Your result: 0:05 · no hints')
+    })
+
+    it('on the last board, the card focuses Practice once the finish saves (codex)', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        expect(cover()?.textContent).toContain('Easy · 2×2 · puzzle 1 of 3')
+        await pressStart()
+        const release = holdSaves(m.store)
+        await win(m, T0 + 5_000)
+        await waitFor(() => expect(card()?.textContent).toContain('Saving your time…'))
+        expect(card()?.querySelector('button'), 'no action while the finish saves').toBeNull()
+        await release()
+        const practice = await screen.findByRole('button', { name: 'Practice' })
+        expect(document.activeElement).toBe(practice)
+    })
+
+    it('but an action that appears late leaves focus where the player put it (codex)', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        await pressStart()
+        const release = holdSaves(m.store)
+        await win(m, T0 + 5_000)
+        await waitFor(() => expect(card()?.textContent).toContain('Saving your time…'))
+        const archive = screen.getByRole('button', { name: 'Archive' })
+        act(() => { archive.focus() })
+        await release()
+        await screen.findByRole('button', { name: 'Practice' })
+        expect(document.activeElement).toBe(archive)
+    })
+
+    it('a late Try again takes the focus, and hands it to Practice once the save goes through', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        await pressStart()
+        const failing = vi.spyOn(m.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        await win(m, T0 + 5_000)
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+        expect(document.activeElement, 'Try again, the card\'s only action').toBe(retry)
+        failing.mockRestore()
+        await act(async () => { fireEvent.click(retry) })
+        const practice = await screen.findByRole('button', { name: 'Practice' })
+        expect(retry.isConnected).toBe(false)
+        expect(document.activeElement, 'passed on from the Try again that went').toBe(practice)
+    })
+
+    it('but not when the player had already moved on from Try again', async () => {
+        const store = localStorageStore(window.localStorage) as AttemptStore
+        await solveAllBut(store, `${DAY}|e1`)
+        const m = await mount({ store })
+        await pressStart()
+        const failing = vi.spyOn(m.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        await win(m, T0 + 5_000)
+        const retry = await screen.findByRole('button', { name: 'Try again' })
+        expect(document.activeElement).toBe(retry)
+        const archive = screen.getByRole('button', { name: 'Archive' })
+        act(() => { archive.focus() })
+        failing.mockRestore()
+        await act(async () => { await m.root.challenge!.retry() })
+        await screen.findByRole('button', { name: 'Practice' })
+        expect(retry.isConnected).toBe(false)
+        expect(document.activeElement).toBe(archive)
     })
 
     it('a covered board never shows a card, whatever its old completion says', async () => {

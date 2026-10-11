@@ -3,6 +3,7 @@ import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, LATE_IN_A_MONTH } from './calendar'
 import type { Attempt } from '../app/challenge/attempt'
 import { drag } from './play'
+import { arm, heldWrite, instrument, probe, release } from './challengeTransaction'
 
 test.use({ baseURL: VISUAL_URL })
 
@@ -13,73 +14,8 @@ type State = {
     practice: { startedAt: number, ms?: number } | null, finished: boolean,
     board: (number | null)[][], advice: { kind: string } | null,
 }
-type TransactionProbe = {
-    armed: 'attempts' | 'meta' | null, active: boolean, release: boolean, abort: boolean,
-    created: number, writes: unknown[], completed: boolean,
-}
-declare global {
-    interface Window { challengeTransaction: TransactionProbe }
-}
-
-/** Intercept the real store's transactions, never replace its reads, steps or writes. */
-const instrument = () => {
-    const probe: TransactionProbe = {
-        armed: null, active: false, release: false, abort: false,
-        created: 0, writes: [], completed: false,
-    }
-    window.challengeTransaction = probe
-    const transaction = IDBDatabase.prototype.transaction
-    IDBDatabase.prototype.transaction = function (...args) {
-        const tx = transaction.apply(this, args)
-        if (this.name !== 'dominoFill.challenge' || tx.mode !== 'readwrite') return tx
-        probe.created++
-        const target = probe.armed
-        if (!target || !tx.objectStoreNames.contains(target)) return tx
-        const store = tx.objectStore(target)
-        // Pending requests keep a genuine IDB transaction open even after put.success.
-        const spin = () => {
-            const request = store.get('__fixture_hold__')
-            request.onsuccess = () => {
-                if (probe.abort) tx.abort()
-                else if (!probe.release) spin()
-            }
-        }
-        const put = store.put.bind(store)
-        store.put = (...putArgs) => {
-            const request = put(...putArgs)
-            if (probe.armed !== target) return request
-            probe.armed = null
-            probe.active = true
-            spin()
-            request.addEventListener('success', () => { probe.writes.push(putArgs[0]) })
-            return request
-        }
-        // objectStore returns this same object in a transaction, as required by IDB.
-        tx.addEventListener('complete', () => {
-            probe.active = false
-            probe.completed = true
-        })
-        tx.addEventListener('abort', () => { probe.active = false })
-        return tx
-    }
-}
-
 const state = async (page: Page): Promise<State> =>
     JSON.parse(await page.locator('[data-challenge-state]').innerText())
-const probe = (page: Page) => page.evaluate(() => ({ ...window.challengeTransaction }))
-const arm = (page: Page, store: 'attempts' | 'meta' = 'attempts') => page.evaluate(store => {
-    Object.assign(window.challengeTransaction, {
-        armed: store, active: false, release: false, abort: false, writes: [], completed: false,
-    })
-}, store)
-const release = (page: Page, abort = false) => page.evaluate(abort => {
-    window.challengeTransaction.abort = abort
-    window.challengeTransaction.release = true
-}, abort)
-const heldWrite = async (page: Page) => {
-    await expect.poll(async () => (await probe(page)).writes.length).toBeGreaterThan(0)
-    expect((await probe(page)).active, 'transaction remains active after put.success').toBe(true)
-}
 const open = async (page: Page, paused = false) => {
     await pinDay(page, LATE_IN_A_MONTH)
     await page.addInitScript(instrument)

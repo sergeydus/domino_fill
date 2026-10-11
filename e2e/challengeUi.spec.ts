@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, pinDayAcrossReloads, LATE_IN_A_MONTH } from './calendar'
 import { playSolution } from './play'
+import { arm, heldWrite, instrument, release } from './challengeTransaction'
 
 /*
  * Slice 3a on screen, in a real browser: `/visual/daily` is the real game with the Daily
@@ -14,6 +15,7 @@ test.use({ baseURL: VISUAL_URL })
 
 const open = async (page: Page, date = LATE_IN_A_MONTH, pin = pinDay) => {
     await pin(page, date)
+    await page.addInitScript(instrument)
     await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
     await page.goto('/visual/daily')
     await expect(page.locator('[data-challenge-cover="ready"]')).toBeVisible({ timeout: 15_000 })
@@ -52,6 +54,21 @@ test('Start from the keyboard reveals the board and puts the keyboard on it', as
     await expect(page.getByRole('grid')).toBeVisible()
     await expect.poll(() => page.evaluate(() =>
         document.querySelector('[role="grid"]')?.contains(document.activeElement) ?? false)).toBe(true)
+})
+
+test('a keyboard Start leaves focus where the player moved it while the start saved (codex)', async ({ page }) => {
+    await open(page)
+    await page.getByRole('button', { name: 'Start', exact: true }).focus()
+    await arm(page)
+    await page.keyboard.press('Enter')
+    await heldWrite(page)
+    await expect(page.locator('[data-challenge-cover="starting"]')).toBeVisible()
+    await page.getByRole('button', { name: 'Archive' }).focus()
+    await release(page)
+    await expect(page.getByRole('grid')).toBeVisible()
+    // Past the frame in which the handoff would have run.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    await expect(page.getByRole('button', { name: 'Archive' })).toBeFocused()
 })
 
 test('Start swaps the cover for a board of exactly its size, and nothing else moves', async ({ page }) => {

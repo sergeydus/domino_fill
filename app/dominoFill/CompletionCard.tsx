@@ -61,9 +61,9 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
      * Bring the whole card into view, then move focus to its primary action.
      *
      * The card only mounts once the board is solved, so mounting *is* the completion
-     * transition and no flag-watching is needed. Next when there is a next level, Replay
-     * when there is not: the rule is "the primary action", and on the last level of a
-     * difficulty there is no next one to offer.
+     * transition (a challenge's late actions are below). Next when there is a next level,
+     * Replay when there is not: the rule is "the primary action", and on the last level of
+     * a difficulty there is no next one to offer.
      *
      * The scroll is not redundant with the focus. Focusing scrolls the *button* into view,
      * which leaves the rest of the card wherever it was -- measured at 360x640, where the
@@ -71,11 +71,37 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
      * of the buttons sat below the fold on exactly the device most people play on.
      * `block: 'nearest'` scrolls the minimum needed, and `preventScroll` stops the focus
      * from undoing it.
+     *
+     * On a challenge board the card can mount with no action at all (slice 3a, rule 16):
+     * the last of the nine, while its finish saves, has no Next board and no Practice yet.
+     * So the focus is *owed* from mount and paid when the first action appears: Practice
+     * once the save commits, or Try again once it fails. The debt is cancelled the moment
+     * focus goes anywhere outside the card, so an action that turns up later never takes
+     * focus back from where the player went (codex). And when the focused action itself
+     * goes, as Try again does once the save goes through, focus falls to the page, and is
+     * passed on to the action that took its place.
      */
+    const owed = useRef(true)
+    const holder = useRef<HTMLElement | null>(null)
     useEffect(() => {
-        cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        (nextRef.current ?? replayRef.current ?? retryRef.current)?.focus({ preventScroll: true })
+        cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+        const onFocus = (focus: FocusEvent) => {
+            if (cardRef.current?.contains(focus.target as Node)) holder.current = focus.target as HTMLElement
+            else owed.current = false
+        }
+        document.addEventListener('focusin', onFocus)
+        return () => document.removeEventListener('focusin', onFocus)
     }, [])
+    useEffect(() => {
+        const action = nextRef.current ?? replayRef.current ?? retryRef.current
+        if (!action) return
+        const active = document.activeElement
+        const dropped = !!holder.current && !holder.current.isConnected
+            && (active === null || active === document.body)
+        if (!owed.current && !dropped) return
+        owed.current = false
+        action.focus({ preventScroll: true })
+    })
 
     const onNext = () => {
         // Guarded rather than assumed: the button is only rendered when there is a next

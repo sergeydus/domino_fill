@@ -31,11 +31,9 @@ type Props = {
 
 /** After a reveal that the keyboard asked for, put the keyboard on the board. */
 const focusBoard = () => {
-    requestAnimationFrame(() => {
-        const grid = document.querySelector<HTMLElement>('[data-board-shell] [role="grid"]')
-        const cell = grid?.querySelector<HTMLElement>('[tabindex="0"]')
-        ;(cell ?? grid)?.focus()
-    })
+    const grid = document.querySelector<HTMLElement>('[data-board-shell] [role="grid"]')
+    const cell = grid?.querySelector<HTMLElement>('[tabindex="0"]')
+    ;(cell ?? grid)?.focus()
 }
 
 const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
@@ -46,8 +44,18 @@ const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
     const start = (event: React.MouseEvent<HTMLButtonElement>) => {
         // Focus moves to the board only if Start had it: the Start button is about to stop
         // existing, and focus would otherwise fall back to the page.
-        const hadFocus = document.activeElement === event.currentTarget
-        void session.startChallenge().then(started => { if (started && hadFocus) focusBoard() })
+        const button = event.currentTarget
+        if (document.activeElement !== button) { void session.startChallenge(); return }
+        // The start saves first, and the player may move on meanwhile: Tab to another
+        // control, or pick another board. Either cancels the handoff, checked at the reveal
+        // itself, so the board never takes focus back from where they went (codex).
+        let moved = false
+        const onFocus = (focus: FocusEvent) => { if (focus.target !== button) moved = true }
+        document.addEventListener('focusin', onFocus)
+        void session.startChallenge().then(started => requestAnimationFrame(() => {
+            document.removeEventListener('focusin', onFocus)
+            if (started && !moved && levels.currentBoard === session) focusBoard()
+        }))
     }
 
     let message: string | null = null
