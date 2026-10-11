@@ -50,3 +50,34 @@ export const pinDay = async (page: Page, day: string) => {
     const noon = await page.evaluate(([y, m, d]) => new Date(y, m - 1, d, 12).getTime(), [y, m, d])
     await page.addInitScript(onDate, noon)
 }
+
+/**
+ * Shift a page's `Date` by a fixed `offset`, so its clock keeps running across reloads.
+ *
+ * `onDate` measures its offset when each page load starts, so every load begins at the
+ * same instant: a reload sends the clock back to it. Right for most tests, wrong for one
+ * that reloads mid-attempt, where the attempt's saved start must stay in the past (slice
+ * 3a: a reload resumes the challenge clock, it never restarts it). Self-contained, as
+ * `onDate` is.
+ */
+export const byOffset = (offset: number) => {
+    const Real = Date
+    const shifted = () => Real.now() + offset
+    globalThis.Date = new Proxy(Real, {
+        construct: (to, args, newTarget) =>
+            Reflect.construct(to, args.length === 0 ? [shifted()] : args, newTarget),
+        apply: () => new Real(shifted()).toString(),
+        get: (to, prop, receiver) => prop === 'now' ? shifted : Reflect.get(to, prop, receiver),
+    })
+}
+
+/**
+ * `pinDay`, but with one offset for the whole test, so time keeps running through a reload
+ * instead of starting again at noon. The offset is measured once, in the page, against the
+ * page's own clock; it is never compared with another page's.
+ */
+export const pinDayAcrossReloads = async (page: Page, day: string) => {
+    const [y, m, d] = day.split('-').map(Number)
+    const offset = await page.evaluate(([y, m, d]) => new Date(y, m - 1, d, 12).getTime() - Date.now(), [y, m, d])
+    await page.addInitScript(byOffset, offset)
+}

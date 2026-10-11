@@ -7,6 +7,8 @@ import { PuzzleSession } from "../stores/PuzzleSession"
 import { MOTION } from "./motion"
 import { control } from "../controls"
 import { DIFFICULTY_NAME } from "./DifficultySlider"
+import { formatTime, resultWords } from "./challengeText"
+import { isChallengeView } from "./challengeCard"
 
 /**
  * What winning looks like (spec P1-4).
@@ -49,6 +51,11 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
     const cardRef = useRef<HTMLDivElement | null>(null)
     const nextRef = useRef<HTMLButtonElement | null>(null)
     const replayRef = useRef<HTMLButtonElement | null>(null)
+    const retryRef = useRef<HTMLButtonElement | null>(null)
+    const view = session.challengeView
+    const challenge = isChallengeView(view)
+    // Slice 3a, rule 16: on a challenge board, the next of the nine still to play, in any size.
+    const next = challenge ? levels.nextChallengeBoard() : null
 
     /*
      * Bring the whole card into view, then move focus to its primary action.
@@ -67,13 +74,30 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
      */
     useEffect(() => {
         cardRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-        (nextRef.current ?? replayRef.current)?.focus({ preventScroll: true })
+        (nextRef.current ?? replayRef.current ?? retryRef.current)?.focus({ preventScroll: true })
     }, [])
 
     const onNext = () => {
         // Guarded rather than assumed: the button is only rendered when there is a next
         // level, but the store is the authority on that.
-        levels.goToNextLevel()
+        if (!challenge) levels.goToNextLevel()
+        else if (next) levels.goToBoard(next)
+    }
+
+    /*
+     * The challenge's result lines (slice 3a, rule 15), under the board's name: the time and
+     * whether hints were used, or why there is no time; while the first solve saves, that it
+     * is saving, and if the save failed, that it is still trying.
+     */
+    const lines: string[] = []
+    if (view.kind === 'finishing') {
+        lines.push(view.saveFailed
+            ? 'Your time isn\'t saved yet. Keep this page open; it\'s still trying.'
+            : 'Saving your time…')
+    } else if (view.kind === 'result') {
+        const result = resultWords(view.result, view.assisted)
+        if (view.practice) lines.push(`Practice · ${formatTime(view.practice.elapsed)}`, `Your result: ${result}`)
+        else lines.push(result)
     }
 
     return (
@@ -98,12 +122,15 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                 <p className="text-body font-medium" data-completion-detail>
                     {DIFFICULTY_NAME[levels.difficulty]} · puzzle {levels.level} of 3
                 </p>
+                {lines.map(line => (
+                    <p key={line} className="text-body tabular-nums" data-completion-result>{line}</p>
+                ))}
             </div>
 
             {/* Secondary controls (graphics P2-2, row 14): the card's own surface is the
                 outcome, and its actions are what comes after it. */}
             <div className="flex flex-row gap-2">
-                {levels.hasNextLevel && (
+                {(challenge ? next !== null : levels.hasNextLevel) && (
                     <button
                         type="button"
                         ref={nextRef}
@@ -111,18 +138,33 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                         className={control('secondary')}
                         onClick={onNext}
                     >
-                        Next level
+                        {challenge ? 'Next board' : 'Next level'}
                     </button>
                 )}
-                <button
-                    type="button"
-                    ref={replayRef}
-                    data-replay
-                    className={control('secondary')}
-                    onClick={() => session.reset()}
-                >
-                    Play again
-                </button>
+                {view.kind === 'finishing' && view.saveFailed && (
+                    <button
+                        type="button"
+                        ref={retryRef}
+                        data-finish-retry
+                        className={control('secondary')}
+                        onClick={() => { void session.rootStore.challenge?.retry() }}
+                    >
+                        Try again
+                    </button>
+                )}
+                {view.kind !== 'finishing' && (
+                    <button
+                        type="button"
+                        ref={replayRef}
+                        data-replay
+                        className={control('secondary')}
+                        // Inside the window a replay is timed Practice (D5, rule 11); on a board
+                        // with nothing to clear it starts one directly (rule 16).
+                        onClick={() => challenge ? session.beginPractice() : session.reset()}
+                    >
+                        {challenge ? 'Practice' : 'Play again'}
+                    </button>
+                )}
             </div>
         </motion.div>
     )

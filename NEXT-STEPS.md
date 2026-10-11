@@ -1976,7 +1976,8 @@ Written for: codex, reviewing Claude's slice-3a contract and, later, its code.
 
 **Status (2026-10-11): accepted by codex at `92286c3`. Implementation commit 1 (hints keep
 the clock) is accepted by codex at `065b743`; commit 2 (the view, history and Next board)
-is built, mutation-tested and gated, awaiting codex's code review.**
+is accepted by codex at `556b1b1`; commit 3 (what's on screen) is built, mutation-tested
+and gated, awaiting codex's code review.**
 
 **Second review, codex (2026-10-11), on `359436e`: held, for one correction, made in
 rule 16.** On a restored empty board, Practice called `reset()`, which changes no cells
@@ -2438,6 +2439,100 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
 - Full cold rerun (2026-10-11): TIME_WAIT **70**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1562** tests in 66 files, 24 more than commit 1; stderr **0 bytes**),
   build **0**, browser **0** (**683 passed, 1 skipped**, 0 socket errors). Committed after it.
+
+**As built: implementation commit 3, what's on screen (rules 9–17, 19–20, 2026-10-11)**
+- Codex accepted commit 2 at `556b1b1`: eight challenge suites (293/293) and the palette
+  audit (16/16), stderr 0 bytes, type-checking, and two scratch tests of its own (an older
+  snapshot never clears a newly committed hint or clock-error flag, transient values
+  included; 2/2, deleted after), and CI run `38133952192` on that head. It suggested
+  keeping those two cases as committed tests: done, as one test in `challengeView.test.ts`.
+- **New components:** `ChallengeCover` (rendered instead of `ClientBoard`; the shell's own
+  box from `shellWidth`/`shellHeight`; the board's name and day; per-state words; Start,
+  or Try again for `unprepared`; focus to the board after a reveal only if Start had it),
+  `ChallengeClock` (its own `data-chrome` row, or nothing for a casual board; `0:00` on a
+  covered one; `role="timer"`), `ChallengeNotice` (one message, its own row only while one
+  applies). Shared wording in `challengeText.ts` (`formatTime`, `resultWords`,
+  `boardName`); the card's mount rule in `challengeCard.ts` (`cardIsUp`).
+- **Changed:** `DominoClient` renders notice, clock row, cover or board, and the legend
+  `inert` while covered; the card mounts by `cardIsUp`. `CompletionCard` adds the result
+  lines, "Next board" (`goToBoard(nextChallengeBoard())`), "Practice"
+  (`session.beginPractice()`) and Try again while a finish fails to save, in place of
+  Practice. Casual boards keep "Next level"/"Play again" and no result line. `GameControls`:
+  Check and Hint also disabled by `!canChange`, Reset by `!canChange`; `canChange` is always
+  true in a casual root. `coordinator.beginPractice` and `PuzzleSession.beginPractice` as
+  rule 16 says. The visual-build page `/visual/daily` (`DailyFixture.tsx`) mounts the real
+  `DominoClient` in the public page's wrapper with an enabled root.
+- **Moved, not changed:** `DIFFICULTY_NAME` now lives in `difficultyName.ts`, re-exported by
+  `DifficultySlider`. Reason: the day-selection component tests stub the slider's module,
+  and the cover, which those tests now render, needs the names. Likewise `cardIsUp` lives
+  in its own module, because those tests stub `CompletionCard`'s.
+- **Rule 14, measured** by the new `e2e/challenge.layout.spec.ts` (run by the `layout`
+  project only), enabled page against public: the clock row costs **37 px** (its line plus
+  the 16 px gap). Where the public page doesn't scroll (390×844 and 1280×800 at 50% and
+  100%) the enabled page doesn't either; the tightest is the 8×8 at 390×844, unclamped
+  cell 45 → 41 px. Where it already scrolls, it scrolls exactly 37 px more (for example
+  360×640's 8×8, 136 → 173). The trigger never fired, so **no fallback code was written**.
+- **Tests changed on purpose:** `tests/controls.test.ts`, the exact inventory 24 → 27, with
+  per-file counts for the fixture (4), the cover (2) and the card (3). `e2e/bundle.spec.ts`:
+  slice 2's four challenge-fixture checks now run in a loop over both fixtures, the same
+  four assertions for each. `e2e/calendar.ts` gains `byOffset` and `pinDayAcrossReloads`.
+  The first version of the reload test failed **2 of 33**: `pinDay` measures its offset at
+  each page load, so a reload sends the clock back to noon, before the attempt's saved
+  start, and the clock rightly read `0:00`. The test was wrong, not the app. It now pins
+  the day with one offset for the whole test (4/4 on a repeat).
+- **New tests:** `tests/challengeUi.test.tsx`, **20**, through the real `DominoClient`: every
+  covered state shows no grid, cell, rock, label or shell; the words and controls of each;
+  disabled controls; focus after a keyboard Start, and none moved by a pointer Start;
+  clock formatting, hints, clock change, yesterday, casual (no row, and no empty row) and
+  legacy; the card's times, the hints mark, Next board across sizes, saving and a failed
+  save, Practice with pieces (undoable) and on a restored empty board (no board change, no
+  Undo, no progress write, result unchanged; codex's case); no card on a covered board;
+  casual unchanged; the notice's message, order, and absence on an archive day.
+  `tests/challengeView.test.ts` +2 (26): the stale-flag case and `beginPractice`'s guards.
+  `e2e/challengeUi.spec.ts`, **8 tests × 2 projects**: nothing of the puzzle in the DOM or
+  the accessibility tree; keyboard Start; the cover's box equal to the shell's and the
+  legend unmoved (±0.5 px); the clock running, resumed after a reload, the solved time;
+  a hint keeping the clock; Next board across sizes and labelled Practice; yesterday;
+  the public page unchanged. `e2e/challenge.layout.spec.ts`, **7**.
+- First drafts that failed and were mine: one component assertion (the legend's text is in
+  `aria-label`, so it's found by `data-legend`), the empty-board Practice test landing on
+  the first unfinished board after reload (it now goes back to puzzle 1), and the reload
+  test above.
+- **Mutations: 30 of 30 caught at the intended test**, every file restored byte for byte:
+  28 unit-level, 2 browser-level (the covered clock row removed, caught by the box test;
+  the daily page compiled into production, caught by its exclusion checks). The first
+  unit sweep was 26 of 28. (1) Removing the page's casual guard on the clock row left an
+  empty `data-chrome` row on the public page, invisible to a text check but costing a
+  16 px gap: the clock now owns its row and renders none for a casual board, and the
+  casual test asserts no empty rows. (2) The notice's casual check was untested, because
+  my test used a root with the challenge off: now an enabled, unsaved root on an archive
+  day. The whole sweep was rerun after both. Probes: the grid hidden rather than absent;
+  the legend not inert; the covered clock row missing; Start leaving focus on the page;
+  moving it for a pointer Start; a future board offering Start; unprepared without Try
+  again; Start enabled while starting; Reset and Hint enabled while covered; an empty
+  clock row on a casual board; the clock ignoring a clock change, the hints mark,
+  yesterday; an untimed result given a time; a hinted result marked "no hints"; Next board
+  staying in one size; "Practice" on a casual board; Practice shown during a failed save;
+  the card up on `completed` for a covered view; the card waiting for `completed` on a
+  result; the notice's order reversed; the notice on a casual board; Practice dropping its
+  empty-board transition; adding an Undo entry; `beginPractice` without a solved result;
+  during a Practice run; history ignoring flags; the two browser probes.
+- Nothing public changes: `provider.tsx` is untouched, and every new element renders only
+  for a challenge view. The gate's unchanged desktop and phone baselines are the evidence.
+- Cold gate, first run (2026-10-11), **failed, so no commit**: TIME_WAIT **46**, root
+  verified. TypeScript **0**, lint **0**, unit **0** (**1584** in 67 files, stderr **0
+  bytes**), build **0**, browser **1** (**706 passed, 4 failed, 1 skipped**, 0 socket
+  errors). The four were two slice-2 tests in `e2e/challengeSession.spec.ts`, in both
+  projects: they clicked Hint while a Start saved (line 148) and Reset while a finish saved
+  (line 278), to show the click changed nothing, and timed out because rule 12 now
+  disables those buttons. The contract's test list missed them, which was my mistake.
+  **Changed on purpose:** each now asserts the button is disabled, and still calls the same
+  session method directly to show its own guard refuses it, so neither guarantee is lost.
+  That spec then passed **28/28**. The whole gate is rerun from cold.
+- Full cold rerun (2026-10-11): TIME_WAIT **36**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1584** in 67 files, 22 more than commit 2; stderr **0 bytes**), build
+  **0**, browser **0** (**710 passed, 1 skipped**, 27 more than before; 0 socket errors),
+  with the public desktop and phone pixel baselines unchanged. Committed after it.
 
 **Validation record**
 - Decisions commit `784e7af` (docs only), gate from cold, first run (2026-10-11): an

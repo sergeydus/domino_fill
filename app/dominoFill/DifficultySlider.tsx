@@ -3,6 +3,7 @@ import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
 import { PRESSED } from "./controlStates"
 import { control } from "../controls"
+import { DIFFICULTY_NAME } from "./difficultyName"
 
 /**
  * Difficulty (spec P1-8, row 19).
@@ -34,11 +35,8 @@ import { control } from "../controls"
  * already did before this row; see `RAIL_WIDTH_PX`.
  */
 
-/**
- * What each difficulty is called, where a player reads it: here, and on the completion card
- * (graphics P2-3), which names the puzzle just solved. `normal` is "Medium" on screen.
- */
-export const DIFFICULTY_NAME = { easy: 'Easy', normal: 'Medium', hard: 'Hard' } as const
+/** Re-exported for the readers that have always found the names here. */
+export { DIFFICULTY_NAME }
 
 const LEVELS = [
     { key: 'easy', label: `${DIFFICULTY_NAME.easy} 6x6` },

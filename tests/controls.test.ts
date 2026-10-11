@@ -212,10 +212,15 @@ describe('every button is one variant, and says nothing else about its look', ()
 
     it('reads the app: every button there is, found', () => {
         // A positive control: a scan that found no buttons would pass everything below.
-        // 20 existing declarations plus the challenge fixture's four test-only controls.
-        expect(all.length).toBe(24)
-        expect(all.filter(button => button.at.replace(/\\/g, '/')
-            .startsWith('app/visual/challenge/ChallengeFixture.tsx:'))).toHaveLength(4)
+        // 20 existing declarations plus the challenge fixture's four test-only controls, and
+        // since slice 3a three more: the cover's Start and Try again, and the completion
+        // card's Try again for a finish that hasn't saved. "Next board" and "Practice" are
+        // the card's existing buttons, relabelled.
+        expect(all.length).toBe(27)
+        const at = (file: string) => all.filter(button => button.at.replace(/\\/g, '/').startsWith(`${file}:`))
+        expect(at('app/visual/challenge/ChallengeFixture.tsx')).toHaveLength(4)
+        expect(at('app/dominoFill/ChallengeCover.tsx')).toHaveLength(2)
+        expect(at('app/dominoFill/CompletionCard.tsx')).toHaveLength(3)
     })
 
     it('recognises a button\'s own look, however it is written', () => {

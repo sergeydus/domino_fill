@@ -318,6 +318,17 @@ export class PuzzleSession {
         return !binding || this.rootStore.challenge!.canMutate(binding)
     }
 
+    /**
+     * The completion card's Practice (slice 3a, rule 16): a Reset when there are pieces to
+     * clear, which starts Practice through the mutation hook and stays undoable; on a board
+     * with nothing on it, a Practice run started directly, with no board change.
+     */
+    beginPractice() {
+        const binding = this.challengeBinding
+        if (this.hasMoves || !binding) this.reset()
+        else this.rootStore.challenge!.beginPractice(binding)
+    }
+
     startChallenge(): Promise<boolean> {
         const binding = this.challengeBinding
         return binding ? this.rootStore.challenge!.startBoard(binding) : Promise.resolve(false)

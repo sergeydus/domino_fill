@@ -145,7 +145,10 @@ test('Start stays covered through request success and an abort, then retries', a
     expect(await place(page, 0), 'input before Start commits').toBe(false)
     await drag(page, [0, 0], [1, 0])
     expect((await state(page)).board, 'real board gesture before Start commits').toEqual([[null, null], [null, null]])
-    await page.getByRole('button', { name: 'Hint', exact: true }).click()
+    // Since slice 3a (rule 12) the button itself is off while Start saves; the session's
+    // own guard still refuses the same call made directly.
+    await expect(page.getByRole('button', { name: 'Hint', exact: true })).toBeDisabled()
+    await page.evaluate(() => { void window.challengeFixture!.root.boardsStore.currentBoard!.requestHint() })
     expect((await state(page)).advice).toBeNull()
     await release(page, true)
     await expect.poll(async () => (await state(page)).starting).toBe(false)
@@ -275,7 +278,10 @@ test('a lost finish recovers on reload and Practice preserves the fixed result',
     const saved = await page.evaluate(id => JSON.parse(localStorage.getItem(`dominoFill.progress.v2.${id}`)!), id)
     expect(saved.solveEvidence.solvedAt).toBe(pending.solvedAt)
     expect(saved.solveEvidence.solvedOn).toBe(LATE_IN_A_MONTH)
-    await page.getByRole('button', { name: 'Reset', exact: true }).click()
+    // Since slice 3a (rule 12) the button is off while the finish saves; the session's own
+    // guard still refuses a direct Reset.
+    await expect(page.getByRole('button', { name: 'Reset', exact: true })).toBeDisabled()
+    await page.evaluate(() => window.challengeFixture!.root.boardsStore.currentBoard!.reset())
     expect((await state(page)).board, 'Reset is blocked while the first finish is pending').toEqual(saved.board)
     // Stop automatic retries, abort the real finish transaction, then reopen the real page.
     await page.evaluate(() => window.challengeFixture!.stop())

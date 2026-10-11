@@ -292,6 +292,28 @@ describe('boardView: every state, from real transitions (rule 6)', () => {
     })
 })
 
+describe('beginPractice: only after a solved result (rule 16)', () => {
+    it('starts nothing on a covered, playing or finishing board, nor during a Practice run', async () => {
+        const h = harness()
+        await open(h)
+        const binding = () => h.service.bindings.get(h.session())!
+        expect(h.service.beginPractice(binding()), 'ready').toBe(false)
+        expect(await h.session().startChallenge()).toBe(true)
+        expect(h.service.beginPractice(binding()), 'playing').toBe(false)
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        expect(h.service.beginPractice(binding()), 'finishing').toBe(false)
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(binding().practice).toBeNull()
+        expect(h.service.beginPractice(binding()), 'a solved result').toBe(true)
+        expect(binding().practice).toEqual({ startedAt: T0 + 200 })
+        expect(h.service.beginPractice(binding()), 'already practising').toBe(false)
+        expect(h.view()).toMatchObject({ kind: 'result', practice: { elapsed: 0, solved: false } })
+    })
+})
+
 describe('history: forward only (rule 7)', () => {
     it('collects stored attempts at opening, then this root\'s Start and finish', async () => {
         const h = harness()
@@ -346,6 +368,35 @@ describe('history: forward only (rule 7)', () => {
         seen.stop()
         expect(seen.values.every(attempt => attempt?.result !== undefined), 'never back to no result').toBe(true)
         expect(h.service.history.get(id)?.result).toEqual({ kind: 'solved', ms: 200 })
+    })
+
+    it('never clears a hint or clock-error flag committed while an older snapshot was read (codex)', async () => {
+        const h = harness()
+        await begin(h)
+        const id = h.session().definition.puzzleId
+        const read = h.store.readAll.bind(h.store)
+        const taken = deferred<void>()
+        const gate = deferred<void>()
+        vi.spyOn(h.store, 'readAll').mockImplementationOnce(async () => {
+            const snapshot = await read()
+            taken.resolve()
+            await gate.promise
+            return snapshot
+        })
+        const refreshing = h.service.refresh()
+        await taken.promise
+        await h.session().requestHint()
+        // The wall clock falls 10 s behind the monotonic one: a detected clock change.
+        h.setTime(T0 - 10_000, 100 + 1_000)
+        h.service.tick()
+        await vi.waitFor(() => expect(h.service.history.get(id)).toMatchObject({ assisted: true, clockError: true }))
+        const seen = watch(h, id)
+        gate.resolve()
+        await refreshing
+        seen.stop()
+        expect(seen.values.every(attempt => attempt?.assisted === true), 'the hint flag never cleared').toBe(true)
+        expect(seen.values.every(attempt => attempt?.clockError === true), 'the clock flag never cleared').toBe(true)
+        expect(h.service.history.get(id)).toMatchObject({ assisted: true, clockError: true })
     })
 
     it('keeps an entry a snapshot lacks, and everything when the read fails', async () => {

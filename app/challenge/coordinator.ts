@@ -302,6 +302,24 @@ export class ChallengeCoordinator {
         }
     }
 
+    /**
+     * Start a Practice run on a board with nothing to clear (slice 3a, rule 16).
+     *
+     * Practice normally begins with the first change after a result (rule 11), and the
+     * card's Practice is a Reset. But a fixed result whose progress was lost restores an
+     * empty board, and a Reset there changes nothing, so it never reaches `boardChanged`
+     * and the button would do nothing (codex reproduced it). This starts the run directly:
+     * no board change, no Undo entry, no progress write, and the result untouched.
+     */
+    beginPractice(binding: ChallengeBinding): boolean {
+        const view = this.boardView(binding.session)
+        if (view.kind !== 'result' || view.practice !== null || view.result.kind === 'given-up') return false
+        if (!this.canMutate(binding)) return false
+        binding.practice = { startedAt: this.sample().wall }
+        binding.solveEvidence = undefined
+        return true
+    }
+
     /** Fold one committed record into `history`, forward only (rule 7). */
     private remember(attempt: Attempt, committed: boolean) {
         const held = this.history.get(attempt.puzzleId)

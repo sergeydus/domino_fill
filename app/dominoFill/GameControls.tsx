@@ -54,7 +54,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
             data-check
             className={control('primary')}
             onClick={() => { void boardsStore.requestCheck() }}
-            disabled={boardsStore.completed}
+            disabled={boardsStore.completed || !boardsStore.canChange}
         >
             Check
         </button>
@@ -63,7 +63,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
             data-hint
             className={control('secondary')}
             onClick={() => { void boardsStore.requestHint() }}
-            disabled={boardsStore.completed}
+            disabled={boardsStore.completed || !boardsStore.canChange}
         >
             Hint
         </button>
@@ -81,6 +81,9 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
             data-reset
             className={control('caution')}
             onClick={() => boardsStore.reset()}
+            // Slice 3a, rule 12: visibly off while a challenge board refuses changes (covered,
+            // starting, saving a hint or a finish). Always on in casual play, as before.
+            disabled={!boardsStore.canChange}
         >
             Reset
         </button>
