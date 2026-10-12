@@ -2787,6 +2787,224 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
   **0**, unit **0** (**1537**, stderr **0 bytes**), build **0**, browser **0** (**683
   passed, 1 skipped**, 0 socket errors). Committed after it.
 
+### Challenge slice 3b, results, Share, streak and countdown: implementation contract
+
+Written by Claude, to be reviewed by codex before any code (user, 2026-10-12). The product
+choices are the user's, in the decision log (2026-10-09 to 2026-10-12) and D7, D9 and D17;
+nothing here decides product. Where this contract has to choose something those decisions
+leave open, it says so and marks it **proposed**, so the review can send it to the user.
+
+**Why.** 3a made each board playable and timed, and gave each its own result. Nothing yet
+gathers a day: there is no screen that shows the nine boards and each size's total, no way
+to share it, no streak, and no reason to come back tomorrow. Those four are what the user
+chose to go live with (2026-10-11), and the challenge stays switched off until they exist.
+This slice builds them and, last, switches the challenge on.
+
+**How it works today** (read in the code, `master` at `ec1353f`):
+- Every attempt this device knows of is in `coordinator.history` (`coordinator.ts:209`), a
+  forward-only `observable.shallow` map by puzzle ID, filled by `enumerate` reading every
+  stored attempt at start and on refresh (`coordinator.ts:778`), and by each committed
+  transaction (`remember`, 324). Attempts are never deleted (`attemptStore.ts:24`), so the
+  map holds every day ever played on this device, which is what a streak needs.
+- A size's result is `sizeResult(attempts)` (`attempt.ts:163`): a total when all three were
+  solved with a time, marked `assisted` if any was hinted, else partial.
+- The window is calendar dates only (`window.ts`): `inWindow`, `afterWindow`, `addDays`.
+  The coordinator's device date is `dayKey(new Date(now.wall))` (`coordinator.ts:225`), and
+  `now` is resampled every second by `tick` (853) while the coordinator runs.
+- The day's nine boards and their definitions come from `LevelStore` (`definitionsFor`,
+  `BoardsStore.ts:527`), for the day being viewed (`viewingDate`, 74).
+- The row with Archive is `navigation` (`DominoClient.tsx:278`): the level arrows,
+  `ArchiveButton` (`PageButtons.tsx:21`), and the control-mode and sound buttons. It sits
+  under the board in the column and in the rail when wide. There is no top bar: **the
+  user's "top bar" is this row, beside Archive**, wherever Archive is.
+- The archive is a dialog mounted only while open (`Archive.tsx`, `archiveOpen`), with a
+  Close button, no key handler and no focus management. The
+  midnight rollover is `useDayRollover` (polls each minute and on focus).
+- The site's address is `resolveSiteUrl(process.env.NEXT_PUBLIC_SITE_URL)`
+  (`siteMetadata.ts:42`), defaulting to `CANONICAL_ORIGIN`, `https://domino-fill.vercel.app`.
+- The challenge is off: `provider.tsx:13` builds `new RootStore()`, whose `challenge`
+  option defaults to false (`RootStore.ts:34`). `/visual/daily` is the enabled page.
+
+**The rules**
+
+*A. A day's results, as data*
+1. A new pure module, `app/challenge/dayResults.ts`. `dayResults(date, boards, history)`
+   takes the day's nine boards as `{ difficulty, level, puzzleId, definitionHash }` (from the
+   day's definitions, never parsed out of an ID) and returns, per board, one state:
+   `solved { ms, assisted }`, `untimed { reason, assisted }`, `given-up`, `in-play`
+   (started, no result yet) or `not-started`; and per size, `sizeResult` of its three. An
+   attempt counts only if its puzzle ID, definition hash and date are this board's (rule 18
+   of 3a, the same identity check, shared rather than copied); otherwise the board is
+   `not-started`.
+2. "A whole size finished" means all three of its boards have a result that is a solve
+   (`solved` or `untimed`); "the day finished" means all nine have a result of any kind.
+   *Proposed*: a given-up board finishes the day but not its size, since given up only
+   happens once the date has left the window, when there is nothing left to play.
+
+*B. The streak, as data*
+3. A new pure module, `app/challenge/streak.ts`. `streak(history, deviceDate)` derives
+   everything from the attempts; nothing about the streak is stored. A **played day** is a
+   board date with at least one attempt whose result is `solved` or `untimed`, hinted or
+   not (D9, 2026-10-09). Days are board dates, not the instant of the solve: solving
+   yesterday's board just after midnight keeps yesterday (D8, D9).
+4. It walks every date from the first played day to `deviceDate`, in order, with
+   `streak = 0, freezes = 0, toward = 0`:
+   - a played day: `streak + 1`; if `freezes < 3`, `toward + 1`, and at 3, `freezes + 1`
+     and `toward = 0`. At 3 saved, nothing counts toward the next (user, 2026-10-12).
+   - a day still in the window (`deviceDate` or the day before) that isn't played yet:
+     nothing changes. It isn't missed while it can still be played.
+   - a missed day, with a freeze: `freezes - 1`, the streak unchanged (a frozen day adds
+     nothing; user, 2026-10-12), and the date recorded as frozen.
+   - a missed day, without one: `streak = 0`, `toward = 0` (user, 2026-10-12).
+   It returns `{ streak, freezes, frozen: string[], playedEver: boolean }`. Milestones are
+   7, 30, 100 and 365 (user, 2026-10-12).
+5. A board date after `deviceDate` (a clock set back, or another device's later attempt)
+   counts nowhere: the walk stops at `deviceDate`. *Proposed*.
+
+*C. The results screen*
+6. A dialog like the archive, mounted only while open, for the **day being viewed**, when
+   that day is a challenge day (`today` or yesterday, by the coordinator's device date). It
+   shows:
+   - the date, as "12 Oct 2026";
+   - three rows, Easy · 6×6, Medium · 7×7, Hard · 8×8, each with its three boards (a square
+     and the board's time or state in words: "1:23", "1:23 · hints used", "no time",
+     "given up", "in play", "not played") and the size's line: the total, the total
+     "· with hints", or "partial";
+   - the streak, "🔥 12-day streak", and saved freezes beside it, "❄️ 2 freezes", hidden at
+     0 (user, 2026-10-12); a milestone line, "🎉 7-day streak!", on the results of the day
+     that reached it; and, when a freeze was used between the previous played day and this
+     one, "❄️ A freeze kept your streak on 10 Oct";
+   - the countdown (rule 12) and Share (rule 10);
+   - Close. No Escape: the archive's dialog has none (read: no key handler in `Archive.tsx`),
+     and a new key would break the no-shortcuts decision (2026-09-28).
+   *Proposed, on "a milestone is shown once"*: the line shows whenever the results of the
+   day that reached it are open, and on no other day. That needs no stored flag, and it
+   can't be lost or shown twice across devices. A stored "already shown" flag is the
+   alternative if the user wants it gone after one look.
+7. *Proposed*, since the archive moves no focus at all today (read: no `focus` call in
+   `Archive.tsx`): on opening, focus moves to the dialog's heading (`tabIndex={-1}`), and
+   on closing, back to the Results button, or, when it opened by itself, to where focus was
+   before. Every square has its words in text, so nothing depends on colour or emoji: the grid is
+   a list with each board's name ("Easy puzzle 1, 1:23, no hints").
+8. **It opens by itself** (user, 2026-10-11) when a board's result is committed on screen
+   and that result completes its size (rule 2) or the day: once per such commit, after the
+   Solved! card, which stays where it is underneath. It never opens by itself for a result
+   that arrives from another tab or from enumeration, only for a finish on this board.
+9. **The Results button** sits in the navigation row, right after Archive (user,
+   2026-10-12), shown when the day being viewed is a challenge day and at least one of its
+   boards has a result. It opens the screen. Labelled "Results", the `quiet` control role,
+   as Archive is.
+
+*D. Share*
+10. Share copies the text below with `navigator.clipboard.writeText` and says "Copied" for a
+    few seconds, announced once (`role="status"`). It never posts and never opens the
+    system share sheet (D7, 2026-10-11). Where the clipboard refuses or is missing, it shows
+    the same text in a read-only, pre-selected text box with "Copy this text", so it can
+    always be copied by hand.
+11. The text, from the results data (user, 2026-10-12):
+    ```
+    Domino Fill · 12 Oct 2026
+    6×6 🟩🟩🟩 3:41
+    7×7 🟩🟨🟩 5:02 · with hints
+    8×8 🟩⬛⬜ partial
+    🔥 12-day streak
+    domino-fill.vercel.app
+    ```
+    🟩 solved without hints (timed or not), 🟨 solved with hints, ⬛ given up, ⬜ anything
+    else (in play or not played). The size's words are exactly the results screen's. The
+    streak line is left out at 0. The address is `resolveSiteUrl`'s host, without
+    `https://`. Nothing from the puzzle itself: no rocks, numbers or positions.
+
+*E. The countdown*
+12. On the results screen only (user, 2026-10-12): "Next challenge in 6:42:10", to the
+    device's next local midnight, from the coordinator's sampled clock, so it ticks with
+    `tick` and tests can drive it. At midnight it reads "Today's challenge is ready", and
+    the existing rollover moves the page on as it does now.
+
+*F. The streak beside Archive*
+13. "🔥 12" in the navigation row after Results (user, 2026-10-12), shown only when
+    `playedEver` (D9: never to players who have never played the challenge), so 0 shows as
+    "🔥 0" for a player whose streak broke. Text, not a button, with an accessible name,
+    "12-day streak". No freezes here (user, 2026-10-12).
+14. Both new items join the navigation row, which already wraps. Their cost to the board's
+    height budget is measured, as 3a's rule 14 was: where the public page doesn't scroll,
+    the enabled page mustn't; where it already scrolls, any extra is reported. *Proposed
+    trigger*: if a 360-wide phone wraps the row onto a third line, the streak moves onto
+    the clock line instead; measured first, and this contract amended if it fires.
+
+*G. Switching it on*
+15. The last commit sets `provider.tsx`'s root to `new RootStore(new CorpusSource(),
+    { challenge: true })`. That changes the public page (a covered board, the clock line,
+    new buttons), so it is a `[visual update]` commit, and the new baselines follow in their
+    own commit from CI's `visual-baselines` artifact. Before it, every 3b feature is
+    reachable only on `/visual/daily`, and the public page and baselines are unchanged.
+16. The existing public browser suites assumed the casual game on today's board. Each one
+    that breaks under activation is changed on purpose and listed in this contract's As
+    built, with the reason, or pinned to an archive day where it is about casual play.
+
+**Not in this slice**
+- Date links (the shared link is the home page; user, 2026-10-12), badges, stats (D6),
+  receipts (D11), previous-best splits (D12), notifications, a finish animation (not
+  decided), the system share sheet.
+- Any change to Ruleset v1, the attempt store, or slice 2's saves.
+- A results screen for archive days: they are casual.
+
+**Tests**
+- `tests/dayResults.test.ts`: each board state; the identity checks; size totals,
+  "with hints", partial for an untimed or given-up board; "size finished" and "day
+  finished".
+- `tests/streak.test.ts`: played days by board date; today and yesterday pending, not
+  missed; a freeze earned on the 3rd played day, paused at 3, used on a missed day, adding
+  nothing; a break resetting the streak and `toward`; a hinted and an untimed solve
+  counting, a given-up board not; future dates ignored; milestones; `playedEver`.
+- `tests/shareText.test.ts`: the exact text for a full day, a partial day, a hinted size,
+  a given-up board, streak 0 (no line), and the host from `resolveSiteUrl`.
+- `tests/challengeResults.test.tsx` (jsdom, real `DominoClient`, enabled root): the Results
+  button's presence rules; the screen's words for every board state; opening by itself
+  after a size and after the ninth, and not after a result from another tab; Share copying
+  (clipboard stub) and its fallback box; the countdown ticking with `tick` and reaching
+  midnight; the streak beside Archive only with `playedEver`; freezes and the milestone
+  and freeze-used lines.
+- `e2e/challengeResults.spec.ts` on `/visual/daily`, with `pinDay`: finishing a size opens
+  the results; Results reopens them; Share puts the text on the clipboard (Chromium's
+  clipboard permission granted in the test); the dialog's focus on opening and closing; the countdown
+  moves.
+- The layout measurement of rule 14, in the `layout` project.
+- Activation: the public suites run against the switched-on page; the new baselines.
+
+**Mutation probes planned**, each against its intended assertion: a hinted solve shown
+without the mark; an untimed board in a total; the identity check dropped (each field); a
+given-up board finishing its size; the streak counting a solve's instant instead of its
+board date; yesterday counted missed; a frozen day adding one; freezes earned at the cap; a
+break keeping `toward`; a future date counted; 🟨 for a hintless solve; the streak line at
+0; the URL with its scheme; the results opening for another tab's result; the Results
+button with no result; the streak shown without `playedEver`; the countdown off by the
+time zone (UTC midnight); Share without its fallback.
+
+**Commits planned**
+1. The data: `dayResults`, `streak`, the share text, with their unit tests.
+2. The results screen, the Results button, the streak beside Archive, Share and the
+   countdown, on `/visual/daily`, with component and browser tests and rule 14's
+   measurement.
+3. Opening by itself after a size or the day.
+4. Switching it on (`[visual update]`), then the new baselines in their own commit.
+Each gets its own mutations, cold gate and As built notes, and goes to codex for review
+before the next. The PR is opened only when the user says.
+
+**Validation record**
+- Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **21**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600** in 67 files,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run.
+- Streak-rules commit `84b7494` (docs only), gate from cold, first run (2026-10-12):
+  TIME_WAIT **36**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run.
+- This contract's commit (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **38**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run. Committed after it.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
