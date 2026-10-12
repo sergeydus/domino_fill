@@ -3327,6 +3327,38 @@ before the next. The PR is opened only when the user says.
   **0** (**733 passed, 1 skipped**, 15 more; 0 socket errors). No failed run. Committed after
   it.
 
+**Correction after codex's review of commit 2 (`4113df9`, 2026-10-12)**
+- Codex held `4113df9` for two focus defects, each reproduced in Chromium in both projects:
+  - **The start guard ignored Share's text box.** With the box shown, Shift+Tab from Share
+    went to Close, skipping the box, and reverse tabbing then cycled Share and Close. Rule 7
+    wants the guard on the last control there is: the start guard now focuses the box when
+    it is shown, else Close. The As built line above ("the start guard sends focus to
+    Close") is amended by this.
+  - **Results lost the keyboard across the layout change.** Focused, then resized between
+    1280x800 and 360x640, focus fell to the page's body in both directions: Results moves
+    between the column and the rail like Archive, but `data-open-results` wasn't among
+    `FocusAcrossComposition`'s control attributes. It is now; the mechanism is unchanged.
+    I missed it because rule 7's "focus is never stranded" check covered only opening and
+    closing the dialog, not the button that opens it.
+- **Tests:** the refusal unit test now also checks the start guard reaching the box (unit
+  count unchanged, 21). Two new browser tests, x 2 projects: the box shown, Tab four times
+  (Share, Close, box, Share) and Shift+Tab four times (box, Close, Share, box); Results
+  focused at 1280x800, narrowed to 360x640 and widened back, focused each time and present
+  once. Before the fix, both failed (measured by the probes below).
+- **Mutations: 3 of 3 caught at the intended test,** files restored byte for byte: the start
+  guard always to Close (unit, at the new assertion; browser, both projects, at the Shift+Tab
+  sequence); `data-open-results` removed from the control attributes (browser, both
+  projects, at "narrowing dropped the keyboard"). The widening direction has no separate
+  probe: the one attribute serves both, and the probe fails at narrowing first.
+- Gate from cold, two runs (2026-10-12). **Run 1:** TIME_WAIT **99**, root verified;
+  TypeScript **0**, lint **0**, unit **0** (**1653**, stderr **0 bytes**), build **0**,
+  browser **0** (**737 passed, 1 skipped**), but **1 socket error**: one board load hit
+  `ERR_NO_BUFFER_SPACE` in `accessibility.spec.ts` (phone-360) and the helper's reload
+  recovered it. No test failed, but the run started at the pool's limit, so I didn't commit
+  on it. **Run 2:** TIME_WAIT **41**; TypeScript **0**, lint **0**, unit **0** (**1653**,
+  stderr **0 bytes**), build **0**, browser **0** (**737 passed, 1 skipped**, 4 more; 0
+  socket errors). Committed after run 2.
+
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
   **21**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600** in 67 files,

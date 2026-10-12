@@ -68,6 +68,51 @@ test('Tab and Shift+Tab stay inside the dialog, never reaching the page (codex)'
     expect(await active()).toMatchObject({ inside: true, name: 'Close' })
 })
 
+test('with the text box shown, Tab and Shift+Tab wrap through it both ways (codex)', async ({ page }) => {
+    // A clipboard that refuses, so Share shows the text to copy by hand. Before the fix,
+    // Shift+Tab from Share skipped the box for Close, and reverse tabbing never reached it.
+    await page.addInitScript(() => {
+        Clipboard.prototype.writeText = () => Promise.reject(new DOMException('denied', 'NotAllowedError'))
+    })
+    await open(page)
+    await solveFirst(page)
+    await openResults(page)
+    await page.getByRole('button', { name: 'Share' }).focus()
+    await page.keyboard.press('Enter')
+    const box = page.locator('[data-results-fallback]')
+    await expect(box).toBeFocused()
+    const focused = () => page.evaluate(() => {
+        const el = document.activeElement
+        if (!el?.closest('[data-results]')) return 'outside'
+        return el.hasAttribute('data-results-fallback') ? 'box' : el.textContent?.trim() ?? ''
+    })
+    const forward: string[] = []
+    for (let i = 0; i < 4; i++) { await page.keyboard.press('Tab'); forward.push(await focused()) }
+    expect(forward).toEqual(['Share', 'Close', 'box', 'Share'])
+    const backward: string[] = []
+    for (let i = 0; i < 4; i++) { await page.keyboard.press('Shift+Tab'); backward.push(await focused()) }
+    expect(backward).toEqual(['box', 'Close', 'Share', 'box'])
+})
+
+test('Results keeps the keyboard across the layout change, both ways (codex)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await open(page)
+    await solveFirst(page)
+    const resultsButton = page.locator('[data-open-results]')
+    await resultsButton.focus()
+    await expect(resultsButton).toBeFocused()
+
+    await page.setViewportSize({ width: 360, height: 640 })
+    await expect(page.locator('[data-rail]')).toHaveCount(0)
+    await expect(resultsButton, 'narrowing dropped the keyboard').toBeFocused()
+    await expect(resultsButton).toHaveCount(1)
+
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect(page.locator('[data-rail]')).toHaveCount(1)
+    await expect(resultsButton, 'widening dropped the keyboard').toBeFocused()
+    await expect(resultsButton).toHaveCount(1)
+})
+
 test('Share puts the decided text on the clipboard', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: VISUAL_URL })
     await open(page)

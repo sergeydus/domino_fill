@@ -331,6 +331,10 @@ describe('Share (rules 10 and 11)', () => {
         const box = dialog()!.querySelector<HTMLTextAreaElement>('[data-results-fallback]')!
         expect(box.value).toContain('Domino Fill · 10 Oct 2026')
         expect(document.activeElement).toBe(box)
+        // The box is now the last control, so the start guard wraps to it, not to Close (codex).
+        share.focus()
+        act(() => { dialog()!.querySelector<HTMLElement>('[data-focus-guard="start"]')!.focus() })
+        expect(document.activeElement).toBe(box)
     })
 
     it('shows it without moving focus when the refusal arrives after focus moved on', async () => {

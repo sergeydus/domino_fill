@@ -126,7 +126,9 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
             className='fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 p-4'
         >
             <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-panel p-4 text-panel-ink'>
-                <div tabIndex={0} data-focus-guard='start' onFocus={() => closeRef.current?.focus()} />
+                {/* To the last control there is: the text box once Share has shown it (codex). */}
+                <div tabIndex={0} data-focus-guard='start'
+                    onFocus={() => (fallbackRef.current ?? closeRef.current)?.focus()} />
                 <h2 id='results-heading' ref={headingRef} tabIndex={-1} data-results-heading
                     className='mb-3 text-card-title font-bold'>
                     Results · {dayWords(day.date)}
