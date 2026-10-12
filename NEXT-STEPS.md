@@ -2909,10 +2909,14 @@ This slice builds them and, last, switches the challenge on.
      depends on colour or emoji: the grid is a list naming each board ("Easy puzzle 1,
      1:23, no hints").
    - While it's open the page behind it is `inert`: the dialog renders outside the
-     `data-stage` element, which gets `inert`, so Tab moves only among the dialog's own
-     controls, with no focus-trap code. `role="dialog"`, `aria-modal="true"`, named by its
-     heading. The archive manages no focus today (read: no `focus` call in `Archive.tsx`);
-     this doesn't change it.
+     `data-stage` element, which gets `inert`. `role="dialog"`, `aria-modal="true"`, named
+     by its heading. **Inert alone doesn't keep Tab inside** (codex, measured in Chromium:
+     Tab went Share, Close, the page's body, Share). So the dialog also has two focus
+     guards, empty focusable elements first and last inside it: focusing the last moves
+     focus to the dialog's first control, and focusing the first moves it to the last.
+     Tab and Shift+Tab then wrap both ways. No key is listened for: Tab itself is
+     untouched, and there's still no Escape. The archive manages no focus today (read: no
+     `focus` call in `Archive.tsx`); this doesn't change it.
    - Results and Archive are never open together: opening either closes the other, and
      rule 8 never opens Results while Archive is open.
    - On closing, focus goes back to the element that had it when the dialog opened, if it
@@ -2944,10 +2948,11 @@ This slice builds them and, last, switches the challenge on.
      the last `serial` it handled. On a new one it checks that the signalled board is still
      the board on screen, that its date is the day being viewed, and that, with this
      result, its size is finished or the day is (rule 2). If so, it opens Results **1.5
-     seconds later** (*proposed*), so the Solved! card's committed time (3a, rule 15) is on
-     screen first. The wait is cancelled if, before it ends, the board changes, Archive
-     opens or Practice starts. The ninth solve, completing its size and the day at once,
-     opens it once.
+     seconds later** (user, 2026-10-12), so the Solved! card's committed time (3a, rule
+     15) is on screen first. The wait is cancelled if, before it ends, the board changes,
+     Archive opens, Practice starts, or **Results is opened by hand**: the signal is then
+     spent, so opening and closing Results during the wait can't make it open again
+     (codex). The ninth solve, completing its size and the day at once, opens it once.
    - **Navigation during a held finish:** if the player has moved to another board when
      the commit lands, nothing opens; the Results button is there.
    - **A failed save** opens it when Try again or the timer finally commits it, by the same
@@ -2989,6 +2994,12 @@ This slice builds them and, last, switches the challenge on.
     - The dialog keeps the date it opened with. At midnight that date becomes yesterday,
       still a challenge day, so its results stay right; the existing rollover moves the
       page underneath as it does now, and the Results button then follows the page's day.
+    - **It closes itself when its date leaves the window** (codex): once the coordinator's
+      device date is two days past the dialog's date, its results are an archive day's,
+      and the screen is only for challenge days (rule 6). A dialog opened on today's
+      results and left open across two midnights closes at the second; one opened on
+      yesterday's results closes at the next midnight, so its countdown never reaches
+      "ready". Focus then goes where rule 7's closing rule sends it.
 
 *F. The streak beside Archive*
 13. "🔥 12" in the navigation row after Results (user, 2026-10-12), shown only when
@@ -2998,10 +3009,13 @@ This slice builds them and, last, switches the challenge on.
 14. **Layout, with 3a's full criteria** (codex). The navigation row gains Results and the
     🔥 count. Measured by a `layout`-project spec against today's public page, at every
     viewport and board size of the layout suite (7 × 3), in each state: covered, playing,
-    a result with Results shown, the widest count ("🔥 365"), and an archive day (no clock
-    line, no Results, the 🔥 shown). The criteria: where the public page doesn't scroll,
-    the enabled page doesn't; the **unclamped cell stays at or above the 38 px minimum**;
-    where the public page already scrolls, the extra is reported. Where a viewport fails,
+    a result with Results shown, the widest count, and an archive day (no clock
+    line, no Results, the 🔥 shown), with the count at four digits, "🔥 3653", since the
+    published corpus has 3,653 days (codex). The criteria, 3a's: where the public page
+    doesn't scroll, the enabled page doesn't; **where the public page's unclamped cell
+    meets the 38 px minimum, the enabled page's does too** (some viewports are below it
+    already, and stay as they are); where the public page already scrolls, the extra is
+    bounded and reported. Where a viewport fails,
     the 🔥 moves to the end of the clock line there, "1:23 · 🔥 12" (user, 2026-10-12), by
     a width rule taken from the measurement, and the spec measures again. On an archive
     day there's no clock line, so the 🔥 stays in the row; the archive-day state shows
@@ -3048,9 +3062,14 @@ This slice builds them and, last, switches the challenge on.
     - **The 3a focus bug** (measured here, missed by 3a's jsdom test): in Chromium a mouse
       click focuses the button it lands on, so "Start had focus" (3a, rule 11) is true for
       a pointer Start too, and the board took focus after a click. 3a's unit test used
-      `fireEvent.click`, which focuses nothing. The fix decides by whether Start had
-      *keyboard* focus, `:focus-visible`, and gets its own correction commit and a
-      Chromium test that clicks Start with the mouse.
+      `fireEvent.click`, which focuses nothing. **The fix classifies the activation, not
+      the focus** (codex: `:focus-visible` stayed true when a Start that already had
+      keyboard focus was clicked with the mouse, a click with `detail: 1`): the browser
+      gives a click from Enter or Space on a button `detail` 0, and a mouse, touch or pen
+      click `detail` 1 or more. Focus moves to the board only for `detail` 0, and only if
+      Start still has focus at the reveal (3a's rule 11 as corrected). Its own commit, with
+      Chromium tests for a mouse click, a mouse click after keyboard focus, Enter and
+      Space.
     - **Button inventory** (`tests/controls.test.ts`, changed on purpose): 27 to **30**: the
       Results button, and the dialog's Share and Close. The 🔥 count is text, and the
       fallback box is a `textarea`, not a button.
@@ -3085,7 +3104,7 @@ This slice builds them and, last, switches the challenge on.
 - `tests/challengeResults.test.tsx` (jsdom, real `DominoClient`, enabled root): the Results
   button's rules; the words for every board state; focus to the heading on opening and
   back on closing, with each fallback (the opener gone, the Results button gone); the page
-  `inert` behind it; Archive and Results excluding each other; Share's clipboard success,
+  `inert` behind it; the focus guards wrapping both ways; Archive and Results excluding each other; Share's clipboard success,
   its refusal, and a refusal arriving after closing or after focus moved (no box, or a box
   that takes no focus); the countdown: its fixed target, ticking with `tick`, "Today's
   challenge is ready" at and after the target, a new target on reopening, under a non-UTC
@@ -3095,15 +3114,18 @@ This slice builds them and, last, switches the challenge on.
   reload, Practice or given up; signalled by a retried failed save; no opening after
   navigating away during a held finish; one opening when the ninth solve completes its
   size and the day; the 1.5 s wait with the committed time on the card, cancelled by
-  navigation, Archive or Practice.
+  navigation, Archive, Practice or opening Results by hand, and no second opening after
+  opening and closing Results during it; the dialog closing itself when its date leaves
+  the window, for today's results across two midnights and yesterday's across one.
 - `e2e/challengeResults.spec.ts` on `/visual/daily`, with `pinDay`, both projects:
   finishing a size opens the results after the card; Results reopens them; Share puts the
-  exact text on the clipboard (permission granted in the test); Tab stays in the dialog;
-  focus returns on closing; the countdown in a non-UTC `timezoneId` across a
+  exact text on the clipboard (permission granted in the test); Tab and Shift+Tab wrap
+  inside the dialog (codex's case: never to the page's body); focus returns on closing; the countdown in a non-UTC `timezoneId` across a
   daylight-saving night.
 - `e2e/challengeResults.layout.spec.ts`, `layout` project: rule 14's matrix and criteria.
 - Activation: the public suites, run through the shared open path; the legacy and clamped
-  cases; the 3a focus correction's Chromium test; the new baselines.
+  cases; the 3a focus correction's Chromium tests (a mouse click, a mouse click after
+  keyboard focus, Enter, Space); the new baselines.
 
 **Mutation probes planned**, each against its intended assertion: a hinted solve shown
 without the mark; an untimed board in a total; each identity check dropped; a given-up
@@ -3114,17 +3136,20 @@ example then breaks); a frozen day adding one; freezes earned at the cap; a brea
 hintless solve; the streak line at 0; the URL with its scheme; the signal for another
 tab's result, for a recovery, for Practice; the signal twice for one result; opening after
 navigating away; opening twice on the ninth; no wait before opening; the page not inert;
-focus not returned; the fallback box taking focus late; the countdown recomputing its
+focus not returned; a focus guard removed (Tab reaches the page); the fallback box taking
+focus late; a hand-opened Results not cancelling the wait; the dialog staying open after
+its date leaves the window; the countdown recomputing its
 target each tick; the target at UTC midnight; the Results button with no result; the 🔥
-without `playedEver`; `openBoard` not pressing Start; the 3a focus fix reverted.
+without `playedEver`; `openBoard` not pressing Start; the 3a focus fix reverted, or deciding by
+`:focus-visible` instead of `detail`.
 
 **Commits planned**
 1. The data: `dayResults`, `streak`, the share text, with their unit tests.
 2. The results screen, the Results button, the 🔥 count, Share and the countdown, on
    `/visual/daily`, with component and browser tests and rule 14's measurement.
 3. The auto-open signal and `ResultsTrigger` (rule 8).
-4. A correction to 3a: Start moves focus only after a keyboard press (rule 16's bug), with
-   its Chromium test.
+4. A correction to 3a: Start moves focus only after a keyboard activation (`detail` 0;
+   rule 16's bug), with its Chromium tests.
 5. Switching it on (`[visual update]`): the shared open path, every public spec's change
    listed with its reason, the activation cases. Then the new baselines in their own
    commit.
@@ -3152,6 +3177,17 @@ before the next. The PR is opened only when the user says.
      states; rule 16 lists, measured, what activation breaks and how each is treated, the
      inventory change, and the legacy and clamped cases. Measuring it found a 3a focus bug,
      now commit 4.
+- Codex held `bea25f5` (2026-10-12) for four corrections and the pause before opening by
+  itself, which the user decided: 1.5 seconds (decision log). The corrections, all made
+  above:
+  1. *Tab containment:* codex measured that inert alone lets Tab reach the page's body;
+     rule 7 adds two focus guards that wrap Tab both ways, with no key handler.
+  2. *Keyboard activation:* codex measured `:focus-visible` staying true for a mouse click
+     after keyboard focus; rule 16's fix classifies the click by `detail` instead.
+  3. *Lifecycle:* opening Results by hand spends the pending signal (rule 8), and the
+     dialog closes itself once its date leaves the window (rule 12).
+  4. *Layout:* the 38 px criterion applies where the public page meets it, as in 3a, and
+     the widest count is four digits ("🔥 3653").
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
@@ -3177,6 +3213,14 @@ before the next. The PR is opened only when the user says.
   committed: 555 failed and 164 passed as is; 161 failed, 1 skipped and 557 passed with
   `openBoard` pressing Start; 0 socket errors in each; `provider.tsx` and `openBoard.ts`
   restored byte for byte after each. Committed after it.
+- Delay decision commit `e87ea9e` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **39**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run.
+- Revision after codex's second review (docs only), gate from cold, first run
+  (2026-10-12): TIME_WAIT **37**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1600**, stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
 
 ### Would need a server (rejected)
 
