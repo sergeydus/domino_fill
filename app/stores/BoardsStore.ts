@@ -1,6 +1,7 @@
 "use client"
 import { makeAutoObservable, observable, reaction, runInAction } from "mobx"
 import { inWindow } from '../challenge/window'
+import { dayResults, type DayBoard, type DayResults } from '../challenge/dayResults'
 import { type DayEntry } from "./corpus"
 import { type LoadedDay } from "./corpusSource"
 import { RootStore } from "./RootStore"
@@ -112,6 +113,13 @@ export class LevelStore {
     archiveOpen = false
 
     /**
+     * The results screen, when it's open (slice 3b, rules 6 and 12): the day it shows and
+     * that day's nine boards, captured when it opens. A rollover can change the day on the
+     * page underneath it, and the screen must go on describing the day it opened on.
+     */
+    results: { readonly date: string, readonly boards: readonly DayBoard[] } | null = null
+
+    /**
      * One live session per puzzleId. Populated eagerly in `setDay` (an action) so that
      * `currentBoard` can be a pure lookup: constructing a store inside a computed makes
      * MobX throw once side effects in derivations are enforced, and hands back a new
@@ -170,6 +178,7 @@ export class LevelStore {
             // the definition lists are: the puzzles inside are frozen, and deep-converting
             // them would undo that.
             pendingDay: observable.ref,
+            results: observable.ref,
         })
 
         // A focused reaction, not an autorun: it tracks exactly one derived value -- the
@@ -363,7 +372,44 @@ export class LevelStore {
         return this.pendingDay !== null || (this.today !== null && this.today !== this.viewingDate)
     }
 
-    setArchiveOpen(open: boolean) { this.archiveOpen = open }
+    /** Archive and Results are never open together (slice 3b, rule 7). */
+    setArchiveOpen(open: boolean) {
+        this.archiveOpen = open
+        if (open) this.results = null
+    }
+
+    /**
+     * The day being viewed and its nine boards, if it is a challenge day: today or yesterday
+     * on the coordinator's device date, and not a day served casually by a clock set before
+     * the corpus (slice 3b, rule 6). Null everywhere else, the challenge off included.
+     */
+    get challengeDay(): { readonly date: string, readonly boards: readonly DayBoard[] } | null {
+        const challenge = this.rootStore.challenge
+        const date = this.viewingDate
+        if (!challenge || !date || this.viewingClamp === 'before' || !inWindow(date, challenge.deviceDate)) return null
+        const boards = (['easy', 'normal', 'hard'] as const).flatMap(difficulty =>
+            (this.definitionsFor(difficulty) ?? []).map((definition, index) => ({
+                difficulty, level: (index + 1) as Level, size: definition.size,
+                puzzleId: definition.puzzleId, definitionHash: definition.definitionHash,
+            })))
+        return { date, boards }
+    }
+
+    /** The viewed challenge day's results, for the Results button (rule 9). */
+    get challengeResults(): DayResults | null {
+        const day = this.challengeDay
+        return day && dayResults(day.date, day.boards, this.rootStore.challenge!.history)
+    }
+
+    /** Open the results screen on the viewed challenge day; nothing if it isn't one. */
+    openResults() {
+        const day = this.challengeDay
+        if (!day) return
+        this.archiveOpen = false
+        this.results = day
+    }
+
+    closeResults() { this.results = null }
 
     /**
      * Start saving, once.

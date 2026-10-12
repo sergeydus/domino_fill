@@ -23,7 +23,8 @@ import ChallengeClock from './ChallengeClock'
 import ChallengeNotice from './ChallengeNotice'
 import { cardIsUp } from './challengeCard'
 import { isCoveredView } from '../challenge/coordinator'
-import { ArchiveButton, ControlModeButton, SoundButton } from './PageButtons'
+import { ArchiveButton, ControlModeButton, ResultsButton, SoundButton, StreakCount } from './PageButtons'
+import ResultsDialog from './ResultsDialog'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
 } from './composition'
@@ -278,6 +279,9 @@ const DominoClient: React.FC = () => {
     <div data-chrome className='flex flex-wrap items-center gap-3'>
       <LevelSelector boardsStore={boardsStore} />
       <ArchiveButton levels={boardsStore} />
+      {/* Slice 3b, rules 9 and 13: nothing at all unless this is a challenge root. */}
+      <ResultsButton levels={boardsStore} />
+      <StreakCount levels={boardsStore} />
       {/*
         The two settings wrap together. At 360px the row has no room for a fourth control,
         and wrapping one button at a time left "Sound on" alone on a line of its own
@@ -326,6 +330,8 @@ const DominoClient: React.FC = () => {
        */}
       <div
         data-stage
+        // Everything behind the results screen, while it is open (slice 3b, rule 7).
+        inert={boardsStore.results !== null}
         data-wide={wide ? '' : undefined}
         className={wide
           ? 'm-auto flex flex-row items-start justify-center'
@@ -381,6 +387,8 @@ const DominoClient: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Outside the stage, so the stage's `inert` leaves it reachable (slice 3b, rule 7). */}
+      {boardsStore.results && <ResultsDialog levels={boardsStore} />}
     </FocusAcrossComposition>
   );
 }

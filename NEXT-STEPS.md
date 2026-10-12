@@ -3241,6 +3241,92 @@ before the next. The PR is opened only when the user says.
   **0**, unit **0** (**1632** in 70 files, 32 more; stderr **0 bytes**), build **0**, browser
   **0** (**718 passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
 
+**As built: implementation commit 2, the results screen and its controls (rules 6, 7, 9 to 14, 2026-10-12)**
+- Codex accepted commit 1 at `e6134bc`: 244/244 focused unit tests (stderr 0 bytes),
+  type-checking, four independent tests of its own (a 3,653-day streak and every milestone,
+  leap-day and window edges, a late result replacing a frozen day, Share with hour-long
+  totals and a configured port), and CI run `38251517901`.
+- **State** (`BoardsStore.ts`): `results`, the open screen's date and nine boards, captured
+  when it opens; `challengeDay`, the viewed day and its boards when it's a challenge day
+  (in the window by the coordinator's date, and not a before-clamp day); `challengeResults`
+  for the Results button; `openResults` and `closeResults`. `setArchiveOpen(true)` closes
+  Results, and `openResults` closes Archive. The coordinator's `streak` is a computed
+  `streakFrom(history, deviceDate)`, so the walk reruns only when either changes.
+- **Beside Archive** (`PageButtons.tsx`): `ResultsButton` (quiet, `data-open-results`) when
+  the viewed day has any result; `StreakCount`, "🔥 12" with the emoji hidden from screen
+  readers and "12-day streak" for them, only when `playedEver`.
+- **The screen** (`ResultsDialog.tsx`), rendered outside the stage, which is `inert` while it
+  is open. Choices inside the contract: the heading reads "Results · 12 Oct 2026"; each size
+  is a heading and a list labelled "Easy puzzles", each item "Puzzle 1: 1:23 · no hints"
+  with its square hidden from screen readers (the list's label carries the size, rather
+  than every item repeating it); a solve without a time reads "no time", or "no time ·
+  hints used"; the size line reads "Total 3:41", "Total 5:02 · with hints" or "partial";
+  the streak line only when `playedEver`, with "1 freeze" or "2 freezes" beside it; the
+  countdown in `formatTime`'s form. The start guard sends focus to Close and the end guard
+  to Share. On closing, focus returns to the opener, else Results, else Archive, skipping
+  the page's body, which is where focus is when nothing has it (a real bug in my first
+  draft, caught by its test: opened with nothing focused, the dialog "returned" focus to
+  the body). A guard against updates after closing was written and removed before the
+  sweep: React ignores state set on a closed dialog, so no test could tell it was there.
+- **Fixture** (`DailyFixture.tsx`, visual build only): `seed(attempts)` puts attempts into the
+  coordinator's history, for the layout measurement's four-digit streak.
+- **Rule 14, measured** by `e2e/challengeResults.layout.spec.ts` (layout project, 7
+  viewports x 3 sizes x 3 states), enabled against public. Covered and playing with Results
+  shown, with "🔥 3653" or "🔥 3654": the added chrome is **+37 px everywhere**, exactly
+  3a's clock row, so Results and the count fit in the Archive row at every viewport and add
+  nothing. An archive day (no clock, no Results, the count shown): **+0** everywhere. Where
+  the public page doesn't scroll, the enabled one doesn't; where its cell meets 38 px, the
+  enabled one's does (the tightest is 3a's 8x8 at 390x844, 45 to 41); where it already
+  scrolls, the extra is the 37 px. All 7 pass. The trigger never fired, so the 🔥 stays
+  beside Archive and **no clock-line fallback was written**.
+- **Tests changed on purpose:** `tests/controls.test.ts`, the inventory 27 to **30**, with
+  per-file counts for `ResultsDialog.tsx` (2) and `PageButtons.tsx` (4).
+- **New tests:** `tests/challengeResults.test.tsx` **21**, through the real `DominoClient`:
+  when Results and the count show (never played, played, given up only, a broken streak,
+  an archive day, a before-clamp day, the challenge off); every board state's words, the
+  totals, nine hidden squares; the streak, freezes and a milestone; a freeze used, named on
+  the next day's results, with no freezes left beside the streak; focus to the heading,
+  the stage inert, focus back to Results; the guards both ways; the fallbacks to Results
+  and to Archive; Archive and Results excluding each other; Share copying the exact text,
+  a refusal on Share (the box, focused), a late refusal after focus moved (the box, focus
+  left alone), after closing (nothing), and no clipboard (the box at once); the countdown
+  fixed at opening, ticking, "ready" at and after midnight, a new target on reopening; the
+  dialog closing itself two days on. `e2e/challengeResults.spec.ts`, **4 x 2 projects**:
+  Results reopening the screen, focused at the top, focus back on closing; Tab five times
+  and Shift+Tab three, never leaving the dialog (codex's case); Share's exact text from
+  the real clipboard; the countdown in New York at 01:00 on 1 Nov 2026, reading 23:59,
+  the night's real 25 hours. `e2e/challengeResults.layout.spec.ts`, **7**.
+- First drafts that failed and were mine: the body-focus bug above; a test helper's type;
+  a test that reused the previous half's stored attempt; **unit stderr of 1018 bytes**, from
+  the countdown tests crossing midnight, where the tick started a day's refresh that
+  finished outside `act` (the test's clock now awaits that refresh inside `act`; 0 bytes
+  since); the clipboard read back with `\r\n` on Windows, so the browser test splits on
+  either; and three layout-spec mistakes: expecting 3653 where the seeded result for today
+  makes it 3654, as it should; seeding today's result on Medium 1, which the spec then
+  started, committing a fresh attempt over the seed (it now seeds Hard 3, which it never
+  starts); and one browser context for all three states, so the second state's Starts left
+  the third's board in play (a context per state now).
+- **Mutations: 25 of 25 caught at the intended test,** files restored byte for byte. Unit,
+  22: Results with no result; the count without `playedEver`; Results on an archive day;
+  on a before-clamp day; Archive opening leaving Results open; Results opening leaving
+  Archive open; the stage not inert; focus not to the heading; focus not given back; focus
+  given back to the body; no Archive fallback; the end guard to Close; "Copied" never said;
+  the fallback taking focus late; no fallback without a clipboard; the countdown's target
+  recomputed; the target at UTC midnight; the dialog staying open past its window; no
+  milestone line; freezes always mentioned; an untimed solve with hints unmarked; the
+  squares read aloud. Browser, 3: the countdown a fixed 24 hours from midnight (caught in
+  New York's 25-hour night); no focus guards; Share copying only the first line. The first
+  sweep was 24 of 25: Results on an archive day survived, because my test's helper knew
+  real definition hashes only for today and yesterday, so the archive day's attempt was
+  ignored for its hash and the button stayed hidden for the wrong reason. The helper now
+  computes any day's hashes, and the whole sweep was rerun. One sweep run also stopped on
+  printing an emoji to the Windows console; the probe's files had been restored before the
+  print, and the rerun prints UTF-8.
+- Cold gate, first run (2026-10-12): TIME_WAIT **39**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1653** in 71 files, 21 more; stderr **0 bytes**), build **0**, browser
+  **0** (**733 passed, 1 skipped**, 15 more; 0 socket errors). No failed run. Committed after
+  it.
+
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
   **21**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600** in 67 files,

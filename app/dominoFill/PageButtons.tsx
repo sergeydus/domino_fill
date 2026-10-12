@@ -29,6 +29,38 @@ export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
   </button>
 ))
 
+/**
+ * Reopens the day's results (slice 3b, rule 9; user, 2026-10-12), beside Archive: shown on
+ * a challenge day once any of its boards has a result.
+ */
+export const ResultsButton = observer(({ levels }: { levels: LevelStore }) =>
+  levels.challengeResults?.anyResult ? (
+    <button
+      type='button'
+      data-open-results
+      className={control('quiet')}
+      onClick={() => levels.openResults()}
+    >
+      Results
+    </button>
+  ) : null)
+
+/**
+ * The streak beside Archive (slice 3b, rule 13; user, 2026-10-12): text, not a control, and
+ * only for a player who has played the challenge (D9), so a broken streak reads "🔥 0".
+ * The emoji is decoration; the words are for everyone who can't see it.
+ */
+export const StreakCount = observer(({ levels }: { levels: LevelStore }) => {
+  const streak = levels.rootStore.challenge?.streak
+  if (!streak?.playedEver) return null
+  return (
+    <span data-streak-count className='text-body tabular-nums'>
+      <span aria-hidden='true'>🔥 {streak.streak}</span>
+      <span className='sr-only'>{streak.streak}-day streak</span>
+    </span>
+  )
+})
+
 /*
  * Muting is a real requirement, not a nicety: a daily puzzle is played on a train, in a
  * queue, in a meeting -- and a game that cannot be silenced gets closed instead (spec P2-4).

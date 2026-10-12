@@ -16,6 +16,7 @@ import {
 } from './attemptStore'
 import { elapsed, read, wentBack, type Reading } from './clock'
 import { addDays, inWindow, isDay } from './window'
+import { streakFrom, type Streak } from './streak'
 
 export type Snapshot = Omit<PuzzleProgress, 'savedAt'>
 type PendingProgress = { generation: number, record: PuzzleProgress }
@@ -223,6 +224,12 @@ export class ChallengeCoordinator {
 
     get unsaved() { return this.selectedKind === 'memory' }
     get deviceDate() { return dayKey(new Date(this.now.wall)) }
+    /**
+     * The streak (slice 3b, rules 3 to 5), from every attempt this root knows of. Computed,
+     * so the walk reruns only when the history or the device's date changes, not on every
+     * second's tick.
+     */
+    get streak(): Streak { return streakFrom(this.history.values(), this.deviceDate) }
     isCovered(binding: ChallengeBinding): boolean {
         if (binding.beforeClamp) return false
         if (binding.date > this.deviceDate) return true
