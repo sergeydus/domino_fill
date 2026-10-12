@@ -2843,9 +2843,8 @@ This slice builds them and, last, switches the challenge on.
    of 3a, the same identity check, shared rather than copied); otherwise the board is
    `not-started`.
 2. "A whole size finished" means all three of its boards have a result that is a solve
-   (`solved` or `untimed`); "the day finished" means all nine have a result of any kind.
-   *Proposed*: a given-up board finishes the day but not its size, since given up only
-   happens once the date has left the window, when there is nothing left to play.
+   (`solved` or `untimed`); "the day finished" means all nine have a result of any kind,
+   so a given-up board finishes the day but not its size (user, 2026-10-12).
 
 *B. The streak, as data*
 3. A new pure module, `app/challenge/streak.ts`. `streak(history, deviceDate)` derives
@@ -2853,19 +2852,38 @@ This slice builds them and, last, switches the challenge on.
    board date with at least one attempt whose result is `solved` or `untimed`, hinted or
    not (D9, 2026-10-09). Days are board dates, not the instant of the solve: solving
    yesterday's board just after midnight keeps yesterday (D8, D9).
-4. It walks every date from the first played day to `deviceDate`, in order, with
-   `streak = 0, freezes = 0, toward = 0`:
-   - a played day: `streak + 1`; if `freezes < 3`, `toward + 1`, and at 3, `freezes + 1`
-     and `toward = 0`. At 3 saved, nothing counts toward the next (user, 2026-10-12).
-   - a day still in the window (`deviceDate` or the day before) that isn't played yet:
-     nothing changes. It isn't missed while it can still be played.
-   - a missed day, with a freeze: `freezes - 1`, the streak unchanged (a frozen day adds
-     nothing; user, 2026-10-12), and the date recorded as frozen.
-   - a missed day, without one: `streak = 0`, `toward = 0` (user, 2026-10-12).
-   It returns `{ streak, freezes, frozen: string[], playedEver: boolean }`. Milestones are
-   7, 30, 100 and 365 (user, 2026-10-12).
-5. A board date after `deviceDate` (a clock set back, or another device's later attempt)
-   counts nowhere: the walk stops at `deviceDate`. *Proposed*.
+4. **A day is missed only once it can't be played any more**, so a freeze earned before
+   then can cover it (user, 2026-10-12, on codex's example). The walk goes over every date
+   `t` from the first played day to `deviceDate`, with `streak = 0, freezes = 0,
+   toward = 0`, and at each step does two things, in this order:
+   - **count `t`**: if `t` is played, `streak + 1`; and if `freezes < 3`, `toward + 1`,
+     reaching 3 gives `freezes + 1, toward = 0`. At 3 saved nothing counts (user,
+     2026-10-12).
+   - **settle the day before**, `m = t − 1`, if `m` is on or after the first played day,
+     isn't played, and has left the window (`deviceDate` is `m + 2` or later). With a
+     freeze: `freezes − 1`, `m` is frozen, and the streak is unchanged (a frozen day adds
+     nothing; user, 2026-10-12). Without one, the streak breaks, and what's left after the
+     gap is `t` alone: `streak` and `toward` are 1 if `t` was played, else 0 (user,
+     2026-10-12).
+   `deviceDate` and the day before are never settled: they can still be played. Codex's
+   example, Monday, Tuesday and Thursday solved:
+
+   | Read on | Streak | Freezes | Wednesday |
+   |---|---:|---:|---|
+   | Thursday | 3 | 1 | still playable |
+   | Friday | 3 | 0 | frozen (Thursday's freeze) |
+   | Friday, had Thursday not been played | 0 | 0 | missed, streak broken |
+
+   It returns `{ streak, freezes, playedEver, days }`, where `days` gives each walked date
+   `{ played, frozen, streak }`, the streak after that date's step. That is what the
+   results screen's date-specific lines need (rule 6): **a milestone** shows on date D's
+   results when D is played and `days[D].streak` is 7, 30, 100 or 365 (a played day adds
+   exactly one, so the day whose step reaches it is the day that reached it); **a freeze
+   used** shows on D's results for each frozen date after the previous played day and
+   before D. Thursday's results, opened on Friday, say Wednesday was frozen.
+5. A board date after `deviceDate` (a clock set back, or another device's data) counts
+   nowhere until that date arrives, when it counts normally (user, 2026-10-12): the walk
+   stops at `deviceDate`.
 
 *C. The results screen*
 6. A dialog like the archive, mounted only while open, for the **day being viewed**, when
@@ -2877,25 +2895,62 @@ This slice builds them and, last, switches the challenge on.
      "given up", "in play", "not played") and the size's line: the total, the total
      "· with hints", or "partial";
    - the streak, "🔥 12-day streak", and saved freezes beside it, "❄️ 2 freezes", hidden at
-     0 (user, 2026-10-12); a milestone line, "🎉 7-day streak!", on the results of the day
-     that reached it; and, when a freeze was used between the previous played day and this
-     one, "❄️ A freeze kept your streak on 10 Oct";
+     0 (user, 2026-10-12); a milestone line, "🎉 7-day streak!", every time the results of
+     the day that reached it are open and on no other day, with nothing stored (user,
+     2026-10-12); and for each freeze used since the previous played day, "❄️ A freeze
+     kept your streak on 10 Oct" (rule 4's `days`);
    - the countdown (rule 12) and Share (rule 10);
    - Close. No Escape: the archive's dialog has none (read: no key handler in `Archive.tsx`),
      and a new key would break the no-shortcuts decision (2026-09-28).
-   *Proposed, on "a milestone is shown once"*: the line shows whenever the results of the
-   day that reached it are open, and on no other day. That needs no stored flag, and it
-   can't be lost or shown twice across devices. A stored "already shown" flag is the
-   alternative if the user wants it gone after one look.
-7. *Proposed*, since the archive moves no focus at all today (read: no `focus` call in
-   `Archive.tsx`): on opening, focus moves to the dialog's heading (`tabIndex={-1}`), and
-   on closing, back to the Results button, or, when it opened by itself, to where focus was
-   before. Every square has its words in text, so nothing depends on colour or emoji: the grid is
-   a list with each board's name ("Easy puzzle 1, 1:23, no hints").
-8. **It opens by itself** (user, 2026-10-11) when a board's result is committed on screen
-   and that result completes its size (rule 2) or the day: once per such commit, after the
-   Solved! card, which stays where it is underneath. It never opens by itself for a result
-   that arrives from another tab or from enumeration, only for a finish on this board.
+7. **A modal dialog, with no new key** (codex):
+   - On opening, focus moves to the dialog's heading (`tabIndex={-1}`; user, 2026-10-12),
+     so a screen reader starts at the top. Every square has its words in text, so nothing
+     depends on colour or emoji: the grid is a list naming each board ("Easy puzzle 1,
+     1:23, no hints").
+   - While it's open the page behind it is `inert`: the dialog renders outside the
+     `data-stage` element, which gets `inert`, so Tab moves only among the dialog's own
+     controls, with no focus-trap code. `role="dialog"`, `aria-modal="true"`, named by its
+     heading. The archive manages no focus today (read: no `focus` call in `Archive.tsx`);
+     this doesn't change it.
+   - Results and Archive are never open together: opening either closes the other, and
+     rule 8 never opens Results while Archive is open.
+   - On closing, focus goes back to the element that had it when the dialog opened, if it
+     is still connected and not inert; otherwise to the Results button if it's shown;
+     otherwise to the Archive button, which is always there.
+   - Share can fail late: the clipboard's promise may settle after the dialog closed or
+     after focus moved within it. The fallback box (rule 10) appears only if the dialog is
+     still open, and it takes focus, with its text selected, only if focus is still on
+     Share; otherwise it appears without moving focus.
+   - No Escape: the archive has none (read: no key handler in `Archive.tsx`), and a new
+     key would break the no-shortcuts decision (2026-09-28).
+8. **It opens by itself** (user, 2026-10-11) after this tab's own finish completes a size
+   or the day. A history change can't say where a result came from (codex: transactions
+   adopt results during refresh and reconciliation too, `coordinator.ts:545`), so the
+   signal is explicit:
+   - **The signal.** The coordinator gains an observable `lastFinish: { puzzleId, serial }`,
+     set in one place: the commit handler of `transact`, when a binding of this root holds
+     a `pendingFinish`, the transaction changed the attempt, and the committed result is a
+     solve (`solved`, or `untimed` from a clock error) whose `finishedAt` equals that
+     `pendingFinish.solvedAt`. That is "this tab's winning placement fixed the result",
+     whichever transaction carried it: the finish save, Try again, the retry timer, or a
+     refresh's `reconcileLive` (`coordinator.ts:507`). `serial` only increases, so one
+     result signals once.
+   - **Not signalled:** another tab fixing the result first (this transaction then changes
+     nothing, or its `finishedAt` differs); recovery after a reload (a new tab has no
+     `pendingFinish`; `recover` uses saved evidence and gives "finish lost"); Practice (no
+     `pendingFinish`); given up (`settle`, no `finishedAt`).
+   - **The reaction**, owned by a new `ResultsTrigger` in `DominoClient`, which remembers
+     the last `serial` it handled. On a new one it checks that the signalled board is still
+     the board on screen, that its date is the day being viewed, and that, with this
+     result, its size is finished or the day is (rule 2). If so, it opens Results **1.5
+     seconds later** (*proposed*), so the Solved! card's committed time (3a, rule 15) is on
+     screen first. The wait is cancelled if, before it ends, the board changes, Archive
+     opens or Practice starts. The ninth solve, completing its size and the day at once,
+     opens it once.
+   - **Navigation during a held finish:** if the player has moved to another board when
+     the commit lands, nothing opens; the Results button is there.
+   - **A failed save** opens it when Try again or the timer finally commits it, by the same
+     rule, if the board is still on screen.
 9. **The Results button** sits in the navigation row, right after Archive (user,
    2026-10-12), shown when the day being viewed is a challenge day and at least one of its
    boards has a result. It opens the screen. Labelled "Results", the `quiet` control role,
@@ -2905,8 +2960,8 @@ This slice builds them and, last, switches the challenge on.
 10. Share copies the text below with `navigator.clipboard.writeText` and says "Copied" for a
     few seconds, announced once (`role="status"`). It never posts and never opens the
     system share sheet (D7, 2026-10-11). Where the clipboard refuses or is missing, it shows
-    the same text in a read-only, pre-selected text box with "Copy this text", so it can
-    always be copied by hand.
+    the same text in a read-only text box labelled "Copy this text", so it can always be
+    copied by hand; focus follows rule 7.
 11. The text, from the results data (user, 2026-10-12):
     ```
     Domino Fill · 12 Oct 2026
@@ -2922,21 +2977,34 @@ This slice builds them and, last, switches the challenge on.
     `https://`. Nothing from the puzzle itself: no rocks, numbers or positions.
 
 *E. The countdown*
-12. On the results screen only (user, 2026-10-12): "Next challenge in 6:42:10", to the
-    device's next local midnight, from the coordinator's sampled clock, so it ticks with
-    `tick` and tests can drive it. At midnight it reads "Today's challenge is ready", and
-    the existing rollover moves the page on as it does now.
+12. On the results screen only (user, 2026-10-12): "Next challenge in 6:42:10".
+    - **Its target is fixed when the dialog opens:** the local midnight that starts the day
+      after the device's date at that moment, `new Date(y, m − 1, d + 1)` in local time,
+      so a daylight-saving day counts its real 23 or 25 hours. It isn't recomputed per
+      tick, so it can reach its end (codex).
+    - It shows `target − now` from the coordinator's sampled clock (`now.wall`), so it ticks
+      with `tick` and tests drive it. From `target` on it reads "Today's challenge is
+      ready" and stays so until the dialog closes; reopening sets a new target.
+    - The dialog keeps the date it opened with. At midnight that date becomes yesterday,
+      still a challenge day, so its results stay right; the existing rollover moves the
+      page underneath as it does now, and the Results button then follows the page's day.
 
 *F. The streak beside Archive*
 13. "🔥 12" in the navigation row after Results (user, 2026-10-12), shown only when
     `playedEver` (D9: never to players who have never played the challenge), so 0 shows as
     "🔥 0" for a player whose streak broke. Text, not a button, with an accessible name,
     "12-day streak". No freezes here (user, 2026-10-12).
-14. Both new items join the navigation row, which already wraps. Their cost to the board's
-    height budget is measured, as 3a's rule 14 was: where the public page doesn't scroll,
-    the enabled page mustn't; where it already scrolls, any extra is reported. *Proposed
-    trigger*: if a 360-wide phone wraps the row onto a third line, the streak moves onto
-    the clock line instead; measured first, and this contract amended if it fires.
+14. **Layout, with 3a's full criteria** (codex). The navigation row gains Results and the
+    🔥 count. Measured by a `layout`-project spec against today's public page, at every
+    viewport and board size of the layout suite (7 × 3), in each state: covered, playing,
+    a result with Results shown, the widest count ("🔥 365"), and an archive day (no clock
+    line, no Results, the 🔥 shown). The criteria: where the public page doesn't scroll,
+    the enabled page doesn't; the **unclamped cell stays at or above the 38 px minimum**;
+    where the public page already scrolls, the extra is reported. Where a viewport fails,
+    the 🔥 moves to the end of the clock line there, "1:23 · 🔥 12" (user, 2026-10-12), by
+    a width rule taken from the measurement, and the spec measures again. On an archive
+    day there's no clock line, so the 🔥 stays in the row; the archive-day state shows
+    whether that alone fits.
 
 *G. Switching it on*
 15. The last commit sets `provider.tsx`'s root to `new RootStore(new CorpusSource(),
@@ -2944,9 +3012,54 @@ This slice builds them and, last, switches the challenge on.
     new buttons), so it is a `[visual update]` commit, and the new baselines follow in their
     own commit from CI's `visual-baselines` artifact. Before it, every 3b feature is
     reachable only on `/visual/daily`, and the public page and baselines are unchanged.
-16. The existing public browser suites assumed the casual game on today's board. Each one
-    that breaks under activation is changed on purpose and listed in this contract's As
-    built, with the reason, or pinned to an archive day where it is about casual play.
+16. **What activation breaks, measured** (codex asked for the list before any code). Two
+    local runs of the whole browser suite with `provider.tsx` switched on, never committed,
+    both files restored byte for byte after (2026-10-12):
+    - **As is: 555 failed, 164 passed**, 0 socket errors, across 30 specs and all four
+      projects. Nearly every failure is the first step, `openBoard` waiting for a board
+      that is now covered ("The board never rendered").
+    - **With `openBoard` pressing Start** (a temporary change): **161 failed, 1 skipped,
+      557 passed**, 0 socket errors. By spec, the cause, and the planned treatment:
+
+    | Spec | Failures (tests) | First error | Treatment |
+    |---|---:|---|---|
+    | `layout.spec.ts` | 76 (76) | no `[data-cell]`: opens `/` itself | its own open path presses Start, then its budgets are re-measured with the clock row; any real budget change is reported, not absorbed |
+    | `board.spec.ts` | 24 (17) | no cell `0,0`: opens `/` itself | the shared open path |
+    | `keyboard.spec.ts` | 11 (11) | a focus marker before any key | **a 3a bug**, below: the tests are right |
+    | `desktop.spec.ts` | 10 (7) | opens `/` itself; one row count, 5 expected | the shared open path; the row count changed on purpose (the clock line) |
+    | `challenge.layout.spec.ts` | 7 (7) | compares with a casual public page | re-pointed: compares the enabled page with 3a's measured budgets, since there's no casual `/` any more |
+    | `accessibility.spec.ts` | 6 (3) | board focus; an accessibility-tree list | the 3a bug; the tree's new rows listed on purpose |
+    | `archive.spec.ts` | 6 (3) | a covered board after picking a day | the shared open path, including after a reload |
+    | `pickAPiece.spec.ts` | 6 (3) | a focus marker; a covered board | the 3a bug; the shared open path |
+    | `challengeSession.spec.ts` | 4 (2) | expects `/` casual | re-pointed to an archive day for its casual comparison |
+    | `persistence.spec.ts` | 3 (2) | covered after a reload | the shared open path, after a reload too |
+    | `challengeUi.spec.ts` | 2 (2) | "the public page stays casual" | replaced: the public page is the challenge, checked on `/` |
+    | `completion.spec.ts` | 2 (2) | the board stays inert after the card | casual-only behaviour ("Play again"): run on an archive day |
+    | `completionCard.spec.ts` | 2 (1) | no card where it expects one | casual-only ("Next level"): run on an archive day |
+    | `feedback.spec.ts` | 2 (2) | a focus marker before any key | the 3a bug |
+
+    The per-test reasons go into the activation commit's As built. The treatments:
+    - **One shared open path.** `openBoard`, and every spec that opens `/` itself, go
+      through one helper that presses Start when the board is covered, so the public
+      suites test what the public sees: a timed challenge board. A spec whose subject is
+      casual play (the card's "Next level" and "Play again", replays) opens an archive day
+      instead, through the Archive dialog, with `pinDay`.
+    - **The 3a focus bug** (measured here, missed by 3a's jsdom test): in Chromium a mouse
+      click focuses the button it lands on, so "Start had focus" (3a, rule 11) is true for
+      a pointer Start too, and the board took focus after a click. 3a's unit test used
+      `fireEvent.click`, which focuses nothing. The fix decides by whether Start had
+      *keyboard* focus, `:focus-visible`, and gets its own correction commit and a
+      Chromium test that clicks Start with the mouse.
+    - **Button inventory** (`tests/controls.test.ts`, changed on purpose): 27 to **30**: the
+      Results button, and the dialog's Share and Close. The 🔥 count is text, and the
+      fallback box is a `textarea`, not a button.
+    - **Activation cases** (codex): a returning player with today's board in progress from
+      before activation sees it "Played before the challenge · untimed", uncovered, with
+      their pieces (slice 2's legacy mark, `coordinator.ts` `legacy`); a device date before
+      the corpus (`clamped === 'before'`) gets the first published day casually, uncovered,
+      with its served-date label; both as browser tests on `/`.
+    - **Baselines:** the activation commit is a `[visual update]`; the new public desktop and
+      phone baselines come from CI's `visual-baselines` artifact, in their own commit.
 
 **Not in this slice**
 - Date links (the shared link is the home page; user, 2026-10-12), badges, stats (D6),
@@ -2956,46 +3069,88 @@ This slice builds them and, last, switches the challenge on.
 - A results screen for archive days: they are casual.
 
 **Tests**
-- `tests/dayResults.test.ts`: each board state; the identity checks; size totals,
-  "with hints", partial for an untimed or given-up board; "size finished" and "day
-  finished".
-- `tests/streak.test.ts`: played days by board date; today and yesterday pending, not
-  missed; a freeze earned on the 3rd played day, paused at 3, used on a missed day, adding
-  nothing; a break resetting the streak and `toward`; a hinted and an untimed solve
-  counting, a given-up board not; future dates ignored; milestones; `playedEver`.
+- `tests/dayResults.test.ts`: each board state; the identity checks; size totals, "with
+  hints", partial for an untimed or given-up board; "size finished" and "day finished",
+  given up finishing the day but not the size.
+- `tests/streak.test.ts`: played days by board date, including yesterday's board solved
+  after midnight; today and yesterday pending, not missed; codex's example in all three
+  rows of rule 4's table; a day settled the moment it leaves the window (on `m + 2`, not
+  `m + 1`); a freeze earned on the 3rd played day, paused at 3 and resumed after one is
+  used; a frozen day adding nothing; a break leaving `t` alone (1 or 0); a hinted and an
+  untimed solve counting, a given-up board not; a future date ignored until it arrives;
+  `days` for the milestone and freeze-used lines; `playedEver`.
 - `tests/shareText.test.ts`: the exact text for a full day, a partial day, a hinted size,
   a given-up board, streak 0 (no line), and the host from `resolveSiteUrl`.
 - `tests/challengeResults.test.tsx` (jsdom, real `DominoClient`, enabled root): the Results
-  button's presence rules; the screen's words for every board state; opening by itself
-  after a size and after the ninth, and not after a result from another tab; Share copying
-  (clipboard stub) and its fallback box; the countdown ticking with `tick` and reaching
-  midnight; the streak beside Archive only with `playedEver`; freezes and the milestone
-  and freeze-used lines.
-- `e2e/challengeResults.spec.ts` on `/visual/daily`, with `pinDay`: finishing a size opens
-  the results; Results reopens them; Share puts the text on the clipboard (Chromium's
-  clipboard permission granted in the test); the dialog's focus on opening and closing; the countdown
-  moves.
-- The layout measurement of rule 14, in the `layout` project.
-- Activation: the public suites run against the switched-on page; the new baselines.
+  button's rules; the words for every board state; focus to the heading on opening and
+  back on closing, with each fallback (the opener gone, the Results button gone); the page
+  `inert` behind it; Archive and Results excluding each other; Share's clipboard success,
+  its refusal, and a refusal arriving after closing or after focus moved (no box, or a box
+  that takes no focus); the countdown: its fixed target, ticking with `tick`, "Today's
+  challenge is ready" at and after the target, a new target on reopening, under a non-UTC
+  zone and across a daylight-saving change; the 🔥 count only with `playedEver`.
+- The auto-open signal (`tests/challengeView.test.ts` and `challengeResults.test.tsx`):
+  signalled once for this tab's finish; not for another tab's result, a recovery after
+  reload, Practice or given up; signalled by a retried failed save; no opening after
+  navigating away during a held finish; one opening when the ninth solve completes its
+  size and the day; the 1.5 s wait with the committed time on the card, cancelled by
+  navigation, Archive or Practice.
+- `e2e/challengeResults.spec.ts` on `/visual/daily`, with `pinDay`, both projects:
+  finishing a size opens the results after the card; Results reopens them; Share puts the
+  exact text on the clipboard (permission granted in the test); Tab stays in the dialog;
+  focus returns on closing; the countdown in a non-UTC `timezoneId` across a
+  daylight-saving night.
+- `e2e/challengeResults.layout.spec.ts`, `layout` project: rule 14's matrix and criteria.
+- Activation: the public suites, run through the shared open path; the legacy and clamped
+  cases; the 3a focus correction's Chromium test; the new baselines.
 
 **Mutation probes planned**, each against its intended assertion: a hinted solve shown
-without the mark; an untimed board in a total; the identity check dropped (each field); a
-given-up board finishing its size; the streak counting a solve's instant instead of its
-board date; yesterday counted missed; a frozen day adding one; freezes earned at the cap; a
-break keeping `toward`; a future date counted; 🟨 for a hintless solve; the streak line at
-0; the URL with its scheme; the results opening for another tab's result; the Results
-button with no result; the streak shown without `playedEver`; the countdown off by the
-time zone (UTC midnight); Share without its fallback.
+without the mark; an untimed board in a total; each identity check dropped; a given-up
+board finishing its size; the streak counting a solve's instant instead of its board date;
+yesterday settled as missed; settling at `m + 1`; settling before counting `t` (codex's
+example then breaks); a frozen day adding one; freezes earned at the cap; a break keeping
+`toward`, or dropping `t`; a future date counted; the milestone on the wrong day; 🟨 for a
+hintless solve; the streak line at 0; the URL with its scheme; the signal for another
+tab's result, for a recovery, for Practice; the signal twice for one result; opening after
+navigating away; opening twice on the ninth; no wait before opening; the page not inert;
+focus not returned; the fallback box taking focus late; the countdown recomputing its
+target each tick; the target at UTC midnight; the Results button with no result; the 🔥
+without `playedEver`; `openBoard` not pressing Start; the 3a focus fix reverted.
 
 **Commits planned**
 1. The data: `dayResults`, `streak`, the share text, with their unit tests.
-2. The results screen, the Results button, the streak beside Archive, Share and the
-   countdown, on `/visual/daily`, with component and browser tests and rule 14's
-   measurement.
-3. Opening by itself after a size or the day.
-4. Switching it on (`[visual update]`), then the new baselines in their own commit.
+2. The results screen, the Results button, the 🔥 count, Share and the countdown, on
+   `/visual/daily`, with component and browser tests and rule 14's measurement.
+3. The auto-open signal and `ResultsTrigger` (rule 8).
+4. A correction to 3a: Start moves focus only after a keyboard press (rule 16's bug), with
+   its Chromium test.
+5. Switching it on (`[visual update]`): the shared open path, every public spec's change
+   listed with its reason, the activation cases. Then the new baselines in their own
+   commit.
 Each gets its own mutations, cold gate and As built notes, and goes to codex for review
 before the next. The PR is opened only when the user says.
+
+**Review notes**
+- Codex held `212e612` (2026-10-12) for five points; the user answered the product
+  questions codex sent, asked again here in one place (decision log, 2026-10-12, six rows).
+  The corrections, all made above:
+  1. *Freezes across the window:* codex showed that rule 4, read literally, broke Monday,
+     Tuesday and Thursday on Friday, when Thursday's freeze should cover Wednesday. The
+     user chose the covering reading; rule 4 now settles a day only when it leaves the
+     window, after counting the next day, with codex's example as a table and `days` for
+     the date-specific lines.
+  2. *The auto-open signal:* rule 8 names it (`lastFinish`, set only when this tab's
+     `pendingFinish` fixed the result), who owns the reaction (`ResultsTrigger`), the
+     deduplication (`serial`), and every case codex listed.
+  3. *The dialog's focus:* rule 7, with the page inert behind it, no trap code and no new
+     key, Archive excluded, connected fallbacks, and late clipboard failures.
+  4. *The countdown:* rule 12 fixes the target at opening, so it can reach "Today's
+     challenge is ready", and keeps the dialog's date; tests under a non-UTC zone and a
+     daylight-saving night.
+  5. *Layout and activation:* rule 14 uses 3a's full criteria across the matrix and its
+     states; rule 16 lists, measured, what activation breaks and how each is treated, the
+     inventory change, and the legacy and clamped cases. Measuring it found a 3a focus bug,
+     now commit 4.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
@@ -3010,6 +3165,17 @@ before the next. The PR is opened only when the user says.
   **38**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
   bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
   failed run. Committed after it.
+- Answers commit `5680fdb` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **37**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run.
+- Revision after codex's first review (docs only), gate from cold, first run (2026-10-12):
+  TIME_WAIT **29**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run. Rule 16's two activation runs were separate, local and never
+  committed: 555 failed and 164 passed as is; 161 failed, 1 skipped and 557 passed with
+  `openBoard` pressing Start; 0 socket errors in each; `provider.tsx` and `openBoard.ts`
+  restored byte for byte after each. Committed after it.
 
 ### Would need a server (rejected)
 
