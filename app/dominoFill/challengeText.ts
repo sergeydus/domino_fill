@@ -1,4 +1,4 @@
-import type { Result } from '../challenge/attempt'
+import type { Result, SizeResult } from '../challenge/attempt'
 import { DIFFICULTY_NAME } from './difficultyName'
 
 /**
@@ -32,3 +32,17 @@ export const resultWords = (result: Result, assisted: boolean): string => {
 /** "Easy · 6×6 · puzzle 1 of 3": which of the nine a board is. */
 export const boardName = (difficulty: keyof typeof DIFFICULTY_NAME, size: number, level: number): string =>
     `${DIFFICULTY_NAME[difficulty]} · ${size}×${size} · puzzle ${level} of 3`
+
+/** A size's line, on the results screen and in Share alike (slice 3b, rules 6 and 11). */
+export const sizeWords = (result: SizeResult): string =>
+    result.kind === 'total'
+        ? `${formatTime(result.ms)}${result.assisted ? ' · with hints' : ''}`
+        : 'partial'
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "12 Oct 2026", from a `YYYY-MM-DD` date: no time zone is involved, only the calendar. */
+export const dayWords = (date: string): string => {
+    const [year, month, day] = date.split('-').map(Number)
+    return `${day} ${MONTHS[month - 1]} ${year}`
+}

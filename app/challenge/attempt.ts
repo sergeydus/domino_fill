@@ -54,6 +54,15 @@ const to = (attempt: Attempt): Step => ({ next: attempt, changed: true })
 export type Board = { readonly puzzleId: string, readonly definitionHash: string, readonly date: string }
 
 /**
+ * Whether an attempt is this published board's (slice 3a, rule 18): its puzzle ID,
+ * definition hash and date all match. `isAttempt` checks a record's shape, not whose it is,
+ * so anything that reads attempts against boards checks this first.
+ */
+export const belongsTo = (attempt: Attempt, board: Board): boolean =>
+    attempt.puzzleId === board.puzzleId && attempt.definitionHash === board.definitionHash
+    && attempt.date === board.date
+
+/**
  * Start (rules 3 and 4). An attempt that already exists is resumed, never restarted -- so a
  * second tab's Start, or a second press, changes nothing -- and a board outside its window
  * has no attempt to start.

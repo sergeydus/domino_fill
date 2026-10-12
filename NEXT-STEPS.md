@@ -3189,6 +3189,58 @@ before the next. The PR is opened only when the user says.
   4. *Layout:* the 38 px criterion applies where the public page meets it, as in 3a, and
      the widest count is four digits ("🔥 3653").
 
+**As built: implementation commit 1, the data (rules 1 to 5 and 11, 2026-10-12)**
+- Codex accepted the contract at `9056174`, with two isolated Chromium experiments of its
+  own: focus guards wrapping both ways, and click `detail` of `[1, 1, 0, 0]` for a mouse
+  click, a mouse click after keyboard focus, Enter and Space. CI run `38236882549` passed.
+- **`app/challenge/dayResults.ts`**: `dayResults(date, boards, history)`, the boards as
+  `DayBoard` (difficulty, level, size, puzzle ID, hash), giving per size its three
+  `BoardState`s in level order, `sizeResult`, and `finished` (three solves); and per day
+  `finished` (nine results, given up included) and `anyResult`. It declares its own
+  `Difficulty`, since `BoardsStore`'s isn't exported. `size` is on `DayBoard` because the
+  share rows name it.
+- **The identity check is shared,** as rule 1 asks: `belongsTo(attempt, board)` in
+  `attempt.ts`, now used by `dayResults` and by 3a's `markForDay`, whose inline check it
+  replaces with no change in behaviour (its 19 tests pass unchanged, and the three
+  identity probes below fail in both suites).
+- **`app/challenge/streak.ts`**: `streakFrom(attempts, deviceDate)`, rule 4's walk, giving
+  `{ streak, freezes, playedEver, days }`; `milestoneOn(streak, date)` and
+  `freezesBefore(streak, date)` for rule 6's lines; `MILESTONES`.
+- **`app/dominoFill/shareText.ts`**: `shareText(results, streak, site)`, beside 3a's
+  wording rather than in `app/challenge`, since it is words. `site` is an origin, as
+  `resolveSiteUrl` returns, and the text carries its `URL.host`. The size line and the
+  date are `sizeWords` and `dayWords`, added to `challengeText.ts`, so the results screen
+  in commit 2 says exactly what Share does.
+- **New tests:** `tests/dayResults.test.ts` 10, `tests/streak.test.ts` 16 (codex's example
+  in all three rows, yesterday's board finished after midnight, settling on `m + 2`, the
+  cap and its resumption, a frozen day adding nothing, a break restarting `toward` and
+  leaving `t`, future dates, both lines), `tests/shareText.test.ts` 6 (the decided text
+  line for line, squares for untimed and hinted solves, no streak line at 0, the
+  configured host without its scheme).
+- First drafts that failed and were mine, all in tests: a helper whose default argument
+  turned "no result" into a solve; a cap case that forgot the day after a missed day is
+  counted before the miss is settled, so at 3 saved it earns nothing; and a "break" case
+  of Monday, Tuesday and Thursday, which is three played days and so earns the freeze
+  that covers Wednesday, exactly as decided. Each now tests what it says.
+- **Mutations: 28 of 28 caught at the intended test,** files restored byte for byte: a
+  hinted solve shown without the mark; the identity check dropped; `belongsTo` without
+  the puzzle ID, the hash, the date (each also failing 3a's archive test); a given-up board
+  finishing its size; a two-board size finished; a day missing a board finished; given up
+  not finishing the day; given up not a result for the button; levels out of order; the
+  streak by the solve's instant; a future date counted; given up counted as played;
+  yesterday settled as missed; settling before counting `t`; a frozen day adding one;
+  freezes earned at the cap; a break keeping `toward`; a break dropping `t`; a milestone on
+  an unplayed day; freezes named past the previous played day; 🟨 without hints; given up
+  as ⬜; the streak line at 0; the address with its scheme; a total without "with hints";
+  the month off by one. The first sweep was 27 of 28: levels out of order survived,
+  because the test reversed the boards but checked only the sizes' order. It now checks
+  each level's place. And my first "settling before counting" probe deleted the count
+  instead of moving it; it was rewritten as a true reordering and rerun. The whole sweep
+  was rerun after both.
+- Cold gate, first run (2026-10-12): TIME_WAIT **24**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1632** in 70 files, 32 more; stderr **0 bytes**), build **0**, browser
+  **0** (**718 passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
+
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
   **21**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600** in 67 files,

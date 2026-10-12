@@ -1,6 +1,6 @@
 import { definitionFrom, type StoredPuzzle } from "./PuzzleDefinition"
 import { isExpired, progressFor, type PuzzleProgress } from "./progressStorage"
-import type { Attempt } from "../challenge/attempt"
+import { belongsTo, type Attempt } from "../challenge/attempt"
 
 /**
  * How a day looks in the archive (spec P1-6/P1-7, row 18d).
@@ -59,8 +59,10 @@ export const markForDay = (
     let done = 0
     for (const stored of puzzles) {
         const attempt = challenge?.attempts.get(stored.puzzleId)
-        if (attempt && attempt.puzzleId === stored.puzzleId && attempt.date === challenge!.date
-            && attempt.definitionHash === definitionFrom(stored).definitionHash) {
+        if (attempt && belongsTo(attempt, {
+            puzzleId: stored.puzzleId, date: challenge!.date,
+            definitionHash: definitionFrom(stored).definitionHash,
+        })) {
             played++
             if (attempt.result && attempt.result.kind !== 'given-up') done++
             continue
