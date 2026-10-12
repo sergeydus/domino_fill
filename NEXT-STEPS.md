@@ -99,6 +99,7 @@ Evidence levels:
 | 2026-10-12 | **When the results screen opens, focus goes to its heading** (user, 2026-10-12). | A screen reader starts at the top; Tab then reaches Share and Close. |
 | 2026-10-12 | **Where the Archive row can't fit the Results button and the 🔥 count, the 🔥 moves to the end of the clock line** (user, 2026-10-12). | Only where measurement shows the row costs the board its budget. Hiding it there, or letting the page scroll, were the alternatives. |
 | 2026-10-12 | **An attempt dated after the device's today counts nowhere until that date arrives** (user, 2026-10-12). | A clock set back, or another device's data. Then it counts normally. |
+| 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 
 ## Principles
 
