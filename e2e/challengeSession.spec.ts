@@ -3,6 +3,7 @@ import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, LATE_IN_A_MONTH } from './calendar'
 import type { Attempt } from '../app/challenge/attempt'
 import { drag } from './play'
+import { arm, heldWrite, instrument, probe, release } from './challengeTransaction'
 
 test.use({ baseURL: VISUAL_URL })
 
@@ -13,73 +14,8 @@ type State = {
     practice: { startedAt: number, ms?: number } | null, finished: boolean,
     board: (number | null)[][], advice: { kind: string } | null,
 }
-type TransactionProbe = {
-    armed: 'attempts' | 'meta' | null, active: boolean, release: boolean, abort: boolean,
-    created: number, writes: unknown[], completed: boolean,
-}
-declare global {
-    interface Window { challengeTransaction: TransactionProbe }
-}
-
-/** Intercept the real store's transactions, never replace its reads, steps or writes. */
-const instrument = () => {
-    const probe: TransactionProbe = {
-        armed: null, active: false, release: false, abort: false,
-        created: 0, writes: [], completed: false,
-    }
-    window.challengeTransaction = probe
-    const transaction = IDBDatabase.prototype.transaction
-    IDBDatabase.prototype.transaction = function (...args) {
-        const tx = transaction.apply(this, args)
-        if (this.name !== 'dominoFill.challenge' || tx.mode !== 'readwrite') return tx
-        probe.created++
-        const target = probe.armed
-        if (!target || !tx.objectStoreNames.contains(target)) return tx
-        const store = tx.objectStore(target)
-        // Pending requests keep a genuine IDB transaction open even after put.success.
-        const spin = () => {
-            const request = store.get('__fixture_hold__')
-            request.onsuccess = () => {
-                if (probe.abort) tx.abort()
-                else if (!probe.release) spin()
-            }
-        }
-        const put = store.put.bind(store)
-        store.put = (...putArgs) => {
-            const request = put(...putArgs)
-            if (probe.armed !== target) return request
-            probe.armed = null
-            probe.active = true
-            spin()
-            request.addEventListener('success', () => { probe.writes.push(putArgs[0]) })
-            return request
-        }
-        // objectStore returns this same object in a transaction, as required by IDB.
-        tx.addEventListener('complete', () => {
-            probe.active = false
-            probe.completed = true
-        })
-        tx.addEventListener('abort', () => { probe.active = false })
-        return tx
-    }
-}
-
 const state = async (page: Page): Promise<State> =>
     JSON.parse(await page.locator('[data-challenge-state]').innerText())
-const probe = (page: Page) => page.evaluate(() => ({ ...window.challengeTransaction }))
-const arm = (page: Page, store: 'attempts' | 'meta' = 'attempts') => page.evaluate(store => {
-    Object.assign(window.challengeTransaction, {
-        armed: store, active: false, release: false, abort: false, writes: [], completed: false,
-    })
-}, store)
-const release = (page: Page, abort = false) => page.evaluate(abort => {
-    window.challengeTransaction.abort = abort
-    window.challengeTransaction.release = true
-}, abort)
-const heldWrite = async (page: Page) => {
-    await expect.poll(async () => (await probe(page)).writes.length).toBeGreaterThan(0)
-    expect((await probe(page)).active, 'transaction remains active after put.success').toBe(true)
-}
 const open = async (page: Page, paused = false) => {
     await pinDay(page, LATE_IN_A_MONTH)
     await page.addInitScript(instrument)
@@ -145,7 +81,10 @@ test('Start stays covered through request success and an abort, then retries', a
     expect(await place(page, 0), 'input before Start commits').toBe(false)
     await drag(page, [0, 0], [1, 0])
     expect((await state(page)).board, 'real board gesture before Start commits').toEqual([[null, null], [null, null]])
-    await page.getByRole('button', { name: 'Hint', exact: true }).click()
+    // Since slice 3a (rule 12) the button itself is off while Start saves; the session's
+    // own guard still refuses the same call made directly.
+    await expect(page.getByRole('button', { name: 'Hint', exact: true })).toBeDisabled()
+    await page.evaluate(() => { void window.challengeFixture!.root.boardsStore.currentBoard!.requestHint() })
     expect((await state(page)).advice).toBeNull()
     await release(page, true)
     await expect.poll(async () => (await state(page)).starting).toBe(false)
@@ -252,7 +191,10 @@ for (const advice of ['Hint', 'Check'] as const) {
             expect((await state(page)).advice).toBeNull()
             await release(owner)
             const finished = await result(other)
-            expect(finished.kind).toBe(first === 'advice' ? 'hinted' : 'solved')
+            // Timed either way since 2026-10-11 (a hint keeps the clock); the advice that
+            // committed first is what marks the attempt as hinted.
+            expect(finished.kind).toBe('solved')
+            expect((await state(other)).attempt!.assisted).toBe(first === 'advice')
             await expect.poll(async () => (await state(page)).assisting).toBe(false)
             if (first === 'finish') expect((await state(page)).advice, 'late advice is suppressed').toBeNull()
             else await expect.poll(async () => (await state(page)).advice).not.toBeNull()
@@ -272,7 +214,10 @@ test('a lost finish recovers on reload and Practice preserves the fixed result',
     const saved = await page.evaluate(id => JSON.parse(localStorage.getItem(`dominoFill.progress.v2.${id}`)!), id)
     expect(saved.solveEvidence.solvedAt).toBe(pending.solvedAt)
     expect(saved.solveEvidence.solvedOn).toBe(LATE_IN_A_MONTH)
-    await page.getByRole('button', { name: 'Reset', exact: true }).click()
+    // Since slice 3a (rule 12) the button is off while the finish saves; the session's own
+    // guard still refuses a direct Reset.
+    await expect(page.getByRole('button', { name: 'Reset', exact: true })).toBeDisabled()
+    await page.evaluate(() => window.challengeFixture!.root.boardsStore.currentBoard!.reset())
     expect((await state(page)).board, 'Reset is blocked while the first finish is pending').toEqual(saved.board)
     // Stop automatic retries, abort the real finish transaction, then reopen the real page.
     await page.evaluate(() => window.challengeFixture!.stop())

@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { markForDay } from '@/app/stores/dayMark'
 import { definitionFrom, type StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import { RETENTION_DAYS, type PuzzleProgress } from '@/app/stores/progressStorage'
+import { RULESET, type Attempt } from '@/app/challenge/attempt'
 
 /**
  * What the archive is allowed to claim about a day (spec P1-6/P1-7, row 18d).
@@ -147,5 +148,74 @@ describe('a record has to survive the same checks a restore does', () => {
             [NINE[1], { board: solvedBoard(), completed: true }],
         ])
         expect(markForDay(NINE, mixed, NOW)).toBe('partial')
+    })
+})
+
+describe('a challenge day is judged by its attempts (slice 3a, rule 18)', () => {
+    /** The chunk day these nine belong to, as the archive passes it in. */
+    const DATE = '2026-09-01'
+    const attempt = (stored: StoredPuzzle, over: Partial<Attempt> = {}): Attempt => ({
+        puzzleId: stored.puzzleId, definitionHash: hashOf(stored), date: DATE, ruleset: RULESET,
+        startedAt: NOW - DAY_MS, assisted: false, clockError: false, ...over,
+    })
+    const challengeOf = (entries: [StoredPuzzle, Partial<Attempt>][]) => ({
+        date: DATE,
+        attempts: new Map(entries.map(([stored, over]) => [stored.puzzleId, attempt(stored, over)])),
+    })
+    const SOLVED: Partial<Attempt> = { result: { kind: 'solved', ms: 83_000 }, finishedAt: NOW - DAY_MS + 83_000 }
+
+    it('gives today\'s marks when there are no attempts', () => {
+        const progress = progressOf([[NINE[0], { board: solvedBoard(), completed: true }], [NINE[1], {}]])
+        expect(markForDay(NINE, progress, NOW, challengeOf([]))).toBe('partial')
+        expect(markForDay(NINE, progressOf([[NINE[0], {}]]), NOW, challengeOf([]))).toBe('started')
+    })
+
+    it('keeps a day complete after Practice clears every board', () => {
+        // Practice resets the board the result was won on: progress says nothing is solved.
+        const cleared = progressOf(NINE.map(stored => [stored, {}]))
+        expect(markForDay(NINE, cleared, NOW)).toBe('started')
+        expect(markForDay(NINE, cleared, NOW, challengeOf(NINE.map(stored => [stored, SOLVED])))).toBe('complete')
+    })
+
+    it('counts a solve without a time as done', () => {
+        const untimed = challengeOf(NINE.map((stored, n) => [stored, {
+            result: { kind: 'untimed', reason: n % 2 ? 'clock-error' : 'finish-lost' },
+        }]))
+        expect(markForDay(NINE, {}, NOW, untimed)).toBe('complete')
+    })
+
+    it('counts given up as played, not done, whatever progress says', () => {
+        const solvedLater = progressOf([[NINE[0], { board: solvedBoard(), completed: true }]])
+        const gaveUp = challengeOf([[NINE[0], { result: { kind: 'given-up' } }]])
+        expect(markForDay(NINE, solvedLater, NOW, gaveUp)).toBe('started')
+    })
+
+    it('counts an attempt still in play as played, not done', () => {
+        expect(markForDay(NINE, {}, NOW, challengeOf([[NINE[0], {}]]))).toBe('started')
+    })
+
+    it('keeps a challenge day\'s mark after its progress ages out', () => {
+        const stale = progressOf([[NINE[0], {
+            savedAt: NOW - (RETENTION_DAYS + 1) * DAY_MS, board: solvedBoard(), completed: true,
+        }]])
+        expect(markForDay(NINE, stale, NOW)).toBe('none')
+        expect(markForDay(NINE, stale, NOW, challengeOf([[NINE[0], SOLVED]]))).toBe('partial')
+    })
+
+    it('ignores an attempt that isn\'t this board\'s, and judges the board from progress', () => {
+        // Each identity check alone: a solved attempt under this board's key that names
+        // another puzzle, another definition or another day counts for nothing here, and
+        // the board's own progress ("started") is what the day shows.
+        const progress = progressOf([[NINE[0], {}]])
+        for (const [why, over] of [
+            ['puzzle ID', { puzzleId: 'v1-2026-09-01-slot-other' }],
+            ['definition hash', { definitionHash: 'not-this-puzzle' }],
+            ['date', { date: '2026-09-02' }],
+        ] as const) {
+            expect(markForDay(NINE, progress, NOW, challengeOf([[NINE[0], { ...SOLVED, ...over }]])), why)
+                .toBe('started')
+            expect(markForDay(NINE, {}, NOW, challengeOf([[NINE[0], { ...SOLVED, ...over }]])), why)
+                .toBe('none')
+        }
     })
 })

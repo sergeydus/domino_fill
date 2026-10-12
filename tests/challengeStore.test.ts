@@ -133,7 +133,9 @@ describe.each(['indexeddb', 'localStorage'] as const)('readAll in %s', kind => {
             await other.change(saved.puzzleId, markAssisted)
             const done = await other.change(saved.puzzleId, end(T0 + 1000))
             expect(done.committed).toBe(true)
-            expect(done.attempt?.result).toEqual({ kind: 'hinted' })
+            // A hint keeps the clock (amended 2026-10-11): timed, and still flagged.
+            expect(done.attempt?.result).toEqual({ kind: 'solved', ms: 1000 })
+            expect(done.attempt?.assisted).toBe(true)
             expect(await store.readAll()).toEqual([done.attempt])
         } finally { other.close(); store.close() }
     })
@@ -341,7 +343,7 @@ describe('two tabs: two connections to one database (rule 15)', () => {
         a.close(); b.close()
     })
 
-    it('the hint commits first: the finish is a solve with a hint', async () => {
+    it('the hint commits first: the finish is timed and marked as hinted', async () => {
         const [a, b] = [await open(), await open()]
         await a.change(BOARD.puzzleId, begin())
         const [hint, done] = await Promise.all([
@@ -349,7 +351,9 @@ describe('two tabs: two connections to one database (rule 15)', () => {
             b.change(BOARD.puzzleId, end(T0 + 1000)),
         ])
         expect(hint.changed).toBe(true)
-        expect(done.attempt?.result).toEqual({ kind: 'hinted' })
+        // Amended 2026-10-11: it was "solved with a hint", with no time.
+        expect(done.attempt?.result).toEqual({ kind: 'solved', ms: 1000 })
+        expect(done.attempt?.assisted).toBe(true)
         a.close(); b.close()
     })
 

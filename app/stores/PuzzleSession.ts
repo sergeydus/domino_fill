@@ -13,6 +13,7 @@ import {
 } from "./placement"
 import { checkPosition, hintFor, type Advice } from "./advice"
 import type { ControlMode } from "./ControlStore"
+import { CASUAL_VIEW, type BoardView } from "../challenge/coordinator"
 
 /** Total border around the grid on one axis: `border-4` on each side (ClientBoard). */
 export const GRID_BORDER_PX = 8
@@ -307,9 +308,25 @@ export class PuzzleSession {
         return this.rootStore.challenge?.bindings.get(this) ?? null
     }
 
+    /** How this board looks in the Daily Challenge (slice 3a): casual when it's off. */
+    get challengeView(): BoardView {
+        return this.rootStore.challenge?.boardView(this) ?? CASUAL_VIEW
+    }
+
     get canChange() {
         const binding = this.challengeBinding
         return !binding || this.rootStore.challenge!.canMutate(binding)
+    }
+
+    /**
+     * The completion card's Practice (slice 3a, rule 16): a Reset when there are pieces to
+     * clear, which starts Practice through the mutation hook and stays undoable; on a board
+     * with nothing on it, a Practice run started directly, with no board change.
+     */
+    beginPractice() {
+        const binding = this.challengeBinding
+        if (this.hasMoves || !binding) this.reset()
+        else this.rootStore.challenge!.beginPractice(binding)
     }
 
     startChallenge(): Promise<boolean> {

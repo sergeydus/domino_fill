@@ -18,6 +18,11 @@ import AdviceStrip from './AdviceStrip'
 import { preloadSounds, unlockSounds } from './feedback'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { FocusAcrossComposition } from './FocusAcrossComposition'
+import ChallengeCover from './ChallengeCover'
+import ChallengeClock from './ChallengeClock'
+import ChallengeNotice from './ChallengeNotice'
+import { cardIsUp } from './challengeCard'
+import { isCoveredView } from '../challenge/coordinator'
 import { ArchiveButton, ControlModeButton, SoundButton } from './PageButtons'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
@@ -203,16 +208,34 @@ const DominoClient: React.FC = () => {
     </div>
   )
 
+  /*
+   * The Daily Challenge (slice 3a). `casual` everywhere the challenge is off or the board
+   * isn't one of today's or yesterday's, and then nothing below differs from before.
+   *
+   * A covered board renders the cover *instead of* the board (rule 9), and keeps every
+   * other row, the clock line included, so the two states get the same height budget and
+   * Start moves nothing (rule 10).
+   */
+  const view = currentBoard.challengeView
+  const covered = isCoveredView(view)
+
   /* The scoring key stays with the board in both compositions (graphics spec 2.3). It is
      not chrome: it explains what is *on* the board, and P1-1 of SPEC.md is explicit that
-     it is a legend rather than a control. */
+     it is a legend rather than a control. Under the cover it stays, inert: it is the same
+     two example pieces for every puzzle, so it gives nothing away (slice 3a, rule 9). */
   const legend = (
-    <div data-chrome>
+    <div data-chrome inert={covered}>
       <DominoPieces boardsStore={currentBoard} />
     </div>
   )
 
-  const completion = currentBoard.completed && (
+  const clock = <ChallengeClock view={view} />
+
+  const board = covered
+    ? <ChallengeCover session={currentBoard} levels={boardsStore} view={view} />
+    : <ClientBoard boardsStore={currentBoard} />
+
+  const completion = cardIsUp(currentBoard) && (
     <div data-chrome>
       <CompletionCard session={currentBoard} levels={boardsStore} />
     </div>
@@ -334,8 +357,10 @@ const DominoClient: React.FC = () => {
               costs the column's gap -- which comes straight out of the board's height
               budget. */}
           {banner}
+          <ChallengeNotice session={currentBoard} />
           {!wide && difficulty}
-          <ClientBoard boardsStore={currentBoard} />
+          {clock}
+          {board}
           {legend}
           {completion}
           {advice}

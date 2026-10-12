@@ -98,11 +98,15 @@ describe('the finish (rules 5 and 6)', () => {
         expect(step.next?.finishedAt).toBe(T0 + 83_250)
     })
 
-    it('after a hint, is a solve with a hint, with no time', () => {
-        expect(finish(started({ assisted: true }), T0 + 5000, '2026-10-09').next?.result).toEqual({ kind: 'hinted' })
-        // A hint is the player's own act, and wins over a clock error.
+    it('after a hint, is still timed, and the attempt keeps its hints-used flag', () => {
+        // Amended 2026-10-11 (user): a hint keeps the clock, LinkedIn's way. It used to give
+        // "solved with a hint" and no time.
+        const step = finish(started({ assisted: true }), T0 + 5000, '2026-10-09')
+        expect(step.next?.result).toEqual({ kind: 'solved', ms: 5000 })
+        expect(step.next?.assisted).toBe(true)
+        // A clock error still costs the time, hinted or not.
         expect(finish(started({ assisted: true, clockError: true }), T0 + 5000, '2026-10-09').next?.result)
-            .toEqual({ kind: 'hinted' })
+            .toEqual({ kind: 'untimed', reason: 'clock-error' })
     })
 
     it('after a flagged clock error, has no time', () => {
@@ -164,9 +168,11 @@ describe('a lost finish, recovered from its solve evidence (rule 14)', () => {
             .toEqual({ kind: 'untimed', reason: 'finish-lost' })
     })
 
-    it('a hinted attempt recovers as a solve with a hint', () => {
-        expect(recover(started({ assisted: true }), { solvedAt: T0, solvedOn: '2026-10-09' }).next?.result)
-            .toEqual({ kind: 'hinted' })
+    it('a hinted attempt recovers like any other: time unavailable, still marked hinted', () => {
+        // Amended 2026-10-11: it used to recover as "solved with a hint".
+        const step = recover(started({ assisted: true }), { solvedAt: T0, solvedOn: '2026-10-09' })
+        expect(step.next?.result).toEqual({ kind: 'untimed', reason: 'finish-lost' })
+        expect(step.next?.assisted).toBe(true)
     })
 
     it('no evidence: still running, and given up once the window closes', () => {
@@ -185,14 +191,21 @@ describe('a lost finish, recovered from its solve evidence (rule 14)', () => {
 describe('a size\'s result (rule 10)', () => {
     const solved = (ms: number) => finish(started(), T0 + ms, '2026-10-09').next
     it('totals three boards solved with a time', () => {
-        expect(sizeResult([solved(1000), solved(2000), solved(3500)])).toEqual({ kind: 'total', ms: 6500 })
+        expect(sizeResult([solved(1000), solved(2000), solved(3500)]))
+            .toEqual({ kind: 'total', ms: 6500, assisted: false })
     })
 
-    it('is partial with any board hinted, untimed, given up, unfinished or not started', () => {
-        const hinted = finish(started({ assisted: true }), T0 + 1, '2026-10-09').next
+    it('totals a size with a hinted board too, marked as with hints (amended 2026-10-11)', () => {
+        const hinted = finish(started({ assisted: true }), T0 + 500, '2026-10-09').next
+        expect(sizeResult([solved(1000), hinted, solved(3500)]))
+            .toEqual({ kind: 'total', ms: 5000, assisted: true })
+    })
+
+    it('is partial with any board untimed, given up, unfinished or not started', () => {
         const untimed = finish(started({ clockError: true }), T0 + 1, '2026-10-09').next
+        const lost = recover(started({ assisted: true }), { solvedAt: T0, solvedOn: '2026-10-09' }).next
         const givenUp = settle(started(), '2026-10-11').next
-        for (const third of [hinted, untimed, givenUp, started(), null]) {
+        for (const third of [untimed, lost, givenUp, started(), null]) {
             expect(sizeResult([solved(1000), solved(2000), third])).toEqual({ kind: 'partial' })
         }
         expect(sizeResult([solved(1000), solved(2000)])).toEqual({ kind: 'partial' })
@@ -239,15 +252,16 @@ describe('a stored attempt is checked, never believed', () => {
         const ended = { finishedAt: T0 + 1000 }
         const cases: [string, Partial<Attempt>][] = [
             // The case codex reproduced: a timed solve that would count towards a total.
+            // An assisted timed solve is now a real state (amended 2026-10-11), so it moved
+            // to the accepted states below; a clock error still forbids a time.
             ['a timed solve, assisted and clock error', { assisted: true, clockError: true, result: solved, ...ended }],
-            ['a timed solve, assisted', { assisted: true, result: solved, ...ended }],
             ['a timed solve, clock error', { clockError: true, result: solved, ...ended }],
             ['a time that is not finish minus start', { result: { kind: 'solved', ms: 999 }, ...ended }],
             ['a timed solve with no finish', { result: solved }],
-            ['a hint with no assist', { result: { kind: 'hinted' }, ...ended }],
+            // A result kind the ruleset no longer has: a stored one reads as no attempt.
+            ['the removed hinted kind', { assisted: true, result: { kind: 'hinted' } as unknown as Result, ...ended }],
             ['a clock error with no flag', { result: { kind: 'untimed', reason: 'clock-error' }, ...ended }],
-            ['time unavailable on an assisted attempt', { assisted: true, result: { kind: 'untimed', reason: 'finish-lost' }, ...ended }],
-            ['a solve with no finish', { assisted: true, result: { kind: 'hinted' } }],
+            ['a lost finish with no finish', { assisted: true, result: { kind: 'untimed', reason: 'finish-lost' } }],
             ['given up with a finish', { result: { kind: 'given-up' }, ...ended }],
             ['a finish with no result', ended],
         ]
@@ -263,7 +277,9 @@ describe('a stored attempt is checked, never believed', () => {
             finish(started(), T0 + 1000, '2026-10-09').next,
             finish(started(), T0 - 1000, '2026-10-09').next,
             finish(started({ assisted: true }), T0 + 1000, '2026-10-09').next,
+            { ...started(), assisted: true, result: { kind: 'solved', ms: 1000 }, finishedAt: T0 + 1000 },
             finish(started({ assisted: true, clockError: true }), T0 + 1000, '2026-10-09').next,
+            { ...started(), assisted: true, result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: T0 },
             finish(started({ clockError: true }), T0 + 1000, '2026-10-09').next,
             settle(started(), '2026-10-11').next,
             recover(started(), evidence('2026-10-10')).next,

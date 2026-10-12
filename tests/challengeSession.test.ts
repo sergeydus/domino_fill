@@ -516,15 +516,18 @@ describe('save-before-answer assistance', () => {
         expect(await answer).toBeNull()
         expect(h.session.advice).toBeNull()
         expect(h.session.adviceTick).toBe(before)
-        expect(h.binding.attempt?.result).toEqual({ kind: 'hinted' })
+        expect(h.binding.attempt?.result).toEqual({ kind: 'solved', ms: 40 })
+        expect(h.binding.attempt?.assisted).toBe(true)
     })
-    it('an assistance committed before the finish makes the solve hinted', async () => {
+    it('an assistance committed before the finish marks the timed solve as hinted', async () => {
+        // Amended 2026-10-11: a hint keeps the clock; it used to give "solved with a hint".
         const h = harness()
         await begin(h)
         await h.session.requestCheck()
         win(h)
         await fixed(h)
-        expect(h.binding.attempt?.result).toEqual({ kind: 'hinted' })
+        expect(h.binding.attempt?.result).toEqual({ kind: 'solved', ms: 200 })
+        expect(h.binding.attempt?.assisted).toBe(true)
     })
     it.each(['level', 'difficulty', 'away-and-back', 'difficulty-away-and-back', 'date'] as const)(
         'navigation by %s suppresses the obsolete answer', async navigation => {
@@ -859,7 +862,8 @@ describe('winning placement, durable evidence and pending finish', () => {
         await pending.original(h.binding.puzzleId, markAssisted)
         pending.release()
         await fixed(h)
-        expect(h.binding.attempt?.result).toEqual({ kind: 'hinted' })
+        expect(h.binding.attempt?.result).toEqual({ kind: 'solved', ms: 200 })
+        expect(h.binding.attempt?.assisted).toBe(true)
     })
     it('recovers an earlier other-tab solve before this pending finish can fix a time', async () => {
         const h = harness()
