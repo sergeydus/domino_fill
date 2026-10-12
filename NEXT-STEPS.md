@@ -93,6 +93,12 @@ Evidence levels:
 | 2026-10-12 | **A frozen day keeps the streak but adds nothing to it** (user, 2026-10-12). | As Duolingo and LinkedIn do: 12 days, a day covered by a freeze, then a played day makes 13. See D9. |
 | 2026-10-12 | **A broken streak starts freeze progress over** (user, 2026-10-12). | A missed day with no freeze saved sets the streak to 0, and the count of days toward the next freeze to 0. See D9. |
 | 2026-10-12 | **Freezes stop being earned while 3 are saved** (user, 2026-10-12). | Days played at the cap earn nothing; counting toward the next starts again once one is used. See D9. |
+| 2026-10-12 | **A day counts as missed only once it can't be played any more, so a freeze earned before then can cover it** (user, 2026-10-12, on codex's example). | Monday, Tuesday and Thursday solved, Wednesday not: on Thursday the streak is 3 with 1 freeze; on Friday, when Wednesday leaves the window, Thursday's freeze covers it, and the streak stays 3 with 0 freezes. Strict date order, which would have reset it to 1, was the alternative. See D9. |
+| 2026-10-12 | **The milestone line shows on the results of the day that reached it**, every time they're opened, and on no other day (user, 2026-10-12). | Nothing is stored. "Once ever", with a flag on the device, was the alternative. |
+| 2026-10-12 | **A given-up board finishes the day but not its size** (user, 2026-10-12). | All nine with a result, given up included, is a finished day; a size is finished only when its three are solved. |
+| 2026-10-12 | **When the results screen opens, focus goes to its heading** (user, 2026-10-12). | A screen reader starts at the top; Tab then reaches Share and Close. |
+| 2026-10-12 | **Where the Archive row can't fit the Results button and the 🔥 count, the 🔥 moves to the end of the clock line** (user, 2026-10-12). | Only where measurement shows the row costs the board its budget. Hiding it there, or letting the page scroll, were the alternatives. |
+| 2026-10-12 | **An attempt dated after the device's today counts nowhere until that date arrives** (user, 2026-10-12). | A clock set back, or another device's data. Then it counts normally. |
 
 ## Principles
 
