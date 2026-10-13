@@ -109,6 +109,40 @@ test('Start from the keyboard reveals the board and puts the keyboard on it', as
         document.querySelector('[role="grid"]')?.contains(document.activeElement) ?? false)).toBe(true)
 })
 
+/** Whether the keyboard is on the board, read past the frame the handoff would run in. */
+const boardFocused = async (page: Page) => {
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    return page.evaluate(() => document.querySelector('[role="grid"]')?.contains(document.activeElement) ?? false)
+}
+
+test.describe('Start moves the keyboard to the board only after a keyboard activation (slice 3b, rule 16)', () => {
+    test('Space does', async ({ page }) => {
+        await open(page)
+        await page.getByRole('button', { name: 'Start', exact: true }).focus()
+        await page.keyboard.press('Space')
+        await expect(page.getByRole('grid')).toBeVisible()
+        await expect.poll(() => boardFocused(page)).toBe(true)
+    })
+
+    test('a mouse click doesn\'t, though Chromium focuses Start on the click', async ({ page }) => {
+        await open(page)
+        await page.getByRole('button', { name: 'Start', exact: true }).click()
+        await expect(page.getByRole('grid')).toBeVisible()
+        expect(await boardFocused(page)).toBe(false)
+    })
+
+    test('a mouse click on a Start the keyboard had focused doesn\'t either (codex)', async ({ page }) => {
+        await open(page)
+        const button = page.getByRole('button', { name: 'Start', exact: true })
+        await page.keyboard.press('Tab')
+        await button.focus()
+        expect(await button.evaluate(el => el.matches(':focus-visible'))).toBe(true)
+        await button.click()
+        await expect(page.getByRole('grid')).toBeVisible()
+        expect(await boardFocused(page)).toBe(false)
+    })
+})
+
 test('a keyboard Start leaves focus where the player moved it while the start saved (codex)', async ({ page }) => {
     await open(page)
     await page.getByRole('button', { name: 'Start', exact: true }).focus()

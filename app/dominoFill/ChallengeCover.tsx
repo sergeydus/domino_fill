@@ -42,10 +42,14 @@ const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
     const yesterday = !!binding && !!challenge && binding.date < challenge.deviceDate
 
     const start = (event: React.MouseEvent<HTMLButtonElement>) => {
-        // Focus moves to the board only if Start had it: the Start button is about to stop
-        // existing, and focus would otherwise fall back to the page.
+        // Focus moves to the board only after a keyboard Start that had focus: the Start
+        // button is about to stop existing, and focus would otherwise fall back to the page.
+        // The activation decides, not the focus (slice 3b, rule 16): Chromium focuses a
+        // button it's clicked on, so "Start had focus" is true for a mouse Start too, and
+        // `:focus-visible` stays true for a mouse click after keyboard focus (codex). A click
+        // from Enter or Space has `detail` 0; a mouse, touch or pen click, 1 or more.
         const button = event.currentTarget
-        if (document.activeElement !== button) { void session.startChallenge(); return }
+        if (event.detail !== 0 || document.activeElement !== button) { void session.startChallenge(); return }
         // The start saves first, and the player may move on meanwhile: Tab to another
         // control, or pick another board. Either cancels the handoff, checked at the reveal
         // itself, so the board never takes focus back from where they went (codex).

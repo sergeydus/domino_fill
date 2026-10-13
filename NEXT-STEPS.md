@@ -3504,6 +3504,43 @@ before the next. The PR is opened only when the user says.
 - Cold gate, first run (2026-10-13): TIME_WAIT **44**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1677**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**739
   passed, 1 skipped**; 0 socket errors). No failed run. Committed after it.
+- Codex accepted the correction at `9a2be95` (2026-10-13): 289/289 unit tests (stderr 0
+  bytes), type-checking, three probes of its own (`changed`, identity and instant each
+  removed) caught at their intended assertions, and CI's gate and visual jobs on the exact
+  head. Its extra local Chromium check didn't start: the socket pool stayed above 100.
+
+**As built: implementation commit 4, Start moves focus only after a keyboard activation (rule 16's 3a bug, 2026-10-13)**
+- **The fix** (`ChallengeCover.tsx`): Start hands the keyboard to the board only when the
+  click came from the keyboard (`event.detail === 0`, which Chromium gives Enter and Space on
+  a button) **and** Start has focus. The rest of 3a's handoff is unchanged: cancelled if
+  focus moves elsewhere while the start saves, or the board on screen changes.
+  - The `detail` check is what rule 16 adds. In Chromium a mouse click focuses the button,
+    so "Start had focus" was true for a mouse Start too, and the board took the keyboard.
+  - The focus check stays: a click with `detail` 0 can also come from script without
+    focus, and 3a's "a pointer Start leaves focus alone" test (a `detail` 0 click with focus
+    on Archive) fails without it (measured, probe 4 below).
+- **New tests:**
+  - `tests/challengeUi.test.tsx`, **1:** a click with `detail` 1 on a focused Start, as
+    Chromium sends it, leaves the board unfocused. 3a's jsdom tests use `fireEvent.click`,
+    whose `detail` is 0, so they go on standing for keyboard Starts; none changed.
+  - `e2e/challengeUi.spec.ts`, **3 × 2 projects**, beside 3a's Enter test:
+    - Space moves focus to the board;
+    - a mouse click doesn't;
+    - a mouse click on a Start the keyboard focused doesn't either. The test checks Start
+      matches `:focus-visible` before clicking: codex's case.
+- **Tests changed on purpose:** none.
+- **Mutations: 4 of 4 caught at the intended test,** files restored byte for byte:
+  - no `detail` check, the 3a behaviour: unit, at the new test; browser, both mouse tests
+    in both projects;
+  - deciding by `:focus-visible` instead: browser, only the mouse-after-keyboard test, in
+    both projects, as codex predicted;
+  - no focus check: unit, at 3a's "a pointer Start leaves focus alone", and also at "the
+    card focuses Practice once the finish saves".
+  - Space has no probe of its own: Enter and Space both give `detail` 0, so no single
+    change breaks only one.
+- Cold gate, first run (2026-10-13): TIME_WAIT **42**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1678**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**745
+  passed, 1 skipped**, 6 more; 0 socket errors). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
