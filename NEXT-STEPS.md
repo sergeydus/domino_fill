@@ -3639,6 +3639,33 @@ before the next. The PR is opened only when the user says.
   **0**, unit **0** (**1679**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**749
   passed, 1 skipped**, 4 more; 0 socket errors). No failed run. Committed after it, as a
   `[visual update]`; the baselines follow in their own commit, from CI's artifact.
+- **The baselines** (`2ebb938`), from CI run `38445794138`'s `visual-baselines` at `f1b4ade`
+  (gate and visual jobs passed): `desktop.png` and `phone.png` differ and were committed;
+  both component sheets came back byte-identical. `environment.json` differs only in the
+  runner image, 20260927.320.1 to 20261004.327.1, and was committed, as in `38512ed`.
+  - Viewed: the public page with the day's first board started, the clock line reading
+    "0:00" above it, and nothing else changed. Not pixel-counted: Pillow isn't installed
+    here.
+- **A breach of the gate rule, mine:** I committed the baselines before running the cold
+  gate. The commit only adds images the gate doesn't read, but the rule has no exception.
+  The gate ran on that head afterwards: TIME_WAIT **41**; TypeScript **0**, lint **0**, unit
+  **0** (**1679**, stderr **0 bytes**), build **0**, browser **0** (**749 passed, 1
+  skipped**, 0 socket errors). CI run `38446950483` on `2ebb938`: gate and visual both
+  passed, so the new baselines match.
+- This record's commit (docs only), gate from cold, two runs (2026-10-13):
+  - **Run 1:** TIME_WAIT **46**; every step **0** (unit **1679**, stderr **0 bytes**; browser
+    **749 passed, 1 skipped**). But **1 socket error**: a board load in
+    `accessibility.spec.ts` (phone-360) hit `ERR_NO_BUFFER_SPACE`, and the helper's one
+    reload recovered it. No test failed. Not committed on.
+  - **Run 2:** TIME_WAIT **18**; every step **0** (unit **1679**, stderr **0 bytes**; browser
+    **749 passed, 1 skipped**), and again **1 socket error**, recovered the same way, mid-run
+    in `layout.spec.ts` after about 700 tests. Committed after run 2: no test failed, and
+    from a start this quiet a third run would most likely do the same.
+  - **Flagged, not fixed here:** before activation the gates recorded 0 socket errors, and
+    since then two consecutive runs have each exhausted the pool mid-run, though the gate
+    before activation's commit and the late baselines gate had 0. Whether activation's Start
+    presses add enough requests per test to matter is not measured. It wants its own change
+    if it continues.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
