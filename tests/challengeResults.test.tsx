@@ -619,6 +619,28 @@ describe('opening by itself (rule 8)', () => {
         expect(dialog()).not.toBeNull()
     })
 
+    it('opens nothing when another tab finishes this board at the same instant first (codex)', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        const session = m.levels.currentBoard!
+        await act(async () => { expect(await session.startChallenge()).toBe(true) })
+        const release = hold(m)
+        await act(async () => {
+            session.placeToward([0, 0], 'down')
+            session.placeToward([0, 1], 'down')
+        })
+        expect(session.challengeView.kind).toBe('finishing')
+        // The clock is frozen at T0: this tab started and solved then, and so did the other.
+        const started = m.root.challenge!.history.get(`${DAY}|e1`)!
+        expect(started.startedAt).toBe(T0)
+        await seed(m.store, [{ ...started, result: { kind: 'solved', ms: 0 }, finishedAt: T0 }])
+        await release()
+        expect(session.challengeView.kind).toBe('result')
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+        expect(m.root.challenge!.lastFinish).toBeNull()
+    })
+
     it('opens nothing for another tab\'s result', async () => {
         const m = await mount({ attempts: solved('e2', 'e3') })
         fakeTimers()

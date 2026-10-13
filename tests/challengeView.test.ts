@@ -494,24 +494,84 @@ describe('lastFinish: this tab\'s own finish, signalled once (slice 3b, rule 8)'
         expect(h.service.lastFinish).toBeNull()
     })
 
-    it('does not signal another board\'s result that finished at the same instant', async () => {
+    it('does not signal another board\'s lost finish that this root recovers at the same instant', async () => {
         let notice!: (id: string) => void
         const h = harness({ options: { listen: (_wake, heard) => { notice = heard; return () => {} } } })
         await begin(h)
-        // Easy 1's finish, captured at T0 + 200, waits for its save.
+        // Another tab solves Hard 3 at T0 + 200, and its finish is never saved: only the
+        // evidence beside its board is.
+        const other = harness()
+        await open(other)
+        other.root.boardsStore.goToBoard({ difficulty: 'hard', level: 3 })
+        expect(await other.session().startChallenge()).toBe(true)
+        vi.spyOn(other.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(other, T0 + 200)
+        await vi.waitFor(() => expect(other.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // This tab's finish of Easy 1, captured at that same instant, waits.
         const held = holdNext(h.store)
         win(h, T0 + 200)
         await held.entered
-        // Another tab finishes Hard 3 at that same instant, and says so.
-        const other = h.sessionAt('hard', 3)
-        await finishedElsewhere(h.store, other, 200)
-        notice(other.definition.puzzleId)
-        await vi.waitFor(() => expect(h.service.history.get(other.definition.puzzleId)?.result)
-            .toEqual({ kind: 'solved', ms: 200 }))
+        // Told of Hard 3, this root recovers the lost finish: its own transaction, a change,
+        // at this tab's captured instant, on another board.
+        const hard = id(h, 'hard', 3)
+        notice(hard)
+        await vi.waitFor(() => expect(h.service.history.get(hard))
+            .toMatchObject({ result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: T0 + 200 }))
         expect(h.service.lastFinish).toBeNull()
         held.release()
         await vi.waitFor(() => expect(h.view().kind).toBe('result'))
         expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+    })
+
+    it('does not signal a finish this root recovers from another tab\'s earlier solve', async () => {
+        // This tab's board saves fail, so the evidence it reads back is the other tab's.
+        const h = harness({ options: { writeProgress: () => false } })
+        await begin(h)
+        // Another tab, on the same attempt, solves it first at T0 + 100; its finish is lost.
+        const other = harness()
+        await open(other)
+        expect(other.binding().attempt?.startedAt).toBe(T0)
+        vi.spyOn(other.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(other, T0 + 100)
+        await vi.waitFor(() => expect(other.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // This tab's finish at T0 + 200: its transaction recovers the earlier solve instead,
+        // a change, finished at the other tab's instant.
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'finish-lost' } }))
+        expect(h.service.history.get(id(h, 'easy', 1))?.finishedAt).toBe(T0 + 100)
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another tab\'s finish of this board at the same instant (codex)', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish, captured at T0 + 200, waits; another tab, started at the same
+        // instant, finishes the same board at the same millisecond and commits first.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        await finishedElsewhere(h.store, h.session(), 200)
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.history.get(id(h, 'easy', 1))?.finishedAt).toBe(T0 + 200)
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another tab\'s recovery of this tab\'s saved solve (codex)', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish waits, with its evidence saved beside the board.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        // Another tab opens, finds the evidence and no finish, and recovers it at its instant.
+        const other = harness({ at: T0 + 1_000 })
+        await open(other)
+        const recovered = other.service.history.get(id(other, 'easy', 1))
+        expect(recovered).toMatchObject({ result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: T0 + 200 })
+        held.release()
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'finish-lost' } }))
+        expect(h.service.lastFinish).toBeNull()
     })
 
     it('does not signal a finish recovered after a reload', async () => {

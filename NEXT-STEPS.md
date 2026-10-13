@@ -3366,7 +3366,9 @@ before the next. The PR is opened only when the user says.
 **As built: implementation commit 3, opening by itself (rule 8, 2026-10-13)**
 - **The signal** (`coordinator.ts`): `lastFinish`, an `observable.ref` of `{ puzzleId,
   serial }`, set by `signalFinish` in `transact`'s commit handler, before `adopt` clears the
-  `pendingFinish` it reads. **A deviation from rule 8's wording, for codex to review:** rule
+  `pendingFinish` it reads. **A deviation from rule 8's wording, for codex to review**
+  (**wrong about `changed`, and reverted for it:** see the correction after review below):
+  rule
   8 names three conditions: the transaction changed the attempt, the result is a solve (or a
   clock error's untimed one), and its `finishedAt` equals a binding's
   `pendingFinish.solvedAt`. I kept only the third, on a binding that `matches` the attempt.
@@ -3459,6 +3461,49 @@ before the next. The PR is opened only when the user says.
   **0**, unit **0** (**1673** in 71 files, 20 more; stderr **0 bytes**), build **0**, browser
   **0** (**739 passed, 1 skipped**, 2 more; 0 socket errors). No failed run. Committed after
   it.
+
+**Correction after codex's review of commit 3 (`ee1a7c4`, 2026-10-13)**
+- Codex held `ee1a7c4`: **the instant match does not imply this tab saved the result.** Two
+  reachable cases, each reproduced in a scratch test that failed at its intended assertion:
+  - Another tab finishes the same board at the same millisecond while this tab's save waits.
+  - Another tab opens while it waits, and recovers this tab's saved solve evidence, which
+    carries the captured instant.
+  - In both, this tab's transaction then commits the other tab's result unchanged, and
+    signalled it. A component test showed the first one opening Results.
+- **Where my reasoning went wrong:** "`reconcileLive` passes `recover` evidence only when
+  older than `pendingFinish`" is true of this root's `reconcileLive`, which knows of its own
+  pending finish. Another tab's has no `pendingFinish`, so its recovery uses this tab's
+  evidence and instant. And "no test could tell `changed` from its absence" was false: both
+  cases tell. The As built claims above are corrected by this.
+- **Corrected:** the commit handler signals only when `outcome.changed` (as rule 8 says), and
+  `signalFinish`'s comment now says why both conditions are needed. The result-kind check
+  stays unwritten, which codex agreed follows from the current reconciliation path: what
+  this root's own transaction writes at the captured instant is `finish`'s, a solve or a
+  clock error's untimed one.
+- **The two remaining checks needed new tests.** With `changed` back, the race test and the
+  same-instant test no longer reached the instant and identity checks: their transactions
+  change nothing, so `changed` stops them first. Both checks still guard real paths, each
+  now with a test built from real transitions:
+  - **The identity check:** another tab's lost finish of Hard 3 at this tab's captured
+    instant. This root, told of it, recovers it in its own transaction, a change on another
+    board, while this tab's finish of Easy 1 waits. It replaces the same-instant test,
+    which `changed` now covers.
+  - **The instant check:** this tab's board saves fail, and another tab solves the same
+    attempt first and loses its finish. This tab's finish transaction then recovers the
+    other's earlier solve instead: a change, finished at the other tab's instant.
+- **Tests:**
+  - `tests/challengeView.test.ts`: codex's two cases (same board at the same instant;
+    another tab recovering this tab's evidence), the identity test replaced as above, and
+    the instant test added. **9** in the describe, 6 before.
+  - `tests/challengeResults.test.tsx`: codex's component case, a same-instant finish by
+    another tab opening nothing. **15** in the describe, 14 before.
+- **Mutations: 19 of 19 caught at the intended test,** the whole sweep rerun, files restored
+  byte for byte. The new probe, `changed` removed, fails codex's three regressions. In the
+  first rerun, before the two new tests, the instant and identity probes survived (17 of
+  19); that is how the gap above was found.
+- Cold gate, first run (2026-10-13): TIME_WAIT **44**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1677**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**739
+  passed, 1 skipped**; 0 socket errors). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT

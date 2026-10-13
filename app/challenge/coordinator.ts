@@ -569,7 +569,8 @@ export class ChallengeCoordinator {
             })
             if (this.alive(epoch)) runInAction(() => {
                 if (outcome.committed) {
-                    if (outcome.attempt) this.signalFinish(outcome.attempt)
+                    // Changed by this transaction: the instant alone can be another tab's (codex).
+                    if (outcome.changed && outcome.attempt) this.signalFinish(outcome.attempt)
                     if (outcome.attempt) this.remember(outcome.attempt, true)
                     if (outcome.attempt?.clockError || outcome.attempt?.result) this.clockFlags.delete(id)
                     if (outcome.attempt && !outcome.attempt.result) this.unfinished.set(id, outcome.attempt)
@@ -585,13 +586,16 @@ export class ChallengeCoordinator {
         })
     }
     /**
-     * Signal a result this tab's winning placement fixed (rule 8): one finished at the instant
-     * a binding of this root captured. Only `finish` writes that instant, and only as a solve
-     * (`reconcileLive` never lets `recover` write it), so this is a solve or a clock error's
-     * untimed one, whichever transaction carried it: the finish save, Try again, the retry
-     * timer or a refresh. Never another tab's result (another instant), a recovery after a
-     * reload (no `pendingFinish`), Practice or a given-up board. Called before `adopt`, which
-     * clears the `pendingFinish` it reads, so one result signals once.
+     * Signal a result this tab's winning placement fixed (rule 8): written by this root's
+     * transaction (the caller checks it changed the attempt) and finished at the instant a
+     * binding of this root captured. The instant alone isn't enough (codex): another tab can
+     * finish the same board at the same millisecond, or recover this tab's saved evidence,
+     * which carries the captured instant. Its result then arrives here unchanged. In this
+     * root, `reconcileLive` never lets `recover` write the captured instant, so what this
+     * root's transaction writes at that instant is `finish`'s: a solve, or a clock error's
+     * untimed one. Whichever transaction carried it: the finish save, Try again, the retry
+     * timer or a refresh. Never a recovery after a reload (no `pendingFinish`), Practice or a
+     * given-up board. Called before `adopt`, which clears the `pendingFinish` it reads.
      */
     private signalFinish(attempt: Attempt) {
         const own = [...this.bindings.values()].some(binding => binding.pendingFinish
