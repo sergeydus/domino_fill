@@ -3541,6 +3541,104 @@ before the next. The PR is opened only when the user says.
 - Cold gate, first run (2026-10-13): TIME_WAIT **42**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1678**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**745
   passed, 1 skipped**, 6 more; 0 socket errors). No failed run. Committed after it.
+- Codex accepted commit 4 at `a6572da` (2026-10-13): 72/72 unit tests (stderr 0 bytes),
+  type-checking, 32/32 Chromium tests (30 committed, and two of its own with touch taps
+  and injected pen clicks), and CI's gate and visual jobs on the exact head.
+
+**As built: implementation commit 5, the challenge switched on (rules 15 and 16, 2026-10-13)**
+- **Switched on** (`provider.tsx`): `new RootStore(new CorpusSource(), { challenge: ... })`,
+  on everywhere except under `/visual`. **A choice the contract didn't foresee, for codex
+  to review:**
+  - `StoreWrapper` wraps every route, the visual build's fixture pages included, and each of
+    those brings its own root. Switched on unconditionally, the wrapper's root, though
+    nothing there renders it, started a second coordinator beside each fixture's, on the
+    same storage.
+  - Measured: `challengeSession.spec.ts`'s "legacy transaction abort" held the fixture's
+    legacy write, and the hidden coordinator wrote the legacy record meanwhile, so the
+    fixture saw `ready` where it expected `retry`.
+  - Those routes exist only in the visual build, and they get the wrapper's root as it was
+    before. The pathname is read in the browser; the server render is the same loading
+    state either way.
+- **What activation breaks, re-measured** before any spec change: the whole browser suite,
+  run with `provider.tsx` switched on and the shared open path pressing Start. **147
+  failed, 1 skipped, 598 passed**, 0 socket errors, across 11 specs. Rule 16's run (before
+  commits 2 to 4) was 161.
+  - The four specs that failed only on 3a's focus bug (`keyboard`, `accessibility`,
+    `pickAPiece`, `feedback`) pass unchanged: commit 4 fixed it.
+  - Two specs were new to the list: `persistence.spec.ts`, 7 (rule 16 had 3), and
+    `challengeResults.layout.spec.ts`, 7, which compares against a casual page and was
+    written after rule 16's run.
+- **The shared open path** (`e2e/openBoard.ts`):
+  - `waitForBoard`, used by `openBoard` and by the specs that reload, waits for the board or
+    its cover, then `startIfCovered`: when the board is covered, it clicks Start and waits
+    for the board, as a player does. A click, so the keyboard stays where it was.
+  - **First draft wrong, measured:** it decided on the first cover it saw, and every board
+    is covered while the challenge prepares. After a reload, a board already started, or an
+    archive day, then shows uncovered, and the helper waited for a Start that never came.
+    This was all 6 archive failures and all 7 persistence ones. It now waits for whichever
+    comes first, the board or a ready cover.
+  - `openArchiveDay` and `ARCHIVE_DAY` (2026-09-20) are for the specs whose subject is casual
+    play. It pins the clock to `LATE_IN_A_MONTH`, opens `/` without starting anything, and
+    picks the day through the Archive dialog. It also works after an earlier load.
+- **Every spec change, with its reason:**
+  - `layout.spec.ts` (76 failed): `chooseDifficulty` presses Start on the board it lands on.
+    **Budgets:** all of the spec's assertions pass with the clock row, and none was changed.
+  - `board.spec.ts` (24): its own open path presses Start after Skip.
+  - `desktop.spec.ts` (10): `hard` presses Start. `CHROME_ROWS` goes 5 to **6**, changed on
+    purpose: the sixth row is 3a's clock line, now on the public page. "The board gets the
+    room a desktop has" still holds its 56 px cell.
+  - `archive.spec.ts` (6) and `persistence.spec.ts` (7): unchanged. The open path above
+    fixed them.
+  - `completion.spec.ts` (2), "Next level moves on": runs on an archive day. A challenge
+    day's card offers "Next board", and the board it moves to is covered.
+  - `completionCard.spec.ts` (2), "on a board really solved": runs on an archive day. A
+    challenge day's card gives the time where casual play names the puzzle.
+  - `challenge.layout.spec.ts` (7) and `challengeResults.layout.spec.ts` (7): **the casual
+    page is `/visual/daily?challenge=off`**, a query the fixture now reads to build its root
+    with the challenge off, which is the public page as it was.
+    - **A change of mechanism from rule 16**, which said to compare with 3a's measured
+      budgets. 3a recorded only the extremes, and recorded numbers wouldn't hold on the CI
+      runner, whose text renders wider. Measured live, the numbers are 3a's and commit 2's
+      exactly: +37 px where the clock row shows, +0 on archive days, 360×640's 8×8 scrolling
+      136 → 173. That also shows the fixture reproduces the old public page.
+  - `challengeUi.spec.ts` (2): "the public page stays casual" is replaced by "the public page
+    is the Daily Challenge" (covered, Start, the clock running after Start, on `BASE_URL`).
+    Rule 16's two activation cases are added, also on `/`:
+    - A board played before the challenge stays uncovered and untimed, reading "Played
+      before the challenge · untimed", with its piece. The progress record is made by the
+      real casual game, on the fixture with the challenge off, and carried to the public
+      origin.
+    - A clock before the corpus gets 2026-09-01 casually, uncovered, with no clock, and
+      the clamp note.
+  - `challengeSession.spec.ts` (4): "the production public page remains casual and writes no
+    challenge records" now runs on an archive day of the production page. Its legacy check
+    has run (`{ checked: true, marks: [] }`), and a hint and a placement record no attempt.
+    "Legacy transaction abort" is unchanged; the `/visual` exception fixed it.
+  - `tests/provider.test.tsx`, changed on purpose: the lifecycle test expected the public
+    root's challenge off; it now expects it on. A new test: off under `/visual`.
+- **After the changes:** the whole browser suite, **749 passed, 1 skipped**, 0 failed, 0
+  socket errors. Unit **1679**, stderr 0 bytes.
+- **Inventory:** `tests/controls.test.ts` went 27 to 30 in commit 2; activation adds no
+  control.
+- **Mutations: 8 of 8 caught at the intended test,** files restored byte for byte, each
+  browser probe on fresh builds:
+  - the challenge off everywhere: unit, at the lifecycle test; browser, at "the public
+    page is the Daily Challenge", both projects;
+  - no `/visual` exception: unit, at the new test; browser, at "legacy transaction abort",
+    both projects;
+  - the open path never pressing Start (rule 16's planned probe): browser, at "the board
+    gets the room a desktop has", among 7 in `desktop.spec.ts`;
+  - deciding on the first cover seen (my first draft): browser, at "an archive day
+    survives a reload";
+  - `openArchiveDay` closing the archive instead of picking the day: browser, at "Next
+    level";
+  - the fixture ignoring `?challenge=off`: browser, at the 360×640 layout comparison.
+  - The legacy and before-clamp cases test behaviour slices 2 and 3a built, which this
+    commit doesn't change, so they have no probe here.
+- Cold gate, first run (2026-10-13): TIME_WAIT **47**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1679**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**749
+  passed, 1 skipped**, 4 more; 0 socket errors). No failed run. Committed after it, as a
+  `[visual update]`; the baselines follow in their own commit, from CI's artifact.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT

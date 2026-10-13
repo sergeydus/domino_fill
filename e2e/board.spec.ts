@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { instrument, waitForReady } from './openBoard'
+import { instrument, startIfCovered, waitForReady } from './openBoard'
 
 /**
  * Where a click on the board lands (spec P0-4 / D4).
@@ -27,6 +27,8 @@ const openBoard = async (page: Page) => {
     await skip.scrollIntoViewIfNeeded()
     await skip.click()
     await expect(overlay(page)).toBeHidden()
+    // The public page is the Daily Challenge: today's board is covered until Start.
+    await startIfCovered(page)
     await expect(page.locator('[data-cell="0,0"]')).toBeVisible()
 }
 

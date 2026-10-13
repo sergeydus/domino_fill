@@ -25,17 +25,26 @@ const Probe = ({ label }: { label: string }) => {
 }
 
 describe('StoreWrapper', () => {
-    it('owns start and disposal through setup-cleanup-setup while its public root stays inactive', () => {
+    it('owns start and disposal through setup-cleanup-setup, with the challenge on (slice 3b)', () => {
         const start = vi.spyOn(RootStore.prototype, 'start')
         const dispose = vi.spyOn(RootStore.prototype, 'dispose')
         try {
             const view = render(<StrictMode><StoreWrapper><Probe label="lifecycle" /></StoreWrapper></StrictMode>)
-            expect(seen.at(-1)!.challenge).toBeNull()
+            expect(seen.at(-1)!.challenge).not.toBeNull()
             expect(start).toHaveBeenCalledTimes(2)
             expect(dispose).toHaveBeenCalledTimes(1)
             view.unmount()
             expect(dispose).toHaveBeenCalledTimes(2)
         } finally { start.mockRestore(); dispose.mockRestore() }
+    })
+
+    it('leaves the challenge off under /visual, where each page brings its own root', () => {
+        const path = window.location.pathname
+        window.history.pushState({}, '', '/visual/daily')
+        try {
+            render(<StoreWrapper><Probe label="visual" /></StoreWrapper>)
+            expect(seen.at(-1)!.challenge).toBeNull()
+        } finally { window.history.pushState({}, '', path) }
     })
     it('exposes a RootStore with both sub-stores', () => {
         render(<StoreWrapper><Probe label="a" /></StoreWrapper>)

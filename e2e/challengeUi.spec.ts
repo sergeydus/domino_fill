@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, pinDayAcrossReloads, LATE_IN_A_MONTH } from './calendar'
-import { playSolution, solutionFor } from './play'
+import { drag, playSolution, solutionFor } from './play'
 import { arm, heldWrite, instrument, release } from './challengeTransaction'
 
 /*
@@ -260,11 +260,68 @@ test('the archive keeps a challenge day\'s mark after a Practice Undo (rule 18)'
     await expect(page.locator(`[data-archive-day="${LATE_IN_A_MONTH}"]`)).toHaveAttribute('data-mark', 'partial')
 })
 
-test('the public page stays casual: no cover, no clock', async ({ page }) => {
-    await pinDay(page, LATE_IN_A_MONTH)
+/*
+ * Switched on (slice 3b, rules 15 and 16): the public page is the Daily Challenge. These run
+ * on `BASE_URL`, the production build, not the fixture.
+ */
+const openPublic = async (page: Page, day = LATE_IN_A_MONTH) => {
+    await pinDay(page, day)
     await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
     await page.goto(`${BASE_URL}/`)
-    await expect(page.getByRole('grid')).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-board-shell], [data-challenge-cover="ready"]').first()).toBeVisible({ timeout: 15_000 })
+}
+
+test('the public page is the Daily Challenge: today\'s board covered, with Start and the clock', async ({ page }) => {
+    await openPublic(page)
+    await expect(page.locator('[data-challenge-cover="ready"]')).toBeVisible()
+    await expect(page.locator('[data-cell]')).toHaveCount(0)
+    await expect(clock(page)).toHaveText('0:00')
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await expect(page.getByRole('grid')).toBeVisible()
+    await expect(clock(page)).toHaveText(/^\d+:\d\d$/)
+})
+
+test('a board played before the challenge stays uncovered and untimed, with its pieces (codex)', async ({ page, browser }) => {
+    // The returning player's record, made by the real game as it was before (the casual
+    // fixture), then carried to the public page's origin.
+    const before = await browser.newContext()
+    const casual = await before.newPage()
+    await pinDay(casual, LATE_IN_A_MONTH)
+    await casual.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
+    await casual.goto(`${VISUAL_URL}/visual/daily?challenge=off`)
+    await expect(casual.getByRole('grid')).toBeVisible({ timeout: 15_000 })
+    await expect(casual.locator('[data-challenge-cover]')).toHaveCount(0)
+    const free = await casual.locator('[data-cell]').evaluateAll(cells => {
+        const empty = new Set(cells.filter(cell => !cell.getAttribute('aria-label')!.includes('rock'))
+            .map(cell => cell.getAttribute('data-cell')!))
+        for (const key of empty) {
+            const [row, column] = key.split(',').map(Number)
+            if (empty.has(`${row + 1},${column}`)) return [row, column]
+        }
+        return null
+    })
+    await drag(casual, [free![0], free![1]], [free![0] + 1, free![1]])
+    await expect(casual.locator('[data-piece]:not([data-piece="rock"])')).toHaveCount(1)
+    const records = await casual.evaluate(() => Object.fromEntries(Object.keys(localStorage)
+        .filter(key => key.startsWith('dominoFill.progress.')).map(key => [key, localStorage.getItem(key)!])))
+    expect(Object.keys(records).length).toBeGreaterThan(0)
+    await before.close()
+
+    await page.addInitScript(records => {
+        if (sessionStorage.getItem('seeded')) return
+        sessionStorage.setItem('seeded', '1')
+        for (const [key, value] of Object.entries(records)) localStorage.setItem(key, value)
+    }, records)
+    await openPublic(page)
+    await expect(clock(page)).toHaveText('Played before the challenge · untimed')
+    await expect(page.locator('[data-challenge-cover]')).toHaveCount(0)
+    await expect(page.locator('[data-piece]:not([data-piece="rock"])')).toHaveCount(1)
+})
+
+test('a clock before the corpus gets the first day casually, uncovered, saying which day (codex)', async ({ page }) => {
+    await openPublic(page, '2019-04-01')
+    await expect(page.locator('[data-clock-clamp]')).toContainText('before')
+    await expect(page.locator('[data-viewing-date]')).toContainText('2026-09-01')
     await expect(page.locator('[data-challenge-cover]')).toHaveCount(0)
     await expect(clock(page)).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Reset', exact: true })).toBeEnabled()

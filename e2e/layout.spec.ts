@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openBoard, startIfCovered } from './openBoard'
 
 /**
  * The layout acceptance criteria (spec P0-3 / D3), across the viewport and zoom matrix.
@@ -36,6 +36,8 @@ const DIFFICULTIES = [
 
 const chooseDifficulty = async (page: Page, label: RegExp, n: number) => {
     await page.getByRole('button', { name: label }).click()
+    // The public page is the Daily Challenge: another size's board is covered until Start.
+    await startIfCovered(page)
     await expect(page.locator('[data-cell]')).toHaveCount(n * n)
 }
 

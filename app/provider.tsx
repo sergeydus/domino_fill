@@ -2,6 +2,7 @@
 import { createContext, useEffect, useState } from "react";
 import { MotionConfig } from "motion/react";
 import { RootStore } from "@/app/stores/RootStore";
+import { CorpusSource } from "@/app/stores/corpusSource";
 
 // `null` default rather than a fallback singleton: a fallback would silently hand out a
 // store shared across the server process, which is the bug this boundary exists to prevent.
@@ -9,8 +10,19 @@ import { RootStore } from "@/app/stores/RootStore";
 export const StoreContext = createContext<RootStore | null>(null);
 
 export const StoreWrapper = ({ children }: { children: React.ReactNode }) => {
-    // Lazy initialiser: constructed once per mount, never on re-render.
-    const [store] = useState(() => new RootStore());
+    /*
+     * Lazy initialiser: constructed once per mount, never on re-render.
+     *
+     * **The Daily Challenge is on** (slice 3b, rule 15). Not under `/visual`, the routes only
+     * the visual build has: each of those pages brings its own root, and this one, though
+     * nothing there renders it, would start a second coordinator beside the fixture's, on
+     * the same storage (measured: it ran the legacy check a fixture test was holding). They
+     * get the wrapper's root as it was before. Read in the browser; the server render is
+     * the same loading state either way.
+     */
+    const [store] = useState(() => new RootStore(new CorpusSource(), {
+        challenge: typeof window === 'undefined' || !window.location.pathname.startsWith('/visual'),
+    }));
     useEffect(() => {
         void store.start()
         return () => store.dispose()

@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 import { shouldRetryStartup, type NetworkFailure, type ResourceType } from './startupRetry'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 
 /**
  * Open the page with the board ready, and explain itself when it is not.
@@ -205,6 +206,29 @@ const describeFailure = async (
     ].join('\n'))
 }
 
+/** A day the archive offers when the clock is pinned to `LATE_IN_A_MONTH`, and not a challenge day. */
+export const ARCHIVE_DAY = '2026-09-20'
+
+/**
+ * Open an archive day: casual play, as the whole page was before the Daily Challenge
+ * (slice 3b, rule 16). For the specs whose subject is casual play (the card's "Next level",
+ * "Play again"), which today's and yesterday's boards no longer have. The clock is pinned
+ * late in a month so the archive shows the day, and the day is picked through the Archive
+ * dialog, as a player picks it. Usable after an earlier load: it navigates again.
+ */
+export const openArchiveDay = async (page: Page, timeout = 15_000) => {
+    await pinDay(page, LATE_IN_A_MONTH)
+    await page.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
+    await instrument(page)
+    await page.goto('/')
+    await waitForReady(page, page.locator('[data-board-shell], [data-challenge-cover]').first(), 'The board', timeout)
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await page.locator(`[data-archive-day="${ARCHIVE_DAY}"]`).click()
+    await expect(page.locator('[data-archive]')).toHaveCount(0)
+    await expect(page.locator('[data-challenge-cover]')).toHaveCount(0)
+    await expect(page.locator('[data-board-shell]')).toBeVisible({ timeout })
+}
+
 /** Load the page past the tutorial and wait for the board, with a useful failure. */
 export const openBoard = async (page: Page, timeout = 15_000) => {
     // The tutorial is suppressed before the first paint rather than dismissed afterwards.
@@ -218,6 +242,33 @@ export const openBoard = async (page: Page, timeout = 15_000) => {
     await waitForBoard(page, timeout)
 }
 
-/** The common case: the tutorial is suppressed, so there is exactly one board. */
-export const waitForBoard = (page: Page, timeout = 15_000) =>
-    waitForReady(page, page.locator('[data-board-shell]'), 'The board', timeout)
+/**
+ * The common case: the tutorial is suppressed, so there is exactly one board.
+ *
+ * **The public page is the Daily Challenge** (slice 3b, rule 16): today's and yesterday's
+ * boards are covered until Start, and a covered board has no shell at all. So this waits for
+ * the board or its cover, and presses Start when it's covered, which is what a player does:
+ * the suites test the timed board the public sees. Start is clicked, so the keyboard stays
+ * where it was, as after any pointer Start. A board that isn't covered (an archive day, one
+ * already started, one played before the challenge) is left exactly as it opened.
+ */
+export const waitForBoard = async (page: Page, timeout = 15_000) => {
+    await waitForReady(page, page.locator('[data-board-shell], [data-challenge-cover]').first(), 'The board', timeout)
+    await startIfCovered(page, timeout)
+}
+
+/**
+ * Press Start on a covered board, once it's ready, and wait for the board.
+ *
+ * Waits for whichever comes first, the board or a ready cover: every board is covered while
+ * the challenge prepares, and only then does one already started, or an archive day's,
+ * show uncovered. Deciding on the first cover seen pressed nothing on those and waited for
+ * a Start that never came (measured: archive and persistence specs, after a reload).
+ */
+export const startIfCovered = async (page: Page, timeout = 15_000) => {
+    const ready = page.locator('[data-challenge-cover="ready"]')
+    await expect(page.locator('[data-board-shell], [data-challenge-cover="ready"]').first()).toBeVisible({ timeout })
+    if (await ready.count() === 0) return
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
+    await expect(page.locator('[data-board-shell]')).toBeVisible({ timeout })
+}

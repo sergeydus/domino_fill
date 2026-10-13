@@ -14,8 +14,8 @@ export const DAILY_SENTINEL = 'domino-daily-fixture-5c0e7a31'
 /**
  * The real game with the Daily Challenge switched on (slice 3a, rule 20), for the browser
  * tests: the public page's own wrapper and `DominoClient`, the real corpus, the real
- * coordinator and storage. Only the root's `challenge` option differs from `provider.tsx`,
- * which stays switched off until slice 3b.
+ * coordinator and storage. Since slice 3b the root is `provider.tsx`'s own; this page adds
+ * the hooks below, and `?challenge=off` for the page as it was before.
  *
  * Compiled only into the `DOMINO_VISUAL_SHEET` build, like the rest of `app/visual`.
  */
@@ -31,7 +31,14 @@ declare global {
 }
 
 export default function DailyFixture() {
-    const [root] = useState(() => new RootStore(new CorpusSource(), { challenge: true }))
+    // `?challenge=off` is the page as it was before the challenge went live (slice 3b, rule
+    // 16): the layout suites measure the challenge's rows against it, and the public page
+    // has no casual today any more. Read in the browser only; the server render is the same
+    // loading state either way.
+    const [root] = useState(() => new RootStore(new CorpusSource(), {
+        challenge: typeof window === 'undefined'
+            || new URLSearchParams(window.location.search).get('challenge') !== 'off',
+    }))
     useEffect(() => {
         window.dailyFixture = {
             root,
