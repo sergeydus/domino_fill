@@ -430,6 +430,124 @@ describe('history: forward only (rule 7)', () => {
     })
 })
 
+describe('lastFinish: this tab\'s own finish, signalled once (slice 3b, rule 8)', () => {
+    const id = (h: Harness, difficulty: 'easy' | 'normal' | 'hard', level: 1 | 2 | 3) =>
+        h.sessionAt(difficulty, level).definition.puzzleId
+
+    it('signals this tab\'s finish once, and a clock error\'s untimed solve too', async () => {
+        const h = harness()
+        await begin(h)
+        expect(h.service.lastFinish).toBeNull()
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+        // A later transaction over the same result changes nothing, and signals nothing.
+        await h.service.refresh()
+        expect(h.service.lastFinish?.serial).toBe(1)
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        // The wall clock falls behind the monotonic one: the solve has no time.
+        h.setTime(T0 + 100, 100 + 20_000)
+        h.service.tick()
+        win(h, T0 + 300)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'clock-error' } }))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 2), serial: 2 })
+    })
+
+    it('signals a failed save when the retry timer or a refresh finally commits it', async () => {
+        const h = harness()
+        await begin(h)
+        vi.spyOn(h.store, 'change').mockResolvedValueOnce({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        expect(h.service.lastFinish).toBeNull()
+        h.service.tick()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        vi.spyOn(h.store, 'change').mockResolvedValueOnce({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 400)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        await h.service.refresh()
+        expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'solved', ms: 200 } })
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 2), serial: 2 })
+    })
+
+    it('does not signal another tab\'s result, even one that wins the race to this board', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish waits; another tab's finish of the same board commits first.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        await finishedElsewhere(h.store, h.session(), 500)
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.view()).toMatchObject({ result: { kind: 'solved', ms: 500 } })
+        // And a refresh that takes another tab's result on another board.
+        await finishedElsewhere(h.store, h.sessionAt('hard', 3), 700)
+        await h.service.refresh()
+        expect(h.service.history.get(id(h, 'hard', 3))?.result).toEqual({ kind: 'solved', ms: 700 })
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another board\'s result that finished at the same instant', async () => {
+        let notice!: (id: string) => void
+        const h = harness({ options: { listen: (_wake, heard) => { notice = heard; return () => {} } } })
+        await begin(h)
+        // Easy 1's finish, captured at T0 + 200, waits for its save.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        // Another tab finishes Hard 3 at that same instant, and says so.
+        const other = h.sessionAt('hard', 3)
+        await finishedElsewhere(h.store, other, 200)
+        notice(other.definition.puzzleId)
+        await vi.waitFor(() => expect(h.service.history.get(other.definition.puzzleId)?.result)
+            .toEqual({ kind: 'solved', ms: 200 }))
+        expect(h.service.lastFinish).toBeNull()
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+    })
+
+    it('does not signal a finish recovered after a reload', async () => {
+        const h = harness()
+        await begin(h)
+        vi.spyOn(h.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // A new tab: the winning board's saved evidence, and no captured finish.
+        const reloaded = harness({ at: T0 + 1_000 })
+        await open(reloaded)
+        expect(reloaded.service.history.get(id(reloaded, 'easy', 1))?.result)
+            .toEqual({ kind: 'untimed', reason: 'finish-lost' })
+        expect(reloaded.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal Practice, or a board given up when its day leaves the window', async () => {
+        const h = harness()
+        await begin(h)
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.beginPractice(h.binding())).toBe(true)
+        expect(h.session().undo()).toBe(true)
+        expect(h.session().placeToward([0, 1], 'down')).toBe(true)
+        expect(h.view()).toMatchObject({ kind: 'result', practice: { solved: true } })
+        expect(h.service.lastFinish?.serial).toBe(1)
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        h.setTime(T0 + 48 * HOUR)
+        await h.service.refresh()
+        expect(h.service.history.get(id(h, 'easy', 2))?.result).toEqual({ kind: 'given-up' })
+        expect(h.service.lastFinish?.serial).toBe(1)
+    })
+})
+
 describe('nextChallengeBoard (rule 8)', () => {
     it('walks Easy, Medium, Hard after the current board, crossing sizes and wrapping', async () => {
         const h = harness()

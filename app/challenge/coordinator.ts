@@ -208,6 +208,13 @@ export class ChallengeCoordinator {
      * what enumeration and this root's own transactions have read, and only moves forward.
      */
     readonly history = new Map<string, Attempt>()
+    /**
+     * The last result this tab's own winning placement fixed (slice 3b, rule 8), for the
+     * results screen to open by itself. A history change can't say where a result came from:
+     * refreshes and reconciliation adopt other tabs' results too. `serial` only increases, so
+     * one result signals once.
+     */
+    lastFinish: { readonly puzzleId: string, readonly serial: number } | null = null
 
     constructor(private readonly options: CoordinatorOptions) {
         this.now = (options.clock ?? read)()
@@ -219,6 +226,7 @@ export class ChallengeCoordinator {
             disposeTimer: false, lastDate: false, unfinished: false, clockFlags: false,
             serial: false, progressMemory: false, hydrations: false, finishes: false,
             bindings: observable.shallow, legacy: observable.ref, history: observable.shallow,
+            lastFinish: observable.ref,
         })
     }
 
@@ -561,6 +569,7 @@ export class ChallengeCoordinator {
             })
             if (this.alive(epoch)) runInAction(() => {
                 if (outcome.committed) {
+                    if (outcome.attempt) this.signalFinish(outcome.attempt)
                     if (outcome.attempt) this.remember(outcome.attempt, true)
                     if (outcome.attempt?.clockError || outcome.attempt?.result) this.clockFlags.delete(id)
                     if (outcome.attempt && !outcome.attempt.result) this.unfinished.set(id, outcome.attempt)
@@ -574,6 +583,20 @@ export class ChallengeCoordinator {
             })
             return outcome
         })
+    }
+    /**
+     * Signal a result this tab's winning placement fixed (rule 8): one finished at the instant
+     * a binding of this root captured. Only `finish` writes that instant, and only as a solve
+     * (`reconcileLive` never lets `recover` write it), so this is a solve or a clock error's
+     * untimed one, whichever transaction carried it: the finish save, Try again, the retry
+     * timer or a refresh. Never another tab's result (another instant), a recovery after a
+     * reload (no `pendingFinish`), Practice or a given-up board. Called before `adopt`, which
+     * clears the `pendingFinish` it reads, so one result signals once.
+     */
+    private signalFinish(attempt: Attempt) {
+        const own = [...this.bindings.values()].some(binding => binding.pendingFinish
+            && this.matches(binding, attempt) && binding.pendingFinish.solvedAt === attempt.finishedAt)
+        if (own) this.lastFinish = { puzzleId: attempt.puzzleId, serial: (this.lastFinish?.serial ?? 0) + 1 }
     }
     /** Shared serialized transaction boundary for commit 4's Start/assist/finish hooks. */
     async change(binding: ChallengeBinding, step: (attempt: Attempt | null) => Step): Promise<Outcome> {

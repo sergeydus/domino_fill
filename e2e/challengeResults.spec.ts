@@ -43,6 +43,26 @@ test('Results reopens the day\'s results, focused at the top, and focus comes ba
     await expect(page.getByRole('button', { name: 'Results' })).toBeFocused()
 })
 
+test('finishing a size opens the results by itself, after the card shows its time', async ({ page }) => {
+    await open(page)
+    // Easy 2 and 3 solved already, so solving Easy 1 finishes the size.
+    await page.evaluate(() => {
+        const fixture = window.dailyFixture!
+        const levels = fixture.root.boardsStore
+        fixture.seed(levels.easyBoards!.slice(1).map(definition => ({
+            puzzleId: definition.puzzleId, definitionHash: definition.definitionHash, date: levels.viewingDate!,
+            ruleset: 1 as const, startedAt: 0, assisted: false, clockError: false,
+            result: { kind: 'solved' as const, ms: 61_000 }, finishedAt: 61_000,
+        })))
+    })
+    await solveFirst(page)
+    // The card's time first; the results 1.5 s later.
+    await expect(results(page)).toHaveCount(0)
+    await expect(results(page)).toBeVisible()
+    await expect(page.locator('[data-results-heading]')).toBeFocused()
+    await expect(page.locator('[data-results-size="easy"] [data-results-total]')).toHaveText(/^Total 2:\d\d$/)
+})
+
 test('Tab and Shift+Tab stay inside the dialog, never reaching the page (codex)', async ({ page }) => {
     await open(page)
     await solveFirst(page)

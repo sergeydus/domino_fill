@@ -405,4 +405,228 @@ describe('the countdown (rule 12)', () => {
         await m.setTime(new Date(2026, 9, 12, 0, 0, 1).getTime())
         await waitFor(() => expect(dialog()).toBeNull())
     })
+
+    it('closes yesterday\'s results at the next midnight', async () => {
+        const m = await mount({ attempts: played() })
+        await m.setTime(new Date(2026, 9, 11, 9).getTime())
+        await openByButton()
+        expect(dialog()!.querySelector('[data-results-heading]')?.textContent).toBe('Results · 10 Oct 2026')
+        await m.setTime(new Date(2026, 9, 11, 23, 59).getTime())
+        expect(dialog()).not.toBeNull()
+        await m.setTime(new Date(2026, 9, 12, 0, 0, 1).getTime())
+        await waitFor(() => expect(dialog()).toBeNull())
+    })
+})
+
+describe('opening by itself (rule 8)', () => {
+    type Mounted = Awaited<ReturnType<typeof mount>>
+    const solved = (...ids: string[]) => ids.map(id => attempt(`${DAY}|${id}`, DAY, 'solved'))
+    const card = () => document.querySelector('[data-completion-card]')?.textContent ?? ''
+
+    /**
+     * After mounting, which waits on real timers. Only the trigger's timer and the date are
+     * faked (the date only because Vitest fakes no timer while `setSystemTime` mocks it);
+     * the coordinator's clock is the harness's own.
+     */
+    const fakeTimers = () => {
+        const now = Date.now()
+        vi.useRealTimers()
+        vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'], now })
+        expect(Date.now()).toBe(T0)
+    }
+    const wait = (ms: number) => act(async () => { vi.advanceTimersByTime(ms) })
+    const go = (m: Mounted, difficulty: 'easy' | 'normal' | 'hard', level: 1 | 2 | 3) =>
+        act(async () => { m.levels.goToBoard({ difficulty, level }) })
+    /** Start the board on screen and place its winning pieces; the finish's save is awaited. */
+    const play = async (m: Mounted) => {
+        const session = m.levels.currentBoard!
+        await act(async () => { expect(await session.startChallenge()).toBe(true) })
+        await act(async () => {
+            expect(session.placeToward([0, 0], 'down')).toBe(true)
+            expect(session.placeToward([0, 1], 'down')).toBe(true)
+        })
+    }
+    /** Hold the store's next change until released. */
+    const hold = (m: Mounted) => {
+        let release!: () => void
+        const gate = new Promise<void>(resolve => { release = resolve })
+        const original = m.store.change.bind(m.store)
+        vi.spyOn(m.store, 'change').mockImplementationOnce(async (id, step) => {
+            await gate
+            return original(id, step)
+        })
+        return () => act(async () => { release(); await gate })
+    }
+
+    it('opens 1.5 s after this tab\'s finish completes a size, once the card shows the time', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        expect(m.root.challenge!.lastFinish?.serial).toBe(1)
+        expect(card()).toContain('0:00 · no hints')
+        await wait(1_499)
+        expect(dialog()).toBeNull()
+        await wait(1)
+        expect(dialog()).not.toBeNull()
+        expect(document.activeElement).toBe(dialog()!.querySelector('[data-results-heading]'))
+    })
+
+    it('stays closed when the finish completes neither its size nor the day', async () => {
+        const m = await mount({ attempts: solved('e2', 'm1', 'm2', 'm3') })
+        fakeTimers()
+        await play(m)
+        expect(m.root.challenge!.lastFinish?.serial).toBe(1)
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+    })
+
+    it('opens once when the ninth solve completes its size and the day', async () => {
+        const m = await mount({ attempts: solved('e1', 'e2', 'e3', 'm1', 'm2', 'm3', 'h1', 'h2') })
+        await go(m, 'hard', 3)
+        fakeTimers()
+        await play(m)
+        await wait(1_500)
+        expect(dialog()).not.toBeNull()
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close' })) })
+        await wait(10_000)
+        expect(dialog()).toBeNull()
+    })
+
+    it('opens when the last board finishes the day, though a given-up board leaves its size unfinished', async () => {
+        const m = await mount({ attempts: [
+            ...solved('e1', 'e2', 'e3', 'm1', 'm2', 'm3', 'h2'), attempt(`${DAY}|h1`, DAY, 'given-up'),
+        ] })
+        await go(m, 'hard', 3)
+        fakeTimers()
+        await play(m)
+        expect(m.levels.challengeResults?.sizes.find(row => row.difficulty === 'hard')?.finished).toBe(false)
+        expect(m.levels.challengeResults?.finished).toBe(true)
+        await wait(1_500)
+        expect(dialog()).not.toBeNull()
+    })
+
+    it('opens nothing once the page has gone during the pause', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        await wait(500)
+        cleanup()
+        await wait(5_000)
+        expect(m.levels.results).toBeNull()
+    })
+
+    it('is cancelled by moving to another board during the pause', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        await wait(1_000)
+        await go(m, 'easy', 2)
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+    })
+
+    it('is cancelled by opening Archive during the pause', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        await wait(1_000)
+        await act(async () => { m.levels.setArchiveOpen(true) })
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+        expect(document.querySelector('[data-archive]')).not.toBeNull()
+    })
+
+    it('is cancelled by starting Practice during the pause', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        await wait(1_000)
+        const session = m.levels.currentBoard!
+        await act(async () => { session.beginPractice() })
+        expect(m.root.challenge!.bindings.get(session)?.practice).not.toBeNull()
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+    })
+
+    it('is spent by opening Results by hand: closing it during the pause opens nothing', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await play(m)
+        await wait(500)
+        await openByButton()
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Close' })) })
+        expect(dialog()).toBeNull()
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+    })
+
+    it('opens nothing for a finish that commits after the player moved on, and leaves Results', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        const session = m.levels.currentBoard!
+        await act(async () => { expect(await session.startChallenge()).toBe(true) })
+        const release = hold(m)
+        await act(async () => {
+            session.placeToward([0, 0], 'down')
+            session.placeToward([0, 1], 'down')
+        })
+        expect(session.challengeView.kind).toBe('finishing')
+        await go(m, 'normal', 1)
+        await release()
+        expect(m.root.challenge!.lastFinish?.serial).toBe(1)
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+        expect(resultsButton()).not.toBeNull()
+    })
+
+    it('opens nothing over Archive, opened while the finish was saving', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        const session = m.levels.currentBoard!
+        await act(async () => { expect(await session.startChallenge()).toBe(true) })
+        const release = hold(m)
+        await act(async () => {
+            session.placeToward([0, 0], 'down')
+            session.placeToward([0, 1], 'down')
+        })
+        await act(async () => { m.levels.setArchiveOpen(true) })
+        await release()
+        expect(m.root.challenge!.lastFinish?.serial).toBe(1)
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+        expect(document.querySelector('[data-archive]')).not.toBeNull()
+    })
+
+    it('keeps its pause when another board\'s held finish commits late', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        // Medium 1's finish is held; Easy 1, finished meanwhile, completes Easy.
+        await go(m, 'normal', 1)
+        const medium = m.levels.currentBoard!
+        await act(async () => { expect(await medium.startChallenge()).toBe(true) })
+        const release = hold(m)
+        await act(async () => {
+            medium.placeToward([0, 0], 'down')
+            medium.placeToward([0, 1], 'down')
+        })
+        await go(m, 'easy', 1)
+        await play(m)
+        expect(m.root.challenge!.lastFinish?.serial).toBe(1)
+        await wait(1_000)
+        await release()
+        expect(m.root.challenge!.lastFinish?.serial).toBe(2)
+        await wait(500)
+        expect(dialog()).not.toBeNull()
+    })
+
+    it('opens nothing for another tab\'s result', async () => {
+        const m = await mount({ attempts: solved('e2', 'e3') })
+        fakeTimers()
+        await seed(m.store, solved('e1'))
+        await act(async () => { await m.root.challenge!.refresh() })
+        expect(m.root.challenge!.history.get(`${DAY}|e1`)?.result).toEqual({ kind: 'solved', ms: 60_000 })
+        await wait(5_000)
+        expect(dialog()).toBeNull()
+        expect(m.root.challenge!.lastFinish).toBeNull()
+    })
 })

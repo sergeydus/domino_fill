@@ -25,6 +25,7 @@ import { cardIsUp } from './challengeCard'
 import { isCoveredView } from '../challenge/coordinator'
 import { ArchiveButton, ControlModeButton, ResultsButton, SoundButton, StreakCount } from './PageButtons'
 import ResultsDialog from './ResultsDialog'
+import ResultsTrigger from './ResultsTrigger'
 import {
   RAIL_WIDTH_PX, STAGE_GAP_PX, WIDE_BOARD_CAP_PX, WIDE_LAYOUT_QUERY,
 } from './composition'
@@ -389,6 +390,8 @@ const DominoClient: React.FC = () => {
       </div>
       {/* Outside the stage, so the stage's `inert` leaves it reachable (slice 3b, rule 7). */}
       {boardsStore.results && <ResultsDialog levels={boardsStore} />}
+      {/* Opens them by itself after this tab's finish completes a size (slice 3b, rule 8). */}
+      <ResultsTrigger levels={boardsStore} />
     </FocusAcrossComposition>
   );
 }

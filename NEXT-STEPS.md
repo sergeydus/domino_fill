@@ -3358,6 +3358,107 @@ before the next. The PR is opened only when the user says.
   on it. **Run 2:** TIME_WAIT **41**; TypeScript **0**, lint **0**, unit **0** (**1653**,
   stderr **0 bytes**), build **0**, browser **0** (**737 passed, 1 skipped**, 4 more; 0
   socket errors). Committed after run 2.
+- Codex accepted the correction at `f49763e` (2026-10-13): 78/78 unit tests (stderr 0 bytes),
+  type-checking, 18/18 Chromium tests (12 committed and six of its own: repeated resize
+  crossings, and reverse wrapping to the copy box, from the heading too), and CI's gate and
+  visual jobs on the exact head.
+
+**As built: implementation commit 3, opening by itself (rule 8, 2026-10-13)**
+- **The signal** (`coordinator.ts`): `lastFinish`, an `observable.ref` of `{ puzzleId,
+  serial }`, set by `signalFinish` in `transact`'s commit handler, before `adopt` clears the
+  `pendingFinish` it reads. **A deviation from rule 8's wording, for codex to review:** rule
+  8 names three conditions: the transaction changed the attempt, the result is a solve (or a
+  clock error's untimed one), and its `finishedAt` equals a binding's
+  `pendingFinish.solvedAt`. I kept only the third, on a binding that `matches` the attempt.
+  Read in the code, it implies the other two:
+  - Only `finish` writes a `finishedAt` equal to the captured instant, and always as a solve
+    or a clock error's untimed solve. `recover` writes the evidence's instant, but
+    `reconcileLive` passes it evidence only when that is older than `pendingFinish`, and a
+    given-up board has no `finishedAt`.
+  - Once a result commits, `adopt` clears `pendingFinish` in the same handler, so a later
+    transaction that changes nothing finds no `pendingFinish`, and one result signals once.
+  - No test could tell either dropped check from its absence. The earlier redundant checks
+    were removed for the same reason.
+- **The reaction** (`ResultsTrigger.tsx`, rendered at the end of `DominoClient`, outside the
+  stage): a MobX `reaction` on `lastFinish`. Each signal is a new value, so it runs once per
+  result and never for one from before it mounted. Rule 8's "remembers the last `serial` it
+  handled" is therefore the reaction itself: a stored serial was written, and removed before
+  the sweep, because no test could tell it was there. On a signal for the board on screen,
+  when its size or the day is now finished, it waits `RESULTS_DELAY_MS` (1500) and calls
+  `openResults`. The wait is cancelled by:
+  - another board on screen;
+  - Archive open;
+  - Results open by hand (spent);
+  - Practice started;
+  - the component unmounting.
+- **Choices inside the contract:**
+  - **The day check:** "the board's date is the day being viewed" is the board check. The
+    board on screen is always one of the viewed day's sessions, and another day's are other
+    objects. A separate date comparison was written and removed before the sweep, for the
+    same reason as the serial.
+  - **Moved on before the signal:** if the player has already moved on when the signal
+    arrives, nothing waits. Example: Archive opened while the finish was saving, which
+    Results would otherwise have replaced 1.5 s later.
+  - **A late signal for another board:** it leaves a running wait alone. My first draft
+    cancelled any running wait on every signal, so board 1's held save committing late
+    would have cancelled board 2's pause. Found on reading, before any test; a test now
+    holds it.
+- **New tests:**
+  - `tests/challengeView.test.ts`, **6**:
+    - this tab's finish signals once, including a clock error's untimed solve;
+    - a failed save signals when the retry timer, or a refresh, commits it;
+    - not for another tab's result, including one that wins the race to this board, nor
+      for a refresh that adopts one;
+    - not for another board's result finished at the same instant, while this tab's finish
+      waits (the identity check);
+    - not for a recovery after a reload;
+    - not for Practice, nor for a board given up when its day leaves the window.
+  - `tests/challengeResults.test.tsx`, **14**, through the real `DominoClient`, with the
+    trigger's timer and the date faked after mounting:
+    - opens at 1500 ms and not at 1499, with the card's time already shown, and focus on
+      the heading;
+    - stays closed when neither the size nor the day is finished;
+    - opens once on the ninth solve;
+    - opens when the last board finishes the day although a given-up board leaves its size
+      unfinished;
+    - nothing after unmounting;
+    - cancelled by navigation, Archive and Practice, and spent by opening Results by hand;
+    - nothing for a finish committing after the player moved on, with Results left there;
+    - nothing over Archive opened while the finish saved;
+    - a late signal for another board keeps the pause;
+    - nothing for another tab's result;
+    - yesterday's results closing at the next midnight (rule 12's remaining case).
+  - `e2e/challengeResults.spec.ts`, **1 × 2 projects:** with Easy 2 and 3 seeded through
+    the fixture, solving Easy 1 shows the card's time, then the results, focused on the
+    heading, with Easy's total.
+- **Tests changed on purpose:** none.
+- **Timers in the jsdom tests:** Vitest refuses fake timers once `setSystemTime` has mocked
+  the date, and faking them before mounting made `mount` time out (measured; I didn't find
+  which wait, and infer it's one of Testing Library's). So the new tests switch to fake
+  timers after mounting, and carry the date across.
+- **First drafts that failed and were mine, all in tests:**
+  - a clock error set 4.9 s back, under the 5 s tolerance;
+  - Medium 2's time expected from the wrong start;
+  - `beginPractice` asserted to return a value it doesn't return;
+  - fake timers installed in the two ways above;
+  - a quoting slip in a scripted insertion.
+  - A test for a finish committing while the root restarted was written and removed: the
+    root restarts only through React's effect cleanup (StrictMode's double mount, or
+    leaving the page), never with a finish in flight, so it argued from a case that
+    doesn't happen.
+- **Mutations: 18 of 18 caught at the intended test,** files restored byte for byte. Unit,
+  17:
+  - the signal: without the instant check; without `pendingFinish`; without the identity
+    check; the serial never increasing; read after `adopt`;
+  - the trigger: no pause; opening whatever the size and day; only a finished size; no
+    board check; navigation, Archive, Results by hand and Practice each not cancelling;
+    waiting when already moved on; the timer not cleared; a late signal cancelling the
+    pause; no cancelling on unmount.
+  - Browser, 1: the trigger not mounted, both projects.
+- Cold gate, first run (2026-10-13): TIME_WAIT **48**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1673** in 71 files, 20 more; stderr **0 bytes**), build **0**, browser
+  **0** (**739 passed, 1 skipped**, 2 more; 0 socket errors). No failed run. Committed after
+  it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
