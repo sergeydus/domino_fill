@@ -3042,6 +3042,10 @@ This slice builds them and, last, switches the challenge on.
     have. The strict stamp check stays for today's and yesterday's boards. A winning board
     restored at build is marked complete then, as hydration's restore does, so reopening a
     solved day doesn't play the win.
+    **Amended a third time after codex's third review (2026-10-14):** that exception holds
+    only while the board is still casual when hydration runs. A corrected clock can turn a
+    before-clamp board timed between build and hydration; hydration then checks it like any
+    timed board, so an unstamped casual piece never enters a timed attempt.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3781,6 +3785,44 @@ before the next. The PR is opened only when the user says.
 - Cold gate, first run (2026-10-14): TIME_WAIT **48**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1687**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
   passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
+
+**Third correction after codex's review of `5744533` (2026-10-14)**
+- Codex held `5744533` for a clock change, reproduced through the real coordinator:
+  1. An active attempt exists for the first published day.
+  2. With the device clock before that day, its board loads before-clamp, so casual, and
+     the build restores an unstamped saved piece. Storage opening is held.
+  3. The clock is corrected and the same day refetched, unclamped.
+  4. Storage opens.
+
+  The board became `playing` in the existing timed attempt, holding the unstamped casual
+  piece: hydration checked only `casualAtBuild`, though the board had since turned timed.
+- **The fix**, rule 15 amended a third time: hydration takes the casual path only while
+  `casualAtBuild` *and* `isCasual(binding)` hold when it runs. Otherwise it takes the timed
+  path, whose stamp check clears the unstamped piece.
+- **Test** (`tests/challengeView.test.ts`, 1 more in the describe, 10 in all): codex's
+  sequence. The device has passed its legacy check already (`legacyCheck(() => [])`):
+  without that, the opening marks the saved piece's board legacy, and the test never reaches
+  the case. It asserts `playing` and an empty board after hydration; with the check removed
+  it fails at "no unstamped piece in the timed attempt".
+- **Mutations: 12 of 12 caught at the intended test,** files restored byte for byte: the
+  second correction's 11 rerun, and the new check removed.
+- Codex's record of `5744533`: 346/346 committed unit tests (stderr 0 bytes), type-checking
+  passed, 3/3 of its scratch controls passed, and CI's gate and visual jobs passed. Its
+  regression failed in both runs, and passed against `15765d3`. It didn't rerun Chromium,
+  the full gate or the mutation probes.
+- Cold gate, **run 1 failed** (2026-10-14): TIME_WAIT **96**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (stderr **0 bytes**), build **0**, browser **1** (**750 passed, 1
+  failed, 1 skipped**; **0 socket errors**). The failure: `e2e/motion.spec.ts:112`, "the
+  completion card arrives inside the limits", phone-360, at `boundingBox()!.width` on cell
+  `0,0`, which wasn't there. The page snapshot shows Easy puzzle **2**, covered, and a
+  **1-day streak**, so puzzle 1 had already been solved in that context. Inferred from that
+  and `e2e/frames.ts`: `onTime` reruns its block when a try's frames come late, and the
+  rerun reopens `/` in the same context, where since activation the solved attempt persists.
+  So a retry never gets a fresh board. A flake from activation (`f1b4ade`), not this
+  change; **open, to be fixed in its own change.**
+- Cold gate, run 2 (2026-10-14): TIME_WAIT **73**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1688**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT

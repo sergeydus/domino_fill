@@ -775,6 +775,28 @@ describe('a board casual by its date, before the coordinator hydrates it (slice 
         expect(session.snapshot.board).toEqual(moved)
         expect(readProgress(id)?.board).toEqual(moved)
     })
+
+    it('checks a board that turned timed before hydration like any timed board (codex)', async () => {
+        const FIRST = '2026-09-01'
+        const id = savedPiece(FIRST)
+        const definition = { puzzleId: id, definitionHash: readProgress(id)!.definitionHash, date: FIRST }
+        const { h, release } = held(new Date(2026, 7, 30, 12).getTime())
+        // A device that has played the challenge already: its piece is not a legacy board's.
+        await h.store.legacyCheck(() => [])
+        await h.store.change(id, current => start(current, definition, new Date(2026, 8, 1, 9).getTime(), FIRST))
+        // Built before-clamp, so casual: its unstamped piece is restored.
+        h.root.boardsStore.setDay(day(FIRST), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual(SAVED)
+        // The clock is corrected and the same day refetched, unclamped: today's board now.
+        h.setTime(new Date(2026, 8, 1, 12).getTime())
+        h.root.boardsStore.receiveDay(loaded(FIRST))
+        expect(h.sessionAt('easy', 1)).toBe(session)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.challengeView.kind).toBe('playing')
+        expect(session.snapshot.board, 'no unstamped piece in the timed attempt').toEqual([[null, null], [null, null]])
+    })
 })
 
 describe('nextChallengeBoard (rule 8)', () => {

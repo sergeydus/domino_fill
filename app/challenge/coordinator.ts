@@ -815,8 +815,11 @@ export class ChallengeCoordinator {
                  * saved without a stamp (codex). So a casual board is only ever filled here,
                  * when it is still untouched and empty and there is a record the build didn't
                  * have (a v1 document migrated since, say); never replaced, never cleared.
+                 * Only while it is still casual: a corrected clock can make a before-clamp
+                 * board timed before this runs, and then it is checked like any timed board
+                 * (codex).
                  */
-                if (binding.casualAtBuild) {
+                if (binding.casualAtBuild && this.isCasual(binding)) {
                     const untouched = !binding.locallyEdited && JSON.stringify(binding.session.snapshot.board)
                         === JSON.stringify(binding.definition.initialBoard)
                     if (untouched && saved) this.restoreAttemptProgress(binding, saved)
