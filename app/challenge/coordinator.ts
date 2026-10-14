@@ -97,6 +97,12 @@ export class ChallengeBinding {
     locallyEdited = false
     attemptStartedAt: number | undefined = undefined
     solveEvidence: ProgressSolveEvidence | undefined = undefined
+    /**
+     * Its session was built casual by its date, so the levels store restored its board then,
+     * and the player may have played it since. Hydration leaves that board alone (slice 3b,
+     * rule 15 amended).
+     */
+    casualAtBuild = false
     baseline: Snapshot
     pending: PendingProgress | null = null
     generation = 0
@@ -354,7 +360,7 @@ export class ChallengeCoordinator {
         } else if (committed) this.history.set(attempt.puzzleId, attempt)
     }
 
-    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null): ChallengeBinding {
+    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null, casualAtBuild = false): ChallengeBinding {
         if (!isDay(date)) throw new Error('Binding requires a real calendar date')
         const previous = this.bindings.get(session)
         if (previous && previous.date === date) {
@@ -367,6 +373,7 @@ export class ChallengeCoordinator {
             return previous
         }
         const binding = new ChallengeBinding(session, date, clamp)
+        binding.casualAtBuild = casualAtBuild
         this.bindings.set(session, binding)
         if (this.status === 'ready' && this.active) {
             const epoch = this.epoch
@@ -801,12 +808,27 @@ export class ChallengeCoordinator {
                 binding.definition)
             runInAction(() => {
                 binding.hydrating = true
-                const attempt = binding.attempt
-                const restore = attempt
-                    ? saved && saved.attemptStartedAt === attempt.startedAt ? saved : null : saved
-                if (restore) this.restoreAttemptProgress(binding, restore)
-                else if (attempt) this.restoreAttemptProgress(binding, null)
-                binding.solveEvidence = binding.beforeClamp ? undefined : restore?.solveEvidence
+                /*
+                 * A board restored as its session was built is the player's already: restoring
+                 * it again would clear its Undo, and the attempt-stamp check below, which keeps
+                 * another attempt's pieces off a timed board, would throw away casual progress
+                 * saved without a stamp (codex). So a casual board is only ever filled here,
+                 * when it is still untouched and empty and there is a record the build didn't
+                 * have (a v1 document migrated since, say); never replaced, never cleared.
+                 */
+                if (binding.casualAtBuild) {
+                    const untouched = !binding.locallyEdited && JSON.stringify(binding.session.snapshot.board)
+                        === JSON.stringify(binding.definition.initialBoard)
+                    if (untouched && saved) this.restoreAttemptProgress(binding, saved)
+                    if (binding.beforeClamp) binding.solveEvidence = undefined
+                } else {
+                    const attempt = binding.attempt
+                    const restore = attempt
+                        ? saved && saved.attemptStartedAt === attempt.startedAt ? saved : null : saved
+                    if (restore) this.restoreAttemptProgress(binding, restore)
+                    else if (attempt) this.restoreAttemptProgress(binding, null)
+                    binding.solveEvidence = binding.beforeClamp ? undefined : restore?.solveEvidence
+                }
                 binding.practice = null
                 binding.baseline = this.snapshot(binding)
                 binding.ready = true

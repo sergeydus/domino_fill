@@ -8,8 +8,9 @@ import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import type { DayEntry } from '@/app/stores/corpus'
 import { isCoveredView, type CoordinatorOptions } from '@/app/challenge/coordinator'
 import { localStorageStore, memoryAttemptStore, type AttemptStore } from '@/app/challenge/attemptStore'
-import { finish, start, type Attempt } from '@/app/challenge/attempt'
+import { finish, RULESET, start, type Attempt } from '@/app/challenge/attempt'
 import { readProgress, writeProgress } from '@/app/stores/progressStorage'
+import { winFeedback } from '@/app/dominoFill/feedback'
 
 vi.mock('@/app/dominoFill/feedback', () => ({ winFeedback: vi.fn() }))
 
@@ -674,6 +675,90 @@ describe('a board casual by its date, before the coordinator hydrates it (slice 
         await release()
         await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
         expect(session.snapshot.board, 'nor by it: another attempt\'s').toEqual([[null, null], [null, null]])
+    })
+
+    it('keeps the Undo of a move made before hydration (codex)', async () => {
+        savedPiece(ARCHIVE)
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.placeToward([0, 1], 'down')).toBe(true)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.undo(), 'Undo survives hydration').toBe(true)
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('keeps casual progress saved while the attempt history couldn\'t be read (codex)', async () => {
+        const id = savedPiece(ARCHIVE)
+        const hash = readProgress(id)!.definitionHash
+        // The board had a timed result when it was today, and its progress carries that stamp.
+        const startedAt = new Date(2026, 9, 5, 9).getTime()
+        writeProgress(id, { ...readProgress(id)!, attemptStartedAt: startedAt })
+        const real = localStorageStore(window.localStorage)
+        await real.change(id, () => ({ changed: true, next: {
+            puzzleId: id, definitionHash: hash, date: ARCHIVE, ruleset: RULESET, startedAt,
+            assisted: false, clockError: false, result: { kind: 'solved', ms: 90_000 }, finishedAt: startedAt + 90_000,
+        } }))
+        // A visit whose attempt history fails, while board saves work: the move is saved
+        // without the attempt's stamp.
+        const broken: AttemptStore = { ...real,
+            readAll: async () => null, change: async () => ({ committed: false, changed: false, attempt: null }) }
+        const visit = harness({ store: broken })
+        await visit.root.start()
+        visit.root.boardsStore.setDay(day(ARCHIVE))
+        const first = visit.sessionAt('easy', 1)
+        expect(first.placeToward([0, 1], 'down')).toBe(true)
+        const both = first.snapshot.board
+        await vi.waitFor(() => expect(readProgress(id)?.board).toEqual(both))
+        expect(readProgress(id)?.attemptStartedAt).toBeUndefined()
+        visit.root.dispose()
+        // Reopened with healthy storage: both pieces, before hydration and after it.
+        const reopened = harness()
+        await reopened.root.start()
+        reopened.root.boardsStore.setDay(day(ARCHIVE))
+        const session = reopened.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual(both)
+        await vi.waitFor(() => expect(reopened.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board, 'hydration keeps the saved pieces').toEqual(both)
+    })
+
+    it('marks a restored winning board complete as it is built, with no celebration', async () => {
+        const id = savedPiece(ARCHIVE)
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day(ARCHIVE))
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const solving = probe.boardsStore.currentBoard!
+        solving.placeToward([0, 0], 'down')
+        solving.placeToward([0, 1], 'down')
+        expect(solving.completedByRules).toBe(true)
+        const winning = solving.snapshot.board
+        probe.boardsStore.disposePersist?.()
+        writeProgress(id, { ...readProgress(id)!, board: winning, completed: false })
+        const { h } = held()
+        vi.mocked(winFeedback).mockClear()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        expect(h.sessionAt('easy', 1).completed).toBe(true)
+        // The levels store's own win reaction would also mark it, and play the win: on
+        // reopening a day solved long ago.
+        expect(winFeedback, 'no celebration for a board already won').not.toHaveBeenCalled()
+    })
+
+    it('fills an untouched casual board from a record only hydration reads, and never clears one', async () => {
+        // The levels store reads storage when it builds the session; the coordinator reads
+        // it again when it hydrates (it also migrates a v1 document then). A record that
+        // arrives in between is the case.
+        const id = savedPiece(ARCHIVE)
+        const record = readProgress(id)!
+        window.localStorage.clear()
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual([[null, null], [null, null]])
+        writeProgress(id, record)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board).toEqual(SAVED)
     })
 
     it('keeps a move made before hydration on top of the saved pieces, in play and in storage', async () => {

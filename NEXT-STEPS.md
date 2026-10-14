@@ -3034,6 +3034,14 @@ This slice builds them and, last, switches the challenge on.
     restored nothing until hydration: an archive board showed empty and accepted moves,
     and a move overwrote the saved piece. Boards in the window stay as they are: covered,
     locked, and restored by hydration, which knows their attempt.
+    **Amended again after codex's second review (2026-10-14):** hydration never replaces or
+    clears the board of a session built casual. Restoring it again cleared the Undo of a
+    move made meanwhile. The attempt-stamp check, meant for timed boards, threw away casual
+    progress saved without a stamp (while attempt history was unreadable). Hydration may
+    only fill such a board while it is untouched and empty, from a record the build didn't
+    have. The strict stamp check stays for today's and yesterday's boards. A winning board
+    restored at build is marked complete then, as hydration's restore does, so reopening a
+    solved day doesn't play the win.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3719,6 +3727,60 @@ before the next. The PR is opened only when the user says.
 - Cold gate, first run (2026-10-14): TIME_WAIT **33**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1683**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
   passed, 1 skipped**, 2 more; **0 socket errors**). No failed run. Committed after it.
+
+**Second correction after codex's review of `15765d3` (2026-10-14)**
+- Codex held `15765d3` for two remaining hydration problems, reproduced in jsdom with the
+  real coordinator:
+  1. **Undo lost:** a move on a held-hydration archive board survived hydration, but Undo
+     then returned false. Hydration restored the board again, and `restore` clears the move
+     history.
+  2. **Saved pieces lost on reopening:** an archive board with an old timed result and
+     matching progress, visited while attempt history couldn't be read (board saves still
+     working), took a move saved without the attempt's stamp. Reopened healthy, both pieces
+     showed, then hydration cleared them: its stamp check rejected the unstamped record.
+- **Both have one cause:** my first correction made the build restore casual boards, but
+  left hydration restoring them a second time, with the check meant for timed boards.
+- **The fix**, rule 15 amended again:
+  - `reconcileSessions` decides "casual now" once per build. It restores the sessions it
+    builds and passes that to `bind`, which sets `ChallengeBinding.casualAtBuild`.
+  - For such a binding, hydration never replaces or clears the board. It only fills one
+    that is untouched (not `locallyEdited`) and still the empty initial board, from a
+    record the build didn't have. The case is real: an enabled root migrates a v1 document
+    in the coordinator, after the build. A filled before-clamp board drops the record's old
+    solve evidence, as before.
+  - In-window boards keep the strict path, stamp check included.
+  - **A winning board restored at build is marked complete then.** Found by its probe
+    surviving: without it the levels store's win reaction marked it, and played the win
+    sound and haptics on reopening a solved day. The test now asserts no celebration.
+  - **First draft wrong, measured:** hydration left a casual board entirely alone, and
+    `challengeClamp.test.ts`'s "new-root before-clamp hydration…" failed. Its levels store
+    reads the real date, while its coordinator reads a fake clock. So the build found the
+    record expired, and only hydration had it, which is how the fill case was found.
+- **Tests** (`tests/challengeView.test.ts`, 4 more in the describe, 9 in all):
+  - codex's Undo sequence;
+  - codex's reopening sequence, with the attempt history failing through a broken store and
+    board saves working; it checks the saved record lacks the stamp, then that reopening
+    keeps both pieces before and after hydration;
+  - a winning board marked complete at build, with no win feedback;
+  - the fill: an untouched board filled from a record written between build and hydration.
+- **Mutations: 11 of 11 caught at the intended test,** files restored byte for byte, the
+  first correction's five rerun against the restructured code:
+  - restoring at build reverted (unit; browser, both projects);
+  - every board restored at build;
+  - `casualByDate` without before-clamp;
+  - `casualByDate` without archive days;
+  - hydration restoring casual boards as before;
+  - without the untouched check;
+  - never filling;
+  - the binding never told;
+  - no completion at build (it survived the first sweep, 10 of 11; see above);
+  - a filled before-clamp board keeping old evidence.
+- Codex's record of `15765d3`: 342/342 unit tests (stderr 0 bytes), 4/4 Chromium archive
+  tests, and CI's gate and visual jobs passed. Its scratch regressions failed at their
+  intended assertions: 2 passed and 1 failed, then 2 passed and 2 failed expanded.
+- Cold gate, first run (2026-10-14): TIME_WAIT **48**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1687**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
