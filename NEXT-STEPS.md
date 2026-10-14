@@ -3027,6 +3027,13 @@ This slice builds them and, last, switches the challenge on.
     new buttons), so it is a `[visual update]` commit, and the new baselines follow in their
     own commit from CI's `visual-baselines` artifact. Before it, every 3b feature is
     reachable only on `/visual/daily`, and the public page and baselines are unchanged.
+    **Amended after codex's review of activation (2026-10-14):** a board casual by its date
+    (a before-clamp day, or one older than yesterday) is shown and playable before the
+    coordinator hydrates it. So its saved progress is restored when the session is built,
+    as with the challenge off, never left for hydration. Codex found an enabled root
+    restored nothing until hydration: an archive board showed empty and accepted moves,
+    and a move overwrote the saved piece. Boards in the window stay as they are: covered,
+    locked, and restored by hydration, which knows their attempt.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3666,6 +3673,52 @@ before the next. The PR is opened only when the user says.
     before activation's commit and the late baselines gate had 0. Whether activation's Start
     presses add enough requests per test to matter is not measured. It wants its own change
     if it continues.
+
+**Correction after codex's review of activation (`f1b4ade` to `2299d4f`, 2026-10-14)**
+- Codex held activation for **lost archive progress**. An enabled root skipped the
+  synchronous restore in `reconcileSessions` for every board, leaving it to hydration, while
+  `canMutate` allowed casual boards at once. So an archive board was drawn empty and
+  playable until IndexedDB answered. Codex measured three things:
+  - the existing archive-return test failing in both projects;
+  - a scratch test showing the empty, editable board;
+  - another showing a move during hydration overwrite the saved piece.
+- **Missed by my runs:** that archive-return test passed in every run of mine. Its read
+  raced hydration, and won on this machine.
+- **The fix**, rule 15 amended to say it:
+  - The coordinator's `casualByDate(date, clamp)` is the date part of `isCasual`: a
+    before-clamp day, or one older than yesterday. `isCasual` now uses it too.
+  - `reconcileSessions` restores saved progress at once where it's true, as with the
+    challenge off, before the session is bound, drawn or playable.
+  - Boards in the window are unchanged: covered and locked until hydration restores what
+    matches their attempt.
+  - Hydration then restores the same record, or the newer one a move before it captured.
+- **Tests:**
+  - `tests/challengeView.test.ts`, **4**, with the coordinator's storage held unopened so
+    nothing hydrates:
+    - an archive day's saved piece is in the session, `casual`, before hydration;
+    - the same for a before-clamp day;
+    - a move before hydration lands on top of the saved piece, and after hydration the
+      board and the stored record both hold it;
+    - today's board, with a stored attempt and a progress record from an earlier attempt,
+      stays empty before hydration and after it. That last test holds the "only casual by
+      date" condition: a fix restoring every board at once fails it.
+  - `e2e/archive.spec.ts`, **1 × 2 projects:** returning to an archive day, the pieces are
+    read in the first DOM change that draws the day's rocks. That's before any IndexedDB
+    event can arrive, so it doesn't depend on timing. With the fix reverted it failed in
+    both projects, at that first-frame assertion.
+- **Mutations: 5 of 5 caught at the intended test,** files restored byte for byte:
+  - the fix reverted: unit, at the archive test, plus the before-clamp and move tests;
+    browser, at the first-frame test in both projects;
+  - every board restored at once: at the today's-board test;
+  - `casualByDate` without before-clamp: at the before-clamp test;
+  - `casualByDate` without archive days: at the archive test.
+- Codex's own record of the held heads: CI passed on all three. Its local cold rerun had
+  4 browser failures in 745: the two archive-restoration ones, and two network startup
+  failures. The six unit failures in its first run were its restricted shell blocking
+  Node's account lookup.
+- Cold gate, first run (2026-10-14): TIME_WAIT **33**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1683**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**, 2 more; **0 socket errors**). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT

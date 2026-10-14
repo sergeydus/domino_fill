@@ -9,7 +9,7 @@ import type { DayEntry } from '@/app/stores/corpus'
 import { isCoveredView, type CoordinatorOptions } from '@/app/challenge/coordinator'
 import { localStorageStore, memoryAttemptStore, type AttemptStore } from '@/app/challenge/attemptStore'
 import { finish, start, type Attempt } from '@/app/challenge/attempt'
-import { writeProgress } from '@/app/stores/progressStorage'
+import { readProgress, writeProgress } from '@/app/stores/progressStorage'
 
 vi.mock('@/app/dominoFill/feedback', () => ({ winFeedback: vi.fn() }))
 
@@ -605,6 +605,90 @@ describe('lastFinish: this tab\'s own finish, signalled once (slice 3b, rule 8)'
         await h.service.refresh()
         expect(h.service.history.get(id(h, 'easy', 2))?.result).toEqual({ kind: 'given-up' })
         expect(h.service.lastFinish?.serial).toBe(1)
+    })
+})
+
+describe('a board casual by its date, before the coordinator hydrates it (slice 3b, codex)', () => {
+    const ARCHIVE = '2026-10-05'
+    const SAVED = [[1, null], [0, null]]
+    /** Easy puzzle 1 of `date`, saved with one piece by an earlier visit. */
+    const savedPiece = (date: string) => {
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day(date))
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const { definition } = probe.boardsStore.currentBoard!
+        probe.boardsStore.disposePersist?.()
+        writeProgress(definition.puzzleId, {
+            definitionHash: definition.definitionHash, board: SAVED, completed: false, savedAt: T0,
+        })
+        return definition.puzzleId
+    }
+    /** A root whose storage never opens until released, so nothing hydrates meanwhile. */
+    const held = (at = T0) => {
+        const opened = deferred<AttemptStore>()
+        const h = harness({ at, options: { openStore: () => opened.promise } })
+        const started = h.root.start()
+        return { h, release: async () => { opened.resolve(h.store); await started } }
+    }
+
+    it('shows an archive day\'s saved pieces before hydration', async () => {
+        const id = savedPiece(ARCHIVE)
+        const { h } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.definition.puzzleId).toBe(id)
+        expect(h.service.bindings.get(session)?.ready).toBe(false)
+        expect(session.challengeView).toEqual({ kind: 'casual' })
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('and a before-clamp day\'s', async () => {
+        const id = savedPiece('2026-09-01')
+        const { h } = held(new Date(2026, 7, 30, 12).getTime())
+        // As a first load's clamp comes to; `receiveDay` would hold this earlier day back
+        // from the harness's own.
+        h.root.boardsStore.setDay(day('2026-09-01'), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.definition.puzzleId).toBe(id)
+        expect(h.service.bindings.get(session)?.ready).toBe(false)
+        expect(session.challengeView).toEqual({ kind: 'casual' })
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('leaves today\'s board as it was until hydration says whose the saved pieces are', async () => {
+        // A record from an earlier attempt than the stored one: not this attempt's board.
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day())
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const { definition } = probe.boardsStore.currentBoard!
+        probe.boardsStore.disposePersist?.()
+        writeProgress(definition.puzzleId, {
+            definitionHash: definition.definitionHash, board: SAVED, completed: false, savedAt: T0,
+            attemptStartedAt: T0 - 60_000,
+        })
+        const { h, release } = held()
+        await h.store.change(definition.puzzleId, current => start(current,
+            { puzzleId: definition.puzzleId, definitionHash: definition.definitionHash, date: DAY }, T0, DAY))
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board, 'not restored before hydration').toEqual([[null, null], [null, null]])
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board, 'nor by it: another attempt\'s').toEqual([[null, null], [null, null]])
+    })
+
+    it('keeps a move made before hydration on top of the saved pieces, in play and in storage', async () => {
+        const id = savedPiece(ARCHIVE)
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.placeToward([0, 1], 'down')).toBe(true)
+        const moved = session.snapshot.board
+        expect(moved.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+        expect(moved).not.toEqual(SAVED)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board).toEqual(moved)
+        expect(readProgress(id)?.board).toEqual(moved)
     })
 })
 

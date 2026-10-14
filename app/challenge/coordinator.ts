@@ -250,8 +250,18 @@ export class ChallengeCoordinator {
         return dayKey(new Date((this.options.clock ?? read)().wall))
     }
     isCasual(binding: ChallengeBinding, date = this.currentDate()): boolean {
-        return binding.beforeClamp || binding.date < addDays(date, -1)
+        return this.casualByDate(binding.date, binding.clamp, date)
             || !!this.legacy?.marks.includes(binding.puzzleId)
+    }
+    /**
+     * Casual by its date alone, whatever is stored: a before-clamp day, or one older than
+     * yesterday. Such a board is shown and playable before hydration, so the levels store
+     * restores its saved progress as it builds the session, not after (codex: an archive
+     * board appeared empty and editable while it hydrated, and a move then overwrote the
+     * saved pieces). Today's and yesterday's stay covered and locked until hydrated.
+     */
+    casualByDate(date: string, clamp: LoadedDay['clamped'], today = this.currentDate()): boolean {
+        return clamp === 'before' || date < addDays(today, -1)
     }
     canStart(binding: ChallengeBinding): boolean {
         return this.active && this.status === 'ready' && binding.ready && binding.served

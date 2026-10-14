@@ -559,7 +559,13 @@ export class LevelStore {
             // owns that judgement -- hash, size and rock positions -- so there is no path
             // that restores without it.
             const saved = progressFor(this.saved[definition.puzzleId], definition)
-            if (saved && !this.rootStore.challenge) session.restore(saved)
+            // With the challenge on, a board inside its window waits for the coordinator,
+            // which knows its attempt; one casual by its date is shown and playable at once,
+            // so it is restored here, before anyone can see or move on it (slice 3b, codex).
+            const challenge = this.rootStore.challenge
+            const now = !challenge
+                || (!!this.viewingDate && challenge.casualByDate(this.viewingDate, this.viewingClamp))
+            if (saved && now) session.restore(saved)
             this.sessions.set(definition.puzzleId, session)
         }
         if (this.rootStore.challenge && this.viewingDate) {

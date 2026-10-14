@@ -227,6 +227,52 @@ test.describe('the day you left is still there', () => {
         expect(await pieces(page)).toEqual(placed)
     })
 
+    test('a returning archive day is drawn with its pieces from its very first frame (codex)', async ({ page }) => {
+        /*
+         * Since the challenge went live the coordinator hydrates every board, and it did so
+         * after the archive board was already on screen and playable: empty, until IndexedDB
+         * answered, and a move then overwrote the saved piece (codex). The read here happens
+         * in the first DOM change that draws the day's rocks, before any IndexedDB event can
+         * have arrived, so it doesn't depend on timing.
+         */
+        await pinDay(page, LATE_IN_A_MONTH)
+        await openBoard(page)
+        await openArchive(page)
+        const [older, other] = await offeredDates(page)
+        await page.locator(`[data-archive-day="${older}"]`).click()
+        await expect(page.locator('[data-viewing-date]')).toContainText(older)
+        const rocks = await page.locator('[data-piece="rock"]').evaluateAll(
+            els => els.map(el => el.getAttribute('data-at')!).sort().join(' '))
+        const { i, j } = await freeRun(page)
+        await drag(page, [i, j], [i + 1, j])
+        const placed = await pieces(page)
+        expect(placed.length, 'the move landed').toBeGreaterThan(0)
+
+        await openArchive(page)
+        await page.locator(`[data-archive-day="${other}"]`).click()
+        await expect(page.locator('[data-viewing-date]')).toContainText(other)
+
+        await page.evaluate(rocks => {
+            const w = window as unknown as { firstFrame?: Promise<string[]> }
+            w.firstFrame = new Promise(resolve => {
+                const observer = new MutationObserver(() => {
+                    const drawn = [...document.querySelectorAll('[data-piece="rock"]')]
+                        .map(el => el.getAttribute('data-at')!).sort().join(' ')
+                    if (drawn !== rocks) return
+                    observer.disconnect()
+                    resolve([...document.querySelectorAll('[data-piece]:not([data-piece="rock"])')]
+                        .map(el => `${el.getAttribute('data-piece')}@${el.getAttribute('data-at')}`).sort())
+                })
+                observer.observe(document.body, { subtree: true, childList: true, attributes: true })
+            })
+        }, rocks)
+        await openArchive(page)
+        await page.locator(`[data-archive-day="${older}"]`).click()
+        const firstFrame = await page.evaluate(() => (window as unknown as { firstFrame: Promise<string[]> }).firstFrame)
+        expect(firstFrame, 'its pieces, in the first frame it is drawn').toEqual(placed)
+        expect(await pieces(page)).toEqual(placed)
+    })
+
     test('an archive day survives a reload, because the date is the key', async ({ page }) => {
         // Pinned, as above; the pin holds across the reload below, so "today" stays that day.
         await pinDay(page, LATE_IN_A_MONTH)
