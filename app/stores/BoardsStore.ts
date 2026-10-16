@@ -553,7 +553,8 @@ export class LevelStore {
          * knows its attempt. One casual by its date is shown and playable at once, so it is
          * restored here, before anyone can see or move on it, and its binding is told so, so
          * hydration leaves it alone (slice 3b, rule 15 amended; codex). Decided once, so the
-         * restore and the binding agree.
+         * restore and the binding agree. A board that turns casual later, before hydrating,
+         * is restored by the coordinator then (`restoreTurnedCasual`).
          */
         const challenge = this.rootStore.challenge
         const casualNow = !!challenge && !!this.viewingDate

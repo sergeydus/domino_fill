@@ -98,11 +98,13 @@ export class ChallengeBinding {
     attemptStartedAt: number | undefined = undefined
     solveEvidence: ProgressSolveEvidence | undefined = undefined
     /**
-     * Its session was built casual by its date, so the levels store restored its board then,
-     * and the player may have played it since. Hydration leaves that board alone (slice 3b,
-     * rule 15 amended).
+     * Its board holds its saved casual progress, put there outside hydration: by the levels
+     * store, for a session built casual by its date, or by the coordinator, when it turned
+     * casual before hydrating (midnight, or a clamp). The player may have played it since.
+     * Hydration leaves that board alone, and until then a casual board takes no move without
+     * it (slice 3b, rule 15 amended).
      */
-    casualAtBuild = false
+    casualRestored = false
     baseline: Snapshot
     pending: PendingProgress | null = null
     generation = 0
@@ -280,7 +282,9 @@ export class ChallengeCoordinator {
         if (binding.starting || binding.assisting || binding.pendingFinish || !binding.served) return false
         const date = this.currentDate()
         if ((binding.date > date && !binding.beforeClamp) || binding.error === 'identity') return false
-        if (this.isCasual(binding, date)) return true
+        // Not before its saved pieces are on it: a move would save over them (codex).
+        if (this.casualByDate(binding.date, binding.clamp, date)) return binding.casualRestored || binding.ready
+        if (this.legacy?.marks.includes(binding.puzzleId)) return true
         return this.active && this.status === 'ready' && binding.ready && !!binding.attempt
     }
     needsAssistanceSave(binding: ChallengeBinding): boolean {
@@ -360,7 +364,7 @@ export class ChallengeCoordinator {
         } else if (committed) this.history.set(attempt.puzzleId, attempt)
     }
 
-    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null, casualAtBuild = false): ChallengeBinding {
+    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null, casualRestored = false): ChallengeBinding {
         if (!isDay(date)) throw new Error('Binding requires a real calendar date')
         const previous = this.bindings.get(session)
         if (previous && previous.date === date) {
@@ -370,10 +374,11 @@ export class ChallengeCoordinator {
                 previous.practice = null
                 previous.solveEvidence = undefined
             }
+            this.restoreTurnedCasual()
             return previous
         }
         const binding = new ChallengeBinding(session, date, clamp)
-        binding.casualAtBuild = casualAtBuild
+        binding.casualRestored = casualRestored
         this.bindings.set(session, binding)
         if (this.status === 'ready' && this.active) {
             const epoch = this.epoch
@@ -410,7 +415,7 @@ export class ChallengeCoordinator {
         if (this.active) return this.initializing ?? Promise.resolve()
         this.active = true
         this.epoch++
-        this.now = (this.options.clock ?? read)()
+        this.advance((this.options.clock ?? read)())
         // Attach after selection; memory mode keeps only local wake checks.
         return this.retry()
     }
@@ -514,7 +519,7 @@ export class ChallengeCoordinator {
         for (const binding of this.bindings.values()) await this.hydrate(binding, epoch)
         if (!this.alive(epoch)) return
         runInAction(() => {
-            this.now = (this.options.clock ?? read)()
+            this.advance((this.options.clock ?? read)())
             this.lastDate = this.deviceDate
             this.status = 'ready'
             this.options.initialized?.()
@@ -554,6 +559,40 @@ export class ChallengeCoordinator {
             : (this.options.readProgress ?? readProgress)(binding.puzzleId)
         if (!record || isExpired(record.savedAt, (this.options.clock ?? read)().wall)) return null
         return progressFor(record, binding.definition)
+    }
+    /** The saved record hydration restores: one waiting to be written first, else storage's. */
+    private savedProgress(binding: ChallengeBinding): PuzzleProgress | null {
+        return progressFor(binding.pending?.record ?? this.liveProgress()[binding.puzzleId], binding.definition)
+    }
+    private untouched(binding: ChallengeBinding) {
+        return !binding.locallyEdited && JSON.stringify(binding.session.snapshot.board)
+            === JSON.stringify(binding.definition.initialBoard)
+    }
+    /**
+     * A board that turns casual by its date before hydration reaches it, at midnight or by a
+     * clamp, is shown and playable from then on. So its saved pieces go on it first, as the
+     * levels store's build does for one casual from the start; until then `canMutate` refuses
+     * it. Before this, it showed empty and editable, and a move saved over them (codex).
+     * Called wherever the date the view reads moves, so the view never shows it casual
+     * without them.
+     */
+    private restoreTurnedCasual() {
+        const date = this.deviceDate
+        for (const binding of this.bindings.values()) {
+            if (binding.casualRestored || binding.ready || !this.casualByDate(binding.date, binding.clamp, date)) continue
+            binding.casualRestored = true
+            const saved = this.untouched(binding) ? this.savedProgress(binding) : null
+            if (!saved) continue
+            this.restoreAttemptProgress(binding, saved)
+            if (binding.beforeClamp) binding.solveEvidence = undefined
+            binding.baseline = this.snapshot(binding)
+            this.options.hydrated?.(binding.puzzleId)
+        }
+    }
+    /** Move the clock the view reads, and restore any board that turned casual with it. */
+    private advance(reading: Reading) {
+        this.now = reading
+        this.restoreTurnedCasual()
     }
     private restoreAttemptProgress(binding: ChallengeBinding, saved: PuzzleProgress | null) {
         binding.hydrating = true
@@ -671,7 +710,7 @@ export class ChallengeCoordinator {
                 if (!this.alive(epoch) || !outcome.committed) return false
             }
             runInAction(() => {
-                this.now = (this.options.clock ?? read)()
+                this.advance((this.options.clock ?? read)())
                 if (previousStart !== outcome.attempt!.startedAt || !binding.locallyEdited) {
                     const saved = this.savedFor(binding)
                     const matching = saved?.attemptStartedAt === outcome.attempt!.startedAt ? saved : null
@@ -804,12 +843,12 @@ export class ChallengeCoordinator {
                 if (this.alive(epoch) && !outcome.committed) throw new Error('Opening reconciliation failed')
                 return
             }
-            const saved = progressFor(binding.pending?.record ?? this.liveProgress()[binding.puzzleId],
-                binding.definition)
+            const saved = this.savedProgress(binding)
             runInAction(() => {
                 binding.hydrating = true
                 /*
-                 * A board restored as its session was built is the player's already: restoring
+                 * A casual board restored before hydration (as its session was built, or as it
+                 * turned casual; see `casualRestored`) is the player's already: restoring
                  * it again would clear its Undo, and the attempt-stamp check below, which keeps
                  * another attempt's pieces off a timed board, would throw away casual progress
                  * saved without a stamp (codex). So a casual board is only ever filled here,
@@ -819,10 +858,8 @@ export class ChallengeCoordinator {
                  * board timed before this runs, and then it is checked like any timed board
                  * (codex).
                  */
-                if (binding.casualAtBuild && this.isCasual(binding)) {
-                    const untouched = !binding.locallyEdited && JSON.stringify(binding.session.snapshot.board)
-                        === JSON.stringify(binding.definition.initialBoard)
-                    if (untouched && saved) this.restoreAttemptProgress(binding, saved)
+                if (binding.casualRestored && this.isCasual(binding)) {
+                    if (this.untouched(binding) && saved) this.restoreAttemptProgress(binding, saved)
                     if (binding.beforeClamp) binding.solveEvidence = undefined
                 } else {
                     const attempt = binding.attempt
@@ -912,7 +949,7 @@ export class ChallengeCoordinator {
                 if (binding.puzzleId === attempt.puzzleId) binding.clockErrorPending = true
             }
         }
-        this.now = next
+        this.advance(next)
         const date = dayKey(new Date(next.wall))
         for (const binding of this.bindings.values()) {
             if (binding.practice && !inWindow(binding.date, date)) binding.practice = null

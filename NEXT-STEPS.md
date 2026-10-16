@@ -3046,6 +3046,12 @@ This slice builds them and, last, switches the challenge on.
     only while the board is still casual when hydration runs. A corrected clock can turn a
     before-clamp board timed between build and hydration; hydration then checks it like any
     timed board, so an unstamped casual piece never enters a timed attempt.
+    **Amended a fourth time after codex's fourth review (2026-10-16):** the protection also
+    covers a board that **turns casual while its hydration is pending**, at midnight or by a
+    clamp. Its saved pieces are restored as it turns casual, before it accepts a move, and a
+    casual board takes no move until its saved pieces are on it (restored outside hydration,
+    or hydrated). Codex found yesterday's board, unhydrated, turned editable but empty at
+    midnight, and the next move's save dropped the saved piece.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3823,6 +3829,59 @@ before the next. The PR is opened only when the user says.
 - Cold gate, run 2 (2026-10-14): TIME_WAIT **73**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1688**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**751
   passed, 1 skipped**; **0 socket errors**). Committed after it.
+
+**Fourth correction after codex's review of `70aee0b` (2026-10-16)**
+- Codex accepted the clock-change fix, and held activation for a midnight case, reproduced
+  through the real coordinator:
+  1. Yesterday's board has a saved piece.
+  2. It's opened while attempt-history reads fail (or storage opening is held), so it stays
+     covered and empty; progress saves still work.
+  3. Midnight passes: the day becomes an archive day, so the board is editable, but empty.
+  4. A move's save holds only the new piece, so the saved one is gone.
+
+  `canMutate` answered "casual" before anything restored the board.
+- **The fix**, rule 15 amended a fourth time:
+  - `casualAtBuild` is now `casualRestored`: the board holds its saved casual progress,
+    put there outside hydration, by the build or by the coordinator.
+  - `canMutate` lets a board casual by its date take a move only if it is
+    `casualRestored` or `ready`. Legacy boards are unchanged.
+  - `restoreTurnedCasual` restores a board that is casual by its date, not ready, and not yet
+    restored, from the same record hydration would use (`savedProgress`: a pending write,
+    else storage). It marks the board restored either way, but restores only an untouched
+    board. It runs wherever the date the view reads moves (`advance`: `sample`, `start`, the
+    end of `initialize`, and a Start's commit), and in `bind` when a clamp changes. So the view
+    never shows such a board casual without its pieces.
+  - An untouched board, because a restarted root (StrictMode) has played boards that aren't
+    ready until they rehydrate. Restoring one would clear its Undo.
+- **Tests** (`tests/challengeView.test.ts`, 4 more in the describe, 14 in all):
+  - codex's sequence with storage opening held: no move at midnight before a tick, then the
+    saved piece once casual, a move on top, and after hydration the board, its Undo and
+    storage;
+  - codex's sequence with history reads failing: the same, ending with both pieces in
+    storage;
+  - a clamp turning today's board casual: restored as it is bound, with no tick;
+  - a played board in a restarted root, turned casual: not restored over, so its Undo
+    survives.
+- **Mutations: 17 of 17 caught at the intended test,** 8 of them also checked at the
+  intended assertion's message (the browser probe, no completion at build, the third
+  correction's check, and the 5 new), files restored byte for byte. That's the third
+  correction's 12 rerun, plus 5 new:
+  - a casual board editable before its pieces are back;
+  - the clock moving without restoring;
+  - a clamp bound without restoring;
+  - restoring over a played board;
+  - a restored board never marked so.
+
+  One earlier probe is now caught differently. "The binding never told it was built
+  casual" fails at the refused move rather than at hydration clearing the board, since an
+  unrestored casual board now takes no move.
+- Codex's record of `70aee0b`: 347/347 committed unit tests (stderr 0 bytes), type-checking
+  passed, its probe removing the guard caught (1/1), and CI's gate and visual jobs passed.
+  Its scratch regressions ran in jsdom only.
+- Cold gate, first run (2026-10-16): TIME_WAIT **49**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1692**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it. The
+  `motion.spec.ts` flake from the third correction's run 1 stays open.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
