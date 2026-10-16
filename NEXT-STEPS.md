@@ -3052,6 +3052,18 @@ This slice builds them and, last, switches the challenge on.
     casual board takes no move until its saved pieces are on it (restored outside hydration,
     or hydrated). Codex found yesterday's board, unhydrated, turned editable but empty at
     midnight, and the next move's save dropped the saved piece.
+    **Amended a fifth time after codex's fifth review (2026-10-16):** casual is judged by
+    **the date on screen** (the coordinator's last clock reading), for moves as for the
+    view, and every board casual by that date has its saved pieces on it before it is shown
+    or takes a move: as it is bound, or as that date moves (midnight) or its clamp changes.
+    That includes a board already hydrated as timed: if the stamp check left it empty and
+    it hasn't been touched since, it gets its saved casual pieces as it turns casual. The
+    coordinator now does the restoring as a board is bound, in the same action that
+    builds it, instead of the levels store. Hydration also reads the clock before it
+    decides. A move in the moment between real midnight and the next reading lands on the
+    board the screen still shows, a timed one. Codex found storage opening just after
+    midnight: hydration's stamp check cleared the casual pieces, and the board then turned
+    casual, empty and editable.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3882,6 +3894,95 @@ before the next. The PR is opened only when the user says.
   **0**, unit **0** (**1692**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
   passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it. The
   `motion.spec.ts` flake from the third correction's run 1 stays open.
+
+**Fifth correction after codex's review of `6b2028f` (2026-10-16)**
+- Codex accepted the midnight sequences, and held activation for initialization crossing
+  midnight before the first tick, with storage opening held 200 ms across it:
+  1. Yesterday has an active attempt and valid unstamped casual progress from an older tab.
+  2. Its timed board, opened just before midnight, waits empty.
+  3. Storage opens just after midnight, before any tick.
+  4. Hydration applies the stamp check and clears the pieces; initialization then moves the
+     date, showing an empty, editable archive board.
+  5. A move saves only the new piece.
+
+  `initialize` hydrates before moving the date, and by then the board is ready, so
+  `restoreTurnedCasual` skipped it.
+- **First fix, not enough, found by reading before committing:** sampling the clock inside
+  hydration, before it decides. That fixes codex's sequence, but if midnight falls between
+  that reading and the next, hydration still clears the board as timed, and nothing restores
+  it later. The rule had to hold for any ordering.
+- **The fix**, rule 15 amended a fifth time:
+  - `restoreTurnedCasual` no longer skips ready bindings. Any board casual by the date on
+    screen, untouched (not `locallyEdited`, still the initial board), gets its saved casual
+    pieces: a timed board the stamp check left empty included.
+  - `canMutate` judges casual by `deviceDate`, the date on screen, not the live clock, and
+    answers `true` there. Every board casual by that date already has its pieces, since the
+    restore runs on every `bind` and wherever that date moves. So the view and moves never
+    disagree: until a reading moves the date, a board just before midnight is the timed
+    board the screen shows.
+  - Hydration samples the clock before deciding, so a board hydrating across midnight is
+    restored then, not at the next tick.
+  - **One mechanism instead of two.** The mutation sweep showed the levels store's
+    build-time restore (15765d3) and `bind`'s `casualAtBuild` flag had become redundant:
+    reverting either survived in both the unit and browser tests. The levels store is back
+    to restoring only with the challenge off, `bind` takes no flag, and the coordinator
+    restores a casual board as it binds it, in the same action that builds it. The
+    first-frame browser test catches its removal. The restore reads per board through
+    `savedFor`, as the levels store did, with no v1 migration, so a root that doesn't know
+    its storage yet writes nothing.
+- **Tests** (`tests/challengeView.test.ts`, 6 more; 1 changed on purpose):
+  - codex's sequence through initialization: the board (its saved pieces, `casual`);
+  - and the saved data (a move keeps both pieces in storage);
+  - a board bound after opening whose hydration crosses midnight: restored at hydration;
+  - a timed board hydrated empty just before midnight: the view and moves agree before the
+    tick, and it gets its pieces at the tick;
+  - a board bound casual by the date on screen while the clock is behind it (it went back):
+    restored as it is bound;
+  - two for before-clamp solve evidence, restored as bound and filled by hydration. The
+    mutation sweep found nothing tested either once the restore moved into `bind`.
+  - Changed on purpose: "keeps its saved pieces in storage when attempt history can't be
+    read" now runs on a device that has passed its legacy check. Its piece otherwise made
+    the board legacy, and with moves judged by the date on screen, a legacy board takes
+    moves. That isn't the case the test is for.
+- **Mutations: 22 of 22 caught at the intended test,** 18 also at the intended assertion's
+  message, files restored byte for byte. Every earlier round this time:
+  - With the first fix, 19 of 21:
+    - codex's diagnostic (advancing the date before hydrating in `initialize`) failed the
+      bound-board test, but at its view assertion; the board assertion now comes first;
+    - a probe reading the live clock in hydration's branch survived as equivalent, and
+      that change was dropped.
+  - After judging by the date on screen, 19 of 22, then 20 of 22:
+    - `canMutate`'s guard was equivalent, so that branch is plainly `true`;
+    - codex's two regressions were protected twice over, so they are now probed by
+      removing both mechanisms;
+    - the `casualAtBuild` flag was redundant.
+  - A run stopped at a changed anchor (my script). What it had run showed the levels
+    store's restore redundant too.
+  - After one mechanism:
+    - 20 of 22: an anchor matched twice, and hydration's before-clamp evidence clear was
+      untested;
+    - 21 of 22: the clear as bound was untested;
+    - 21 of 22: my script ran that probe against the wrong file;
+    - then 22 of 22.
+
+  The probes: restoring as bound removed (unit; browser; the clock-back test); the levels
+  store restoring every board; `casualByDate` without before-clamp, and without archive
+  days; hydration restoring casual boards as before, and without the untouched check;
+  hydration never filling; a restored winning board not marked complete; before-clamp
+  evidence kept, as bound and when filled; hydration not checking the board is still casual;
+  the clock moving without restoring; a clamp bound without restoring; restoring over a
+  played board; a restored board never marked so; codex's ordering, at the board and at the
+  saved data; hydrated boards not restored as they turn casual; hydration not sampling the
+  clock; `canMutate` judging by the live clock.
+- Browser, before the sweep: `archive`, `challengeSession` and `persistence` specs, **76
+  passed**.
+- Codex's record of `6b2028f`: 351/351 committed unit tests (stderr 0 bytes), type-checking
+  passed, 4/4 Chromium archive regressions, 6/6 of its probes caught at their intended
+  assertions, its diagnostic passing 226/226 targeted tests, and CI's gate and visual jobs
+  passed.
+- Cold gate, first run (2026-10-16): TIME_WAIT **33**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1699**, 7 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT

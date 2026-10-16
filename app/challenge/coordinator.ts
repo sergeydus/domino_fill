@@ -98,11 +98,10 @@ export class ChallengeBinding {
     attemptStartedAt: number | undefined = undefined
     solveEvidence: ProgressSolveEvidence | undefined = undefined
     /**
-     * Its board holds its saved casual progress, put there outside hydration: by the levels
-     * store, for a session built casual by its date, or by the coordinator, when it turned
-     * casual before hydrating (midnight, or a clamp). The player may have played it since.
-     * Hydration leaves that board alone, and until then a casual board takes no move without
-     * it (slice 3b, rule 15 amended).
+     * Its board holds its saved casual progress, put there outside hydration by
+     * `restoreTurnedCasual`, as it was bound casual or as it turned casual (midnight, or a
+     * clamp). The player may have played it since, so hydration leaves that board alone
+     * (slice 3b, rule 15 amended).
      */
     casualRestored = false
     baseline: Snapshot
@@ -263,10 +262,10 @@ export class ChallengeCoordinator {
     }
     /**
      * Casual by its date alone, whatever is stored: a before-clamp day, or one older than
-     * yesterday. Such a board is shown and playable before hydration, so the levels store
-     * restores its saved progress as it builds the session, not after (codex: an archive
-     * board appeared empty and editable while it hydrated, and a move then overwrote the
-     * saved pieces). Today's and yesterday's stay covered and locked until hydrated.
+     * yesterday. Such a board is shown and playable before hydration, so its saved progress
+     * is restored as it is bound, not after (`restoreTurnedCasual`; codex: an archive board
+     * appeared empty and editable while it hydrated, and a move then overwrote the saved
+     * pieces). Today's and yesterday's stay covered and locked until hydrated.
      */
     casualByDate(date: string, clamp: LoadedDay['clamped'], today = this.currentDate()): boolean {
         return clamp === 'before' || date < addDays(today, -1)
@@ -282,8 +281,11 @@ export class ChallengeCoordinator {
         if (binding.starting || binding.assisting || binding.pendingFinish || !binding.served) return false
         const date = this.currentDate()
         if ((binding.date > date && !binding.beforeClamp) || binding.error === 'identity') return false
-        // Not before its saved pieces are on it: a move would save over them (codex).
-        if (this.casualByDate(binding.date, binding.clamp, date)) return binding.casualRestored || binding.ready
+        // Casual by the date the view shows, so a board is always what the view says: a timed
+        // one just before midnight is still timed until a reading moves that date. Whatever
+        // that date makes casual already has its saved pieces (`restoreTurnedCasual`), so a
+        // move can't save over them (codex).
+        if (this.casualByDate(binding.date, binding.clamp, this.deviceDate)) return true
         if (this.legacy?.marks.includes(binding.puzzleId)) return true
         return this.active && this.status === 'ready' && binding.ready && !!binding.attempt
     }
@@ -364,7 +366,7 @@ export class ChallengeCoordinator {
         } else if (committed) this.history.set(attempt.puzzleId, attempt)
     }
 
-    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null, casualRestored = false): ChallengeBinding {
+    bind(session: PuzzleSession, date: string, clamp: LoadedDay['clamped'] = null): ChallengeBinding {
         if (!isDay(date)) throw new Error('Binding requires a real calendar date')
         const previous = this.bindings.get(session)
         if (previous && previous.date === date) {
@@ -378,8 +380,10 @@ export class ChallengeCoordinator {
             return previous
         }
         const binding = new ChallengeBinding(session, date, clamp)
-        binding.casualRestored = casualRestored
         this.bindings.set(session, binding)
+        // Casual by the date on screen: its saved pieces go on it now, in the same action as
+        // the levels store builds the session, so even its first frame has them.
+        this.restoreTurnedCasual()
         if (this.status === 'ready' && this.active) {
             const epoch = this.epoch
             const task = this.hydrate(binding, epoch).catch(() => {
@@ -569,19 +573,24 @@ export class ChallengeCoordinator {
             === JSON.stringify(binding.definition.initialBoard)
     }
     /**
-     * A board that turns casual by its date before hydration reaches it, at midnight or by a
-     * clamp, is shown and playable from then on. So its saved pieces go on it first, as the
-     * levels store's build does for one casual from the start; until then `canMutate` refuses
-     * it. Before this, it showed empty and editable, and a move saved over them (codex).
-     * Called wherever the date the view reads moves, so the view never shows it casual
-     * without them.
+     * A board casual by the date on screen is shown and playable, so its saved pieces go on
+     * it as it is bound, or as it turns casual, at midnight or by a clamp (codex: an archive
+     * board, then one turning casual at midnight, showed empty and editable, and a move saved
+     * over them). `canMutate` judges by the same date, so it never allows a move first.
+     * Hydrated or not: a timed board that the stamp check left empty, because its saved
+     * pieces are casual ones, gets them back too, whichever side of midnight its hydration
+     * landed (codex). Only an untouched board, so nothing played is replaced. Called on every
+     * bind and wherever the date on screen moves.
      */
     private restoreTurnedCasual() {
         const date = this.deviceDate
         for (const binding of this.bindings.values()) {
-            if (binding.casualRestored || binding.ready || !this.casualByDate(binding.date, binding.clamp, date)) continue
+            if (binding.casualRestored || !this.casualByDate(binding.date, binding.clamp, date)) continue
             binding.casualRestored = true
-            const saved = this.untouched(binding) ? this.savedProgress(binding) : null
+            // Read per board, with no v1 migration: a root may not know its storage yet, and
+            // one that turns out unsaved must not have written (the levels store reads the same).
+            const saved = !this.untouched(binding) ? null : binding.pending
+                ? progressFor(binding.pending.record, binding.definition) : this.savedFor(binding)
             if (!saved) continue
             this.restoreAttemptProgress(binding, saved)
             if (binding.beforeClamp) binding.solveEvidence = undefined
@@ -845,15 +854,22 @@ export class ChallengeCoordinator {
             }
             const saved = this.savedProgress(binding)
             runInAction(() => {
+                /*
+                 * Read the clock first, and decide by that one reading. Midnight can pass while
+                 * this waited for storage, before any tick: the board is casual now, and the
+                 * timed check below would clear its unstamped casual pieces, after which, ready,
+                 * nothing restores them (codex). Sampling restores it as turned casual instead.
+                 */
+                this.sample()
                 binding.hydrating = true
                 /*
-                 * A casual board restored before hydration (as its session was built, or as it
-                 * turned casual; see `casualRestored`) is the player's already: restoring
+                 * A casual board restored before hydration (as it was bound, or as it turned
+                 * casual; see `casualRestored`) is the player's already: restoring
                  * it again would clear its Undo, and the attempt-stamp check below, which keeps
                  * another attempt's pieces off a timed board, would throw away casual progress
                  * saved without a stamp (codex). So a casual board is only ever filled here,
-                 * when it is still untouched and empty and there is a record the build didn't
-                 * have (a v1 document migrated since, say); never replaced, never cleared.
+                 * when it is still untouched and empty and there is a record the bind didn't
+                 * read (a v1 document migrated here, say); never replaced, never cleared.
                  * Only while it is still casual: a corrected clock can make a before-clamp
                  * board timed before this runs, and then it is checked like any timed board
                  * (codex).

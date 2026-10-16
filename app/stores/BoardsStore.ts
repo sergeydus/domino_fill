@@ -548,18 +548,6 @@ export class LevelStore {
             if (!served.has(puzzleId)) this.sessions.delete(puzzleId)
         }
 
-        /*
-         * With the challenge on, a board inside its window waits for the coordinator, which
-         * knows its attempt. One casual by its date is shown and playable at once, so it is
-         * restored here, before anyone can see or move on it, and its binding is told so, so
-         * hydration leaves it alone (slice 3b, rule 15 amended; codex). Decided once, so the
-         * restore and the binding agree. A board that turns casual later, before hydrating,
-         * is restored by the coordinator then (`restoreTurnedCasual`).
-         */
-        const challenge = this.rootStore.challenge
-        const casualNow = !!challenge && !!this.viewingDate
-            && challenge.casualByDate(this.viewingDate, this.viewingClamp)
-        const built = new Set<PuzzleSession>()
         for (const definition of definitions) {
             const existing = this.sessions.get(definition.puzzleId)
             if (existing && existing.definition.definitionHash === definition.definitionHash) {
@@ -571,20 +559,17 @@ export class LevelStore {
             // owns that judgement -- hash, size and rock positions -- so there is no path
             // that restores without it.
             const saved = progressFor(this.saved[definition.puzzleId], definition)
-            if (saved && (!challenge || casualNow)) {
-                session.restore(saved)
-                // As the coordinator's restore does: a winning board is complete, not a fresh
-                // placement waiting to be celebrated.
-                if (challenge && session.completedByRules) session.setCompleted(true)
-            }
+            // With the challenge on, the coordinator restores it as it binds it below: at once
+            // if it's casual by the date on screen, else by hydration, which knows its attempt
+            // (slice 3b, rule 15 amended).
+            if (saved && !this.rootStore.challenge) session.restore(saved)
             this.sessions.set(definition.puzzleId, session)
-            built.add(session)
         }
-        if (challenge && this.viewingDate) {
+        if (this.rootStore.challenge && this.viewingDate) {
             for (const session of this.sessions.values()) {
-                challenge.bind(session, this.viewingDate, this.viewingClamp, casualNow && built.has(session))
+                this.rootStore.challenge.bind(session, this.viewingDate, this.viewingClamp)
             }
-            challenge.retain(new Set(this.sessions.values()))
+            this.rootStore.challenge.retain(new Set(this.sessions.values()))
         }
     }
 
