@@ -991,6 +991,44 @@ describe('a board casual by its date, before the coordinator hydrates it (slice 
             expect(readProgress(id)?.board.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
         })
 
+        describe('a change that empties a hydrated board just after midnight, before a tick (codex)', () => {
+            /** Yesterday's timed board, played to one piece, then reloaded and hydrated with it. */
+            const reloaded = async () => {
+                const first = harness({ at: new Date(2026, 9, 9, 12).getTime() })
+                first.root.boardsStore.setDay(day(YESTERDAY))
+                await open(first)
+                const played = first.sessionAt('easy', 1)
+                expect(await played.startChallenge()).toBe(true)
+                expect(played.placeToward([0, 0], 'down')).toBe(true)
+                const piece = played.snapshot.board
+                await vi.waitFor(() => expect(readProgress(played.definition.puzzleId)?.board).toEqual(piece))
+                first.root.dispose()
+                const h = harness({ at: new Date(2026, 9, 10, 23, 59, 59, 900).getTime() })
+                h.root.boardsStore.setDay(day(YESTERDAY))
+                await open(h)
+                const session = h.sessionAt('easy', 1)
+                expect(session.snapshot.board, 'hydrated with its piece').toEqual(piece)
+                h.setTime(MIDNIGHT)
+                return { session, piece }
+            }
+
+            it('keeps a Reset, and its Undo', async () => {
+                const { session, piece } = await reloaded()
+                session.reset()
+                expect(session.snapshot.board, 'the Reset stands').toEqual(EMPTY)
+                expect(session.undo(), 'and can be undone').toBe(true)
+                expect(session.snapshot.board).toEqual(piece)
+            })
+
+            it('keeps the last piece\'s removal, and its Undo', async () => {
+                const { session, piece } = await reloaded()
+                expect(session.removePiece(0, 0)).toBe(true)
+                expect(session.snapshot.board, 'the removal stands').toEqual(EMPTY)
+                expect(session.undo(), 'and can be undone').toBe(true)
+                expect(session.snapshot.board).toEqual(piece)
+            })
+        })
+
         it('never restores over a board played before it turned casual (a restarted root)', async () => {
             const h = harness()
             await begin(h)

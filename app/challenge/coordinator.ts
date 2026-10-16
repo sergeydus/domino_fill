@@ -771,10 +771,13 @@ export class ChallengeCoordinator {
     }
     /** Called synchronously inside a successful session mutation, never from a reaction. */
     boardChanged(binding: ChallengeBinding, placement: boolean) {
+        // Edited before the reading: a reading can turn the board casual, and a Reset or a last
+        // piece removed leaves it empty, which untouched would make `restoreTurnedCasual` put
+        // the saved pieces back over, clearing the change's Undo (codex).
+        binding.locallyEdited = true
         const reading = this.sample()
         const date = dayKey(new Date(reading.wall))
         if (!binding.session.completedByRules) binding.session.setCompleted(false)
-        binding.locallyEdited = true
         binding.emptyStartRetry = false
         if (this.isCasual(binding, date)) {
             binding.practice = null

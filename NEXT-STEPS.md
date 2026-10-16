@@ -3064,6 +3064,11 @@ This slice builds them and, last, switches the challenge on.
     board the screen still shows, a timed one. Codex found storage opening just after
     midnight: hydration's stamp check cleared the casual pieces, and the board then turned
     casual, empty and editable.
+    **Amended a sixth time after codex's sixth review (2026-10-16):** a change counts as the
+    player's from the moment it lands. The board is marked edited before the clock reading
+    that might turn it casual, so a Reset or a last piece removed, which leaves the board
+    empty, is never mistaken for an untouched board and restored over. Codex found both
+    undone just after midnight, with their Undo entries lost.
 16. **What activation breaks, measured** (codex asked for the list before any code). Two
     local runs of the whole browser suite with `provider.tsx` switched on, never committed,
     both files restored byte for byte after (2026-10-12):
@@ -3983,6 +3988,42 @@ before the next. The PR is opened only when the user says.
 - Cold gate, first run (2026-10-16): TIME_WAIT **33**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1699**, 7 more; stderr **0 bytes**), build **0**, browser **0** (**751
   passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
+
+**Sixth correction after codex's review of `3db7e19` (2026-10-16)**
+- Codex accepted the late-initialization fix, and held it for a Reset and removal case,
+  reproduced through the real coordinator:
+  1. Yesterday's timed board is reloaded with one saved piece and hydrates normally;
+     `locallyEdited` is false.
+  2. Midnight passes, before the next tick.
+  3. Reset, or remove the only piece.
+  4. The piece reappears, and the change's Undo entry is gone.
+
+  `boardChanged` sampled the clock before setting `locallyEdited`. The sample turned the
+  board casual and ran `restoreTurnedCasual`, and the board, just emptied and not yet marked,
+  looked untouched.
+- **The fix**, rule 15 amended a sixth time: `boardChanged` sets `locallyEdited` before it
+  samples.
+- **Tests** (`tests/challengeView.test.ts`, 2 more): yesterday's board, played to one piece
+  in a first root, reloaded and hydrated in a second just before midnight, then the clock
+  moved past it with no tick:
+  - a Reset stands, and its Undo brings the piece back;
+  - the last piece's removal stands, and its Undo brings it back.
+- **Mutations: 24 of 24 caught at the intended test,** files restored byte for byte, on the
+  first run: the fifth correction's 22 rerun, plus the edit marked after the reading, caught
+  at "the Reset stands" and "the removal stands".
+- Codex's record of `3db7e19`: 358/358 committed unit tests (stderr 0 bytes), type-checking
+  passed, 4/4 Chromium archive regressions, and CI's gate and visual jobs passed. Its two
+  regressions passed against `6b2028f`, and its diagnostic, marking the board edited before
+  sampling, passed 231/231 targeted tests.
+- Cold gate, **run 1 failed** (2026-10-16): TIME_WAIT **53**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1701**; stderr **0 bytes**), build **0**, browser **1** (**750
+  passed, 1 failed, 1 skipped**; **1 socket error**). The failure was `e2e/metadata.spec.ts:93`
+  on phone-360: `page.goto: net::ERR_NO_BUFFER_SPACE`. That's the machine's socket pool, but
+  it's a failed gate all the same. The open question about socket pressure since activation
+  stands.
+- Cold gate, run 2 (2026-10-16): TIME_WAIT **47**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1701**, 2 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). Committed after it.
 
 **Validation record**
 - Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
