@@ -101,6 +101,7 @@ Evidence levels:
 | 2026-10-12 | **An attempt dated after the device's today counts nowhere until that date arrives** (user, 2026-10-12). | A clock set back, or another device's data. Then it counts normally. |
 | 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 | 2026-10-17 | Slice 3b's PR is opened (#12), with merging decided separately. Claude takes the `keyGuide.spec.ts` flake next, codex reviewing; codex then takes socket pressure, Claude reviewing (user, approving codex's recommendation, 2026-10-17). | Codex approved slice 3b at `e5a5c37`. One change active at a time. |
+| 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
 
 ## Principles
 
@@ -4241,6 +4242,11 @@ from the guide's nearest `[data-advice]` ancestor, and the wording above):
   **0**, unit **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753
   passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
 - **Still open:** the cause. The next failure's message will carry the raw values.
+- Codex accepted `c281c43` (2026-10-17).
+- The decision-log row for PR #12's merge (docs only), gate from cold, first run
+  (2026-10-17): TIME_WAIT **40**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
 
 ### Would need a server (rejected)
 
