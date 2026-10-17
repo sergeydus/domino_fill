@@ -224,6 +224,17 @@ describe('the cover (rules 9-12)', () => {
         expect((screen.getByRole('button', { name: 'Reset' }) as HTMLButtonElement).disabled).toBe(false)
     })
 
+    it('a mouse Start leaves the board unfocused, even with Start focused (slice 3b, rule 16)', async () => {
+        await mount()
+        const button = screen.getByRole('button', { name: 'Start' })
+        // As Chromium does: the click focuses the button, and says it came from a pointer.
+        button.focus()
+        await act(async () => { fireEvent.click(button, { detail: 1 }) })
+        await waitFor(() => expect(screen.queryByRole('grid')).toBeTruthy())
+        await nextFrame()
+        expect(screen.getByRole('grid').contains(document.activeElement)).toBe(false)
+    })
+
     it('a pointer Start leaves focus alone', async () => {
         await mount()
         const outside = screen.getByRole('button', { name: 'Archive' })

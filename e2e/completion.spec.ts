@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openArchiveDay, openBoard } from './openBoard'
 import { drag, playSolution, solutionFor } from './play'
 
 /**
@@ -197,6 +197,9 @@ test('Reset also works on a won board, from outside the inert subtree', async ({
 })
 
 test('Next level moves on and leaves the win behind', async ({ page }) => {
+    // Casual play's "Next level", so on an archive day: on a challenge day the card offers
+    // "Next board", and the board it moves to is covered until Start (slice 3b, rule 16).
+    await openArchiveDay(page)
     await playSolution(page)
     const cellsBefore = await page.locator('[data-cell]').count()
 

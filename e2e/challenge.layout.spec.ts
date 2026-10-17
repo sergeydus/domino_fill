@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { BASE_URL, VISUAL_URL } from './server'
+import { VISUAL_URL } from './server'
 import { pinDay, LATE_IN_A_MONTH } from './calendar'
 
 /*
@@ -17,6 +17,11 @@ import { pinDay, LATE_IN_A_MONTH } from './calendar'
  * the same budget, and `challengeUi.spec.ts` checks the two boxes are equal.
  *
  * Named `*.layout.spec.ts` so only the `layout` project runs it: it sets its own viewports.
+ *
+ * **"The public page" above is `/visual/daily?challenge=off`** since the challenge went live on
+ * the public page (slice 3b, rule 16): the same fixture with the challenge off, which is the
+ * public page as it was. It's measured live rather than against recorded numbers, which
+ * would not hold on the CI runner, whose text renders wider.
  */
 
 const VIEWPORTS = [
@@ -63,24 +68,24 @@ for (const viewport of VIEWPORTS) {
     test(`the clock row costs no new scrolling and no floor at ${viewport.name}`, async ({ browser }) => {
         const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } })
         await context.addInitScript(() => localStorage.setItem('hasSeenTutorial', 'true'))
-        const publicPage = await context.newPage()
+        const casualPage = await context.newPage()
         const enabledPage = await context.newPage()
-        await pinDay(publicPage, LATE_IN_A_MONTH)
+        await pinDay(casualPage, LATE_IN_A_MONTH)
         await pinDay(enabledPage, LATE_IN_A_MONTH)
-        await publicPage.goto(`${BASE_URL}/`)
+        await casualPage.goto(`${VISUAL_URL}/visual/daily?challenge=off`)
         await enabledPage.goto(`${VISUAL_URL}/visual/daily`)
-        await expect(publicPage.locator('[data-cell]').first()).toBeVisible({ timeout: 15_000 })
+        await expect(casualPage.locator('[data-cell]').first()).toBeVisible({ timeout: 15_000 })
         await expect(enabledPage.locator('[data-challenge-cover="ready"]')).toBeVisible({ timeout: 15_000 })
 
         const findings: string[] = []
         for (const size of SIZES) {
-            await publicPage.locator(`[data-difficulty="${size.key}"]`).click()
-            await expect(publicPage.locator('[data-cell]')).toHaveCount(size.n * size.n)
+            await casualPage.locator(`[data-difficulty="${size.key}"]`).click()
+            await expect(casualPage.locator('[data-cell]')).toHaveCount(size.n * size.n)
             await enabledPage.locator(`[data-difficulty="${size.key}"]`).click()
             await expect(enabledPage.locator('[data-cover-board]')).toContainText(`${size.n}×${size.n}`)
-            await settle(publicPage)
+            await settle(casualPage)
             await settle(enabledPage)
-            const plain = await measure(publicPage, size.n)
+            const plain = await measure(casualPage, size.n)
             const enabled = await measure(enabledPage, size.n)
             findings.push(`${size.n}x${size.n}: public scroll ${plain.scroll} cell ${plain.cell}; `
                 + `enabled scroll ${enabled.scroll} cell ${enabled.cell}; row ${enabled.row}`)

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { BASE_URL, VISUAL_URL } from './server'
 import { pinDay, LATE_IN_A_MONTH } from './calendar'
+import { ARCHIVE_DAY } from './openBoard'
 import type { Attempt } from '../app/challenge/attempt'
 import { drag } from './play'
 import { arm, heldWrite, instrument, probe, release } from './challengeTransaction'
@@ -261,15 +262,19 @@ for (const channel of ['BroadcastChannel', 'focus'] as const) {
     })
 }
 
-test('the production public page remains casual and writes no challenge records or legacy check', async ({ page }) => {
+test('the production page plays an archive day casually and records no attempt for it', async ({ page }) => {
+    // Until slice 3b this checked the public page wrote no challenge storage at all. It is
+    // the challenge now (rule 16), so its legacy check runs at opening; casual play is an
+    // archive day's, and that must still record nothing.
     await pinDay(page, LATE_IN_A_MONTH)
     await page.goto(`${BASE_URL}/`)
     await page.getByRole('button', { name: 'Skip', exact: true }).click()
+    await expect(page.locator('[data-challenge-cover="ready"]')).toBeVisible()
+    await page.getByRole('button', { name: 'Archive' }).click()
+    await page.locator(`[data-archive-day="${ARCHIVE_DAY}"]`).click()
     await expect(page.getByRole('grid')).toBeVisible()
-    const databases = await page.evaluate(() => indexedDB.databases())
-    expect(databases.filter(db => db.name === 'dominoFill.challenge')).toEqual([])
-    expect(await page.evaluate(() => Object.keys(localStorage)
-        .filter(key => key.startsWith('dominoFill.challenge.')))).toEqual([])
+    await expect(page.locator('[data-challenge-cover]')).toHaveCount(0)
+    expect(await readDatabase(page)).toEqual({ attempts: [], legacy: { checked: true, marks: [] } })
     await page.getByRole('button', { name: 'Hint', exact: true }).click()
     await expect(page.locator('[data-advice-kind="hint"]')).toBeVisible()
     const free = await page.locator('[data-cell]').evaluateAll(cells => {
@@ -284,8 +289,5 @@ test('the production public page remains casual and writes no challenge records 
     expect(free, 'public board has an available placement').not.toBeNull()
     await drag(page, [free![0], free![1]], [free![0] + 1, free![1]])
     await expect(page.locator('[data-piece]:not([data-piece="rock"])')).toHaveCount(1)
-    expect((await page.evaluate(() => indexedDB.databases()))
-        .filter(db => db.name === 'dominoFill.challenge')).toEqual([])
-    expect(await page.evaluate(() => Object.keys(localStorage)
-        .filter(key => key.startsWith('dominoFill.challenge.')))).toEqual([])
+    expect((await readDatabase(page)).attempts).toEqual([])
 })

@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openArchiveDay } from './openBoard'
 import { playSolution } from './play'
 import { VISUAL_URL } from './server'
 import { waitForRest } from './rest'
@@ -99,7 +99,9 @@ test.describe('the completion card: outcome, detail, actions', () => {
     }
 
     test('on a board really solved, naming the puzzle that was', async ({ page }) => {
-        await openBoard(page)
+        // Casual play's card names the puzzle; a challenge day's gives its time instead
+        // (slice 3a, rule 15), so this runs on an archive day (slice 3b, rule 16).
+        await openArchiveDay(page)
         await page.locator('[data-difficulty="normal"]').click()
         await expect(page.locator('[data-difficulty="normal"]')).toHaveAttribute('aria-pressed', 'true')
         // Which puzzle the store is on, from the level selector's own label.

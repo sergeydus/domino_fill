@@ -135,13 +135,13 @@ npm run test:e2e;                    echo "e2e=$?"
 - **No servers.** Everything competitive runs on the device, on the honour system
   (Principle 5 in NEXT-STEPS).
 
-## Where things stand (2026-10-11)
+## Where things stand (2026-10-12)
 
 - The Daily Challenge: decisions and Ruleset v1 (D2) are in NEXT-STEPS. Slices 1 (the
-  attempt record, its store and the clock) and 2 (the wiring into the game) are merged, and
-  the challenge is still switched off: `RootStore`'s `challenge` option defaults to false.
-  Slice 3, what's on screen, is Claude's, reviewed by codex. It ships as two PRs, 3a (the
-  playable challenge) and 3b (results, Share, streak, countdown), and goes live only after
-  both. Each needs its own contract first.
+  attempt record, its store and the clock), 2 (the wiring into the game) and 3a (the
+  playable challenge on screen) are merged, and the challenge is still switched off:
+  `RootStore`'s `challenge` option defaults to false. Slice 3b (results, Share, streak,
+  countdown, then switching it on) is Claude's, reviewed by codex; its product choices are
+  in NEXT-STEPS' decision log (2026-10-12), and its contract comes before any code.
 - Known flake to diagnose: `e2e/theme.spec.ts:71` read a background as `[0,0,0]`; its
   parser also maps transparent to that, so capture the raw CSS value first.

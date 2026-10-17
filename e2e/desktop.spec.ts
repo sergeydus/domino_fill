@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { openBoard } from './openBoard'
+import { openBoard, startIfCovered } from './openBoard'
 import { RAIL_WIDTH_PX, WIDE_BOARD_CAP_PX } from '../app/dominoFill/composition'
 
 /**
@@ -22,14 +22,16 @@ import { RAIL_WIDTH_PX, WIDE_BOARD_CAP_PX } from '../app/dominoFill/composition'
 /**
  * How many `data-chrome` rows the page has, in either composition.
  *
- * The same five in both, because the wide layout *moves* them rather than adding any:
- * difficulty, legend, advice, controls, navigation. The board's height budget is the sum
- * of these, so a duplicate would be subtracted twice.
+ * The same six in both, because the wide layout *moves* them rather than adding any:
+ * difficulty, the challenge's clock line, legend, advice, controls, navigation. The board's
+ * height budget is the sum of these, so a duplicate would be subtracted twice. Five until
+ * the Daily Challenge went live on this page (slice 3b, rule 16): the clock line is 3a's.
  */
-const CHROME_ROWS = 5
+const CHROME_ROWS = 6
 
 const hard = async (page: Page) => {
     await page.getByRole('button', { name: /hard/i }).click()
+    await startIfCovered(page)
     await expect(page.locator('[data-cell]')).toHaveCount(64)
 }
 

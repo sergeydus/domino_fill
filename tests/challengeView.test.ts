@@ -8,8 +8,9 @@ import type { StoredPuzzle } from '@/app/stores/PuzzleDefinition'
 import type { DayEntry } from '@/app/stores/corpus'
 import { isCoveredView, type CoordinatorOptions } from '@/app/challenge/coordinator'
 import { localStorageStore, memoryAttemptStore, type AttemptStore } from '@/app/challenge/attemptStore'
-import { finish, start, type Attempt } from '@/app/challenge/attempt'
-import { writeProgress } from '@/app/stores/progressStorage'
+import { finish, RULESET, start, type Attempt } from '@/app/challenge/attempt'
+import { readProgress, writeProgress } from '@/app/stores/progressStorage'
+import { winFeedback } from '@/app/dominoFill/feedback'
 
 vi.mock('@/app/dominoFill/feedback', () => ({ winFeedback: vi.fn() }))
 
@@ -427,6 +428,621 @@ describe('history: forward only (rule 7)', () => {
         vi.spyOn(h.store, 'readAll').mockResolvedValueOnce([stranger])
         await h.service.refresh()
         expect(h.service.history.get('elsewhere')).toBe(held)
+    })
+})
+
+describe('lastFinish: this tab\'s own finish, signalled once (slice 3b, rule 8)', () => {
+    const id = (h: Harness, difficulty: 'easy' | 'normal' | 'hard', level: 1 | 2 | 3) =>
+        h.sessionAt(difficulty, level).definition.puzzleId
+
+    it('signals this tab\'s finish once, and a clock error\'s untimed solve too', async () => {
+        const h = harness()
+        await begin(h)
+        expect(h.service.lastFinish).toBeNull()
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+        // A later transaction over the same result changes nothing, and signals nothing.
+        await h.service.refresh()
+        expect(h.service.lastFinish?.serial).toBe(1)
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        // The wall clock falls behind the monotonic one: the solve has no time.
+        h.setTime(T0 + 100, 100 + 20_000)
+        h.service.tick()
+        win(h, T0 + 300)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'clock-error' } }))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 2), serial: 2 })
+    })
+
+    it('signals a failed save when the retry timer or a refresh finally commits it', async () => {
+        const h = harness()
+        await begin(h)
+        vi.spyOn(h.store, 'change').mockResolvedValueOnce({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        expect(h.service.lastFinish).toBeNull()
+        h.service.tick()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        vi.spyOn(h.store, 'change').mockResolvedValueOnce({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 400)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        await h.service.refresh()
+        expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'solved', ms: 200 } })
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 2), serial: 2 })
+    })
+
+    it('does not signal another tab\'s result, even one that wins the race to this board', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish waits; another tab's finish of the same board commits first.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        await finishedElsewhere(h.store, h.session(), 500)
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.view()).toMatchObject({ result: { kind: 'solved', ms: 500 } })
+        // And a refresh that takes another tab's result on another board.
+        await finishedElsewhere(h.store, h.sessionAt('hard', 3), 700)
+        await h.service.refresh()
+        expect(h.service.history.get(id(h, 'hard', 3))?.result).toEqual({ kind: 'solved', ms: 700 })
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another board\'s lost finish that this root recovers at the same instant', async () => {
+        let notice!: (id: string) => void
+        const h = harness({ options: { listen: (_wake, heard) => { notice = heard; return () => {} } } })
+        await begin(h)
+        // Another tab solves Hard 3 at T0 + 200, and its finish is never saved: only the
+        // evidence beside its board is.
+        const other = harness()
+        await open(other)
+        other.root.boardsStore.goToBoard({ difficulty: 'hard', level: 3 })
+        expect(await other.session().startChallenge()).toBe(true)
+        vi.spyOn(other.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(other, T0 + 200)
+        await vi.waitFor(() => expect(other.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // This tab's finish of Easy 1, captured at that same instant, waits.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        // Told of Hard 3, this root recovers the lost finish: its own transaction, a change,
+        // at this tab's captured instant, on another board.
+        const hard = id(h, 'hard', 3)
+        notice(hard)
+        await vi.waitFor(() => expect(h.service.history.get(hard))
+            .toMatchObject({ result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: T0 + 200 }))
+        expect(h.service.lastFinish).toBeNull()
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.lastFinish).toEqual({ puzzleId: id(h, 'easy', 1), serial: 1 })
+    })
+
+    it('does not signal a finish this root recovers from another tab\'s earlier solve', async () => {
+        // This tab's board saves fail, so the evidence it reads back is the other tab's.
+        const h = harness({ options: { writeProgress: () => false } })
+        await begin(h)
+        // Another tab, on the same attempt, solves it first at T0 + 100; its finish is lost.
+        const other = harness()
+        await open(other)
+        expect(other.binding().attempt?.startedAt).toBe(T0)
+        vi.spyOn(other.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(other, T0 + 100)
+        await vi.waitFor(() => expect(other.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // This tab's finish at T0 + 200: its transaction recovers the earlier solve instead,
+        // a change, finished at the other tab's instant.
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'finish-lost' } }))
+        expect(h.service.history.get(id(h, 'easy', 1))?.finishedAt).toBe(T0 + 100)
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another tab\'s finish of this board at the same instant (codex)', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish, captured at T0 + 200, waits; another tab, started at the same
+        // instant, finishes the same board at the same millisecond and commits first.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        await finishedElsewhere(h.store, h.session(), 200)
+        held.release()
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.history.get(id(h, 'easy', 1))?.finishedAt).toBe(T0 + 200)
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal another tab\'s recovery of this tab\'s saved solve (codex)', async () => {
+        const h = harness()
+        await begin(h)
+        // This tab's finish waits, with its evidence saved beside the board.
+        const held = holdNext(h.store)
+        win(h, T0 + 200)
+        await held.entered
+        // Another tab opens, finds the evidence and no finish, and recovers it at its instant.
+        const other = harness({ at: T0 + 1_000 })
+        await open(other)
+        const recovered = other.service.history.get(id(other, 'easy', 1))
+        expect(recovered).toMatchObject({ result: { kind: 'untimed', reason: 'finish-lost' }, finishedAt: T0 + 200 })
+        held.release()
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'result', result: { kind: 'untimed', reason: 'finish-lost' } }))
+        expect(h.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal a finish recovered after a reload', async () => {
+        const h = harness()
+        await begin(h)
+        vi.spyOn(h.store, 'change').mockResolvedValue({ committed: false, changed: false, attempt: null })
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view()).toMatchObject({ kind: 'finishing', saveFailed: true }))
+        // A new tab: the winning board's saved evidence, and no captured finish.
+        const reloaded = harness({ at: T0 + 1_000 })
+        await open(reloaded)
+        expect(reloaded.service.history.get(id(reloaded, 'easy', 1))?.result)
+            .toEqual({ kind: 'untimed', reason: 'finish-lost' })
+        expect(reloaded.service.lastFinish).toBeNull()
+    })
+
+    it('does not signal Practice, or a board given up when its day leaves the window', async () => {
+        const h = harness()
+        await begin(h)
+        win(h, T0 + 200)
+        await vi.waitFor(() => expect(h.view().kind).toBe('result'))
+        expect(h.service.beginPractice(h.binding())).toBe(true)
+        expect(h.session().undo()).toBe(true)
+        expect(h.session().placeToward([0, 1], 'down')).toBe(true)
+        expect(h.view()).toMatchObject({ kind: 'result', practice: { solved: true } })
+        expect(h.service.lastFinish?.serial).toBe(1)
+
+        h.root.boardsStore.setLevel(2)
+        expect(await h.session().startChallenge()).toBe(true)
+        h.setTime(T0 + 48 * HOUR)
+        await h.service.refresh()
+        expect(h.service.history.get(id(h, 'easy', 2))?.result).toEqual({ kind: 'given-up' })
+        expect(h.service.lastFinish?.serial).toBe(1)
+    })
+})
+
+describe('a board casual by its date, before the coordinator hydrates it (slice 3b, codex)', () => {
+    const ARCHIVE = '2026-10-05'
+    const SAVED = [[1, null], [0, null]]
+    /** Easy puzzle 1 of `date`, saved with one piece by an earlier visit. */
+    const savedPiece = (date: string) => {
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day(date))
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const { definition } = probe.boardsStore.currentBoard!
+        probe.boardsStore.disposePersist?.()
+        writeProgress(definition.puzzleId, {
+            definitionHash: definition.definitionHash, board: SAVED, completed: false, savedAt: T0,
+        })
+        return definition.puzzleId
+    }
+    /** A root whose storage never opens until released, so nothing hydrates meanwhile. */
+    const held = (at = T0) => {
+        const opened = deferred<AttemptStore>()
+        const h = harness({ at, options: { openStore: () => opened.promise } })
+        const started = h.root.start()
+        return { h, release: async () => { opened.resolve(h.store); await started } }
+    }
+
+    it('shows an archive day\'s saved pieces before hydration', async () => {
+        const id = savedPiece(ARCHIVE)
+        const { h } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.definition.puzzleId).toBe(id)
+        expect(h.service.bindings.get(session)?.ready).toBe(false)
+        expect(session.challengeView).toEqual({ kind: 'casual' })
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('and a before-clamp day\'s', async () => {
+        const id = savedPiece('2026-09-01')
+        const { h } = held(new Date(2026, 7, 30, 12).getTime())
+        // As a first load's clamp comes to; `receiveDay` would hold this earlier day back
+        // from the harness's own.
+        h.root.boardsStore.setDay(day('2026-09-01'), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.definition.puzzleId).toBe(id)
+        expect(h.service.bindings.get(session)?.ready).toBe(false)
+        expect(session.challengeView).toEqual({ kind: 'casual' })
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('leaves today\'s board as it was until hydration says whose the saved pieces are', async () => {
+        // A record from an earlier attempt than the stored one: not this attempt's board.
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day())
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const { definition } = probe.boardsStore.currentBoard!
+        probe.boardsStore.disposePersist?.()
+        writeProgress(definition.puzzleId, {
+            definitionHash: definition.definitionHash, board: SAVED, completed: false, savedAt: T0,
+            attemptStartedAt: T0 - 60_000,
+        })
+        const { h, release } = held()
+        await h.store.change(definition.puzzleId, current => start(current,
+            { puzzleId: definition.puzzleId, definitionHash: definition.definitionHash, date: DAY }, T0, DAY))
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board, 'not restored before hydration').toEqual([[null, null], [null, null]])
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board, 'nor by it: another attempt\'s').toEqual([[null, null], [null, null]])
+    })
+
+    it('keeps the Undo of a move made before hydration (codex)', async () => {
+        savedPiece(ARCHIVE)
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.placeToward([0, 1], 'down')).toBe(true)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.undo(), 'Undo survives hydration').toBe(true)
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('keeps casual progress saved while the attempt history couldn\'t be read (codex)', async () => {
+        const id = savedPiece(ARCHIVE)
+        const hash = readProgress(id)!.definitionHash
+        // The board had a timed result when it was today, and its progress carries that stamp.
+        const startedAt = new Date(2026, 9, 5, 9).getTime()
+        writeProgress(id, { ...readProgress(id)!, attemptStartedAt: startedAt })
+        const real = localStorageStore(window.localStorage)
+        await real.change(id, () => ({ changed: true, next: {
+            puzzleId: id, definitionHash: hash, date: ARCHIVE, ruleset: RULESET, startedAt,
+            assisted: false, clockError: false, result: { kind: 'solved', ms: 90_000 }, finishedAt: startedAt + 90_000,
+        } }))
+        // A visit whose attempt history fails, while board saves work: the move is saved
+        // without the attempt's stamp.
+        const broken: AttemptStore = { ...real,
+            readAll: async () => null, change: async () => ({ committed: false, changed: false, attempt: null }) }
+        const visit = harness({ store: broken })
+        await visit.root.start()
+        visit.root.boardsStore.setDay(day(ARCHIVE))
+        const first = visit.sessionAt('easy', 1)
+        expect(first.placeToward([0, 1], 'down')).toBe(true)
+        const both = first.snapshot.board
+        await vi.waitFor(() => expect(readProgress(id)?.board).toEqual(both))
+        expect(readProgress(id)?.attemptStartedAt).toBeUndefined()
+        visit.root.dispose()
+        // Reopened with healthy storage: both pieces, before hydration and after it.
+        const reopened = harness()
+        await reopened.root.start()
+        reopened.root.boardsStore.setDay(day(ARCHIVE))
+        const session = reopened.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual(both)
+        await vi.waitFor(() => expect(reopened.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board, 'hydration keeps the saved pieces').toEqual(both)
+    })
+
+    it('marks a restored winning board complete as it is built, with no celebration', async () => {
+        const id = savedPiece(ARCHIVE)
+        const probe = new RootStore(new CorpusSource())
+        probe.boardsStore.setDay(day(ARCHIVE))
+        probe.boardsStore.goToBoard({ difficulty: 'easy', level: 1 })
+        const solving = probe.boardsStore.currentBoard!
+        solving.placeToward([0, 0], 'down')
+        solving.placeToward([0, 1], 'down')
+        expect(solving.completedByRules).toBe(true)
+        const winning = solving.snapshot.board
+        probe.boardsStore.disposePersist?.()
+        writeProgress(id, { ...readProgress(id)!, board: winning, completed: false })
+        const { h } = held()
+        vi.mocked(winFeedback).mockClear()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        expect(h.sessionAt('easy', 1).completed).toBe(true)
+        // The levels store's own win reaction would also mark it, and play the win: on
+        // reopening a day solved long ago.
+        expect(winFeedback, 'no celebration for a board already won').not.toHaveBeenCalled()
+    })
+
+    it('fills an untouched casual board from a record only hydration reads, and never clears one', async () => {
+        // The levels store reads storage when it builds the session; the coordinator reads
+        // it again when it hydrates (it also migrates a v1 document then). A record that
+        // arrives in between is the case.
+        const id = savedPiece(ARCHIVE)
+        const record = readProgress(id)!
+        window.localStorage.clear()
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual([[null, null], [null, null]])
+        writeProgress(id, record)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board).toEqual(SAVED)
+    })
+
+    it('drops old solve evidence from a before-clamp board restored as it is bound, before hydration', async () => {
+        const FIRST = '2026-09-01'
+        const id = savedPiece(FIRST)
+        writeProgress(id, { ...readProgress(id)!, board: [[1, 1], [0, 0]], completed: true, solveEvidence: {
+            solvedAt: new Date(2026, 8, 1, 9).getTime(), solvedOn: FIRST, columnTargets: '1,1', rowTargets: '2,0' } })
+        expect(readProgress(id)?.solveEvidence, 'the record carries it').toBeDefined()
+        const { h } = held(new Date(2026, 7, 30, 12).getTime())
+        h.root.boardsStore.setDay(day(FIRST), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual([[1, 1], [0, 0]])
+        expect(h.service.bindings.get(session)?.solveEvidence, 'none on a before-clamp board').toBeUndefined()
+    })
+
+    it('drops old solve evidence from a before-clamp board that hydration fills', async () => {
+        // As above, but before-clamp, from a solved board's record carrying its evidence.
+        const FIRST = '2026-09-01'
+        const id = savedPiece(FIRST)
+        const WON = [[1, 1], [0, 0]]
+        const record = { ...readProgress(id)!, board: WON, completed: true, solveEvidence: {
+            solvedAt: new Date(2026, 8, 1, 9).getTime(), solvedOn: FIRST, columnTargets: '1,1', rowTargets: '2,0' } }
+        window.localStorage.clear()
+        const { h, release } = held(new Date(2026, 7, 30, 12).getTime())
+        h.root.boardsStore.setDay(day(FIRST), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual([[null, null], [null, null]])
+        writeProgress(id, record)
+        expect(readProgress(id)?.solveEvidence, 'the record carries it').toBeDefined()
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board).toEqual(WON)
+        expect(h.service.bindings.get(session)?.solveEvidence, 'none on a before-clamp board').toBeUndefined()
+    })
+
+    it('keeps a move made before hydration on top of the saved pieces, in play and in storage', async () => {
+        const id = savedPiece(ARCHIVE)
+        const { h, release } = held()
+        h.root.boardsStore.setDay(day(ARCHIVE))
+        const session = h.sessionAt('easy', 1)
+        expect(session.placeToward([0, 1], 'down')).toBe(true)
+        const moved = session.snapshot.board
+        expect(moved.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+        expect(moved).not.toEqual(SAVED)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.snapshot.board).toEqual(moved)
+        expect(readProgress(id)?.board).toEqual(moved)
+    })
+
+    it('checks a board that turned timed before hydration like any timed board (codex)', async () => {
+        const FIRST = '2026-09-01'
+        const id = savedPiece(FIRST)
+        const definition = { puzzleId: id, definitionHash: readProgress(id)!.definitionHash, date: FIRST }
+        const { h, release } = held(new Date(2026, 7, 30, 12).getTime())
+        // A device that has played the challenge already: its piece is not a legacy board's.
+        await h.store.legacyCheck(() => [])
+        await h.store.change(id, current => start(current, definition, new Date(2026, 8, 1, 9).getTime(), FIRST))
+        // Built before-clamp, so casual: its unstamped piece is restored.
+        h.root.boardsStore.setDay(day(FIRST), 'before')
+        const session = h.sessionAt('easy', 1)
+        expect(session.snapshot.board).toEqual(SAVED)
+        // The clock is corrected and the same day refetched, unclamped: today's board now.
+        h.setTime(new Date(2026, 8, 1, 12).getTime())
+        h.root.boardsStore.receiveDay(loaded(FIRST))
+        expect(h.sessionAt('easy', 1)).toBe(session)
+        await release()
+        await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+        expect(session.challengeView.kind).toBe('playing')
+        expect(session.snapshot.board, 'no unstamped piece in the timed attempt').toEqual([[null, null], [null, null]])
+    })
+
+    describe('turning casual at midnight before it hydrates (codex)', () => {
+        const YESTERDAY = '2026-10-09'
+        const MIDNIGHT = new Date(2026, 9, 11, 0, 0, 1).getTime()
+        const EMPTY = [[null, null], [null, null]]
+
+        it('takes no move until its saved pieces are back, then keeps them (storage opening held)', async () => {
+            const id = savedPiece(YESTERDAY)
+            const { h, release } = held()
+            h.root.boardsStore.setDay(day(YESTERDAY))
+            const session = h.sessionAt('easy', 1)
+            expect(session.snapshot.board, 'yesterday\'s board waits for hydration').toEqual(EMPTY)
+            h.setTime(MIDNIGHT)
+            expect(session.placeToward([0, 1], 'down'), 'no move on the empty board').toBe(false)
+            h.service.tick()
+            expect(session.challengeView).toEqual({ kind: 'casual' })
+            expect(session.snapshot.board, 'its saved pieces, once casual').toEqual(SAVED)
+            expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+            const both = session.snapshot.board
+            expect(both.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+            await release()
+            await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+            expect(session.snapshot.board).toEqual(both)
+            expect(session.undo(), 'and its Undo').toBe(true)
+            await vi.waitFor(() => expect(readProgress(id)?.board).toEqual(SAVED))
+        })
+
+        it('keeps its saved pieces in storage when attempt history can\'t be read', async () => {
+            const id = savedPiece(YESTERDAY)
+            const real = localStorageStore(window.localStorage)
+            // A device that has played the challenge already: its piece is not a legacy board's.
+            await real.legacyCheck(() => [])
+            const broken: AttemptStore = { ...real,
+                readAll: async () => null, change: async () => ({ committed: false, changed: false, attempt: null }) }
+            const h = harness({ store: broken })
+            await h.root.start()
+            h.root.boardsStore.setDay(day(YESTERDAY))
+            const session = h.sessionAt('easy', 1)
+            expect(session.snapshot.board, 'never hydrated: still empty').toEqual(EMPTY)
+            h.setTime(MIDNIGHT)
+            expect(session.placeToward([0, 1], 'down'), 'no move on the empty board').toBe(false)
+            h.service.tick()
+            expect(session.challengeView).toEqual({ kind: 'casual' })
+            expect(session.snapshot.board, 'its saved pieces, once casual').toEqual(SAVED)
+            expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+            const both = session.snapshot.board
+            expect(both.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+            await vi.waitFor(() => expect(readProgress(id)?.board, 'both pieces saved').toEqual(both))
+        })
+
+        it('and one turned casual by a clamp is restored as it is bound, with no tick', async () => {
+            const FIRST = '2026-09-01'
+            const id = savedPiece(FIRST)
+            const { h } = held(new Date(2026, 8, 1, 12).getTime())
+            h.root.boardsStore.setDay(day(FIRST))
+            const session = h.sessionAt('easy', 1)
+            expect(session.snapshot.board, 'today\'s board waits for hydration').toEqual(EMPTY)
+            // The clock goes back before the first published day, and the refetch clamps it.
+            h.setTime(new Date(2026, 7, 30, 12).getTime())
+            h.root.boardsStore.receiveDay({ day: day(FIRST), requested: '2026-08-30', clamped: 'before' })
+            expect(h.sessionAt('easy', 1)).toBe(session)
+            expect(session.challengeView).toEqual({ kind: 'casual' })
+            expect(session.snapshot.board, 'its saved pieces, as soon as it is casual').toEqual(SAVED)
+            expect(readProgress(id)?.board).toEqual(SAVED)
+            expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+        })
+
+        describe('when midnight passes while hydration waits, before any tick', () => {
+            const JUST_BEFORE = new Date(2026, 9, 10, 23, 59, 59, 900).getTime()
+            /**
+             * Yesterday's board with an active attempt and an unstamped casual piece from an
+             * older tab, opened just before midnight; storage opens just after it.
+             */
+            const lateOpening = async () => {
+                const id = savedPiece(YESTERDAY)
+                const { h, release } = held(JUST_BEFORE)
+                await h.store.legacyCheck(() => [])
+                const board = { puzzleId: id, definitionHash: readProgress(id)!.definitionHash, date: YESTERDAY }
+                await h.store.change(id, current => start(current, board, new Date(2026, 9, 9, 9).getTime(), YESTERDAY))
+                h.root.boardsStore.setDay(day(YESTERDAY))
+                const session = h.sessionAt('easy', 1)
+                expect(session.snapshot.board, 'the timed board waits for hydration').toEqual(EMPTY)
+                h.setTime(MIDNIGHT)
+                await release()
+                return { h, id, session }
+            }
+
+            it('restores its pieces, not the timed check\'s empty board (codex)', async () => {
+                const { session } = await lateOpening()
+                expect(session.challengeView).toEqual({ kind: 'casual' })
+                expect(session.snapshot.board, 'its saved pieces, not cleared').toEqual(SAVED)
+            })
+
+            it('and a move keeps them in storage (codex)', async () => {
+                const { id, session } = await lateOpening()
+                expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+                const both = session.snapshot.board
+                expect(both.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+                await vi.waitFor(() => expect(readProgress(id)?.board, 'both pieces saved').toEqual(both))
+            })
+
+            it('and one hydrated as timed just before midnight, empty, gets them as it turns casual', async () => {
+                const id = savedPiece(YESTERDAY)
+                const h = harness({ at: JUST_BEFORE })
+                await h.store.legacyCheck(() => [])
+                const board = { puzzleId: id, definitionHash: readProgress(id)!.definitionHash, date: YESTERDAY }
+                await h.store.change(id, current => start(current, board, new Date(2026, 9, 9, 9).getTime(), YESTERDAY))
+                await open(h)
+                h.root.boardsStore.setDay(day(YESTERDAY))
+                const session = h.sessionAt('easy', 1)
+                await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+                expect(session.challengeView.kind, 'timed until midnight').toBe('playing')
+                expect(session.snapshot.board, 'the stamp check keeps casual pieces off it').toEqual(EMPTY)
+                h.setTime(MIDNIGHT)
+                // Until a reading moves the date, the board is what the view shows: timed.
+                agrees(h, session)
+                h.service.tick()
+                expect(session.challengeView).toEqual({ kind: 'casual' })
+                expect(session.snapshot.board, 'its saved pieces, once casual').toEqual(SAVED)
+                agrees(h, session)
+                expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+                const both = session.snapshot.board
+                await vi.waitFor(() => expect(readProgress(id)?.board, 'both pieces saved').toEqual(both))
+            })
+
+            it('and a board bound after opening, whose own hydration crosses midnight', async () => {
+                const id = savedPiece(YESTERDAY)
+                const h = harness({ at: JUST_BEFORE })
+                await h.store.legacyCheck(() => [])
+                const board = { puzzleId: id, definitionHash: readProgress(id)!.definitionHash, date: YESTERDAY }
+                await h.store.change(id, current => start(current, board, new Date(2026, 9, 9, 9).getTime(), YESTERDAY))
+                await open(h)
+                const transaction = holdNext(h.store)
+                h.root.boardsStore.setDay(day(YESTERDAY))
+                const session = h.sessionAt('easy', 1)
+                await transaction.entered
+                h.setTime(MIDNIGHT)
+                transaction.release()
+                await vi.waitFor(() => expect(h.service.bindings.get(session)?.ready).toBe(true))
+                expect(session.snapshot.board, 'its saved pieces, not cleared').toEqual(SAVED)
+                expect(session.challengeView, 'shown casual as it hydrates').toEqual({ kind: 'casual' })
+            })
+        })
+
+        it('restores one bound casual by the view\'s date while the clock is behind it (it went back)', async () => {
+            const id = savedPiece(YESTERDAY)
+            const h = harness({ at: MIDNIGHT })
+            await h.store.legacyCheck(() => [])
+            await open(h)
+            // Back to yesterday's evening, before any tick: the levels store reads 10-09 as
+            // yesterday's, timed, while the view still reads it as an archive day.
+            h.setTime(new Date(2026, 9, 10, 23, 0).getTime())
+            h.root.boardsStore.setDay(day(YESTERDAY))
+            const session = h.sessionAt('easy', 1)
+            expect(session.challengeView).toEqual({ kind: 'casual' })
+            expect(session.snapshot.board, 'its saved pieces, as it is bound').toEqual(SAVED)
+            agrees(h, session)
+            expect(session.placeToward([0, 1], 'down'), 'playable once restored').toBe(true)
+            expect(readProgress(id)?.board.map(row => row[0]), 'the saved piece is still there').toEqual([1, 0])
+        })
+
+        describe('a change that empties a hydrated board just after midnight, before a tick (codex)', () => {
+            /** Yesterday's timed board, played to one piece, then reloaded and hydrated with it. */
+            const reloaded = async () => {
+                const first = harness({ at: new Date(2026, 9, 9, 12).getTime() })
+                first.root.boardsStore.setDay(day(YESTERDAY))
+                await open(first)
+                const played = first.sessionAt('easy', 1)
+                expect(await played.startChallenge()).toBe(true)
+                expect(played.placeToward([0, 0], 'down')).toBe(true)
+                const piece = played.snapshot.board
+                await vi.waitFor(() => expect(readProgress(played.definition.puzzleId)?.board).toEqual(piece))
+                first.root.dispose()
+                const h = harness({ at: new Date(2026, 9, 10, 23, 59, 59, 900).getTime() })
+                h.root.boardsStore.setDay(day(YESTERDAY))
+                await open(h)
+                const session = h.sessionAt('easy', 1)
+                expect(session.snapshot.board, 'hydrated with its piece').toEqual(piece)
+                h.setTime(MIDNIGHT)
+                return { session, piece }
+            }
+
+            it('keeps a Reset, and its Undo', async () => {
+                const { session, piece } = await reloaded()
+                session.reset()
+                expect(session.snapshot.board, 'the Reset stands').toEqual(EMPTY)
+                expect(session.undo(), 'and can be undone').toBe(true)
+                expect(session.snapshot.board).toEqual(piece)
+            })
+
+            it('keeps the last piece\'s removal, and its Undo', async () => {
+                const { session, piece } = await reloaded()
+                expect(session.removePiece(0, 0)).toBe(true)
+                expect(session.snapshot.board, 'the removal stands').toEqual(EMPTY)
+                expect(session.undo(), 'and can be undone').toBe(true)
+                expect(session.snapshot.board).toEqual(piece)
+            })
+        })
+
+        it('never restores over a board played before it turned casual (a restarted root)', async () => {
+            const h = harness()
+            await begin(h)
+            const session = h.session()
+            expect(session.placeToward([0, 0], 'down')).toBe(true)
+            const played = session.snapshot.board
+            // Dispose and start, as StrictMode does: no binding is ready until it hydrates.
+            h.root.dispose()
+            h.setTime(T0 + 48 * HOUR)
+            await h.root.start()
+            expect(session.challengeView).toEqual({ kind: 'casual' })
+            expect(session.snapshot.board).toEqual(played)
+            expect(session.undo(), 'its Undo survives').toBe(true)
+        })
     })
 })
 

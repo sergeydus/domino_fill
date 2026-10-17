@@ -16,6 +16,7 @@ import {
 } from './attemptStore'
 import { elapsed, read, wentBack, type Reading } from './clock'
 import { addDays, inWindow, isDay } from './window'
+import { streakFrom, type Streak } from './streak'
 
 export type Snapshot = Omit<PuzzleProgress, 'savedAt'>
 type PendingProgress = { generation: number, record: PuzzleProgress }
@@ -96,6 +97,13 @@ export class ChallengeBinding {
     locallyEdited = false
     attemptStartedAt: number | undefined = undefined
     solveEvidence: ProgressSolveEvidence | undefined = undefined
+    /**
+     * Its board holds its saved casual progress, put there outside hydration by
+     * `restoreTurnedCasual`, as it was bound casual or as it turned casual (midnight, or a
+     * clamp). The player may have played it since, so hydration leaves that board alone
+     * (slice 3b, rule 15 amended).
+     */
+    casualRestored = false
     baseline: Snapshot
     pending: PendingProgress | null = null
     generation = 0
@@ -207,6 +215,13 @@ export class ChallengeCoordinator {
      * what enumeration and this root's own transactions have read, and only moves forward.
      */
     readonly history = new Map<string, Attempt>()
+    /**
+     * The last result this tab's own winning placement fixed (slice 3b, rule 8), for the
+     * results screen to open by itself. A history change can't say where a result came from:
+     * refreshes and reconciliation adopt other tabs' results too. `serial` only increases, so
+     * one result signals once.
+     */
+    lastFinish: { readonly puzzleId: string, readonly serial: number } | null = null
 
     constructor(private readonly options: CoordinatorOptions) {
         this.now = (options.clock ?? read)()
@@ -218,11 +233,18 @@ export class ChallengeCoordinator {
             disposeTimer: false, lastDate: false, unfinished: false, clockFlags: false,
             serial: false, progressMemory: false, hydrations: false, finishes: false,
             bindings: observable.shallow, legacy: observable.ref, history: observable.shallow,
+            lastFinish: observable.ref,
         })
     }
 
     get unsaved() { return this.selectedKind === 'memory' }
     get deviceDate() { return dayKey(new Date(this.now.wall)) }
+    /**
+     * The streak (slice 3b, rules 3 to 5), from every attempt this root knows of. Computed,
+     * so the walk reruns only when the history or the device's date changes, not on every
+     * second's tick.
+     */
+    get streak(): Streak { return streakFrom(this.history.values(), this.deviceDate) }
     isCovered(binding: ChallengeBinding): boolean {
         if (binding.beforeClamp) return false
         if (binding.date > this.deviceDate) return true
@@ -235,8 +257,18 @@ export class ChallengeCoordinator {
         return dayKey(new Date((this.options.clock ?? read)().wall))
     }
     isCasual(binding: ChallengeBinding, date = this.currentDate()): boolean {
-        return binding.beforeClamp || binding.date < addDays(date, -1)
+        return this.casualByDate(binding.date, binding.clamp, date)
             || !!this.legacy?.marks.includes(binding.puzzleId)
+    }
+    /**
+     * Casual by its date alone, whatever is stored: a before-clamp day, or one older than
+     * yesterday. Such a board is shown and playable before hydration, so its saved progress
+     * is restored as it is bound, not after (`restoreTurnedCasual`; codex: an archive board
+     * appeared empty and editable while it hydrated, and a move then overwrote the saved
+     * pieces). Today's and yesterday's stay covered and locked until hydrated.
+     */
+    casualByDate(date: string, clamp: LoadedDay['clamped'], today = this.currentDate()): boolean {
+        return clamp === 'before' || date < addDays(today, -1)
     }
     canStart(binding: ChallengeBinding): boolean {
         return this.active && this.status === 'ready' && binding.ready && binding.served
@@ -249,7 +281,12 @@ export class ChallengeCoordinator {
         if (binding.starting || binding.assisting || binding.pendingFinish || !binding.served) return false
         const date = this.currentDate()
         if ((binding.date > date && !binding.beforeClamp) || binding.error === 'identity') return false
-        if (this.isCasual(binding, date)) return true
+        // Casual by the date the view shows, so a board is always what the view says: a timed
+        // one just before midnight is still timed until a reading moves that date. Whatever
+        // that date makes casual already has its saved pieces (`restoreTurnedCasual`), so a
+        // move can't save over them (codex).
+        if (this.casualByDate(binding.date, binding.clamp, this.deviceDate)) return true
+        if (this.legacy?.marks.includes(binding.puzzleId)) return true
         return this.active && this.status === 'ready' && binding.ready && !!binding.attempt
     }
     needsAssistanceSave(binding: ChallengeBinding): boolean {
@@ -339,10 +376,14 @@ export class ChallengeCoordinator {
                 previous.practice = null
                 previous.solveEvidence = undefined
             }
+            this.restoreTurnedCasual()
             return previous
         }
         const binding = new ChallengeBinding(session, date, clamp)
         this.bindings.set(session, binding)
+        // Casual by the date on screen: its saved pieces go on it now, in the same action as
+        // the levels store builds the session, so even its first frame has them.
+        this.restoreTurnedCasual()
         if (this.status === 'ready' && this.active) {
             const epoch = this.epoch
             const task = this.hydrate(binding, epoch).catch(() => {
@@ -378,7 +419,7 @@ export class ChallengeCoordinator {
         if (this.active) return this.initializing ?? Promise.resolve()
         this.active = true
         this.epoch++
-        this.now = (this.options.clock ?? read)()
+        this.advance((this.options.clock ?? read)())
         // Attach after selection; memory mode keeps only local wake checks.
         return this.retry()
     }
@@ -482,7 +523,7 @@ export class ChallengeCoordinator {
         for (const binding of this.bindings.values()) await this.hydrate(binding, epoch)
         if (!this.alive(epoch)) return
         runInAction(() => {
-            this.now = (this.options.clock ?? read)()
+            this.advance((this.options.clock ?? read)())
             this.lastDate = this.deviceDate
             this.status = 'ready'
             this.options.initialized?.()
@@ -523,6 +564,45 @@ export class ChallengeCoordinator {
         if (!record || isExpired(record.savedAt, (this.options.clock ?? read)().wall)) return null
         return progressFor(record, binding.definition)
     }
+    /** The saved record hydration restores: one waiting to be written first, else storage's. */
+    private savedProgress(binding: ChallengeBinding): PuzzleProgress | null {
+        return progressFor(binding.pending?.record ?? this.liveProgress()[binding.puzzleId], binding.definition)
+    }
+    private untouched(binding: ChallengeBinding) {
+        return !binding.locallyEdited && JSON.stringify(binding.session.snapshot.board)
+            === JSON.stringify(binding.definition.initialBoard)
+    }
+    /**
+     * A board casual by the date on screen is shown and playable, so its saved pieces go on
+     * it as it is bound, or as it turns casual, at midnight or by a clamp (codex: an archive
+     * board, then one turning casual at midnight, showed empty and editable, and a move saved
+     * over them). `canMutate` judges by the same date, so it never allows a move first.
+     * Hydrated or not: a timed board that the stamp check left empty, because its saved
+     * pieces are casual ones, gets them back too, whichever side of midnight its hydration
+     * landed (codex). Only an untouched board, so nothing played is replaced. Called on every
+     * bind and wherever the date on screen moves.
+     */
+    private restoreTurnedCasual() {
+        const date = this.deviceDate
+        for (const binding of this.bindings.values()) {
+            if (binding.casualRestored || !this.casualByDate(binding.date, binding.clamp, date)) continue
+            binding.casualRestored = true
+            // Read per board, with no v1 migration: a root may not know its storage yet, and
+            // one that turns out unsaved must not have written (the levels store reads the same).
+            const saved = !this.untouched(binding) ? null : binding.pending
+                ? progressFor(binding.pending.record, binding.definition) : this.savedFor(binding)
+            if (!saved) continue
+            this.restoreAttemptProgress(binding, saved)
+            if (binding.beforeClamp) binding.solveEvidence = undefined
+            binding.baseline = this.snapshot(binding)
+            this.options.hydrated?.(binding.puzzleId)
+        }
+    }
+    /** Move the clock the view reads, and restore any board that turned casual with it. */
+    private advance(reading: Reading) {
+        this.now = reading
+        this.restoreTurnedCasual()
+    }
     private restoreAttemptProgress(binding: ChallengeBinding, saved: PuzzleProgress | null) {
         binding.hydrating = true
         binding.session.restore(saved ?? {
@@ -554,6 +634,8 @@ export class ChallengeCoordinator {
             })
             if (this.alive(epoch)) runInAction(() => {
                 if (outcome.committed) {
+                    // Changed by this transaction: the instant alone can be another tab's (codex).
+                    if (outcome.changed && outcome.attempt) this.signalFinish(outcome.attempt)
                     if (outcome.attempt) this.remember(outcome.attempt, true)
                     if (outcome.attempt?.clockError || outcome.attempt?.result) this.clockFlags.delete(id)
                     if (outcome.attempt && !outcome.attempt.result) this.unfinished.set(id, outcome.attempt)
@@ -567,6 +649,23 @@ export class ChallengeCoordinator {
             })
             return outcome
         })
+    }
+    /**
+     * Signal a result this tab's winning placement fixed (rule 8): written by this root's
+     * transaction (the caller checks it changed the attempt) and finished at the instant a
+     * binding of this root captured. The instant alone isn't enough (codex): another tab can
+     * finish the same board at the same millisecond, or recover this tab's saved evidence,
+     * which carries the captured instant. Its result then arrives here unchanged. In this
+     * root, `reconcileLive` never lets `recover` write the captured instant, so what this
+     * root's transaction writes at that instant is `finish`'s: a solve, or a clock error's
+     * untimed one. Whichever transaction carried it: the finish save, Try again, the retry
+     * timer or a refresh. Never a recovery after a reload (no `pendingFinish`), Practice or a
+     * given-up board. Called before `adopt`, which clears the `pendingFinish` it reads.
+     */
+    private signalFinish(attempt: Attempt) {
+        const own = [...this.bindings.values()].some(binding => binding.pendingFinish
+            && this.matches(binding, attempt) && binding.pendingFinish.solvedAt === attempt.finishedAt)
+        if (own) this.lastFinish = { puzzleId: attempt.puzzleId, serial: (this.lastFinish?.serial ?? 0) + 1 }
     }
     /** Shared serialized transaction boundary for commit 4's Start/assist/finish hooks. */
     async change(binding: ChallengeBinding, step: (attempt: Attempt | null) => Step): Promise<Outcome> {
@@ -620,7 +719,7 @@ export class ChallengeCoordinator {
                 if (!this.alive(epoch) || !outcome.committed) return false
             }
             runInAction(() => {
-                this.now = (this.options.clock ?? read)()
+                this.advance((this.options.clock ?? read)())
                 if (previousStart !== outcome.attempt!.startedAt || !binding.locallyEdited) {
                     const saved = this.savedFor(binding)
                     const matching = saved?.attemptStartedAt === outcome.attempt!.startedAt ? saved : null
@@ -672,10 +771,13 @@ export class ChallengeCoordinator {
     }
     /** Called synchronously inside a successful session mutation, never from a reaction. */
     boardChanged(binding: ChallengeBinding, placement: boolean) {
+        // Edited before the reading: a reading can turn the board casual, and a Reset or a last
+        // piece removed leaves it empty, which untouched would make `restoreTurnedCasual` put
+        // the saved pieces back over, clearing the change's Undo (codex).
+        binding.locallyEdited = true
         const reading = this.sample()
         const date = dayKey(new Date(reading.wall))
         if (!binding.session.completedByRules) binding.session.setCompleted(false)
-        binding.locallyEdited = true
         binding.emptyStartRetry = false
         if (this.isCasual(binding, date)) {
             binding.practice = null
@@ -753,16 +855,39 @@ export class ChallengeCoordinator {
                 if (this.alive(epoch) && !outcome.committed) throw new Error('Opening reconciliation failed')
                 return
             }
-            const saved = progressFor(binding.pending?.record ?? this.liveProgress()[binding.puzzleId],
-                binding.definition)
+            const saved = this.savedProgress(binding)
             runInAction(() => {
+                /*
+                 * Read the clock first, and decide by that one reading. Midnight can pass while
+                 * this waited for storage, before any tick: the board is casual now, and the
+                 * timed check below would clear its unstamped casual pieces, after which, ready,
+                 * nothing restores them (codex). Sampling restores it as turned casual instead.
+                 */
+                this.sample()
                 binding.hydrating = true
-                const attempt = binding.attempt
-                const restore = attempt
-                    ? saved && saved.attemptStartedAt === attempt.startedAt ? saved : null : saved
-                if (restore) this.restoreAttemptProgress(binding, restore)
-                else if (attempt) this.restoreAttemptProgress(binding, null)
-                binding.solveEvidence = binding.beforeClamp ? undefined : restore?.solveEvidence
+                /*
+                 * A casual board restored before hydration (as it was bound, or as it turned
+                 * casual; see `casualRestored`) is the player's already: restoring
+                 * it again would clear its Undo, and the attempt-stamp check below, which keeps
+                 * another attempt's pieces off a timed board, would throw away casual progress
+                 * saved without a stamp (codex). So a casual board is only ever filled here,
+                 * when it is still untouched and empty and there is a record the bind didn't
+                 * read (a v1 document migrated here, say); never replaced, never cleared.
+                 * Only while it is still casual: a corrected clock can make a before-clamp
+                 * board timed before this runs, and then it is checked like any timed board
+                 * (codex).
+                 */
+                if (binding.casualRestored && this.isCasual(binding)) {
+                    if (this.untouched(binding) && saved) this.restoreAttemptProgress(binding, saved)
+                    if (binding.beforeClamp) binding.solveEvidence = undefined
+                } else {
+                    const attempt = binding.attempt
+                    const restore = attempt
+                        ? saved && saved.attemptStartedAt === attempt.startedAt ? saved : null : saved
+                    if (restore) this.restoreAttemptProgress(binding, restore)
+                    else if (attempt) this.restoreAttemptProgress(binding, null)
+                    binding.solveEvidence = binding.beforeClamp ? undefined : restore?.solveEvidence
+                }
                 binding.practice = null
                 binding.baseline = this.snapshot(binding)
                 binding.ready = true
@@ -843,7 +968,7 @@ export class ChallengeCoordinator {
                 if (binding.puzzleId === attempt.puzzleId) binding.clockErrorPending = true
             }
         }
-        this.now = next
+        this.advance(next)
         const date = dayKey(new Date(next.wall))
         for (const binding of this.bindings.values()) {
             if (binding.practice && !inWindow(binding.date, date)) binding.practice = null

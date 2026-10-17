@@ -215,12 +215,15 @@ describe('every button is one variant, and says nothing else about its look', ()
         // 20 existing declarations plus the challenge fixture's four test-only controls, and
         // since slice 3a three more: the cover's Start and Try again, and the completion
         // card's Try again for a finish that hasn't saved. "Next board" and "Practice" are
-        // the card's existing buttons, relabelled.
-        expect(all.length).toBe(27)
+        // the card's existing buttons, relabelled. Since slice 3b, three more: the Results
+        // button beside Archive, and the results screen's Share and Close.
+        expect(all.length).toBe(30)
         const at = (file: string) => all.filter(button => button.at.replace(/\\/g, '/').startsWith(`${file}:`))
         expect(at('app/visual/challenge/ChallengeFixture.tsx')).toHaveLength(4)
         expect(at('app/dominoFill/ChallengeCover.tsx')).toHaveLength(2)
         expect(at('app/dominoFill/CompletionCard.tsx')).toHaveLength(3)
+        expect(at('app/dominoFill/ResultsDialog.tsx')).toHaveLength(2)
+        expect(at('app/dominoFill/PageButtons.tsx')).toHaveLength(4)
     })
 
     it('recognises a button\'s own look, however it is written', () => {

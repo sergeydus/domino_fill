@@ -82,6 +82,24 @@ Evidence levels:
 | 2026-10-11 | After a challenge solve, the Solved! card shows that board's time and a way on; finishing the last of the nine, or a whole size, opens the day's results (user, 2026-10-11). | The results screen is 3b's. In 3a the card alone. |
 | 2026-10-11 | After a challenge solve, the card's button goes to the **next unfinished board of the day, in any size** ("Next board"), not the next level of the same size (user, 2026-10-11). | Claude's proposal in slice 3a's contract (rule 16); the user chose it over keeping "Next level". Casual boards keep "Next level". |
 | 2026-10-11 | **Hints keep the clock running, LinkedIn's way** (user, 2026-10-11), superseding "a hint costs that board's time only" (2026-10-09). | A Hint or Check marks the board *hints used*; it still finishes with its time. A board with none shows *no hints*. A size total that includes a hinted board is shown, marked *with hints*. Check still counts like a hint. The flag is still saved before the hint is shown (rule 7), so the mark stays honest. A clock error or a lost finish still gives no time. The user asked for Claude's opinion: LinkedIn keeps the timer and marks "no hints used", the user's own description. Claude recommended this, since the rule hasn't shipped and a misclick no longer costs a result. Ruleset v1 is amended in place before launch; see slice 3a's contract. |
+| 2026-10-12 | Slice 3a merged as PR #11 (`ec1353f`), still switched off; Claude starts slice 3b's contract, codex reviews (user, relaying codex's recommendation, 2026-10-12). | CI passed on `master`. 3b: the results screen, Share, streak and countdown, then switching the challenge on. Contract first, on `feature/challenge-results`. |
+| 2026-10-12 | **Share copies a Wordle-style grid with times** (user, 2026-10-12). | A title line with the date; one row per size, a square per board and that size's total, or "partial"; the streak; the home page's address. 🟩 solved, 🟨 hints used, ⬛ given up, ⬜ not played. Spoiler-free: nothing from the puzzle itself. See D7. |
+| 2026-10-12 | **The shared link is the home page** (user, 2026-10-12). | It opens today's challenge; a friend a day apart reaches the same date through the archive. No date links are built. See D7. |
+| 2026-10-12 | **The streak shows on the results screen and as a 🔥 count in the top bar** (user, 2026-10-12). | The top-bar count appears only once the player has played the challenge (D9: never shown to players who don't). See D9. |
+| 2026-10-12 | **The countdown to tomorrow's boards is on the results screen** (user, 2026-10-12). | As Wordle shows it, ticking. Nowhere else. See D17. |
+| 2026-10-12 | **A streak milestone is one line on the results screen**, at 7, 30, 100 and 365 days (user, 2026-10-12). | Shown once, e.g. "🎉 7-day streak!". No badges. See D9. |
+| 2026-10-12 | **A Results button in the top bar, beside Archive**, reopens the results screen once any of the day's boards has a result (user, 2026-10-12). | The screen also opens by itself after the ninth board or a whole size (2026-10-11). |
+| 2026-10-12 | **Saved streak freezes show on the results screen**, beside the streak (user, 2026-10-12). | "🔥 12 · ❄️ 2 freezes". When a freeze is used, the results say which day it covered. Not in the top bar. See D9. |
+| 2026-10-12 | **A frozen day keeps the streak but adds nothing to it** (user, 2026-10-12). | As Duolingo and LinkedIn do: 12 days, a day covered by a freeze, then a played day makes 13. See D9. |
+| 2026-10-12 | **A broken streak starts freeze progress over** (user, 2026-10-12). | A missed day with no freeze saved sets the streak to 0, and the count of days toward the next freeze to 0. See D9. |
+| 2026-10-12 | **Freezes stop being earned while 3 are saved** (user, 2026-10-12). | Days played at the cap earn nothing; counting toward the next starts again once one is used. See D9. |
+| 2026-10-12 | **A day counts as missed only once it can't be played any more, so a freeze earned before then can cover it** (user, 2026-10-12, on codex's example). | Monday, Tuesday and Thursday solved, Wednesday not: on Thursday the streak is 3 with 1 freeze; on Friday, when Wednesday leaves the window, Thursday's freeze covers it, and the streak stays 3 with 0 freezes. Strict date order, which would have reset it to 1, was the alternative. See D9. |
+| 2026-10-12 | **The milestone line shows on the results of the day that reached it**, every time they're opened, and on no other day (user, 2026-10-12). | Nothing is stored. "Once ever", with a flag on the device, was the alternative. |
+| 2026-10-12 | **A given-up board finishes the day but not its size** (user, 2026-10-12). | All nine with a result, given up included, is a finished day; a size is finished only when its three are solved. |
+| 2026-10-12 | **When the results screen opens, focus goes to its heading** (user, 2026-10-12). | A screen reader starts at the top; Tab then reaches Share and Close. |
+| 2026-10-12 | **Where the Archive row can't fit the Results button and the 🔥 count, the 🔥 moves to the end of the clock line** (user, 2026-10-12). | Only where measurement shows the row costs the board its budget. Hiding it there, or letting the page scroll, were the alternatives. |
+| 2026-10-12 | **An attempt dated after the device's today counts nowhere until that date arrives** (user, 2026-10-12). | A clock set back, or another device's data. Then it counts normally. |
+| 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 
 ## Principles
 
@@ -148,9 +166,9 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | D4 | A clock that survives a reload | `performance.now()` suits elapsed time within one page, but it restarts on reload (codex, citing the W3C spec). The attempt's start is therefore saved as a wall-clock time, so reloading never restarts the attempt. Changing the device clock mid-attempt could still alter the time, which is accepted under the honour system. | Small | |
 | D5 | First attempt only, practice after *(codex R3, C2)* | Once a challenge board is revealed, that attempt is its result. Replays are Practice copies, labelled everywhere, never overwriting the result or completion mark. Inside the today-or-yesterday window a Practice replay is timed too, since those boards have no untimed play (user, 2026-10-09). Archive puzzles outside the window are casual and untimed (D8). | Medium | Yes (user, 2026-10-09) |
 | D6 | Personal stats | Today's time, best, average, the last 30 days and a solved count. They get their own storage, which the 14-day progress cleanup never removes (read: `RETENTION_DAYS = 14` in `app/stores/progressStorage.ts`). | Small | |
-| D7 | Share card *(codex C4, R10)* | A spoiler-free result: the date, the time, whether assists were used, and a link to that date's challenge. Casual players can share a solve without a time. It never posts automatically. | Small to medium | Yes: a Share button copying text, in slice 3b (user, 2026-10-11). |
+| D7 | Share card *(codex C4, R10)* | A spoiler-free result: the date, the time, whether assists were used, and a link to that date's challenge. Casual players can share a solve without a time. It never posts automatically. | Small to medium | Yes: a Share button copying text, in slice 3b (user, 2026-10-11). The text is a Wordle-style grid, a square per board with each size's total, plus the streak, and the link is the home page, not a date link (user, 2026-10-12). |
 | D8 | Challenge link and window *(codex R8)* | "Today" is the player's local day (read: `DominoClient.tsx` loads the day from `dayKey(new Date())`), so a friend's today can be your yesterday (codex). **Proposed:** a date's challenge can be started, as a first attempt, while that date is today or yesterday on the player's device. The window is two calendar dates on the player's device, not exactly 48 hours, and it doesn't cover every pair of time zones: at the same instant a UTC+14 player can be two dates ahead of a UTC−12 one, whose device refuses the link as a future date (codex). It covers friends whose dates differ by at most one. Links name an explicit date, and future dates are refused, even though their files are public. Since today is always timed, yesterday's boards inside this window are covered and timed too (user, 2026-10-09). | Small to medium | Yes (user, 2026-10-09) |
-| D9 | Streaks *(codex C7)* | Consecutive days with at least one challenge board solved (a hinted or checked solve counts; user, 2026-10-09), plus milestones, as LinkedIn does. Proposed: they use D8's window, so a player who solves yesterday's board just after midnight keeps their streak. Codex's caution still applies, since pressure fights calm play. So no streak is shown to players who never play the challenge. A streak freeze is earned for every 3 days played (days that keep the streak), at most 3 are saved, and one is used automatically on a missed day. | Small to medium | Yes |
+| D9 | Streaks *(codex C7)* | Consecutive days with at least one challenge board solved (a hinted or checked solve counts; user, 2026-10-09), plus milestones, as LinkedIn does. Proposed: they use D8's window, so a player who solves yesterday's board just after midnight keeps their streak. Codex's caution still applies, since pressure fights calm play. So no streak is shown to players who never play the challenge. A streak freeze is earned for every 3 days played (days that keep the streak), at most 3 are saved, and one is used automatically on a missed day. | Small to medium | Yes. Shown on the results screen and as a 🔥 count in the top bar once the player has played the challenge; saved freezes beside it on the results screen only; a milestone is one line on the results screen at 7, 30, 100 and 365 days (user, 2026-10-12). A frozen day keeps the streak without adding to it; a break starts freeze progress over; no freeze is earned while 3 are saved (user, 2026-10-12). |
 | D10 | Finish without blocking *(codex R6)* | The clock stops on the winning placement. The result appears without blocking input and is announced once to screen readers. There is no auto-advance in casual play. Also check that no animation blocks input: every duration in `app/dominoFill/motion.ts` is 0.2 s or less (read), but blocking hasn't been checked. | Medium | |
 | D11 | Run receipt *(codex R4)* | Export the puzzle ID, definition hash, ruleset version, time and move log. It's useful for replay and settling disputes among friends, but proves the moves, not who made them or how fast. | Medium | |
 | D12 | Previous-best comparison *(codex R7)* | A split against your own best, only on challenge boards, with a switch to hide it. | Medium | |
@@ -158,7 +176,7 @@ are timed with no untimed way in, so there's no casual first look to rule on (D1
 | D14 | Input fairness study *(codex R5)* | Compare mouse, touch and keyboard times before adding faster controls. If one input is much faster, decide whether to note the input on the share card. | Study first | |
 | D15 | Speedrun categories on archive puzzles | The earlier plan: fixed sets, splits and video-checked runs. It's superseded as the main competition, but could return as an extra. | Medium | |
 | D16 | Prevent early access to future boards | Keep tomorrow's and later boards unavailable before their release, including direct content access and advancing the device clock. Past boards remain unrestricted. See the draft requirements below; stronger release protection requires withholding future readable content rather than only hiding the board. | Study first | Later, low priority (user, 2026-10-10). Requirements only now; release-date policy and implementation need their own decisions/contract. |
-| D17 | Wordle/LinkedIn daily feel | Use Principle 6 to guide the daily entry, finish and results experience in slice 3. Claude suggested Share text, a visible streak, a next-puzzle countdown and finish animation; these are proposals to resolve in the slice-3 contract, not features approved by this direction alone. | Design first | Yes to the design direction (user, 2026-10-10). Keep all nine challenge boards (user, 2026-10-10); D1 and Ruleset v1 stay as accepted. Chosen for slice 3b (user, 2026-10-11): a day results screen, Share, the streak and the countdown. A finish animation was not among the choices offered, so it is not decided. Also: the clock is always visible; live after 3a and 3b; hints keep the clock; "Next board" crosses sizes (user, 2026-10-11). |
+| D17 | Wordle/LinkedIn daily feel | Use Principle 6 to guide the daily entry, finish and results experience in slice 3. Claude suggested Share text, a visible streak, a next-puzzle countdown and finish animation; these are proposals to resolve in the slice-3 contract, not features approved by this direction alone. | Design first | Yes to the design direction (user, 2026-10-10). Keep all nine challenge boards (user, 2026-10-10); D1 and Ruleset v1 stay as accepted. Chosen for slice 3b (user, 2026-10-11): a day results screen, Share, the streak and the countdown. A finish animation was not among the choices offered, so it is not decided. Also: the clock is always visible; live after 3a and 3b; hints keep the clock; "Next board" crosses sizes (user, 2026-10-11). The countdown is on the results screen only, and a Results button beside Archive reopens it (user, 2026-10-12). |
 
 ### Future-board release protection (D16): draft requirements, low priority
 
@@ -2775,6 +2793,1374 @@ amendment against `reset()` and the coordinator's Practice hook, and that only
 - Full cold rerun (2026-10-11): TIME_WAIT **45**, root verified. TypeScript **0**, lint
   **0**, unit **0** (**1537**, stderr **0 bytes**), build **0**, browser **0** (**683
   passed, 1 skipped**, 0 socket errors). Committed after it.
+
+### Challenge slice 3b, results, Share, streak and countdown: implementation contract
+
+Written by Claude, to be reviewed by codex before any code (user, 2026-10-12). The product
+choices are the user's, in the decision log (2026-10-09 to 2026-10-12) and D7, D9 and D17;
+nothing here decides product. Where this contract has to choose something those decisions
+leave open, it says so and marks it **proposed**, so the review can send it to the user.
+
+**Why.** 3a made each board playable and timed, and gave each its own result. Nothing yet
+gathers a day: there is no screen that shows the nine boards and each size's total, no way
+to share it, no streak, and no reason to come back tomorrow. Those four are what the user
+chose to go live with (2026-10-11), and the challenge stays switched off until they exist.
+This slice builds them and, last, switches the challenge on.
+
+**How it works today** (read in the code, `master` at `ec1353f`):
+- Every attempt this device knows of is in `coordinator.history` (`coordinator.ts:209`), a
+  forward-only `observable.shallow` map by puzzle ID, filled by `enumerate` reading every
+  stored attempt at start and on refresh (`coordinator.ts:778`), and by each committed
+  transaction (`remember`, 324). Attempts are never deleted (`attemptStore.ts:24`), so the
+  map holds every day ever played on this device, which is what a streak needs.
+- A size's result is `sizeResult(attempts)` (`attempt.ts:163`): a total when all three were
+  solved with a time, marked `assisted` if any was hinted, else partial.
+- The window is calendar dates only (`window.ts`): `inWindow`, `afterWindow`, `addDays`.
+  The coordinator's device date is `dayKey(new Date(now.wall))` (`coordinator.ts:225`), and
+  `now` is resampled every second by `tick` (853) while the coordinator runs.
+- The day's nine boards and their definitions come from `LevelStore` (`definitionsFor`,
+  `BoardsStore.ts:527`), for the day being viewed (`viewingDate`, 74).
+- The row with Archive is `navigation` (`DominoClient.tsx:278`): the level arrows,
+  `ArchiveButton` (`PageButtons.tsx:21`), and the control-mode and sound buttons. It sits
+  under the board in the column and in the rail when wide. There is no top bar: **the
+  user's "top bar" is this row, beside Archive**, wherever Archive is.
+- The archive is a dialog mounted only while open (`Archive.tsx`, `archiveOpen`), with a
+  Close button, no key handler and no focus management. The
+  midnight rollover is `useDayRollover` (polls each minute and on focus).
+- The site's address is `resolveSiteUrl(process.env.NEXT_PUBLIC_SITE_URL)`
+  (`siteMetadata.ts:42`), defaulting to `CANONICAL_ORIGIN`, `https://domino-fill.vercel.app`.
+- The challenge is off: `provider.tsx:13` builds `new RootStore()`, whose `challenge`
+  option defaults to false (`RootStore.ts:34`). `/visual/daily` is the enabled page.
+
+**The rules**
+
+*A. A day's results, as data*
+1. A new pure module, `app/challenge/dayResults.ts`. `dayResults(date, boards, history)`
+   takes the day's nine boards as `{ difficulty, level, puzzleId, definitionHash }` (from the
+   day's definitions, never parsed out of an ID) and returns, per board, one state:
+   `solved { ms, assisted }`, `untimed { reason, assisted }`, `given-up`, `in-play`
+   (started, no result yet) or `not-started`; and per size, `sizeResult` of its three. An
+   attempt counts only if its puzzle ID, definition hash and date are this board's (rule 18
+   of 3a, the same identity check, shared rather than copied); otherwise the board is
+   `not-started`.
+2. "A whole size finished" means all three of its boards have a result that is a solve
+   (`solved` or `untimed`); "the day finished" means all nine have a result of any kind,
+   so a given-up board finishes the day but not its size (user, 2026-10-12).
+
+*B. The streak, as data*
+3. A new pure module, `app/challenge/streak.ts`. `streak(history, deviceDate)` derives
+   everything from the attempts; nothing about the streak is stored. A **played day** is a
+   board date with at least one attempt whose result is `solved` or `untimed`, hinted or
+   not (D9, 2026-10-09). Days are board dates, not the instant of the solve: solving
+   yesterday's board just after midnight keeps yesterday (D8, D9).
+4. **A day is missed only once it can't be played any more**, so a freeze earned before
+   then can cover it (user, 2026-10-12, on codex's example). The walk goes over every date
+   `t` from the first played day to `deviceDate`, with `streak = 0, freezes = 0,
+   toward = 0`, and at each step does two things, in this order:
+   - **count `t`**: if `t` is played, `streak + 1`; and if `freezes < 3`, `toward + 1`,
+     reaching 3 gives `freezes + 1, toward = 0`. At 3 saved nothing counts (user,
+     2026-10-12).
+   - **settle the day before**, `m = t − 1`, if `m` is on or after the first played day,
+     isn't played, and has left the window (`deviceDate` is `m + 2` or later). With a
+     freeze: `freezes − 1`, `m` is frozen, and the streak is unchanged (a frozen day adds
+     nothing; user, 2026-10-12). Without one, the streak breaks, and what's left after the
+     gap is `t` alone: `streak` and `toward` are 1 if `t` was played, else 0 (user,
+     2026-10-12).
+   `deviceDate` and the day before are never settled: they can still be played. Codex's
+   example, Monday, Tuesday and Thursday solved:
+
+   | Read on | Streak | Freezes | Wednesday |
+   |---|---:|---:|---|
+   | Thursday | 3 | 1 | still playable |
+   | Friday | 3 | 0 | frozen (Thursday's freeze) |
+   | Friday, had Thursday not been played | 0 | 0 | missed, streak broken |
+
+   It returns `{ streak, freezes, playedEver, days }`, where `days` gives each walked date
+   `{ played, frozen, streak }`, the streak after that date's step. That is what the
+   results screen's date-specific lines need (rule 6): **a milestone** shows on date D's
+   results when D is played and `days[D].streak` is 7, 30, 100 or 365 (a played day adds
+   exactly one, so the day whose step reaches it is the day that reached it); **a freeze
+   used** shows on D's results for each frozen date after the previous played day and
+   before D. Thursday's results, opened on Friday, say Wednesday was frozen.
+5. A board date after `deviceDate` (a clock set back, or another device's data) counts
+   nowhere until that date arrives, when it counts normally (user, 2026-10-12): the walk
+   stops at `deviceDate`.
+
+*C. The results screen*
+6. A dialog like the archive, mounted only while open, for the **day being viewed**, when
+   that day is a challenge day (`today` or yesterday, by the coordinator's device date). It
+   shows:
+   - the date, as "12 Oct 2026";
+   - three rows, Easy · 6×6, Medium · 7×7, Hard · 8×8, each with its three boards (a square
+     and the board's time or state in words: "1:23", "1:23 · hints used", "no time",
+     "given up", "in play", "not played") and the size's line: the total, the total
+     "· with hints", or "partial";
+   - the streak, "🔥 12-day streak", and saved freezes beside it, "❄️ 2 freezes", hidden at
+     0 (user, 2026-10-12); a milestone line, "🎉 7-day streak!", every time the results of
+     the day that reached it are open and on no other day, with nothing stored (user,
+     2026-10-12); and for each freeze used since the previous played day, "❄️ A freeze
+     kept your streak on 10 Oct" (rule 4's `days`);
+   - the countdown (rule 12) and Share (rule 10);
+   - Close. No Escape: the archive's dialog has none (read: no key handler in `Archive.tsx`),
+     and a new key would break the no-shortcuts decision (2026-09-28).
+7. **A modal dialog, with no new key** (codex):
+   - On opening, focus moves to the dialog's heading (`tabIndex={-1}`; user, 2026-10-12),
+     so a screen reader starts at the top. Every square has its words in text, so nothing
+     depends on colour or emoji: the grid is a list naming each board ("Easy puzzle 1,
+     1:23, no hints").
+   - While it's open the page behind it is `inert`: the dialog renders outside the
+     `data-stage` element, which gets `inert`. `role="dialog"`, `aria-modal="true"`, named
+     by its heading. **Inert alone doesn't keep Tab inside** (codex, measured in Chromium:
+     Tab went Share, Close, the page's body, Share). So the dialog also has two focus
+     guards, empty focusable elements first and last inside it: focusing the last moves
+     focus to the dialog's first control, and focusing the first moves it to the last.
+     Tab and Shift+Tab then wrap both ways. No key is listened for: Tab itself is
+     untouched, and there's still no Escape. The archive manages no focus today (read: no
+     `focus` call in `Archive.tsx`); this doesn't change it.
+   - Results and Archive are never open together: opening either closes the other, and
+     rule 8 never opens Results while Archive is open.
+   - On closing, focus goes back to the element that had it when the dialog opened, if it
+     is still connected and not inert; otherwise to the Results button if it's shown;
+     otherwise to the Archive button, which is always there.
+   - Share can fail late: the clipboard's promise may settle after the dialog closed or
+     after focus moved within it. The fallback box (rule 10) appears only if the dialog is
+     still open, and it takes focus, with its text selected, only if focus is still on
+     Share; otherwise it appears without moving focus.
+   - No Escape: the archive has none (read: no key handler in `Archive.tsx`), and a new
+     key would break the no-shortcuts decision (2026-09-28).
+8. **It opens by itself** (user, 2026-10-11) after this tab's own finish completes a size
+   or the day. A history change can't say where a result came from (codex: transactions
+   adopt results during refresh and reconciliation too, `coordinator.ts:545`), so the
+   signal is explicit:
+   - **The signal.** The coordinator gains an observable `lastFinish: { puzzleId, serial }`,
+     set in one place: the commit handler of `transact`, when a binding of this root holds
+     a `pendingFinish`, the transaction changed the attempt, and the committed result is a
+     solve (`solved`, or `untimed` from a clock error) whose `finishedAt` equals that
+     `pendingFinish.solvedAt`. That is "this tab's winning placement fixed the result",
+     whichever transaction carried it: the finish save, Try again, the retry timer, or a
+     refresh's `reconcileLive` (`coordinator.ts:507`). `serial` only increases, so one
+     result signals once.
+   - **Not signalled:** another tab fixing the result first (this transaction then changes
+     nothing, or its `finishedAt` differs); recovery after a reload (a new tab has no
+     `pendingFinish`; `recover` uses saved evidence and gives "finish lost"); Practice (no
+     `pendingFinish`); given up (`settle`, no `finishedAt`).
+   - **The reaction**, owned by a new `ResultsTrigger` in `DominoClient`, which remembers
+     the last `serial` it handled. On a new one it checks that the signalled board is still
+     the board on screen, that its date is the day being viewed, and that, with this
+     result, its size is finished or the day is (rule 2). If so, it opens Results **1.5
+     seconds later** (user, 2026-10-12), so the Solved! card's committed time (3a, rule
+     15) is on screen first. The wait is cancelled if, before it ends, the board changes,
+     Archive opens, Practice starts, or **Results is opened by hand**: the signal is then
+     spent, so opening and closing Results during the wait can't make it open again
+     (codex). The ninth solve, completing its size and the day at once, opens it once.
+   - **Navigation during a held finish:** if the player has moved to another board when
+     the commit lands, nothing opens; the Results button is there.
+   - **A failed save** opens it when Try again or the timer finally commits it, by the same
+     rule, if the board is still on screen.
+9. **The Results button** sits in the navigation row, right after Archive (user,
+   2026-10-12), shown when the day being viewed is a challenge day and at least one of its
+   boards has a result. It opens the screen. Labelled "Results", the `quiet` control role,
+   as Archive is.
+
+*D. Share*
+10. Share copies the text below with `navigator.clipboard.writeText` and says "Copied" for a
+    few seconds, announced once (`role="status"`). It never posts and never opens the
+    system share sheet (D7, 2026-10-11). Where the clipboard refuses or is missing, it shows
+    the same text in a read-only text box labelled "Copy this text", so it can always be
+    copied by hand; focus follows rule 7.
+11. The text, from the results data (user, 2026-10-12):
+    ```
+    Domino Fill · 12 Oct 2026
+    6×6 🟩🟩🟩 3:41
+    7×7 🟩🟨🟩 5:02 · with hints
+    8×8 🟩⬛⬜ partial
+    🔥 12-day streak
+    domino-fill.vercel.app
+    ```
+    🟩 solved without hints (timed or not), 🟨 solved with hints, ⬛ given up, ⬜ anything
+    else (in play or not played). The size's words are exactly the results screen's. The
+    streak line is left out at 0. The address is `resolveSiteUrl`'s host, without
+    `https://`. Nothing from the puzzle itself: no rocks, numbers or positions.
+
+*E. The countdown*
+12. On the results screen only (user, 2026-10-12): "Next challenge in 6:42:10".
+    - **Its target is fixed when the dialog opens:** the local midnight that starts the day
+      after the device's date at that moment, `new Date(y, m − 1, d + 1)` in local time,
+      so a daylight-saving day counts its real 23 or 25 hours. It isn't recomputed per
+      tick, so it can reach its end (codex).
+    - It shows `target − now` from the coordinator's sampled clock (`now.wall`), so it ticks
+      with `tick` and tests drive it. From `target` on it reads "Today's challenge is
+      ready" and stays so until the dialog closes; reopening sets a new target.
+    - The dialog keeps the date it opened with. At midnight that date becomes yesterday,
+      still a challenge day, so its results stay right; the existing rollover moves the
+      page underneath as it does now, and the Results button then follows the page's day.
+    - **It closes itself when its date leaves the window** (codex): once the coordinator's
+      device date is two days past the dialog's date, its results are an archive day's,
+      and the screen is only for challenge days (rule 6). A dialog opened on today's
+      results and left open across two midnights closes at the second; one opened on
+      yesterday's results closes at the next midnight, so its countdown never reaches
+      "ready". Focus then goes where rule 7's closing rule sends it.
+
+*F. The streak beside Archive*
+13. "🔥 12" in the navigation row after Results (user, 2026-10-12), shown only when
+    `playedEver` (D9: never to players who have never played the challenge), so 0 shows as
+    "🔥 0" for a player whose streak broke. Text, not a button, with an accessible name,
+    "12-day streak". No freezes here (user, 2026-10-12).
+14. **Layout, with 3a's full criteria** (codex). The navigation row gains Results and the
+    🔥 count. Measured by a `layout`-project spec against today's public page, at every
+    viewport and board size of the layout suite (7 × 3), in each state: covered, playing,
+    a result with Results shown, the widest count, and an archive day (no clock
+    line, no Results, the 🔥 shown), with the count at four digits, "🔥 3653", since the
+    published corpus has 3,653 days (codex). The criteria, 3a's: where the public page
+    doesn't scroll, the enabled page doesn't; **where the public page's unclamped cell
+    meets the 38 px minimum, the enabled page's does too** (some viewports are below it
+    already, and stay as they are); where the public page already scrolls, the extra is
+    bounded and reported. Where a viewport fails,
+    the 🔥 moves to the end of the clock line there, "1:23 · 🔥 12" (user, 2026-10-12), by
+    a width rule taken from the measurement, and the spec measures again. On an archive
+    day there's no clock line, so the 🔥 stays in the row; the archive-day state shows
+    whether that alone fits.
+
+*G. Switching it on*
+15. The last commit sets `provider.tsx`'s root to `new RootStore(new CorpusSource(),
+    { challenge: true })`. That changes the public page (a covered board, the clock line,
+    new buttons), so it is a `[visual update]` commit, and the new baselines follow in their
+    own commit from CI's `visual-baselines` artifact. Before it, every 3b feature is
+    reachable only on `/visual/daily`, and the public page and baselines are unchanged.
+    **Amended after codex's review of activation (2026-10-14):** a board casual by its date
+    (a before-clamp day, or one older than yesterday) is shown and playable before the
+    coordinator hydrates it. So its saved progress is restored when the session is built,
+    as with the challenge off, never left for hydration. Codex found an enabled root
+    restored nothing until hydration: an archive board showed empty and accepted moves,
+    and a move overwrote the saved piece. Boards in the window stay as they are: covered,
+    locked, and restored by hydration, which knows their attempt.
+    **Amended again after codex's second review (2026-10-14):** hydration never replaces or
+    clears the board of a session built casual. Restoring it again cleared the Undo of a
+    move made meanwhile. The attempt-stamp check, meant for timed boards, threw away casual
+    progress saved without a stamp (while attempt history was unreadable). Hydration may
+    only fill such a board while it is untouched and empty, from a record the build didn't
+    have. The strict stamp check stays for today's and yesterday's boards. A winning board
+    restored at build is marked complete then, as hydration's restore does, so reopening a
+    solved day doesn't play the win.
+    **Amended a third time after codex's third review (2026-10-14):** that exception holds
+    only while the board is still casual when hydration runs. A corrected clock can turn a
+    before-clamp board timed between build and hydration; hydration then checks it like any
+    timed board, so an unstamped casual piece never enters a timed attempt.
+    **Amended a fourth time after codex's fourth review (2026-10-16):** the protection also
+    covers a board that **turns casual while its hydration is pending**, at midnight or by a
+    clamp. Its saved pieces are restored as it turns casual, before it accepts a move, and a
+    casual board takes no move until its saved pieces are on it (restored outside hydration,
+    or hydrated). Codex found yesterday's board, unhydrated, turned editable but empty at
+    midnight, and the next move's save dropped the saved piece.
+    **Amended a fifth time after codex's fifth review (2026-10-16):** casual is judged by
+    **the date on screen** (the coordinator's last clock reading), for moves as for the
+    view, and every board casual by that date has its saved pieces on it before it is shown
+    or takes a move: as it is bound, or as that date moves (midnight) or its clamp changes.
+    That includes a board already hydrated as timed: if the stamp check left it empty and
+    it hasn't been touched since, it gets its saved casual pieces as it turns casual. The
+    coordinator now does the restoring as a board is bound, in the same action that
+    builds it, instead of the levels store. Hydration also reads the clock before it
+    decides. A move in the moment between real midnight and the next reading lands on the
+    board the screen still shows, a timed one. Codex found storage opening just after
+    midnight: hydration's stamp check cleared the casual pieces, and the board then turned
+    casual, empty and editable.
+    **Amended a sixth time after codex's sixth review (2026-10-16):** a change counts as the
+    player's from the moment it lands. The board is marked edited before the clock reading
+    that might turn it casual, so a Reset or a last piece removed, which leaves the board
+    empty, is never mistaken for an untouched board and restored over. Codex found both
+    undone just after midnight, with their Undo entries lost.
+16. **What activation breaks, measured** (codex asked for the list before any code). Two
+    local runs of the whole browser suite with `provider.tsx` switched on, never committed,
+    both files restored byte for byte after (2026-10-12):
+    - **As is: 555 failed, 164 passed**, 0 socket errors, across 30 specs and all four
+      projects. Nearly every failure is the first step, `openBoard` waiting for a board
+      that is now covered ("The board never rendered").
+    - **With `openBoard` pressing Start** (a temporary change): **161 failed, 1 skipped,
+      557 passed**, 0 socket errors. By spec, the cause, and the planned treatment:
+
+    | Spec | Failures (tests) | First error | Treatment |
+    |---|---:|---|---|
+    | `layout.spec.ts` | 76 (76) | no `[data-cell]`: opens `/` itself | its own open path presses Start, then its budgets are re-measured with the clock row; any real budget change is reported, not absorbed |
+    | `board.spec.ts` | 24 (17) | no cell `0,0`: opens `/` itself | the shared open path |
+    | `keyboard.spec.ts` | 11 (11) | a focus marker before any key | **a 3a bug**, below: the tests are right |
+    | `desktop.spec.ts` | 10 (7) | opens `/` itself; one row count, 5 expected | the shared open path; the row count changed on purpose (the clock line) |
+    | `challenge.layout.spec.ts` | 7 (7) | compares with a casual public page | re-pointed: compares the enabled page with 3a's measured budgets, since there's no casual `/` any more |
+    | `accessibility.spec.ts` | 6 (3) | board focus; an accessibility-tree list | the 3a bug; the tree's new rows listed on purpose |
+    | `archive.spec.ts` | 6 (3) | a covered board after picking a day | the shared open path, including after a reload |
+    | `pickAPiece.spec.ts` | 6 (3) | a focus marker; a covered board | the 3a bug; the shared open path |
+    | `challengeSession.spec.ts` | 4 (2) | expects `/` casual | re-pointed to an archive day for its casual comparison |
+    | `persistence.spec.ts` | 3 (2) | covered after a reload | the shared open path, after a reload too |
+    | `challengeUi.spec.ts` | 2 (2) | "the public page stays casual" | replaced: the public page is the challenge, checked on `/` |
+    | `completion.spec.ts` | 2 (2) | the board stays inert after the card | casual-only behaviour ("Play again"): run on an archive day |
+    | `completionCard.spec.ts` | 2 (1) | no card where it expects one | casual-only ("Next level"): run on an archive day |
+    | `feedback.spec.ts` | 2 (2) | a focus marker before any key | the 3a bug |
+
+    The per-test reasons go into the activation commit's As built. The treatments:
+    - **One shared open path.** `openBoard`, and every spec that opens `/` itself, go
+      through one helper that presses Start when the board is covered, so the public
+      suites test what the public sees: a timed challenge board. A spec whose subject is
+      casual play (the card's "Next level" and "Play again", replays) opens an archive day
+      instead, through the Archive dialog, with `pinDay`.
+    - **The 3a focus bug** (measured here, missed by 3a's jsdom test): in Chromium a mouse
+      click focuses the button it lands on, so "Start had focus" (3a, rule 11) is true for
+      a pointer Start too, and the board took focus after a click. 3a's unit test used
+      `fireEvent.click`, which focuses nothing. **The fix classifies the activation, not
+      the focus** (codex: `:focus-visible` stayed true when a Start that already had
+      keyboard focus was clicked with the mouse, a click with `detail: 1`): the browser
+      gives a click from Enter or Space on a button `detail` 0, and a mouse, touch or pen
+      click `detail` 1 or more. Focus moves to the board only for `detail` 0, and only if
+      Start still has focus at the reveal (3a's rule 11 as corrected). Its own commit, with
+      Chromium tests for a mouse click, a mouse click after keyboard focus, Enter and
+      Space.
+    - **Button inventory** (`tests/controls.test.ts`, changed on purpose): 27 to **30**: the
+      Results button, and the dialog's Share and Close. The 🔥 count is text, and the
+      fallback box is a `textarea`, not a button.
+    - **Activation cases** (codex): a returning player with today's board in progress from
+      before activation sees it "Played before the challenge · untimed", uncovered, with
+      their pieces (slice 2's legacy mark, `coordinator.ts` `legacy`); a device date before
+      the corpus (`clamped === 'before'`) gets the first published day casually, uncovered,
+      with its served-date label; both as browser tests on `/`.
+    - **Baselines:** the activation commit is a `[visual update]`; the new public desktop and
+      phone baselines come from CI's `visual-baselines` artifact, in their own commit.
+
+**Not in this slice**
+- Date links (the shared link is the home page; user, 2026-10-12), badges, stats (D6),
+  receipts (D11), previous-best splits (D12), notifications, a finish animation (not
+  decided), the system share sheet.
+- Any change to Ruleset v1, the attempt store, or slice 2's saves.
+- A results screen for archive days: they are casual.
+
+**Tests**
+- `tests/dayResults.test.ts`: each board state; the identity checks; size totals, "with
+  hints", partial for an untimed or given-up board; "size finished" and "day finished",
+  given up finishing the day but not the size.
+- `tests/streak.test.ts`: played days by board date, including yesterday's board solved
+  after midnight; today and yesterday pending, not missed; codex's example in all three
+  rows of rule 4's table; a day settled the moment it leaves the window (on `m + 2`, not
+  `m + 1`); a freeze earned on the 3rd played day, paused at 3 and resumed after one is
+  used; a frozen day adding nothing; a break leaving `t` alone (1 or 0); a hinted and an
+  untimed solve counting, a given-up board not; a future date ignored until it arrives;
+  `days` for the milestone and freeze-used lines; `playedEver`.
+- `tests/shareText.test.ts`: the exact text for a full day, a partial day, a hinted size,
+  a given-up board, streak 0 (no line), and the host from `resolveSiteUrl`.
+- `tests/challengeResults.test.tsx` (jsdom, real `DominoClient`, enabled root): the Results
+  button's rules; the words for every board state; focus to the heading on opening and
+  back on closing, with each fallback (the opener gone, the Results button gone); the page
+  `inert` behind it; the focus guards wrapping both ways; Archive and Results excluding each other; Share's clipboard success,
+  its refusal, and a refusal arriving after closing or after focus moved (no box, or a box
+  that takes no focus); the countdown: its fixed target, ticking with `tick`, "Today's
+  challenge is ready" at and after the target, a new target on reopening, under a non-UTC
+  zone and across a daylight-saving change; the 🔥 count only with `playedEver`.
+- The auto-open signal (`tests/challengeView.test.ts` and `challengeResults.test.tsx`):
+  signalled once for this tab's finish; not for another tab's result, a recovery after
+  reload, Practice or given up; signalled by a retried failed save; no opening after
+  navigating away during a held finish; one opening when the ninth solve completes its
+  size and the day; the 1.5 s wait with the committed time on the card, cancelled by
+  navigation, Archive, Practice or opening Results by hand, and no second opening after
+  opening and closing Results during it; the dialog closing itself when its date leaves
+  the window, for today's results across two midnights and yesterday's across one.
+- `e2e/challengeResults.spec.ts` on `/visual/daily`, with `pinDay`, both projects:
+  finishing a size opens the results after the card; Results reopens them; Share puts the
+  exact text on the clipboard (permission granted in the test); Tab and Shift+Tab wrap
+  inside the dialog (codex's case: never to the page's body); focus returns on closing; the countdown in a non-UTC `timezoneId` across a
+  daylight-saving night.
+- `e2e/challengeResults.layout.spec.ts`, `layout` project: rule 14's matrix and criteria.
+- Activation: the public suites, run through the shared open path; the legacy and clamped
+  cases; the 3a focus correction's Chromium tests (a mouse click, a mouse click after
+  keyboard focus, Enter, Space); the new baselines.
+
+**Mutation probes planned**, each against its intended assertion: a hinted solve shown
+without the mark; an untimed board in a total; each identity check dropped; a given-up
+board finishing its size; the streak counting a solve's instant instead of its board date;
+yesterday settled as missed; settling at `m + 1`; settling before counting `t` (codex's
+example then breaks); a frozen day adding one; freezes earned at the cap; a break keeping
+`toward`, or dropping `t`; a future date counted; the milestone on the wrong day; 🟨 for a
+hintless solve; the streak line at 0; the URL with its scheme; the signal for another
+tab's result, for a recovery, for Practice; the signal twice for one result; opening after
+navigating away; opening twice on the ninth; no wait before opening; the page not inert;
+focus not returned; a focus guard removed (Tab reaches the page); the fallback box taking
+focus late; a hand-opened Results not cancelling the wait; the dialog staying open after
+its date leaves the window; the countdown recomputing its
+target each tick; the target at UTC midnight; the Results button with no result; the 🔥
+without `playedEver`; `openBoard` not pressing Start; the 3a focus fix reverted, or deciding by
+`:focus-visible` instead of `detail`.
+
+**Commits planned**
+1. The data: `dayResults`, `streak`, the share text, with their unit tests.
+2. The results screen, the Results button, the 🔥 count, Share and the countdown, on
+   `/visual/daily`, with component and browser tests and rule 14's measurement.
+3. The auto-open signal and `ResultsTrigger` (rule 8).
+4. A correction to 3a: Start moves focus only after a keyboard activation (`detail` 0;
+   rule 16's bug), with its Chromium tests.
+5. Switching it on (`[visual update]`): the shared open path, every public spec's change
+   listed with its reason, the activation cases. Then the new baselines in their own
+   commit.
+Each gets its own mutations, cold gate and As built notes, and goes to codex for review
+before the next. The PR is opened only when the user says.
+
+**Review notes**
+- Codex held `212e612` (2026-10-12) for five points; the user answered the product
+  questions codex sent, asked again here in one place (decision log, 2026-10-12, six rows).
+  The corrections, all made above:
+  1. *Freezes across the window:* codex showed that rule 4, read literally, broke Monday,
+     Tuesday and Thursday on Friday, when Thursday's freeze should cover Wednesday. The
+     user chose the covering reading; rule 4 now settles a day only when it leaves the
+     window, after counting the next day, with codex's example as a table and `days` for
+     the date-specific lines.
+  2. *The auto-open signal:* rule 8 names it (`lastFinish`, set only when this tab's
+     `pendingFinish` fixed the result), who owns the reaction (`ResultsTrigger`), the
+     deduplication (`serial`), and every case codex listed.
+  3. *The dialog's focus:* rule 7, with the page inert behind it, no trap code and no new
+     key, Archive excluded, connected fallbacks, and late clipboard failures.
+  4. *The countdown:* rule 12 fixes the target at opening, so it can reach "Today's
+     challenge is ready", and keeps the dialog's date; tests under a non-UTC zone and a
+     daylight-saving night.
+  5. *Layout and activation:* rule 14 uses 3a's full criteria across the matrix and its
+     states; rule 16 lists, measured, what activation breaks and how each is treated, the
+     inventory change, and the legacy and clamped cases. Measuring it found a 3a focus bug,
+     now commit 4.
+- Codex held `bea25f5` (2026-10-12) for four corrections and the pause before opening by
+  itself, which the user decided: 1.5 seconds (decision log). The corrections, all made
+  above:
+  1. *Tab containment:* codex measured that inert alone lets Tab reach the page's body;
+     rule 7 adds two focus guards that wrap Tab both ways, with no key handler.
+  2. *Keyboard activation:* codex measured `:focus-visible` staying true for a mouse click
+     after keyboard focus; rule 16's fix classifies the click by `detail` instead.
+  3. *Lifecycle:* opening Results by hand spends the pending signal (rule 8), and the
+     dialog closes itself once its date leaves the window (rule 12).
+  4. *Layout:* the 38 px criterion applies where the public page meets it, as in 3a, and
+     the widest count is four digits ("🔥 3653").
+
+**As built: implementation commit 1, the data (rules 1 to 5 and 11, 2026-10-12)**
+- Codex accepted the contract at `9056174`, with two isolated Chromium experiments of its
+  own: focus guards wrapping both ways, and click `detail` of `[1, 1, 0, 0]` for a mouse
+  click, a mouse click after keyboard focus, Enter and Space. CI run `38236882549` passed.
+- **`app/challenge/dayResults.ts`**: `dayResults(date, boards, history)`, the boards as
+  `DayBoard` (difficulty, level, size, puzzle ID, hash), giving per size its three
+  `BoardState`s in level order, `sizeResult`, and `finished` (three solves); and per day
+  `finished` (nine results, given up included) and `anyResult`. It declares its own
+  `Difficulty`, since `BoardsStore`'s isn't exported. `size` is on `DayBoard` because the
+  share rows name it.
+- **The identity check is shared,** as rule 1 asks: `belongsTo(attempt, board)` in
+  `attempt.ts`, now used by `dayResults` and by 3a's `markForDay`, whose inline check it
+  replaces with no change in behaviour (its 19 tests pass unchanged, and the three
+  identity probes below fail in both suites).
+- **`app/challenge/streak.ts`**: `streakFrom(attempts, deviceDate)`, rule 4's walk, giving
+  `{ streak, freezes, playedEver, days }`; `milestoneOn(streak, date)` and
+  `freezesBefore(streak, date)` for rule 6's lines; `MILESTONES`.
+- **`app/dominoFill/shareText.ts`**: `shareText(results, streak, site)`, beside 3a's
+  wording rather than in `app/challenge`, since it is words. `site` is an origin, as
+  `resolveSiteUrl` returns, and the text carries its `URL.host`. The size line and the
+  date are `sizeWords` and `dayWords`, added to `challengeText.ts`, so the results screen
+  in commit 2 says exactly what Share does.
+- **New tests:** `tests/dayResults.test.ts` 10, `tests/streak.test.ts` 16 (codex's example
+  in all three rows, yesterday's board finished after midnight, settling on `m + 2`, the
+  cap and its resumption, a frozen day adding nothing, a break restarting `toward` and
+  leaving `t`, future dates, both lines), `tests/shareText.test.ts` 6 (the decided text
+  line for line, squares for untimed and hinted solves, no streak line at 0, the
+  configured host without its scheme).
+- First drafts that failed and were mine, all in tests: a helper whose default argument
+  turned "no result" into a solve; a cap case that forgot the day after a missed day is
+  counted before the miss is settled, so at 3 saved it earns nothing; and a "break" case
+  of Monday, Tuesday and Thursday, which is three played days and so earns the freeze
+  that covers Wednesday, exactly as decided. Each now tests what it says.
+- **Mutations: 28 of 28 caught at the intended test,** files restored byte for byte: a
+  hinted solve shown without the mark; the identity check dropped; `belongsTo` without
+  the puzzle ID, the hash, the date (each also failing 3a's archive test); a given-up board
+  finishing its size; a two-board size finished; a day missing a board finished; given up
+  not finishing the day; given up not a result for the button; levels out of order; the
+  streak by the solve's instant; a future date counted; given up counted as played;
+  yesterday settled as missed; settling before counting `t`; a frozen day adding one;
+  freezes earned at the cap; a break keeping `toward`; a break dropping `t`; a milestone on
+  an unplayed day; freezes named past the previous played day; 🟨 without hints; given up
+  as ⬜; the streak line at 0; the address with its scheme; a total without "with hints";
+  the month off by one. The first sweep was 27 of 28: levels out of order survived,
+  because the test reversed the boards but checked only the sizes' order. It now checks
+  each level's place. And my first "settling before counting" probe deleted the count
+  instead of moving it; it was rewritten as a true reordering and rerun. The whole sweep
+  was rerun after both.
+- Cold gate, first run (2026-10-12): TIME_WAIT **24**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1632** in 70 files, 32 more; stderr **0 bytes**), build **0**, browser
+  **0** (**718 passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
+
+**As built: implementation commit 2, the results screen and its controls (rules 6, 7, 9 to 14, 2026-10-12)**
+- Codex accepted commit 1 at `e6134bc`: 244/244 focused unit tests (stderr 0 bytes),
+  type-checking, four independent tests of its own (a 3,653-day streak and every milestone,
+  leap-day and window edges, a late result replacing a frozen day, Share with hour-long
+  totals and a configured port), and CI run `38251517901`.
+- **State** (`BoardsStore.ts`): `results`, the open screen's date and nine boards, captured
+  when it opens; `challengeDay`, the viewed day and its boards when it's a challenge day
+  (in the window by the coordinator's date, and not a before-clamp day); `challengeResults`
+  for the Results button; `openResults` and `closeResults`. `setArchiveOpen(true)` closes
+  Results, and `openResults` closes Archive. The coordinator's `streak` is a computed
+  `streakFrom(history, deviceDate)`, so the walk reruns only when either changes.
+- **Beside Archive** (`PageButtons.tsx`): `ResultsButton` (quiet, `data-open-results`) when
+  the viewed day has any result; `StreakCount`, "🔥 12" with the emoji hidden from screen
+  readers and "12-day streak" for them, only when `playedEver`.
+- **The screen** (`ResultsDialog.tsx`), rendered outside the stage, which is `inert` while it
+  is open. Choices inside the contract: the heading reads "Results · 12 Oct 2026"; each size
+  is a heading and a list labelled "Easy puzzles", each item "Puzzle 1: 1:23 · no hints"
+  with its square hidden from screen readers (the list's label carries the size, rather
+  than every item repeating it); a solve without a time reads "no time", or "no time ·
+  hints used"; the size line reads "Total 3:41", "Total 5:02 · with hints" or "partial";
+  the streak line only when `playedEver`, with "1 freeze" or "2 freezes" beside it; the
+  countdown in `formatTime`'s form. The start guard sends focus to Close and the end guard
+  to Share. On closing, focus returns to the opener, else Results, else Archive, skipping
+  the page's body, which is where focus is when nothing has it (a real bug in my first
+  draft, caught by its test: opened with nothing focused, the dialog "returned" focus to
+  the body). A guard against updates after closing was written and removed before the
+  sweep: React ignores state set on a closed dialog, so no test could tell it was there.
+- **Fixture** (`DailyFixture.tsx`, visual build only): `seed(attempts)` puts attempts into the
+  coordinator's history, for the layout measurement's four-digit streak.
+- **Rule 14, measured** by `e2e/challengeResults.layout.spec.ts` (layout project, 7
+  viewports x 3 sizes x 3 states), enabled against public. Covered and playing with Results
+  shown, with "🔥 3653" or "🔥 3654": the added chrome is **+37 px everywhere**, exactly
+  3a's clock row, so Results and the count fit in the Archive row at every viewport and add
+  nothing. An archive day (no clock, no Results, the count shown): **+0** everywhere. Where
+  the public page doesn't scroll, the enabled one doesn't; where its cell meets 38 px, the
+  enabled one's does (the tightest is 3a's 8x8 at 390x844, 45 to 41); where it already
+  scrolls, the extra is the 37 px. All 7 pass. The trigger never fired, so the 🔥 stays
+  beside Archive and **no clock-line fallback was written**.
+- **Tests changed on purpose:** `tests/controls.test.ts`, the inventory 27 to **30**, with
+  per-file counts for `ResultsDialog.tsx` (2) and `PageButtons.tsx` (4).
+- **New tests:** `tests/challengeResults.test.tsx` **21**, through the real `DominoClient`:
+  when Results and the count show (never played, played, given up only, a broken streak,
+  an archive day, a before-clamp day, the challenge off); every board state's words, the
+  totals, nine hidden squares; the streak, freezes and a milestone; a freeze used, named on
+  the next day's results, with no freezes left beside the streak; focus to the heading,
+  the stage inert, focus back to Results; the guards both ways; the fallbacks to Results
+  and to Archive; Archive and Results excluding each other; Share copying the exact text,
+  a refusal on Share (the box, focused), a late refusal after focus moved (the box, focus
+  left alone), after closing (nothing), and no clipboard (the box at once); the countdown
+  fixed at opening, ticking, "ready" at and after midnight, a new target on reopening; the
+  dialog closing itself two days on. `e2e/challengeResults.spec.ts`, **4 x 2 projects**:
+  Results reopening the screen, focused at the top, focus back on closing; Tab five times
+  and Shift+Tab three, never leaving the dialog (codex's case); Share's exact text from
+  the real clipboard; the countdown in New York at 01:00 on 1 Nov 2026, reading 23:59,
+  the night's real 25 hours. `e2e/challengeResults.layout.spec.ts`, **7**.
+- First drafts that failed and were mine: the body-focus bug above; a test helper's type;
+  a test that reused the previous half's stored attempt; **unit stderr of 1018 bytes**, from
+  the countdown tests crossing midnight, where the tick started a day's refresh that
+  finished outside `act` (the test's clock now awaits that refresh inside `act`; 0 bytes
+  since); the clipboard read back with `\r\n` on Windows, so the browser test splits on
+  either; and three layout-spec mistakes: expecting 3653 where the seeded result for today
+  makes it 3654, as it should; seeding today's result on Medium 1, which the spec then
+  started, committing a fresh attempt over the seed (it now seeds Hard 3, which it never
+  starts); and one browser context for all three states, so the second state's Starts left
+  the third's board in play (a context per state now).
+- **Mutations: 25 of 25 caught at the intended test,** files restored byte for byte. Unit,
+  22: Results with no result; the count without `playedEver`; Results on an archive day;
+  on a before-clamp day; Archive opening leaving Results open; Results opening leaving
+  Archive open; the stage not inert; focus not to the heading; focus not given back; focus
+  given back to the body; no Archive fallback; the end guard to Close; "Copied" never said;
+  the fallback taking focus late; no fallback without a clipboard; the countdown's target
+  recomputed; the target at UTC midnight; the dialog staying open past its window; no
+  milestone line; freezes always mentioned; an untimed solve with hints unmarked; the
+  squares read aloud. Browser, 3: the countdown a fixed 24 hours from midnight (caught in
+  New York's 25-hour night); no focus guards; Share copying only the first line. The first
+  sweep was 24 of 25: Results on an archive day survived, because my test's helper knew
+  real definition hashes only for today and yesterday, so the archive day's attempt was
+  ignored for its hash and the button stayed hidden for the wrong reason. The helper now
+  computes any day's hashes, and the whole sweep was rerun. One sweep run also stopped on
+  printing an emoji to the Windows console; the probe's files had been restored before the
+  print, and the rerun prints UTF-8.
+- Cold gate, first run (2026-10-12): TIME_WAIT **39**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1653** in 71 files, 21 more; stderr **0 bytes**), build **0**, browser
+  **0** (**733 passed, 1 skipped**, 15 more; 0 socket errors). No failed run. Committed after
+  it.
+
+**Correction after codex's review of commit 2 (`4113df9`, 2026-10-12)**
+- Codex held `4113df9` for two focus defects, each reproduced in Chromium in both projects:
+  - **The start guard ignored Share's text box.** With the box shown, Shift+Tab from Share
+    went to Close, skipping the box, and reverse tabbing then cycled Share and Close. Rule 7
+    wants the guard on the last control there is: the start guard now focuses the box when
+    it is shown, else Close. The As built line above ("the start guard sends focus to
+    Close") is amended by this.
+  - **Results lost the keyboard across the layout change.** Focused, then resized between
+    1280x800 and 360x640, focus fell to the page's body in both directions: Results moves
+    between the column and the rail like Archive, but `data-open-results` wasn't among
+    `FocusAcrossComposition`'s control attributes. It is now; the mechanism is unchanged.
+    I missed it because rule 7's "focus is never stranded" check covered only opening and
+    closing the dialog, not the button that opens it.
+- **Tests:** the refusal unit test now also checks the start guard reaching the box (unit
+  count unchanged, 21). Two new browser tests, x 2 projects: the box shown, Tab four times
+  (Share, Close, box, Share) and Shift+Tab four times (box, Close, Share, box); Results
+  focused at 1280x800, narrowed to 360x640 and widened back, focused each time and present
+  once. Before the fix, both failed (measured by the probes below).
+- **Mutations: 3 of 3 caught at the intended test,** files restored byte for byte: the start
+  guard always to Close (unit, at the new assertion; browser, both projects, at the Shift+Tab
+  sequence); `data-open-results` removed from the control attributes (browser, both
+  projects, at "narrowing dropped the keyboard"). The widening direction has no separate
+  probe: the one attribute serves both, and the probe fails at narrowing first.
+- Gate from cold, two runs (2026-10-12). **Run 1:** TIME_WAIT **99**, root verified;
+  TypeScript **0**, lint **0**, unit **0** (**1653**, stderr **0 bytes**), build **0**,
+  browser **0** (**737 passed, 1 skipped**), but **1 socket error**: one board load hit
+  `ERR_NO_BUFFER_SPACE` in `accessibility.spec.ts` (phone-360) and the helper's reload
+  recovered it. No test failed, but the run started at the pool's limit, so I didn't commit
+  on it. **Run 2:** TIME_WAIT **41**; TypeScript **0**, lint **0**, unit **0** (**1653**,
+  stderr **0 bytes**), build **0**, browser **0** (**737 passed, 1 skipped**, 4 more; 0
+  socket errors). Committed after run 2.
+- Codex accepted the correction at `f49763e` (2026-10-13): 78/78 unit tests (stderr 0 bytes),
+  type-checking, 18/18 Chromium tests (12 committed and six of its own: repeated resize
+  crossings, and reverse wrapping to the copy box, from the heading too), and CI's gate and
+  visual jobs on the exact head.
+
+**As built: implementation commit 3, opening by itself (rule 8, 2026-10-13)**
+- **The signal** (`coordinator.ts`): `lastFinish`, an `observable.ref` of `{ puzzleId,
+  serial }`, set by `signalFinish` in `transact`'s commit handler, before `adopt` clears the
+  `pendingFinish` it reads. **A deviation from rule 8's wording, for codex to review**
+  (**wrong about `changed`, and reverted for it:** see the correction after review below):
+  rule
+  8 names three conditions: the transaction changed the attempt, the result is a solve (or a
+  clock error's untimed one), and its `finishedAt` equals a binding's
+  `pendingFinish.solvedAt`. I kept only the third, on a binding that `matches` the attempt.
+  Read in the code, it implies the other two:
+  - Only `finish` writes a `finishedAt` equal to the captured instant, and always as a solve
+    or a clock error's untimed solve. `recover` writes the evidence's instant, but
+    `reconcileLive` passes it evidence only when that is older than `pendingFinish`, and a
+    given-up board has no `finishedAt`.
+  - Once a result commits, `adopt` clears `pendingFinish` in the same handler, so a later
+    transaction that changes nothing finds no `pendingFinish`, and one result signals once.
+  - No test could tell either dropped check from its absence. The earlier redundant checks
+    were removed for the same reason.
+- **The reaction** (`ResultsTrigger.tsx`, rendered at the end of `DominoClient`, outside the
+  stage): a MobX `reaction` on `lastFinish`. Each signal is a new value, so it runs once per
+  result and never for one from before it mounted. Rule 8's "remembers the last `serial` it
+  handled" is therefore the reaction itself: a stored serial was written, and removed before
+  the sweep, because no test could tell it was there. On a signal for the board on screen,
+  when its size or the day is now finished, it waits `RESULTS_DELAY_MS` (1500) and calls
+  `openResults`. The wait is cancelled by:
+  - another board on screen;
+  - Archive open;
+  - Results open by hand (spent);
+  - Practice started;
+  - the component unmounting.
+- **Choices inside the contract:**
+  - **The day check:** "the board's date is the day being viewed" is the board check. The
+    board on screen is always one of the viewed day's sessions, and another day's are other
+    objects. A separate date comparison was written and removed before the sweep, for the
+    same reason as the serial.
+  - **Moved on before the signal:** if the player has already moved on when the signal
+    arrives, nothing waits. Example: Archive opened while the finish was saving, which
+    Results would otherwise have replaced 1.5 s later.
+  - **A late signal for another board:** it leaves a running wait alone. My first draft
+    cancelled any running wait on every signal, so board 1's held save committing late
+    would have cancelled board 2's pause. Found on reading, before any test; a test now
+    holds it.
+- **New tests:**
+  - `tests/challengeView.test.ts`, **6**:
+    - this tab's finish signals once, including a clock error's untimed solve;
+    - a failed save signals when the retry timer, or a refresh, commits it;
+    - not for another tab's result, including one that wins the race to this board, nor
+      for a refresh that adopts one;
+    - not for another board's result finished at the same instant, while this tab's finish
+      waits (the identity check);
+    - not for a recovery after a reload;
+    - not for Practice, nor for a board given up when its day leaves the window.
+  - `tests/challengeResults.test.tsx`, **14**, through the real `DominoClient`, with the
+    trigger's timer and the date faked after mounting:
+    - opens at 1500 ms and not at 1499, with the card's time already shown, and focus on
+      the heading;
+    - stays closed when neither the size nor the day is finished;
+    - opens once on the ninth solve;
+    - opens when the last board finishes the day although a given-up board leaves its size
+      unfinished;
+    - nothing after unmounting;
+    - cancelled by navigation, Archive and Practice, and spent by opening Results by hand;
+    - nothing for a finish committing after the player moved on, with Results left there;
+    - nothing over Archive opened while the finish saved;
+    - a late signal for another board keeps the pause;
+    - nothing for another tab's result;
+    - yesterday's results closing at the next midnight (rule 12's remaining case).
+  - `e2e/challengeResults.spec.ts`, **1 × 2 projects:** with Easy 2 and 3 seeded through
+    the fixture, solving Easy 1 shows the card's time, then the results, focused on the
+    heading, with Easy's total.
+- **Tests changed on purpose:** none.
+- **Timers in the jsdom tests:** Vitest refuses fake timers once `setSystemTime` has mocked
+  the date, and faking them before mounting made `mount` time out (measured; I didn't find
+  which wait, and infer it's one of Testing Library's). So the new tests switch to fake
+  timers after mounting, and carry the date across.
+- **First drafts that failed and were mine, all in tests:**
+  - a clock error set 4.9 s back, under the 5 s tolerance;
+  - Medium 2's time expected from the wrong start;
+  - `beginPractice` asserted to return a value it doesn't return;
+  - fake timers installed in the two ways above;
+  - a quoting slip in a scripted insertion.
+  - A test for a finish committing while the root restarted was written and removed: the
+    root restarts only through React's effect cleanup (StrictMode's double mount, or
+    leaving the page), never with a finish in flight, so it argued from a case that
+    doesn't happen.
+- **Mutations: 18 of 18 caught at the intended test,** files restored byte for byte. Unit,
+  17:
+  - the signal: without the instant check; without `pendingFinish`; without the identity
+    check; the serial never increasing; read after `adopt`;
+  - the trigger: no pause; opening whatever the size and day; only a finished size; no
+    board check; navigation, Archive, Results by hand and Practice each not cancelling;
+    waiting when already moved on; the timer not cleared; a late signal cancelling the
+    pause; no cancelling on unmount.
+  - Browser, 1: the trigger not mounted, both projects.
+- Cold gate, first run (2026-10-13): TIME_WAIT **48**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1673** in 71 files, 20 more; stderr **0 bytes**), build **0**, browser
+  **0** (**739 passed, 1 skipped**, 2 more; 0 socket errors). No failed run. Committed after
+  it.
+
+**Correction after codex's review of commit 3 (`ee1a7c4`, 2026-10-13)**
+- Codex held `ee1a7c4`: **the instant match does not imply this tab saved the result.** Two
+  reachable cases, each reproduced in a scratch test that failed at its intended assertion:
+  - Another tab finishes the same board at the same millisecond while this tab's save waits.
+  - Another tab opens while it waits, and recovers this tab's saved solve evidence, which
+    carries the captured instant.
+  - In both, this tab's transaction then commits the other tab's result unchanged, and
+    signalled it. A component test showed the first one opening Results.
+- **Where my reasoning went wrong:** "`reconcileLive` passes `recover` evidence only when
+  older than `pendingFinish`" is true of this root's `reconcileLive`, which knows of its own
+  pending finish. Another tab's has no `pendingFinish`, so its recovery uses this tab's
+  evidence and instant. And "no test could tell `changed` from its absence" was false: both
+  cases tell. The As built claims above are corrected by this.
+- **Corrected:** the commit handler signals only when `outcome.changed` (as rule 8 says), and
+  `signalFinish`'s comment now says why both conditions are needed. The result-kind check
+  stays unwritten, which codex agreed follows from the current reconciliation path: what
+  this root's own transaction writes at the captured instant is `finish`'s, a solve or a
+  clock error's untimed one.
+- **The two remaining checks needed new tests.** With `changed` back, the race test and the
+  same-instant test no longer reached the instant and identity checks: their transactions
+  change nothing, so `changed` stops them first. Both checks still guard real paths, each
+  now with a test built from real transitions:
+  - **The identity check:** another tab's lost finish of Hard 3 at this tab's captured
+    instant. This root, told of it, recovers it in its own transaction, a change on another
+    board, while this tab's finish of Easy 1 waits. It replaces the same-instant test,
+    which `changed` now covers.
+  - **The instant check:** this tab's board saves fail, and another tab solves the same
+    attempt first and loses its finish. This tab's finish transaction then recovers the
+    other's earlier solve instead: a change, finished at the other tab's instant.
+- **Tests:**
+  - `tests/challengeView.test.ts`: codex's two cases (same board at the same instant;
+    another tab recovering this tab's evidence), the identity test replaced as above, and
+    the instant test added. **9** in the describe, 6 before.
+  - `tests/challengeResults.test.tsx`: codex's component case, a same-instant finish by
+    another tab opening nothing. **15** in the describe, 14 before.
+- **Mutations: 19 of 19 caught at the intended test,** the whole sweep rerun, files restored
+  byte for byte. The new probe, `changed` removed, fails codex's three regressions. In the
+  first rerun, before the two new tests, the instant and identity probes survived (17 of
+  19); that is how the gap above was found.
+- Cold gate, first run (2026-10-13): TIME_WAIT **44**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1677**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**739
+  passed, 1 skipped**; 0 socket errors). No failed run. Committed after it.
+- Codex accepted the correction at `9a2be95` (2026-10-13): 289/289 unit tests (stderr 0
+  bytes), type-checking, three probes of its own (`changed`, identity and instant each
+  removed) caught at their intended assertions, and CI's gate and visual jobs on the exact
+  head. Its extra local Chromium check didn't start: the socket pool stayed above 100.
+
+**As built: implementation commit 4, Start moves focus only after a keyboard activation (rule 16's 3a bug, 2026-10-13)**
+- **The fix** (`ChallengeCover.tsx`): Start hands the keyboard to the board only when the
+  click came from the keyboard (`event.detail === 0`, which Chromium gives Enter and Space on
+  a button) **and** Start has focus. The rest of 3a's handoff is unchanged: cancelled if
+  focus moves elsewhere while the start saves, or the board on screen changes.
+  - The `detail` check is what rule 16 adds. In Chromium a mouse click focuses the button,
+    so "Start had focus" was true for a mouse Start too, and the board took the keyboard.
+  - The focus check stays: a click with `detail` 0 can also come from script without
+    focus, and 3a's "a pointer Start leaves focus alone" test (a `detail` 0 click with focus
+    on Archive) fails without it (measured, probe 4 below).
+- **New tests:**
+  - `tests/challengeUi.test.tsx`, **1:** a click with `detail` 1 on a focused Start, as
+    Chromium sends it, leaves the board unfocused. 3a's jsdom tests use `fireEvent.click`,
+    whose `detail` is 0, so they go on standing for keyboard Starts; none changed.
+  - `e2e/challengeUi.spec.ts`, **3 × 2 projects**, beside 3a's Enter test:
+    - Space moves focus to the board;
+    - a mouse click doesn't;
+    - a mouse click on a Start the keyboard focused doesn't either. The test checks Start
+      matches `:focus-visible` before clicking: codex's case.
+- **Tests changed on purpose:** none.
+- **Mutations: 4 of 4 caught at the intended test,** files restored byte for byte:
+  - no `detail` check, the 3a behaviour: unit, at the new test; browser, both mouse tests
+    in both projects;
+  - deciding by `:focus-visible` instead: browser, only the mouse-after-keyboard test, in
+    both projects, as codex predicted;
+  - no focus check: unit, at 3a's "a pointer Start leaves focus alone", and also at "the
+    card focuses Practice once the finish saves".
+  - Space has no probe of its own: Enter and Space both give `detail` 0, so no single
+    change breaks only one.
+- Cold gate, first run (2026-10-13): TIME_WAIT **42**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1678**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**745
+  passed, 1 skipped**, 6 more; 0 socket errors). No failed run. Committed after it.
+- Codex accepted commit 4 at `a6572da` (2026-10-13): 72/72 unit tests (stderr 0 bytes),
+  type-checking, 32/32 Chromium tests (30 committed, and two of its own with touch taps
+  and injected pen clicks), and CI's gate and visual jobs on the exact head.
+
+**As built: implementation commit 5, the challenge switched on (rules 15 and 16, 2026-10-13)**
+- **Switched on** (`provider.tsx`): `new RootStore(new CorpusSource(), { challenge: ... })`,
+  on everywhere except under `/visual`. **A choice the contract didn't foresee, for codex
+  to review:**
+  - `StoreWrapper` wraps every route, the visual build's fixture pages included, and each of
+    those brings its own root. Switched on unconditionally, the wrapper's root, though
+    nothing there renders it, started a second coordinator beside each fixture's, on the
+    same storage.
+  - Measured: `challengeSession.spec.ts`'s "legacy transaction abort" held the fixture's
+    legacy write, and the hidden coordinator wrote the legacy record meanwhile, so the
+    fixture saw `ready` where it expected `retry`.
+  - Those routes exist only in the visual build, and they get the wrapper's root as it was
+    before. The pathname is read in the browser; the server render is the same loading
+    state either way.
+- **What activation breaks, re-measured** before any spec change: the whole browser suite,
+  run with `provider.tsx` switched on and the shared open path pressing Start. **147
+  failed, 1 skipped, 598 passed**, 0 socket errors, across 11 specs. Rule 16's run (before
+  commits 2 to 4) was 161.
+  - The four specs that failed only on 3a's focus bug (`keyboard`, `accessibility`,
+    `pickAPiece`, `feedback`) pass unchanged: commit 4 fixed it.
+  - Two specs were new to the list: `persistence.spec.ts`, 7 (rule 16 had 3), and
+    `challengeResults.layout.spec.ts`, 7, which compares against a casual page and was
+    written after rule 16's run.
+- **The shared open path** (`e2e/openBoard.ts`):
+  - `waitForBoard`, used by `openBoard` and by the specs that reload, waits for the board or
+    its cover, then `startIfCovered`: when the board is covered, it clicks Start and waits
+    for the board, as a player does. A click, so the keyboard stays where it was.
+  - **First draft wrong, measured:** it decided on the first cover it saw, and every board
+    is covered while the challenge prepares. After a reload, a board already started, or an
+    archive day, then shows uncovered, and the helper waited for a Start that never came.
+    This was all 6 archive failures and all 7 persistence ones. It now waits for whichever
+    comes first, the board or a ready cover.
+  - `openArchiveDay` and `ARCHIVE_DAY` (2026-09-20) are for the specs whose subject is casual
+    play. It pins the clock to `LATE_IN_A_MONTH`, opens `/` without starting anything, and
+    picks the day through the Archive dialog. It also works after an earlier load.
+- **Every spec change, with its reason:**
+  - `layout.spec.ts` (76 failed): `chooseDifficulty` presses Start on the board it lands on.
+    **Budgets:** all of the spec's assertions pass with the clock row, and none was changed.
+  - `board.spec.ts` (24): its own open path presses Start after Skip.
+  - `desktop.spec.ts` (10): `hard` presses Start. `CHROME_ROWS` goes 5 to **6**, changed on
+    purpose: the sixth row is 3a's clock line, now on the public page. "The board gets the
+    room a desktop has" still holds its 56 px cell.
+  - `archive.spec.ts` (6) and `persistence.spec.ts` (7): unchanged. The open path above
+    fixed them.
+  - `completion.spec.ts` (2), "Next level moves on": runs on an archive day. A challenge
+    day's card offers "Next board", and the board it moves to is covered.
+  - `completionCard.spec.ts` (2), "on a board really solved": runs on an archive day. A
+    challenge day's card gives the time where casual play names the puzzle.
+  - `challenge.layout.spec.ts` (7) and `challengeResults.layout.spec.ts` (7): **the casual
+    page is `/visual/daily?challenge=off`**, a query the fixture now reads to build its root
+    with the challenge off, which is the public page as it was.
+    - **A change of mechanism from rule 16**, which said to compare with 3a's measured
+      budgets. 3a recorded only the extremes, and recorded numbers wouldn't hold on the CI
+      runner, whose text renders wider. Measured live, the numbers are 3a's and commit 2's
+      exactly: +37 px where the clock row shows, +0 on archive days, 360×640's 8×8 scrolling
+      136 → 173. That also shows the fixture reproduces the old public page.
+  - `challengeUi.spec.ts` (2): "the public page stays casual" is replaced by "the public page
+    is the Daily Challenge" (covered, Start, the clock running after Start, on `BASE_URL`).
+    Rule 16's two activation cases are added, also on `/`:
+    - A board played before the challenge stays uncovered and untimed, reading "Played
+      before the challenge · untimed", with its piece. The progress record is made by the
+      real casual game, on the fixture with the challenge off, and carried to the public
+      origin.
+    - A clock before the corpus gets 2026-09-01 casually, uncovered, with no clock, and
+      the clamp note.
+  - `challengeSession.spec.ts` (4): "the production public page remains casual and writes no
+    challenge records" now runs on an archive day of the production page. Its legacy check
+    has run (`{ checked: true, marks: [] }`), and a hint and a placement record no attempt.
+    "Legacy transaction abort" is unchanged; the `/visual` exception fixed it.
+  - `tests/provider.test.tsx`, changed on purpose: the lifecycle test expected the public
+    root's challenge off; it now expects it on. A new test: off under `/visual`.
+- **After the changes:** the whole browser suite, **749 passed, 1 skipped**, 0 failed, 0
+  socket errors. Unit **1679**, stderr 0 bytes.
+- **Inventory:** `tests/controls.test.ts` went 27 to 30 in commit 2; activation adds no
+  control.
+- **Mutations: 8 of 8 caught at the intended test,** files restored byte for byte, each
+  browser probe on fresh builds:
+  - the challenge off everywhere: unit, at the lifecycle test; browser, at "the public
+    page is the Daily Challenge", both projects;
+  - no `/visual` exception: unit, at the new test; browser, at "legacy transaction abort",
+    both projects;
+  - the open path never pressing Start (rule 16's planned probe): browser, at "the board
+    gets the room a desktop has", among 7 in `desktop.spec.ts`;
+  - deciding on the first cover seen (my first draft): browser, at "an archive day
+    survives a reload";
+  - `openArchiveDay` closing the archive instead of picking the day: browser, at "Next
+    level";
+  - the fixture ignoring `?challenge=off`: browser, at the 360×640 layout comparison.
+  - The legacy and before-clamp cases test behaviour slices 2 and 3a built, which this
+    commit doesn't change, so they have no probe here.
+- Cold gate, first run (2026-10-13): TIME_WAIT **47**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1679**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**749
+  passed, 1 skipped**, 4 more; 0 socket errors). No failed run. Committed after it, as a
+  `[visual update]`; the baselines follow in their own commit, from CI's artifact.
+- **The baselines** (`2ebb938`), from CI run `38445794138`'s `visual-baselines` at `f1b4ade`
+  (gate and visual jobs passed): `desktop.png` and `phone.png` differ and were committed;
+  both component sheets came back byte-identical. `environment.json` differs only in the
+  runner image, 20260927.320.1 to 20261004.327.1, and was committed, as in `38512ed`.
+  - Viewed: the public page with the day's first board started, the clock line reading
+    "0:00" above it, and nothing else changed. Not pixel-counted: Pillow isn't installed
+    here.
+- **A breach of the gate rule, mine:** I committed the baselines before running the cold
+  gate. The commit only adds images the gate doesn't read, but the rule has no exception.
+  The gate ran on that head afterwards: TIME_WAIT **41**; TypeScript **0**, lint **0**, unit
+  **0** (**1679**, stderr **0 bytes**), build **0**, browser **0** (**749 passed, 1
+  skipped**, 0 socket errors). CI run `38446950483` on `2ebb938`: gate and visual both
+  passed, so the new baselines match.
+- This record's commit (docs only), gate from cold, two runs (2026-10-13):
+  - **Run 1:** TIME_WAIT **46**; every step **0** (unit **1679**, stderr **0 bytes**; browser
+    **749 passed, 1 skipped**). But **1 socket error**: a board load in
+    `accessibility.spec.ts` (phone-360) hit `ERR_NO_BUFFER_SPACE`, and the helper's one
+    reload recovered it. No test failed. Not committed on.
+  - **Run 2:** TIME_WAIT **18**; every step **0** (unit **1679**, stderr **0 bytes**; browser
+    **749 passed, 1 skipped**), and again **1 socket error**, recovered the same way, mid-run
+    in `layout.spec.ts` after about 700 tests. Committed after run 2: no test failed, and
+    from a start this quiet a third run would most likely do the same.
+  - **Flagged, not fixed here:** before activation the gates recorded 0 socket errors, and
+    since then two consecutive runs have each exhausted the pool mid-run, though the gate
+    before activation's commit and the late baselines gate had 0. Whether activation's Start
+    presses add enough requests per test to matter is not measured. It wants its own change
+    if it continues.
+
+**Correction after codex's review of activation (`f1b4ade` to `2299d4f`, 2026-10-14)**
+- Codex held activation for **lost archive progress**. An enabled root skipped the
+  synchronous restore in `reconcileSessions` for every board, leaving it to hydration, while
+  `canMutate` allowed casual boards at once. So an archive board was drawn empty and
+  playable until IndexedDB answered. Codex measured three things:
+  - the existing archive-return test failing in both projects;
+  - a scratch test showing the empty, editable board;
+  - another showing a move during hydration overwrite the saved piece.
+- **Missed by my runs:** that archive-return test passed in every run of mine. Its read
+  raced hydration, and won on this machine.
+- **The fix**, rule 15 amended to say it:
+  - The coordinator's `casualByDate(date, clamp)` is the date part of `isCasual`: a
+    before-clamp day, or one older than yesterday. `isCasual` now uses it too.
+  - `reconcileSessions` restores saved progress at once where it's true, as with the
+    challenge off, before the session is bound, drawn or playable.
+  - Boards in the window are unchanged: covered and locked until hydration restores what
+    matches their attempt.
+  - Hydration then restores the same record, or the newer one a move before it captured.
+- **Tests:**
+  - `tests/challengeView.test.ts`, **4**, with the coordinator's storage held unopened so
+    nothing hydrates:
+    - an archive day's saved piece is in the session, `casual`, before hydration;
+    - the same for a before-clamp day;
+    - a move before hydration lands on top of the saved piece, and after hydration the
+      board and the stored record both hold it;
+    - today's board, with a stored attempt and a progress record from an earlier attempt,
+      stays empty before hydration and after it. That last test holds the "only casual by
+      date" condition: a fix restoring every board at once fails it.
+  - `e2e/archive.spec.ts`, **1 × 2 projects:** returning to an archive day, the pieces are
+    read in the first DOM change that draws the day's rocks. That's before any IndexedDB
+    event can arrive, so it doesn't depend on timing. With the fix reverted it failed in
+    both projects, at that first-frame assertion.
+- **Mutations: 5 of 5 caught at the intended test,** files restored byte for byte:
+  - the fix reverted: unit, at the archive test, plus the before-clamp and move tests;
+    browser, at the first-frame test in both projects;
+  - every board restored at once: at the today's-board test;
+  - `casualByDate` without before-clamp: at the before-clamp test;
+  - `casualByDate` without archive days: at the archive test.
+- Codex's own record of the held heads: CI passed on all three. Its local cold rerun had
+  4 browser failures in 745: the two archive-restoration ones, and two network startup
+  failures. The six unit failures in its first run were its restricted shell blocking
+  Node's account lookup.
+- Cold gate, first run (2026-10-14): TIME_WAIT **33**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1683**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**, 2 more; **0 socket errors**). No failed run. Committed after it.
+
+**Second correction after codex's review of `15765d3` (2026-10-14)**
+- Codex held `15765d3` for two remaining hydration problems, reproduced in jsdom with the
+  real coordinator:
+  1. **Undo lost:** a move on a held-hydration archive board survived hydration, but Undo
+     then returned false. Hydration restored the board again, and `restore` clears the move
+     history.
+  2. **Saved pieces lost on reopening:** an archive board with an old timed result and
+     matching progress, visited while attempt history couldn't be read (board saves still
+     working), took a move saved without the attempt's stamp. Reopened healthy, both pieces
+     showed, then hydration cleared them: its stamp check rejected the unstamped record.
+- **Both have one cause:** my first correction made the build restore casual boards, but
+  left hydration restoring them a second time, with the check meant for timed boards.
+- **The fix**, rule 15 amended again:
+  - `reconcileSessions` decides "casual now" once per build. It restores the sessions it
+    builds and passes that to `bind`, which sets `ChallengeBinding.casualAtBuild`.
+  - For such a binding, hydration never replaces or clears the board. It only fills one
+    that is untouched (not `locallyEdited`) and still the empty initial board, from a
+    record the build didn't have. The case is real: an enabled root migrates a v1 document
+    in the coordinator, after the build. A filled before-clamp board drops the record's old
+    solve evidence, as before.
+  - In-window boards keep the strict path, stamp check included.
+  - **A winning board restored at build is marked complete then.** Found by its probe
+    surviving: without it the levels store's win reaction marked it, and played the win
+    sound and haptics on reopening a solved day. The test now asserts no celebration.
+  - **First draft wrong, measured:** hydration left a casual board entirely alone, and
+    `challengeClamp.test.ts`'s "new-root before-clamp hydration…" failed. Its levels store
+    reads the real date, while its coordinator reads a fake clock. So the build found the
+    record expired, and only hydration had it, which is how the fill case was found.
+- **Tests** (`tests/challengeView.test.ts`, 4 more in the describe, 9 in all):
+  - codex's Undo sequence;
+  - codex's reopening sequence, with the attempt history failing through a broken store and
+    board saves working; it checks the saved record lacks the stamp, then that reopening
+    keeps both pieces before and after hydration;
+  - a winning board marked complete at build, with no win feedback;
+  - the fill: an untouched board filled from a record written between build and hydration.
+- **Mutations: 11 of 11 caught at the intended test,** files restored byte for byte, the
+  first correction's five rerun against the restructured code:
+  - restoring at build reverted (unit; browser, both projects);
+  - every board restored at build;
+  - `casualByDate` without before-clamp;
+  - `casualByDate` without archive days;
+  - hydration restoring casual boards as before;
+  - without the untouched check;
+  - never filling;
+  - the binding never told;
+  - no completion at build (it survived the first sweep, 10 of 11; see above);
+  - a filled before-clamp board keeping old evidence.
+- Codex's record of `15765d3`: 342/342 unit tests (stderr 0 bytes), 4/4 Chromium archive
+  tests, and CI's gate and visual jobs passed. Its scratch regressions failed at their
+  intended assertions: 2 passed and 1 failed, then 2 passed and 2 failed expanded.
+- Cold gate, first run (2026-10-14): TIME_WAIT **48**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1687**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
+
+**Third correction after codex's review of `5744533` (2026-10-14)**
+- Codex held `5744533` for a clock change, reproduced through the real coordinator:
+  1. An active attempt exists for the first published day.
+  2. With the device clock before that day, its board loads before-clamp, so casual, and
+     the build restores an unstamped saved piece. Storage opening is held.
+  3. The clock is corrected and the same day refetched, unclamped.
+  4. Storage opens.
+
+  The board became `playing` in the existing timed attempt, holding the unstamped casual
+  piece: hydration checked only `casualAtBuild`, though the board had since turned timed.
+- **The fix**, rule 15 amended a third time: hydration takes the casual path only while
+  `casualAtBuild` *and* `isCasual(binding)` hold when it runs. Otherwise it takes the timed
+  path, whose stamp check clears the unstamped piece.
+- **Test** (`tests/challengeView.test.ts`, 1 more in the describe, 10 in all): codex's
+  sequence. The device has passed its legacy check already (`legacyCheck(() => [])`):
+  without that, the opening marks the saved piece's board legacy, and the test never reaches
+  the case. It asserts `playing` and an empty board after hydration; with the check removed
+  it fails at "no unstamped piece in the timed attempt".
+- **Mutations: 12 of 12 caught at the intended test,** files restored byte for byte: the
+  second correction's 11 rerun, and the new check removed.
+- Codex's record of `5744533`: 346/346 committed unit tests (stderr 0 bytes), type-checking
+  passed, 3/3 of its scratch controls passed, and CI's gate and visual jobs passed. Its
+  regression failed in both runs, and passed against `15765d3`. It didn't rerun Chromium,
+  the full gate or the mutation probes.
+- Cold gate, **run 1 failed** (2026-10-14): TIME_WAIT **96**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (stderr **0 bytes**), build **0**, browser **1** (**750 passed, 1
+  failed, 1 skipped**; **0 socket errors**). The failure: `e2e/motion.spec.ts:112`, "the
+  completion card arrives inside the limits", phone-360, at `boundingBox()!.width` on cell
+  `0,0`, which wasn't there. The page snapshot shows Easy puzzle **2**, covered, and a
+  **1-day streak**, so puzzle 1 had already been solved in that context. Inferred from that
+  and `e2e/frames.ts`: `onTime` reruns its block when a try's frames come late, and the
+  rerun reopens `/` in the same context, where since activation the solved attempt persists.
+  So a retry never gets a fresh board. A flake from activation (`f1b4ade`), not this
+  change; **open, to be fixed in its own change.**
+- Cold gate, run 2 (2026-10-14): TIME_WAIT **73**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1688**, 1 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). Committed after it.
+
+**Fourth correction after codex's review of `70aee0b` (2026-10-16)**
+- Codex accepted the clock-change fix, and held activation for a midnight case, reproduced
+  through the real coordinator:
+  1. Yesterday's board has a saved piece.
+  2. It's opened while attempt-history reads fail (or storage opening is held), so it stays
+     covered and empty; progress saves still work.
+  3. Midnight passes: the day becomes an archive day, so the board is editable, but empty.
+  4. A move's save holds only the new piece, so the saved one is gone.
+
+  `canMutate` answered "casual" before anything restored the board.
+- **The fix**, rule 15 amended a fourth time:
+  - `casualAtBuild` is now `casualRestored`: the board holds its saved casual progress,
+    put there outside hydration, by the build or by the coordinator.
+  - `canMutate` lets a board casual by its date take a move only if it is
+    `casualRestored` or `ready`. Legacy boards are unchanged.
+  - `restoreTurnedCasual` restores a board that is casual by its date, not ready, and not yet
+    restored, from the same record hydration would use (`savedProgress`: a pending write,
+    else storage). It marks the board restored either way, but restores only an untouched
+    board. It runs wherever the date the view reads moves (`advance`: `sample`, `start`, the
+    end of `initialize`, and a Start's commit), and in `bind` when a clamp changes. So the view
+    never shows such a board casual without its pieces.
+  - An untouched board, because a restarted root (StrictMode) has played boards that aren't
+    ready until they rehydrate. Restoring one would clear its Undo.
+- **Tests** (`tests/challengeView.test.ts`, 4 more in the describe, 14 in all):
+  - codex's sequence with storage opening held: no move at midnight before a tick, then the
+    saved piece once casual, a move on top, and after hydration the board, its Undo and
+    storage;
+  - codex's sequence with history reads failing: the same, ending with both pieces in
+    storage;
+  - a clamp turning today's board casual: restored as it is bound, with no tick;
+  - a played board in a restarted root, turned casual: not restored over, so its Undo
+    survives.
+- **Mutations: 17 of 17 caught at the intended test,** 8 of them also checked at the
+  intended assertion's message (the browser probe, no completion at build, the third
+  correction's check, and the 5 new), files restored byte for byte. That's the third
+  correction's 12 rerun, plus 5 new:
+  - a casual board editable before its pieces are back;
+  - the clock moving without restoring;
+  - a clamp bound without restoring;
+  - restoring over a played board;
+  - a restored board never marked so.
+
+  One earlier probe is now caught differently. "The binding never told it was built
+  casual" fails at the refused move rather than at hydration clearing the board, since an
+  unrestored casual board now takes no move.
+- Codex's record of `70aee0b`: 347/347 committed unit tests (stderr 0 bytes), type-checking
+  passed, its probe removing the guard caught (1/1), and CI's gate and visual jobs passed.
+  Its scratch regressions ran in jsdom only.
+- Cold gate, first run (2026-10-16): TIME_WAIT **49**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1692**, 4 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it. The
+  `motion.spec.ts` flake from the third correction's run 1 stays open.
+
+**Fifth correction after codex's review of `6b2028f` (2026-10-16)**
+- Codex accepted the midnight sequences, and held activation for initialization crossing
+  midnight before the first tick, with storage opening held 200 ms across it:
+  1. Yesterday has an active attempt and valid unstamped casual progress from an older tab.
+  2. Its timed board, opened just before midnight, waits empty.
+  3. Storage opens just after midnight, before any tick.
+  4. Hydration applies the stamp check and clears the pieces; initialization then moves the
+     date, showing an empty, editable archive board.
+  5. A move saves only the new piece.
+
+  `initialize` hydrates before moving the date, and by then the board is ready, so
+  `restoreTurnedCasual` skipped it.
+- **First fix, not enough, found by reading before committing:** sampling the clock inside
+  hydration, before it decides. That fixes codex's sequence, but if midnight falls between
+  that reading and the next, hydration still clears the board as timed, and nothing restores
+  it later. The rule had to hold for any ordering.
+- **The fix**, rule 15 amended a fifth time:
+  - `restoreTurnedCasual` no longer skips ready bindings. Any board casual by the date on
+    screen, untouched (not `locallyEdited`, still the initial board), gets its saved casual
+    pieces: a timed board the stamp check left empty included.
+  - `canMutate` judges casual by `deviceDate`, the date on screen, not the live clock, and
+    answers `true` there. Every board casual by that date already has its pieces, since the
+    restore runs on every `bind` and wherever that date moves. So the view and moves never
+    disagree: until a reading moves the date, a board just before midnight is the timed
+    board the screen shows.
+  - Hydration samples the clock before deciding, so a board hydrating across midnight is
+    restored then, not at the next tick.
+  - **One mechanism instead of two.** The mutation sweep showed the levels store's
+    build-time restore (15765d3) and `bind`'s `casualAtBuild` flag had become redundant:
+    reverting either survived in both the unit and browser tests. The levels store is back
+    to restoring only with the challenge off, `bind` takes no flag, and the coordinator
+    restores a casual board as it binds it, in the same action that builds it. The
+    first-frame browser test catches its removal. The restore reads per board through
+    `savedFor`, as the levels store did, with no v1 migration, so a root that doesn't know
+    its storage yet writes nothing.
+- **Tests** (`tests/challengeView.test.ts`, 6 more; 1 changed on purpose):
+  - codex's sequence through initialization: the board (its saved pieces, `casual`);
+  - and the saved data (a move keeps both pieces in storage);
+  - a board bound after opening whose hydration crosses midnight: restored at hydration;
+  - a timed board hydrated empty just before midnight: the view and moves agree before the
+    tick, and it gets its pieces at the tick;
+  - a board bound casual by the date on screen while the clock is behind it (it went back):
+    restored as it is bound;
+  - two for before-clamp solve evidence, restored as bound and filled by hydration. The
+    mutation sweep found nothing tested either once the restore moved into `bind`.
+  - Changed on purpose: "keeps its saved pieces in storage when attempt history can't be
+    read" now runs on a device that has passed its legacy check. Its piece otherwise made
+    the board legacy, and with moves judged by the date on screen, a legacy board takes
+    moves. That isn't the case the test is for.
+- **Mutations: 22 of 22 caught at the intended test,** 18 also at the intended assertion's
+  message, files restored byte for byte. Every earlier round this time:
+  - With the first fix, 19 of 21:
+    - codex's diagnostic (advancing the date before hydrating in `initialize`) failed the
+      bound-board test, but at its view assertion; the board assertion now comes first;
+    - a probe reading the live clock in hydration's branch survived as equivalent, and
+      that change was dropped.
+  - After judging by the date on screen, 19 of 22, then 20 of 22:
+    - `canMutate`'s guard was equivalent, so that branch is plainly `true`;
+    - codex's two regressions were protected twice over, so they are now probed by
+      removing both mechanisms;
+    - the `casualAtBuild` flag was redundant.
+  - A run stopped at a changed anchor (my script). What it had run showed the levels
+    store's restore redundant too.
+  - After one mechanism:
+    - 20 of 22: an anchor matched twice, and hydration's before-clamp evidence clear was
+      untested;
+    - 21 of 22: the clear as bound was untested;
+    - 21 of 22: my script ran that probe against the wrong file;
+    - then 22 of 22.
+
+  The probes: restoring as bound removed (unit; browser; the clock-back test); the levels
+  store restoring every board; `casualByDate` without before-clamp, and without archive
+  days; hydration restoring casual boards as before, and without the untouched check;
+  hydration never filling; a restored winning board not marked complete; before-clamp
+  evidence kept, as bound and when filled; hydration not checking the board is still casual;
+  the clock moving without restoring; a clamp bound without restoring; restoring over a
+  played board; a restored board never marked so; codex's ordering, at the board and at the
+  saved data; hydrated boards not restored as they turn casual; hydration not sampling the
+  clock; `canMutate` judging by the live clock.
+- Browser, before the sweep: `archive`, `challengeSession` and `persistence` specs, **76
+  passed**.
+- Codex's record of `6b2028f`: 351/351 committed unit tests (stderr 0 bytes), type-checking
+  passed, 4/4 Chromium archive regressions, 6/6 of its probes caught at their intended
+  assertions, its diagnostic passing 226/226 targeted tests, and CI's gate and visual jobs
+  passed.
+- Cold gate, first run (2026-10-16): TIME_WAIT **33**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1699**, 7 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). No failed run. Committed after it.
+
+**Sixth correction after codex's review of `3db7e19` (2026-10-16)**
+- Codex accepted the late-initialization fix, and held it for a Reset and removal case,
+  reproduced through the real coordinator:
+  1. Yesterday's timed board is reloaded with one saved piece and hydrates normally;
+     `locallyEdited` is false.
+  2. Midnight passes, before the next tick.
+  3. Reset, or remove the only piece.
+  4. The piece reappears, and the change's Undo entry is gone.
+
+  `boardChanged` sampled the clock before setting `locallyEdited`. The sample turned the
+  board casual and ran `restoreTurnedCasual`, and the board, just emptied and not yet marked,
+  looked untouched.
+- **The fix**, rule 15 amended a sixth time: `boardChanged` sets `locallyEdited` before it
+  samples.
+- **Tests** (`tests/challengeView.test.ts`, 2 more): yesterday's board, played to one piece
+  in a first root, reloaded and hydrated in a second just before midnight, then the clock
+  moved past it with no tick:
+  - a Reset stands, and its Undo brings the piece back;
+  - the last piece's removal stands, and its Undo brings it back.
+- **Mutations: 24 of 24 caught at the intended test,** files restored byte for byte, on the
+  first run: the fifth correction's 22 rerun, plus the edit marked after the reading, caught
+  at "the Reset stands" and "the removal stands".
+- Codex's record of `3db7e19`: 358/358 committed unit tests (stderr 0 bytes), type-checking
+  passed, 4/4 Chromium archive regressions, and CI's gate and visual jobs passed. Its two
+  regressions passed against `6b2028f`, and its diagnostic, marking the board edited before
+  sampling, passed 231/231 targeted tests.
+- Cold gate, **run 1 failed** (2026-10-16): TIME_WAIT **53**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1701**; stderr **0 bytes**), build **0**, browser **1** (**750
+  passed, 1 failed, 1 skipped**; **1 socket error**). The failure was `e2e/metadata.spec.ts:93`
+  on phone-360: `page.goto: net::ERR_NO_BUFFER_SPACE`. That's the machine's socket pool, but
+  it's a failed gate all the same. The open question about socket pressure since activation
+  stands.
+- Cold gate, run 2 (2026-10-16): TIME_WAIT **47**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1701**, 2 more; stderr **0 bytes**), build **0**, browser **0** (**751
+  passed, 1 skipped**; **0 socket errors**). Committed after it.
+
+**Validation record**
+- Decisions commit `b540c42` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **21**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600** in 67 files,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run.
+- Streak-rules commit `84b7494` (docs only), gate from cold, first run (2026-10-12):
+  TIME_WAIT **36**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run.
+- This contract's commit (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **38**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run. Committed after it.
+- Answers commit `5680fdb` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **37**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run.
+- Revision after codex's first review (docs only), gate from cold, first run (2026-10-12):
+  TIME_WAIT **29**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**,
+  stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket
+  errors). No failed run. Rule 16's two activation runs were separate, local and never
+  committed: 555 failed and 164 passed as is; 161 failed, 1 skipped and 557 passed with
+  `openBoard` pressing Start; 0 socket errors in each; `provider.tsx` and `openBoard.ts`
+  restored byte for byte after each. Committed after it.
+- Delay decision commit `e87ea9e` (docs only), gate from cold, first run (2026-10-12): TIME_WAIT
+  **39**, root verified. TypeScript **0**, lint **0**, unit **0** (**1600**, stderr **0
+  bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0 socket errors). No
+  failed run.
+- Revision after codex's second review (docs only), gate from cold, first run
+  (2026-10-12): TIME_WAIT **37**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1600**, stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
+
+### Slice 3b follow-up, fresh tries for the completion-card motion test: implementation contract
+
+**Why.** A flake from activation (`f1b4ade`), recorded in the third correction's run 1 and
+left open for its own change; codex asked for it fixed before merge (2026-10-16).
+`e2e/motion.spec.ts`'s "the completion card arrives inside the limits" failed on phone-360
+at `boundingBox()!.width` on cell `0,0`: the cell wasn't there.
+
+**How it works today** (read, then measured):
+- `onTime` (`e2e/frames.ts:105`) runs a try again, up to three times, when its frames
+  arrive late, which happens on a busy machine.
+- The completion-card test (`e2e/motion.spec.ts:109`) runs every try in the test's one
+  `page`: `openBoard` goes to `/`, presses Start, then `playSolution` solves the board.
+- Since activation, a solve is a challenge attempt, kept in the context's storage. So a
+  second try opens a page where puzzle 1 is already solved, and the open path
+  (`startIfCovered`, `e2e/openBoard.ts:268`) can find a different board.
+- **Measured** (2026-10-17), with a scratch spec (deleted after) running two tries in one
+  page, 10 runs: the first try was fine 10 times. The second was unusable 3 times:
+  - twice it landed on Easy puzzle **2**, covered, with no cell, as in the gate's failure;
+  - once a cover was still there and the try failed after.
+- The other three `onTime` tests open the component sheet (`/visual`), whose boards keep
+  nothing between loads (read, not measured).
+
+**The rules:**
+1. Each try of the completion-card test runs in **a new browser context**, made from the
+   test's own device options (viewport, user agent, scale, mobile, touch), its base URL,
+   and `reducedMotion: 'no-preference'`. It's closed after the try, pass or fail. So every
+   try starts as the first does: a fresh device, empty storage.
+2. Each try checks that it starts fresh, **before it navigates**: the context's storage,
+   IndexedDB included (`context.storageState({ indexedDB: true })`, Playwright 1.63), is
+   `{ cookies: [], origins: [] }`. A try that isn't fresh then fails at that check, saying
+   so, before `openBoard` can fail at something else.
+3. Each new page is **pinned to the same published day**, `LATE_IN_A_MONTH`, with `pinDay`
+   before it loads (AGENTS.md: date-dependent browser tests pin the day). So every try
+   measures the same puzzle, even across midnight.
+4. The measurement is unchanged: the same board, solution, tracking and limits.
+
+**Corrected after codex's review (2026-10-17):**
+- The freshness check was "the streak reads 0" after opening. Wrong: a started-only attempt
+  leaves `playedEver` false, so `StreakCount` shows nothing (`tests/streak.test.ts:29`).
+  It's now the storage check, before navigation (rule 2).
+- The pinned day was missing (rule 3).
+- The compound probe is dropped (below): with the check removed, a shared context fails
+  only sometimes (3 of 10 measured), so it couldn't be relied on.
+
+**Not in it:** `onTime` and `openBoard` are unchanged, and so are the sheet's three motion
+tests. The socket-pressure question stays open separately.
+
+**Tests:**
+- The try becomes one function in the spec. A new test, "every try starts from a fresh
+  device", runs it twice in a row, so a second try is exercised on every run, not only
+  when frames come late. It runs in the same projects as the spec, desktop and phone-360.
+- Mutation probe: the tries sharing one context, kept open between them and closed after
+  the test, so the second try can't fail merely because its context was closed. Caught
+  by the new test at the freshness check, every run: the first try's Start and solve
+  always leave an attempt and progress in storage (read; to be confirmed by the probe).
+- The full gate before each commit, as always.
+
+**As built (2026-10-17)**
+- `e2e/motion.spec.ts` only:
+  - `cardArrival(context)` is one try: the storage check, then a new page, `pinDay`,
+    `openBoard`, and the unchanged measurement.
+  - `inFreshContext(browser, device)` makes the context, runs the try, and closes the
+    context in a `finally`.
+  - The device comes from the test's own option fixtures (`viewport`, `userAgent`,
+    `deviceScaleFactor`, `isMobile`, `hasTouch`, `baseURL`); `reducedMotion` is set to
+    `'no-preference'` on the new context.
+- **Tests:** "arrives inside the limits" runs `onTime` over `inFreshContext`. The new "every
+  try starts from a fresh device" runs two tries in a row. Desktop and phone-360, 2 more
+  browser tests.
+- **Measured:** the describe's two tests, `--repeat-each=5`: **20 passed**.
+- **Mutation probe: 3 of 3 runs caught, in both projects, at "the try starts on a fresh
+  device",** file restored byte for byte. Every try shared one context per worker, kept
+  open between tries and closed in `afterAll`. That confirms the contract's "every run".
+- Cold gate, **run 1 failed** (2026-10-17): TIME_WAIT **93**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1701**, stderr **0 bytes**), build **0**, browser **1** (**752
+  passed, 1 failed, 1 skipped**; **1 socket error**). The failure was
+  `e2e/cellStates.spec.ts:137` on phone-360: `page.goto: net::ERR_NO_BUFFER_SPACE`.
+- Run 2 (2026-10-17), started only once TIME_WAIT was under 50: TIME_WAIT **42**, root
+  verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0 bytes**), build
+  **0**, browser **0** (**753 passed, 1 skipped**, 2 more; **1 socket error, recovered**:
+  the open path's one reload, in `cellStates.spec.ts`, with no test failed). Committed
+  after it.
+- **Socket pressure keeps coming back:** 3 of the last 7 gate runs, since the sixth
+  correction's, had a socket error, and 2 of those runs failed. Still open, and its own change: fewer workers, or a pause between runs.
+
+**Validation record**
+- This contract's commit (docs only), gate from cold, first run (2026-10-17): TIME_WAIT
+  **92**, root verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0
+  bytes**), build **0**, browser **0** (**751 passed, 1 skipped**, 0 socket errors). No
+  failed run. Committed after it.
+- The revision after codex's review (docs only), gate from cold, **run 1 failed**
+  (2026-10-17): TIME_WAIT **38**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **1** (**749 passed, 2 failed, 1
+  skipped**, 0 socket errors). Both failures were on desktop:
+  - `e2e/motion.spec.ts:112`, the flake this contract fixes, again at
+    `boundingBox()!.width`;
+  - `e2e/keyGuide.spec.ts:107`, "one line at 360px, in both modes", a new flake:
+    `expect(spread).toBeLessThan(line / 2)` with `line` **NaN** and `spread` 0. The guide's
+    computed `line-height` didn't parse as a number. Inferred: it read `normal`. **Open:**
+    capture the raw value first, then fix it in its own change, as with `theme.spec.ts`.
+- Run 2 (2026-10-17): TIME_WAIT **25**, root verified. TypeScript **0**, lint **0**, unit
+  **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**751 passed, 1
+  skipped**, 0 socket errors). Committed after it.
 
 ### Would need a server (rejected)
 
