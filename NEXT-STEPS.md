@@ -4926,9 +4926,9 @@ Two limits:
 
 ### Windows browser-test socket pressure: investigation contract
 
-**Status (2026-10-18):** Claude accepted `7a3e7a9`; the four measurements are complete,
-retained in their original order. The nominal screening rule was not met and missing
-samples make the comparison provisional. No permanent worker cap is proposed or built.
+**Status (2026-10-18):** Claude accepted `7a3e7a9` on 2026-10-17; the four measurements
+are complete, retained in their original order. The nominal screening rule was not met;
+missing samples make the comparison provisional. No permanent worker cap is proposed or built.
 A successor measurement needs a reviewed amendment; a permanent remedy still needs its
 own evidence, exact mechanism and mutation tests, accepted before code.
 
@@ -4939,7 +4939,7 @@ own evidence, exact mechanism and mutation tests, accepted before code.
 - Both optional suggestions adopted in rule 4: sample through the post-run drain, with
   a bound, and include all local TCP rows, plus total ESTABLISHED and TIME_WAIT counts.
 - Claude accepted the revision at `7a3e7a9` with no corrections before the comparative
-  runs (2026-10-18). Claude read the diff, and did not rerun its gate or check its CI.
+  runs (2026-10-17). Claude read the diff, and did not rerun its gate or check its CI.
 
 **Why**
 - The motion-test As built record reports socket errors in 3 of its last 7 cold gates,
@@ -5231,6 +5231,20 @@ the default duration. These data do not establish uninstrumented suite performan
 - Only NEXT-STEPS is committed for this investigation stage. The motion/fixture
   failures and the recovered socket errors remain follow-ups; no tests, timeouts,
   assertions, default worker counts or retry mechanisms were changed to pass the gate.
+
+**Measurement-record review, Claude (2026-10-18)**
+- Accepted `65f3716` with one factual correction: acceptance of `7a3e7a9` was on
+  **2026-10-17**, not 2026-10-18. Corrected above; the measurement and gate dates remain
+  2026-10-18. This changes documentation only; no runtime mutation probe applies.
+- Claude read the record only, without inspecting the retained artifacts or rerunning
+  anything. A further socket experiment needs a reviewed amendment, including duration
+  from observer-off runs, instrumented/uninstrumented error counts reported separately,
+  and a cheaper collector. Zero instrumented errors must not be read as improvement.
+- Next-change priority and owners for the newly reported flakes await the user's choice.
+- Date-correction commit gate (2026-10-18), first cold run: TIME_WAIT **68**; repository
+  root, four gate caches and `.next-visual` verified before cleanup. TypeScript **0**,
+  lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**,
+  browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No collector ran.
 
 ## Open questions
 
