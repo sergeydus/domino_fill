@@ -100,6 +100,8 @@ Evidence levels:
 | 2026-10-12 | **Where the Archive row can't fit the Results button and the 🔥 count, the 🔥 moves to the end of the clock line** (user, 2026-10-12). | Only where measurement shows the row costs the board its budget. Hiding it there, or letting the page scroll, were the alternatives. |
 | 2026-10-12 | **An attempt dated after the device's today counts nowhere until that date arrives** (user, 2026-10-12). | A clock set back, or another device's data. Then it counts normally. |
 | 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
+| 2026-10-17 | Slice 3b's PR is opened (#12), with merging decided separately. Claude takes the `keyGuide.spec.ts` flake next, codex reviewing; codex then takes socket pressure, Claude reviewing (user, approving codex's recommendation, 2026-10-17). | Codex approved slice 3b at `e5a5c37`. One change active at a time. |
+| 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
 
 ## Principles
 
@@ -4161,6 +4163,90 @@ tests. The socket-pressure question stays open separately.
 - Run 2 (2026-10-17): TIME_WAIT **25**, root verified. TypeScript **0**, lint **0**, unit
   **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**751 passed, 1
   skipped**, 0 socket errors). Committed after it.
+
+### The key guide's one-line check, made to name its failure: implementation contract
+
+**Why.** `e2e/keyGuide.spec.ts:107`, "one line at 360px, in both modes", failed once in a
+full gate run (2026-10-17, desktop; recorded in the motion-test contract above):
+`expect(spread, 'drag: its fragments' tops').toBeLessThan(line / 2)` with `spread` **0** and
+`line` **NaN**. Builder: Claude, reviewer: codex (user, 2026-10-17). Codex asked for the raw
+`line-height` to be captured before anything is concluded.
+
+**How it works today** (read, then measured):
+- The check (`e2e/keyGuide.spec.ts:107-124`) reads, in the page, the guide's fragment tops
+  and `parseFloat(getComputedStyle(el).lineHeight)`. It keeps only the parsed number, so
+  the raw value was lost.
+- The guide (`[data-key-guide]`, `app/dominoFill/AdviceStrip.tsx:70`) inherits its line
+  height from `text-body` on `[data-advice]`.
+- What the failure does show: `spread` was 0, so the guide had fragments, all on one line.
+  So it was attached and laid out, and only its computed `line-height` failed to parse.
+  `normal` is the likeliest value, which would mean `text-body`'s line height wasn't
+  applied when it was read. **Inferred, not seen.**
+- **Measured, not reproduced** (2026-10-17), with a scratch copy (deleted after) that
+  logged the raw values every time:
+  - 60 runs, desktop, alone;
+  - 300 runs, desktop and phone-360, 12 workers.
+
+  In all 360, `line-height` was `21px`, with 6 fragments in drag mode and 4 in pick mode.
+- The test also depends on the date: `squares` takes a rock and a free square from today's
+  board, and throws if there isn't one. That breaks AGENTS.md's rule to pin the day.
+
+**The rules:**
+1. The check reads its raw values in one call: the guide's computed `line-height` as a
+   string, its `font-size`, `[data-advice]`'s `line-height`, each fragment's top, and how
+   many `[data-key-guide]` elements there are.
+2. It first asserts that the `line-height` parses to a positive number. The message
+   carries every raw value above. Then it checks the spread as now, also with the raw
+   values in its message. So the next failure says what it saw.
+3. The file pins the day, `LATE_IN_A_MONTH`, with `pinDay` before `openBoard` (AGENTS.md).
+4. No fix to the app or the test's tolerance until a failure shows the cause. When one
+   does, that fix is a change of its own.
+
+**Not in it:** the guide's styling; the other tests in the file, apart from the pinned day;
+socket pressure (codex's, next).
+
+**Branch, a deviation:** `fix/key-guide-check`, from `feature/challenge-results` at
+`e5a5c37`, not from `master`. The flake was observed with the challenge on, which `master`
+doesn't have until PR #12 merges; that activation causes it isn't established (codex).
+Committing on #12's branch would move its reviewed head. This PR merges after #12.
+
+**Tests:**
+- The changed check, in both projects, as before.
+- Mutation probe: the guide given `line-height: normal` inline. It must fail at the new
+  parse check, with `normal` in its message.
+- The full gate before the commit.
+
+**Validation record**
+- This contract's commit (docs only, with the decision-log row), gate from cold, first run
+  (2026-10-17): TIME_WAIT **43**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
+
+**As built (2026-10-17)**, after codex accepted the contract (asking for the parent metric
+from the guide's nearest `[data-advice]` ancestor, and the wording above):
+- `e2e/keyGuide.spec.ts` only:
+  - `beforeEach` pins `LATE_IN_A_MONTH`, then opens the board.
+  - The one-line check reads `{ lineHeight, fontSize, adviceLineHeight, tops, guides }` in
+    one `evaluate`. `adviceLineHeight` comes from `el.closest('[data-advice]')`.
+  - It asserts the line height parses to a positive, finite number, then the unchanged
+    spread check. Both messages end with `saw` and the raw values as JSON.
+- **Measured:** the whole file, `--repeat-each=3`, desktop and phone-360: **36 passed**. So
+  the pinned day's board has the rock and free square the file needs.
+- **Mutation probe: caught in both projects at "its line height is a length",** with
+  `"lineHeight":"normal"` in each message; `AdviceStrip.tsx` restored byte for byte. The
+  probe's message:
+  `{"lineHeight":"normal","fontSize":"14px","adviceLineHeight":"21px","tops":[526.16 ×6],"guides":1}`.
+  Its spread is 0, as in the real failure. Consistent with the inferred `normal`; it
+  doesn't show it.
+- Cold gate, first run (2026-10-17): TIME_WAIT **39**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753
+  passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
+- **Still open:** the cause. The next failure's message will carry the raw values.
+- Codex accepted `c281c43` (2026-10-17).
+- The decision-log row for PR #12's merge (docs only), gate from cold, first run
+  (2026-10-17): TIME_WAIT **40**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
 
 ### Would need a server (rejected)
 
