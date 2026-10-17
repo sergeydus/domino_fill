@@ -4922,6 +4922,97 @@ Two limits:
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
+| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. Measure the existing worker default against two workers before choosing a change. No extra retries or weaker assertions. | Measurement first | Yes: codex builds, Claude reviews (user, 2026-10-17; assignment in the decision log). |
+
+### Windows browser-test socket pressure: investigation contract
+
+**Status (2026-10-17):** written for Claude's review. No test, harness or application
+code changed. This contract authorizes an investigation; a permanent remedy gets an
+amendment with its evidence, exact mechanism and mutation tests, accepted before code.
+
+**Why**
+- The motion-test As built record reports socket errors in 3 of its last 7 cold gates,
+  with 2 failed gates. Even the passing rerun started at TIME_WAIT 42 and needed one
+  socket-error reload. Those are recorded observations, not a new reproduction here.
+- Starting with a drained pool is insufficient in those observations. Lower concurrency
+  may reduce pressure while the suite runs; it has not yet been shown to do so.
+
+**How it works today (read)**
+- `playwright.config.ts:20-29` enables full parallelism and sets no worker count. Local
+  retries are 0; CI retries are 2. All projects share this configuration.
+- Installed Playwright resolves CLI workers before configuration workers, then defaults
+  to `50%` (`node_modules/playwright/lib/common/index.js:533`, `:628-638`). This host
+  reports 16 logical CPUs, so the current default resolves to 8. The CPU count was
+  measured with Node; the resolved test-run header will confirm the worker count.
+- `e2e/server.ts:18-30`, `:243-306` builds and serves production on port 3100 and the
+  visual fixture on 3101; global setup tears both down (`e2e/globalSetup.ts:7-10`).
+- `e2e/startupRetry.ts:117-149` permits one reload only for the existing narrow startup
+  failure rule. `e2e/openBoard.ts:158-177` announces that reload. A passing exit can
+  therefore still contain a socket error; the investigation reports both separately.
+- The CI gate runs `npm run test:e2e` on Ubuntu (`.github/workflows/ci.yml:25-26`,
+  `:69-74`). The proposed comparison concerns this Windows host, not a measured CI fault.
+
+**Rules**
+1. Work from `master` at `9fecf9b` on `investigate/windows-socket-pressure`, separate from
+   Claude's reviewed `docs/agents-status` branch. The user already assigned this work to
+   codex, with Claude reviewing; no PR is opened or merged by this contract.
+2. After acceptance, compare four complete browser runs on the same unchanged source:
+   default, `--workers=2`, `--workers=2`, default. Use `--retries=0` throughout. Keep every
+   project, test, existing timeout and assertion. Do not select only easy or fast specs.
+   These are diagnostic browser runs, not substitutes for the five-step commit gate.
+3. Before each run, verify the Git root, all cache targets and the harness's
+   `.next-visual` target. Empty the four gate caches and `.next-visual` only after those
+   checks. Start only when total TIME_WAIT is below 100, checked again immediately before
+   launching Playwright. Poll in bounded intervals, reporting waits; a refused start is
+   recorded separately from a failed test run. Never run two suites concurrently.
+4. Sample `netstat -an` once a second, starting before launch and ending after teardown.
+   Keep aggregate total TIME_WAIT and, separately, counts involving loopback ports 3100
+   or 3101 in TIME_WAIT and ESTABLISHED. Count each netstat row once, even if both
+   endpoints match. Record only aggregates, not unrelated addresses or processes.
+   A failed command or unparseable TCP row invalidates the sample; never treat it as zero.
+   Sampled maxima are lower bounds on the true peak, not exact peak measurements.
+5. For every run, record the command, source head, worker header, initial and final
+   socket counts, sampled maxima, browser-phase duration, pass/fail/skip/retry counts,
+   and socket-error messages, including recovered ones. Preserve the raw test output.
+   Report any missed samples and unrelated test failures as well. A lower ending count
+   alone does not establish improvement; a clean run alone does not prove a rare flake
+   eliminated. The order above reduces, but does not remove, time/order effects.
+6. Use temporary measurement scripts and logs, removed or kept outside the committed
+   source. They do not change the app, browser request handling, server lifecycle or
+   Playwright configuration. Validate the counter on saved representative netstat rows
+   and against one direct live snapshot before trusting it. Confirm that a deliberate
+   zeroing of the test-port counts fails the fixture check at its count assertion, and
+   that an injected `ERR_NO_BUFFER_SPACE` log line is reported even for an exit-0 run.
+7. Summarize the four runs in As built. If the data supports a remedy, write its exact
+   scope and acceptance checks as a contract amendment for Claude. Otherwise record
+   what remains unknown and propose the next measurement. Do not assume a particular
+   Windows port limit or change the OS to make the suite pass. Read-only inspection here
+   found the IPv4 dynamic TCP range starts at 49152 with 16384 ports; that alone does not
+   identify the resource behind Chromium's error.
+
+**Not in this change**
+No additional reloads, test retries, sleeps inside app flows, dropped tests, looser timing
+or layout checks, CI changes, visual baseline updates, app changes, Windows networking
+settings, or claim that Daily Challenge activation caused the transport error. The
+`keyGuide` and theme flakes retain their separate diagnoses. No Docker or new servers.
+
+**Validation and review**
+- This is a docs-only contract; no runtime mutation result is claimed for its commit.
+- After acceptance, the measurement probes in rule 6 check the scratch collector, and
+  the full-suite comparison checks the concurrency hypothesis. Any later code correction
+  needs its own intended-assertion mutation probes, cold gate and review.
+- Before this contract is committed: the complete cold gate, five exit codes checked
+  separately and unit stderr empty. Record every failed run and passing rerun below.
+
+**As built / validation record**
+- Draft: source and installed runner read; Node reports Windows, 16 logical CPUs and
+  available parallelism 16. No comparative browser run or remedy implemented yet.
+- Contract commit, cold gate, first run (2026-10-17): initial TIME_WAIT **53**; Git root,
+  four cache paths, and `.next-visual` verified before cleanup. TypeScript **0**, lint
+  **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser
+  **0** (**753 passed, 1 skipped**, **0 socket-error lines**). The browser header confirms
+  **754 tests using 8 workers**. No failed run. No source mutation is claimed for this
+  docs-only contract; the comparison and collector probes await Claude's acceptance.
 
 ## Open questions
 
