@@ -1,4 +1,5 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from '@playwright/test'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { VISUAL_URL } from './server'
 import { waitForRest } from './rest'
 import { frames, movement, onTime, track, type Sample } from './frames'
@@ -109,26 +110,61 @@ test.describe('with motion', () => {
 test.describe('the completion card', () => {
     test.use({ baseURL: undefined, reducedMotion: 'no-preference' })
 
-    test('arrives inside the limits', async ({ page }) => {
-        /*
-         * Read from its transform, not its box: arriving, the card scrolls itself into view
-         * (CompletionCard says why), and the page scrolling moves the box by far more than
-         * the animation does -- measured, 0.56 of a cell.
-         */
-        const m = await onTime(async () => {
-            await openBoard(page)
-            const cell = (await page.locator('[data-cell="0,0"]').boundingBox())!.width
-            await track(page, 'card', '[data-completion-card]')
-            await playSolution(page)
-            const samples = await frames(page, 'card')
-            const offset = (s: Sample) => Math.hypot(s.tx, s.ty)
-            const moving = (s: Sample) => offset(s) > 1e-3 || Math.abs(s.opacity - 1) > 1e-3
-            return { ...movement(samples, moving), reach: Math.max(...samples.map(offset)) / cell }
-        })
+    /** What a try's browser context is made from: the test's own device and base URL. */
+    type Device = Pick<BrowserContextOptions,
+        'viewport' | 'userAgent' | 'deviceScaleFactor' | 'isMobile' | 'hasTouch' | 'baseURL'>
+
+    /**
+     * One try: solve the pinned day's first board and read the card arriving.
+     *
+     * Read from its transform, not its box: arriving, the card scrolls itself into view
+     * (CompletionCard says why), and the page scrolling moves the box by far more than the
+     * animation does -- measured, 0.56 of a cell.
+     */
+    const cardArrival = async (context: BrowserContext) => {
+        // Fresh, checked before anything loads: a solve is a challenge attempt, kept in the
+        // context's storage, and a try that inherited one opened another board (measured: 3
+        // of 10 second tries in one page, twice on a covered board with no cell).
+        expect(await context.storageState({ indexedDB: true }), 'the try starts on a fresh device')
+            .toEqual({ cookies: [], origins: [] })
+        const page = await context.newPage()
+        await pinDay(page, LATE_IN_A_MONTH)
+        await openBoard(page)
+        const cell = (await page.locator('[data-cell="0,0"]').boundingBox())!.width
+        await track(page, 'card', '[data-completion-card]')
+        await playSolution(page)
+        const samples = await frames(page, 'card')
+        const offset = (s: Sample) => Math.hypot(s.tx, s.ty)
+        const moving = (s: Sample) => offset(s) > 1e-3 || Math.abs(s.opacity - 1) > 1e-3
+        return { ...movement(samples, moving), reach: Math.max(...samples.map(offset)) / cell }
+    }
+
+    /** A try in a browser context of its own, closed after it, pass or fail. */
+    const inFreshContext = async (browser: Browser, device: Device) => {
+        const context = await browser.newContext({ ...device, reducedMotion: 'no-preference' })
+        try {
+            return await cardArrival(context)
+        } finally {
+            await context.close()
+        }
+    }
+
+    test('arrives inside the limits', async ({ browser, viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL }) => {
+        const device = { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL }
+        const m = await onTime(() => inFreshContext(browser, device))
         expect(m.moved).toBe(true)
         expect(m.reach).toBeGreaterThan(0.05)
         expect(m.reach).toBeLessThanOrEqual(LIMITS.amplitude)
         expect(m.upper, `moved for ${ms(m)}`).toBeLessThanOrEqual(LIMITS.duration * 1000)
+    })
+
+    // `onTime` tries again only when frames come late; this takes a second try every run.
+    test('every try starts from a fresh device', async ({ browser, viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL }) => {
+        const device = { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, baseURL }
+        for (const n of [1, 2]) {
+            const m = await inFreshContext(browser, device)
+            expect(m.moved, `try ${n}: the card arrived`).toBe(true)
+        }
     })
 })
 

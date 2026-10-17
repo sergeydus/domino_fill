@@ -4115,6 +4115,34 @@ tests. The socket-pressure question stays open separately.
   always leave an attempt and progress in storage (read; to be confirmed by the probe).
 - The full gate before each commit, as always.
 
+**As built (2026-10-17)**
+- `e2e/motion.spec.ts` only:
+  - `cardArrival(context)` is one try: the storage check, then a new page, `pinDay`,
+    `openBoard`, and the unchanged measurement.
+  - `inFreshContext(browser, device)` makes the context, runs the try, and closes the
+    context in a `finally`.
+  - The device comes from the test's own option fixtures (`viewport`, `userAgent`,
+    `deviceScaleFactor`, `isMobile`, `hasTouch`, `baseURL`); `reducedMotion` is set to
+    `'no-preference'` on the new context.
+- **Tests:** "arrives inside the limits" runs `onTime` over `inFreshContext`. The new "every
+  try starts from a fresh device" runs two tries in a row. Desktop and phone-360, 2 more
+  browser tests.
+- **Measured:** the describe's two tests, `--repeat-each=5`: **20 passed**.
+- **Mutation probe: 3 of 3 runs caught, in both projects, at "the try starts on a fresh
+  device",** file restored byte for byte. Every try shared one context per worker, kept
+  open between tries and closed in `afterAll`. That confirms the contract's "every run".
+- Cold gate, **run 1 failed** (2026-10-17): TIME_WAIT **93**, root verified. TypeScript **0**,
+  lint **0**, unit **0** (**1701**, stderr **0 bytes**), build **0**, browser **1** (**752
+  passed, 1 failed, 1 skipped**; **1 socket error**). The failure was
+  `e2e/cellStates.spec.ts:137` on phone-360: `page.goto: net::ERR_NO_BUFFER_SPACE`.
+- Run 2 (2026-10-17), started only once TIME_WAIT was under 50: TIME_WAIT **42**, root
+  verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0 bytes**), build
+  **0**, browser **0** (**753 passed, 1 skipped**, 2 more; **1 socket error, recovered**:
+  the open path's one reload, in `cellStates.spec.ts`, with no test failed). Committed
+  after it.
+- **Socket pressure keeps coming back:** 3 of the last 7 gate runs, since the sixth
+  correction's, had a socket error, and 2 of those runs failed. Still open, and its own change: fewer workers, or a pause between runs.
+
 **Validation record**
 - This contract's commit (docs only), gate from cold, first run (2026-10-17): TIME_WAIT
   **92**, root verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0
