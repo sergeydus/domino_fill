@@ -4085,13 +4085,22 @@ at `boundingBox()!.width` on cell `0,0`: the cell wasn't there.
    test's own device options (viewport, user agent, scale, mobile, touch), its base URL,
    and `reducedMotion: 'no-preference'`. It's closed after the try, pass or fail. So every
    try starts as the first does: a fresh device, empty storage.
-2. Each try checks that it starts fresh: right after opening, the streak beside Archive
-   reads 0. It appears once a player has played at all (`StreakCount`,
-   `app/dominoFill/PageButtons.tsx:53`), so the try's own Start shows it, and it counts
-   solved days, so a fresh device that has only started reads 0 (to be confirmed when
-   built). The failure's snapshot read 1. A try that isn't fresh then fails at that
-   check, saying so, rather than at a missing cell.
-3. The measurement is unchanged: the same board, solution, tracking and limits.
+2. Each try checks that it starts fresh, **before it navigates**: the context's storage,
+   IndexedDB included (`context.storageState({ indexedDB: true })`, Playwright 1.63), is
+   `{ cookies: [], origins: [] }`. A try that isn't fresh then fails at that check, saying
+   so, before `openBoard` can fail at something else.
+3. Each new page is **pinned to the same published day**, `LATE_IN_A_MONTH`, with `pinDay`
+   before it loads (AGENTS.md: date-dependent browser tests pin the day). So every try
+   measures the same puzzle, even across midnight.
+4. The measurement is unchanged: the same board, solution, tracking and limits.
+
+**Corrected after codex's review (2026-10-17):**
+- The freshness check was "the streak reads 0" after opening. Wrong: a started-only attempt
+  leaves `playedEver` false, so `StreakCount` shows nothing (`tests/streak.test.ts:29`).
+  It's now the storage check, before navigation (rule 2).
+- The pinned day was missing (rule 3).
+- The compound probe is dropped (below): with the check removed, a shared context fails
+  only sometimes (3 of 10 measured), so it couldn't be relied on.
 
 **Not in it:** `onTime` and `openBoard` are unchanged, and so are the sheet's three motion
 tests. The socket-pressure question stays open separately.
@@ -4100,10 +4109,10 @@ tests. The socket-pressure question stays open separately.
 - The try becomes one function in the spec. A new test, "every try starts from a fresh
   device", runs it twice in a row, so a second try is exercised on every run, not only
   when frames come late. It runs in the same projects as the spec, desktop and phone-360.
-- Mutation probes:
-  - the tries sharing one context: caught by the new test, at the fresh check;
-  - the fresh check removed, with the tries sharing one context: the new test fails, at the
-    missing cell or later, which shows the check is what names the cause.
+- Mutation probe: the tries sharing one context, kept open between them and closed after
+  the test, so the second try can't fail merely because its context was closed. Caught
+  by the new test at the freshness check, every run: the first try's Start and solve
+  always leave an attempt and progress in storage (read; to be confirmed by the probe).
 - The full gate before each commit, as always.
 
 **Validation record**
@@ -4111,6 +4120,19 @@ tests. The socket-pressure question stays open separately.
   **92**, root verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0
   bytes**), build **0**, browser **0** (**751 passed, 1 skipped**, 0 socket errors). No
   failed run. Committed after it.
+- The revision after codex's review (docs only), gate from cold, **run 1 failed**
+  (2026-10-17): TIME_WAIT **38**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **1** (**749 passed, 2 failed, 1
+  skipped**, 0 socket errors). Both failures were on desktop:
+  - `e2e/motion.spec.ts:112`, the flake this contract fixes, again at
+    `boundingBox()!.width`;
+  - `e2e/keyGuide.spec.ts:107`, "one line at 360px, in both modes", a new flake:
+    `expect(spread).toBeLessThan(line / 2)` with `line` **NaN** and `spread` 0. The guide's
+    computed `line-height` didn't parse as a number. Inferred: it read `normal`. **Open:**
+    capture the raw value first, then fix it in its own change, as with `theme.spec.ts`.
+- Run 2 (2026-10-17): TIME_WAIT **25**, root verified. TypeScript **0**, lint **0**, unit
+  **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**751 passed, 1
+  skipped**, 0 socket errors). Committed after it.
 
 ### Would need a server (rejected)
 
