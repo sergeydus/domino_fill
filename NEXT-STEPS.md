@@ -4205,9 +4205,9 @@ full gate run (2026-10-17, desktop; recorded in the motion-test contract above):
 socket pressure (codex's, next).
 
 **Branch, a deviation:** `fix/key-guide-check`, from `feature/challenge-results` at
-`e5a5c37`, not from `master`. The flake comes from the challenge being on, which `master`
-doesn't have until PR #12 merges, and committing on #12's branch would move its reviewed
-head. This PR merges after #12.
+`e5a5c37`, not from `master`. The flake was observed with the challenge on, which `master`
+doesn't have until PR #12 merges; that activation causes it isn't established (codex).
+Committing on #12's branch would move its reviewed head. This PR merges after #12.
 
 **Tests:**
 - The changed check, in both projects, as before.
@@ -4220,6 +4220,27 @@ head. This PR merges after #12.
   (2026-10-17): TIME_WAIT **43**, root verified. TypeScript **0**, lint **0**, unit **0**
   (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
   socket errors). No failed run. Committed after it.
+
+**As built (2026-10-17)**, after codex accepted the contract (asking for the parent metric
+from the guide's nearest `[data-advice]` ancestor, and the wording above):
+- `e2e/keyGuide.spec.ts` only:
+  - `beforeEach` pins `LATE_IN_A_MONTH`, then opens the board.
+  - The one-line check reads `{ lineHeight, fontSize, adviceLineHeight, tops, guides }` in
+    one `evaluate`. `adviceLineHeight` comes from `el.closest('[data-advice]')`.
+  - It asserts the line height parses to a positive, finite number, then the unchanged
+    spread check. Both messages end with `saw` and the raw values as JSON.
+- **Measured:** the whole file, `--repeat-each=3`, desktop and phone-360: **36 passed**. So
+  the pinned day's board has the rock and free square the file needs.
+- **Mutation probe: caught in both projects at "its line height is a length",** with
+  `"lineHeight":"normal"` in each message; `AdviceStrip.tsx` restored byte for byte. The
+  probe's message:
+  `{"lineHeight":"normal","fontSize":"14px","adviceLineHeight":"21px","tops":[526.16 ×6],"guides":1}`.
+  Its spread is 0, as in the real failure. Consistent with the inferred `normal`; it
+  doesn't show it.
+- Cold gate, first run (2026-10-17): TIME_WAIT **39**, root verified. TypeScript **0**, lint
+  **0**, unit **0** (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753
+  passed, 1 skipped**, 0 socket errors). No failed run. Committed after it.
+- **Still open:** the cause. The next failure's message will carry the raw values.
 
 ### Would need a server (rejected)
 

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { openBoard } from './openBoard'
 import { readBoard } from './play'
 import { KEY_INSTRUCTIONS, guideText } from '../app/dominoFill/keyGuide'
@@ -44,7 +45,11 @@ const keyboardOn = async (page: Page, at: readonly [number, number]) => {
     await page.keyboard.press('ArrowLeft')
 }
 
-test.beforeEach(async ({ page }) => { await openBoard(page) })
+// `squares` takes a rock and a free square from the board, so the day is pinned (AGENTS.md).
+test.beforeEach(async ({ page }) => {
+    await pinDay(page, LATE_IN_A_MONTH)
+    await openBoard(page)
+})
 
 test('the guide is the mode\'s, and shows only while the keyboard is on the board', async ({ page }) => {
     const { free } = await squares(page)
@@ -115,11 +120,24 @@ test('one line at 360px, in both modes', async ({ page }) => {
         // Every fragment of the span starts within half a line of the first. Not a count of
         // rects -- Chrome returns one per text run and child, six for the default mode's line
         // on a single line.
-        const { spread, line } = await guide(page).evaluate(el => {
-            const tops = Array.from(el.getClientRects(), r => r.top)
-            return { spread: Math.max(...tops) - Math.min(...tops), line: parseFloat(getComputedStyle(el).lineHeight) }
+        //
+        // The raw values go into both messages: this once failed with the line height NaN,
+        // and keeping only the parsed number lost what the browser had said (codex).
+        const raw = await guide(page).evaluate(el => {
+            const style = getComputedStyle(el)
+            const advice = el.closest('[data-advice]')
+            return {
+                lineHeight: style.lineHeight, fontSize: style.fontSize,
+                adviceLineHeight: advice ? getComputedStyle(advice).lineHeight : null,
+                tops: Array.from(el.getClientRects(), r => r.top),
+                guides: document.querySelectorAll('[data-key-guide]').length,
+            }
         })
-        expect(spread, `${mode}: its fragments' tops`).toBeLessThan(line / 2)
+        const seen = JSON.stringify(raw)
+        const line = parseFloat(raw.lineHeight)
+        expect(Number.isFinite(line) && line > 0, `${mode}: its line height is a length, saw ${seen}`).toBe(true)
+        const spread = Math.max(...raw.tops) - Math.min(...raw.tops)
+        expect(spread, `${mode}: its fragments' tops, saw ${seen}`).toBeLessThan(line / 2)
     }
 })
 
