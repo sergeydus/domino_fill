@@ -4930,6 +4930,14 @@ Two limits:
 code changed. This contract authorizes an investigation; a permanent remedy gets an
 amendment with its evidence, exact mechanism and mutation tests, accepted before code.
 
+**First review, Claude (2026-10-17)**
+- Accepted after one correction: pre-state which socket-count reduction and duration
+  cost justify a remedy proposal. Two runs per setting cannot establish an error-rate
+  reduction. Rules 5 and 7 now give that decision rule before any comparative run.
+- Both optional suggestions adopted in rule 4: sample through the post-run drain, with
+  a bound, and include all local TCP rows, plus total ESTABLISHED and TIME_WAIT counts.
+- The revised decision rule awaits Claude's review. No comparative run has started.
+
 **Why**
 - The motion-test As built record reports socket errors in 3 of its last 7 cold gates,
   with 2 failed gates. Even the passing rerun started at TIME_WAIT 42 and needed one
@@ -4965,28 +4973,69 @@ amendment with its evidence, exact mechanism and mutation tests, accepted before
    checks. Start only when total TIME_WAIT is below 100, checked again immediately before
    launching Playwright. Poll in bounded intervals, reporting waits; a refused start is
    recorded separately from a failed test run. Never run two suites concurrently.
-4. Sample `netstat -an` once a second, starting before launch and ending after teardown.
-   Keep aggregate total TIME_WAIT and, separately, counts involving loopback ports 3100
-   or 3101 in TIME_WAIT and ESTABLISHED. Count each netstat row once, even if both
-   endpoints match. Record only aggregates, not unrelated addresses or processes.
-   A failed command or unparseable TCP row invalidates the sample; never treat it as zero.
+4. Sample `netstat -an` once a second, starting before launch. Keep all local TCP rows
+   (all states), total ESTABLISHED and TIME_WAIT, and the same three counts involving
+   loopback ports 3100 or 3101. Derive the non-test counts by subtraction. Count each
+   netstat row once, even if both endpoints match. Record only aggregates, not unrelated
+   addresses or processes. A failed command or unparseable TCP row invalidates the
+   sample; never treat it as zero. Report missing samples and the longest sampling gap.
    Sampled maxima are lower bounds on the true peak, not exact peak measurements.
+   Continue after teardown until the first valid sample with total TIME_WAIT below 100,
+   or 600 seconds after teardown, whichever comes first. Record the elapsed drain time;
+   at the bound report "more than 600 seconds", not 600 seconds or a successful drain.
+   The next run still requires the existing below-100 preflight, even if this bound fires.
 5. For every run, record the command, source head, worker header, initial and final
    socket counts, sampled maxima, browser-phase duration, pass/fail/skip/retry counts,
    and socket-error messages, including recovered ones. Preserve the raw test output.
-   Report any missed samples and unrelated test failures as well. A lower ending count
-   alone does not establish improvement; a clean run alone does not prove a rare flake
-   eliminated. The order above reduces, but does not remove, time/order effects.
+   Record unrelated test failures as well. Mark phase boundaries using one host's
+   monotonic clock in a temporary reporter: first test begins, last test ends, and the
+   post-teardown `onEnd` callback. Use that callback as the teardown-end marker for both
+   the peak window and drain time. Browser-phase duration is first begin to last end;
+   separately record process elapsed time excluding the drain observation, and drain
+   time. Setup/build time is outside the browser-phase duration. The same reporter and
+   sampler run in both settings; no timestamps are compared across browser pages.
+
+   **Decision rule, fixed before the four runs:** for run i, let P_i be the sampled
+   test-port TIME_WAIT maximum and T_i the sampled total TIME_WAIT maximum, both from
+   first test begin through teardown end. Let D_i be browser-phase duration. A proposal
+   to cap this Windows suite at two workers is justified for review only if:
+   - the higher P_i of the two 2-worker runs is at most **75%** of the lower P_i of the
+     two default runs;
+   - the higher T_i of the two 2-worker runs is at most **75%** of the lower T_i of the
+     two default runs; and
+   - the slower D_i of the two 2-worker runs is at most **2 times** the slower D_i of the
+     two default runs.
+
+   This requires a 25% reduction with separation in both count measures and caps the
+   measured duration cost at 100%. These are engineering screening thresholds, not
+   statistical confidence bounds or proof that the error is prevented. Report all
+   individual values and ratios, including the non-test loads, so a background-load
+   change is visible. All four runs must account for the same complete set of tests,
+   with retries disabled and usable phase samples. An interrupted run or missing phase
+   boundary makes the comparison inconclusive; do not silently replace or omit it.
+   Any missing samples make the threshold comparison provisional, requiring review.
+   Error and no-error outcomes are reported but are **not** votes for or against an
+   error-rate claim: two runs per setting cannot settle that. A lower ending count alone
+   also does not establish improvement. The run order reduces, but does not remove,
+   time/order effects; external-load differences and failure-induced stalls remain
+   confounders to discuss before any remedy is accepted.
 6. Use temporary measurement scripts and logs, removed or kept outside the committed
    source. They do not change the app, browser request handling, server lifecycle or
    Playwright configuration. Validate the counter on saved representative netstat rows
    and against one direct live snapshot before trusting it. Confirm that a deliberate
    zeroing of the test-port counts fails the fixture check at its count assertion, and
    that an injected `ERR_NO_BUFFER_SPACE` log line is reported even for an exit-0 run.
-7. Summarize the four runs in As built. If the data supports a remedy, write its exact
-   scope and acceptance checks as a contract amendment for Claude. Otherwise record
-   what remains unknown and propose the next measurement. Do not assume a particular
-   Windows port limit or change the OS to make the suite pass. Read-only inspection here
+7. Summarize the four runs in As built, applying rule 5 unchanged. If its threshold is
+   met, propose a Windows-only two-worker default as a contract amendment for Claude,
+   with the exact mechanism and acceptance checks; do not implement it yet. If it is
+   not met, record that the screening rule was not met (or the comparison was
+   inconclusive), without claiming that fewer workers cannot help, and propose the next
+   measurement.
+   Drain time and all-connection counts are diagnostic evidence, not alternative ways
+   to declare the worker comparison a success. A pause or other remedy needs its own
+   pre-stated rule and review; a post-run drain time cannot explain or cure a mid-run
+   failure by itself. Do not assume a particular Windows port limit or change the OS
+   to make the suite pass. Read-only inspection here
    found the IPv4 dynamic TCP range starts at 49152 with 16384 ports; that alone does not
    identify the resource behind Chromium's error.
 
@@ -5013,6 +5062,12 @@ settings, or claim that Daily Challenge activation caused the transport error. T
   **0** (**753 passed, 1 skipped**, **0 socket-error lines**). The browser header confirms
   **754 tests using 8 workers**. No failed run. No source mutation is claimed for this
   docs-only contract; the comparison and collector probes await Claude's acceptance.
+- Revision for Claude's first review, cold gate, first run (2026-10-17): initial
+  TIME_WAIT **46**; Git root, four cache paths and `.next-visual` verified before cleanup.
+  TypeScript **0**, lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**),
+  build **0**, browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**).
+  No failed run. Only NEXT-STEPS changed; the decision thresholds, drain observation
+  and wider counts are specified before the comparative runs, which have not started.
 
 ## Open questions
 
