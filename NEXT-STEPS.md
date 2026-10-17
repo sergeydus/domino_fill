@@ -4926,9 +4926,11 @@ Two limits:
 
 ### Windows browser-test socket pressure: investigation contract
 
-**Status (2026-10-17):** written for Claude's review. No test, harness or application
-code changed. This contract authorizes an investigation; a permanent remedy gets an
-amendment with its evidence, exact mechanism and mutation tests, accepted before code.
+**Status (2026-10-18):** Claude accepted `7a3e7a9`; the four measurements are complete,
+retained in their original order. The nominal screening rule was not met and missing
+samples make the comparison provisional. No permanent worker cap is proposed or built.
+A successor measurement needs a reviewed amendment; a permanent remedy still needs its
+own evidence, exact mechanism and mutation tests, accepted before code.
 
 **First review, Claude (2026-10-17)**
 - Accepted after one correction: pre-state which socket-count reduction and duration
@@ -4936,7 +4938,8 @@ amendment with its evidence, exact mechanism and mutation tests, accepted before
   reduction. Rules 5 and 7 now give that decision rule before any comparative run.
 - Both optional suggestions adopted in rule 4: sample through the post-run drain, with
   a bound, and include all local TCP rows, plus total ESTABLISHED and TIME_WAIT counts.
-- The revised decision rule awaits Claude's review. No comparative run has started.
+- Claude accepted the revision at `7a3e7a9` with no corrections before the comparative
+  runs (2026-10-18). Claude read the diff, and did not rerun its gate or check its CI.
 
 **Why**
 - The motion-test As built record reports socket errors in 3 of its last 7 cold gates,
@@ -5068,6 +5071,166 @@ settings, or claim that Daily Challenge activation caused the transport error. T
   build **0**, browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**).
   No failed run. Only NEXT-STEPS changed; the decision thresholds, drain observation
   and wider counts are specified before the comparative runs, which have not started.
+
+**Four comparative runs, measured (2026-10-18)**
+
+All four used unchanged source `7a3e7a9dd23386940698cfcdcc1495b4fec5e9f5`, in the agreed
+8 / 2 / 2 / 8 order. Before each: root and all five cache targets verified, caches
+cleared, total TIME_WAIT below 100. A separate sampler was ready, with another below-100
+reading, before the Playwright child launched. No run was replaced or rerun.
+
+Command: `node node_modules/playwright/cli.js test --retries=0
+--reporter=line,<temporary reporter>`; add `--workers=2` only for runs 2 and 3. The raw
+headers confirm 754 tests using the requested worker counts. The sorted test-title hash
+is identical in all four runs (`4d8ecd39737840ec8a104c612d7bf7f31bf7d32e5caa8fddd2791b8df4ed546f`).
+Every run accounts for all 754 results, with 0 test retries and 0 socket-error lines.
+The raw output also has no startup-reload announcements or the other two transient
+startup error codes. This does not estimate the rare error's rate or establish its cause.
+
+P and T below are **sampled** TIME_WAIT maxima during the pre-stated phase window.
+CLI time excludes drain observation; browser time excludes setup/build and teardown.
+Drain is the first observed post-teardown sample below 100, not the exact crossing.
+
+| Run | Workers | Browser result / exit | P: test ports | T: all | Browser seconds | CLI seconds | Drain seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 (default) | 753 passed, 1 skipped / 0 | 3532 | 3574 | 157.163 | 201.053 | 117.182 |
+| 2 | 2 | 753 passed, 1 skipped / 0 | 1889 | 1906 | 341.117 | 389.873 | 114.178 |
+| 3 | 2 | 753 passed, 1 skipped / 0 | 1978 | 2023 | 322.216 | 354.954 | 114.838 |
+| 4 | 8 (default) | **752 passed, 1 failed, 1 skipped / 1** | 3353 | 3375 | 170.549 | 220.956 | 117.217 |
+
+Run 4's failure: desktop, `motion.spec.ts:152`, the completion card's "arrives inside
+the limits". Exact message: **"frames were never delivered on time: longest gaps 83,
+33, 50ms"**. It completed the suite. This is a frame-delivery failure, not the old
+missing-cell retry sequence; its cause is not established. Instrumentation overhead and
+machine load are confounders. Its artifacts and error are retained; no motion fix is
+included or assigned by this record.
+
+For the wider connection counts, each triple is **all / test ports / other**. Each
+metric's maximum is evaluated separately, so maxima in a triple need not sum.
+Test-port classification requires a loopback endpoint on 3100 or 3101; wildcard
+LISTENING rows are outside that category. Each OS row counts once, including when both
+endpoints match; separate client/server ESTABLISHED rows remain separate OS rows.
+
+| Run | Peak TCP rows, all states | Peak ESTABLISHED | Peak other TIME_WAIT |
+| --- | --- | --- | --- |
+| 1 | 3816 / 3598 / 224 | 170 / 98 / 75 | 51 |
+| 2 | 2094 / 1913 / 212 | 98 / 26 / 74 | 48 |
+| 3 | 2200 / 1990 / 211 | 99 / 28 / 75 | 46 |
+| 4 | 3591 / 3407 / 194 | 162 / 96 / 68 | 31 |
+
+Snapshots below give **TCP rows / ESTABLISHED / TIME_WAIT**, first for all connections,
+then test ports in parentheses. Other counts at each snapshot are the difference.
+"After teardown" is the first valid sample after the callback, outside the peak window.
+
+| Run | Before launch: all (test) | After teardown: all (test) | At drained stop: all (test) |
+| --- | --- | --- | --- |
+| 1 | 202 / 71 / 36 (0 / 0 / 0) | 3714 / 74 / 3544 (3502 / 0 / 3502) | 252 / 69 / 87 (66 / 0 / 66) |
+| 2 | 199 / 71 / 33 (0 / 0 / 0) | 2072 / 65 / 1912 (1895 / 0 / 1895) | 264 / 70 / 99 (72 / 0 / 72) |
+| 3 | 252 / 69 / 87 (60 / 0 / 60) | 2190 / 64 / 2030 (1984 / 0 / 1984) | 248 / 63 / 91 (66 / 0 / 66) |
+| 4 | 237 / 63 / 79 (54 / 0 / 54) | 3483 / 63 / 3326 (3310 / 0 / 3310) | 258 / 65 / 97 (72 / 0 / 72) |
+
+**Sample quality and observer cost**
+
+No command or TCP-row parse failed; all samples are valid reads. There were delayed or
+missed sampling intervals. The collector counted missed intervals as
+`sum(max(0, round(gapMs / 1000) - 1))`, fixed in its code before run 1. This is a timing
+diagnostic, not a count of failed reads. Raw monotonic sample times and capture durations
+are retained, including gaps. Maxima remain lower bounds on actual peaks.
+
+| Run | Samples all / phase | Invalid reads | Missed intervals all / phase | Longest gap ms all / phase | Phase capture ms median / p95 / max |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 310 / 149 | 0 | 15 / 14 | 3678.977 / 3678.977 | 456.050 / 1309.419 / 2934.632 |
+| 2 | 502 / 339 | 0 | 0 / 0 | 1277.665 / 1277.665 | 113.363 / 196.446 / 377.632 |
+| 3 | 468 / 320 | 0 | 1 / 0 | 2349.739 / 1216.518 | 100.779 / 182.839 / 315.711 |
+| 4 | 329 / 161 | 0 | 19 / 18 | 2194.409 / 2194.409 | 727.015 / 1360.240 / 1976.703 |
+
+Thus rule 5 makes the comparison **provisional**, even apart from the screening result.
+The scans themselves were costly, especially during the 8-worker runs. The same
+observer was used throughout, but that does not prove its performance impact equal
+across settings. No observer-off control was run. The failed motion case also confounds
+the default duration. These data do not establish uninstrumented suite performance.
+
+**Collector checks and an instrumentation mistake**
+- Before run 1: representative IPv4/IPv6 rows, both endpoints matching counted once,
+  non-test connections, malformed TCP rows, and a direct live snapshot checked. Peak
+  window controls exclude setup and drain, and retain invalid-read information.
+- **2 of 2 deliberate collector breaks caught at their intended assertions:** zeroing
+  test-port TIME_WAIT failed "fixture test-port TIME_WAIT count"; including setup/drain
+  in the peak failed "phase peak excludes setup and drain". Probe environment restored;
+  collector bytes unchanged. An exit-0 log with an injected `ERR_NO_BUFFER_SPACE` was
+  also reported. That is a positive diagnostic control, not an observed browser error.
+- A simulated one-result protocol calibration checked prelaunch sampling and ordered
+  phase markers. It was not a browser test and is not included in the counts above.
+- **My wrapper check failed after run 1**, reporting "Unexpected retries". The public
+  reporter did not receive my `onConfigure` hook, so optional configuration metadata
+  was absent. The calibration had manually called that hook and missed the mistake.
+  Actual test retry indices were 0; the CLI explicitly used `--retries=0`. The raw
+  Playwright worker header supplies the required worker count. I corrected the outer
+  validation to read that retained header and resumed at run 2. Run 1's data was not
+  changed, and no comparative run was discarded or replaced.
+- The reporter/sampler and runner stayed byte-for-byte identical in all four runs.
+  SHA-256: `collector.cjs` =
+  `963faf23bda9e2633cccdf54bd03aedf5577b5c75b7da271765ad44074219f23`;
+  `runner.cjs` = `be91d916e3ca3b01b7a0f273d202b79faf2ddcb21317f3514d57e6e4b8f47b44`.
+- Raw stdout/stderr, per-sample aggregates, phase markers, derived comparison and test
+  artifacts remain locally in `playwright-report/socket-investigation-20261017/`, outside
+  committed source. The directory name reflects preparation on the 17th; the runs were
+  on the 18th. Scripts are archived as text before the gate, so lint does not treat
+  temporary instrumentation as project code. No raw netstat rows or unrelated OS
+  addresses/process IDs were saved; test output retains its normal diagnostics.
+
+**Apply the rule unchanged**
+- P ratio: `1978 / 3353 = 0.5899194751`, within the 0.75 bound.
+- T ratio: `2023 / 3375 = 0.5994074074`, within the 0.75 bound.
+- D ratio: `341116.6814 / 170549.3141 = 2.0001058533`, **above** the 2 bound. Using the
+  raw values, the slow 2-worker duration exceeds twice the slow default by **18.0532 ms**.
+  Rounding the table cannot turn that into a pass. That difference is tiny relative to
+  the observed timing variation; it is not evidence that two workers cannot help.
+- **The nominal screening rule is not met, and the comparison is provisional.** No
+  Windows two-worker default is proposed under this contract. No socket error was
+  reproduced; the error-rate and root-cause questions remain open. Drain times were
+  about two minutes in all settings and are not a separate route to declaring success.
+- **Proposed next measurement, not accepted or started:** first reduce or quantify
+  observer overhead, then compare four workers with the default as a possible middle
+  ground in time and socket counts. The exact collector, coverage/overhead checks and
+  decision rule need a separate amendment reviewed by Claude before more runs. No
+  permanent harness, application or CI change is built by this record.
+
+**Measurement-record commit gate (separate from the comparison)**
+- Cold gate run 1 (2026-10-18), **failed; no commit**. TIME_WAIT **52**; root, four gate
+  caches and `.next-visual` checked before cleanup. TypeScript **0**, lint **0**, unit
+  **0** (**1701/1701**, stderr **0 bytes**), build **0**, browser **1** (**750 passed,
+  3 failed, 1 skipped**, **0 socket-error lines**). No temporary collector was running.
+  - Desktop `motion.spec.ts:152`: "frames were never delivered on time: longest gaps
+    67, 50, 50ms". The frame-delivery failure can therefore occur without the collector;
+    it is not established as an observer-only effect.
+  - Phone `challengeSession.spec.ts:116`: the competing-Starts case timed out at line
+    123 after 5 seconds, waiting for the other tab's created-transaction count to rise
+    above 8; it stayed 8.
+  - Phone `challengeSession.spec.ts:155`: the Check request-success/abort case timed out
+    at `start`'s line 44 after 5 seconds, waiting for `covered` to become false.
+  - Errors and artifacts retained alongside the comparative output. These failures are
+    reported with no cause claimed or test weakened. Rerun the entire gate from cold;
+    the completed comparison remains unchanged and is not rerun for a passing result.
+  - A one-second aggregate snapshot after this gate read 5.66% CPU busy, 7.05 GiB free
+    of 31.92 GiB physical memory, and 16 logical CPUs. It was outside the failed tests
+    and does not diagnose their load or cause. No unrelated processes were inspected.
+- Full cold gate run 2 (2026-10-18): TIME_WAIT **23**; root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**). Same default 8-worker configuration, no temporary collector and no new
+  retry flag. All five exits passed; the existing startup helper performed **two
+  recovered `ERR_NO_BUFFER_SPACE` reloads**, recorded as two separate warning messages.
+  The originating tests cannot be identified reliably from the split logs, so no test
+  names are claimed for them. This gate was not socket-error-free. It is recorded as
+  verification, not a replacement or extra arm in the comparative experiment.
+- Thus the socket error was not reproduced in the four instrumented runs, but **was
+  reproduced in the separate uninstrumented gate**, with recovery. Counts at those
+  failure instants were not sampled. The source, rate and root-cause questions stay
+  open; the four-run screening outcome and provisional status are unchanged.
+- Only NEXT-STEPS is committed for this investigation stage. The motion/fixture
+  failures and the recovered socket errors remain follow-ups; no tests, timeouts,
+  assertions, default worker counts or retry mechanisms were changed to pass the gate.
 
 ## Open questions
 
