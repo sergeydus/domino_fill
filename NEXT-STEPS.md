@@ -4058,6 +4058,60 @@ before the next. The PR is opened only when the user says.
   (**1600**, stderr **0 bytes**), build **0**, browser **0** (**718 passed, 1 skipped**, 0
   socket errors). No failed run. Committed after it.
 
+### Slice 3b follow-up, fresh tries for the completion-card motion test: implementation contract
+
+**Why.** A flake from activation (`f1b4ade`), recorded in the third correction's run 1 and
+left open for its own change; codex asked for it fixed before merge (2026-10-16).
+`e2e/motion.spec.ts`'s "the completion card arrives inside the limits" failed on phone-360
+at `boundingBox()!.width` on cell `0,0`: the cell wasn't there.
+
+**How it works today** (read, then measured):
+- `onTime` (`e2e/frames.ts:105`) runs a try again, up to three times, when its frames
+  arrive late, which happens on a busy machine.
+- The completion-card test (`e2e/motion.spec.ts:109`) runs every try in the test's one
+  `page`: `openBoard` goes to `/`, presses Start, then `playSolution` solves the board.
+- Since activation, a solve is a challenge attempt, kept in the context's storage. So a
+  second try opens a page where puzzle 1 is already solved, and the open path
+  (`startIfCovered`, `e2e/openBoard.ts:268`) can find a different board.
+- **Measured** (2026-10-17), with a scratch spec (deleted after) running two tries in one
+  page, 10 runs: the first try was fine 10 times. The second was unusable 3 times:
+  - twice it landed on Easy puzzle **2**, covered, with no cell, as in the gate's failure;
+  - once a cover was still there and the try failed after.
+- The other three `onTime` tests open the component sheet (`/visual`), whose boards keep
+  nothing between loads (read, not measured).
+
+**The rules:**
+1. Each try of the completion-card test runs in **a new browser context**, made from the
+   test's own device options (viewport, user agent, scale, mobile, touch), its base URL,
+   and `reducedMotion: 'no-preference'`. It's closed after the try, pass or fail. So every
+   try starts as the first does: a fresh device, empty storage.
+2. Each try checks that it starts fresh: right after opening, the streak beside Archive
+   reads 0. It appears once a player has played at all (`StreakCount`,
+   `app/dominoFill/PageButtons.tsx:53`), so the try's own Start shows it, and it counts
+   solved days, so a fresh device that has only started reads 0 (to be confirmed when
+   built). The failure's snapshot read 1. A try that isn't fresh then fails at that
+   check, saying so, rather than at a missing cell.
+3. The measurement is unchanged: the same board, solution, tracking and limits.
+
+**Not in it:** `onTime` and `openBoard` are unchanged, and so are the sheet's three motion
+tests. The socket-pressure question stays open separately.
+
+**Tests:**
+- The try becomes one function in the spec. A new test, "every try starts from a fresh
+  device", runs it twice in a row, so a second try is exercised on every run, not only
+  when frames come late. It runs in the same projects as the spec, desktop and phone-360.
+- Mutation probes:
+  - the tries sharing one context: caught by the new test, at the fresh check;
+  - the fresh check removed, with the tries sharing one context: the new test fails, at the
+    missing cell or later, which shows the check is what names the cause.
+- The full gate before each commit, as always.
+
+**Validation record**
+- This contract's commit (docs only), gate from cold, first run (2026-10-17): TIME_WAIT
+  **92**, root verified. TypeScript **0**, lint **0**, unit **0** (**1701**, stderr **0
+  bytes**), build **0**, browser **0** (**751 passed, 1 skipped**, 0 socket errors). No
+  failed run. Committed after it.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
