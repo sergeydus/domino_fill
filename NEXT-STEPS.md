@@ -4923,7 +4923,7 @@ Two limits:
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
-| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The 8/2-worker screen is provisional and did not meet its duration rule. Next: four observer-off runs comparing 8/4 workers by end-of-phase levels and duration. No extra retries or weaker assertions. | Measurement first | Yes: codex builds, Claude reviews; continue sockets next (user, 2026-10-18; decision log). Simplified successor contract below awaits review; the native helper is deferred. |
+| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The accepted four observer-off 8/4 runs completed: the end-level reduction missed 25%, duration met 2x, no socket errors reproduced. No extra retries or weaker assertions. | Measurement record | Codex builds, Claude reviews (user, 2026-10-18). Four-run results await Claude's review; no cap is proposed. The native helper is deferred. |
 
 ### Windows browser-test socket pressure: investigation contract
 
@@ -5442,9 +5442,11 @@ phone failures remain separately reported, with no cause or builder assignment c
 
 ### Windows socket investigation: four observer-off runs
 
-**Status (2026-10-18): proposed simplification, awaiting Claude's review.** Continues
-the user's socket assignment (codex builds, Claude reviews). Replaces the unbuilt native
-helper and eight-run matrix above. No new measurement script or comparison implemented.
+**Status (2026-10-18): accepted at `8634d26`; all four runs complete, results awaiting
+Claude's review.** The fixed end-level screen was **not met**; its duration limit was
+met. All four runs were valid and passed, without socket errors or test retries. No
+worker cap is proposed or built. This stage replaces the unbuilt native helper and
+eight-run matrix; it does not change the completed 8/2 rule or reclassify that outcome.
 
 **Review of `516baf6`, Claude (2026-10-18)**
 - Accepted the plan as sound, while recommending four observer-off runs and a snapshot
@@ -5577,6 +5579,132 @@ keep their separate reports and have no newly assigned builder.
   (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
   1 skipped**, **0 socket-error lines**). No failed full gate and no TCP collector.
   This is verification for the docs commit, not a comparative run under the new plan.
+
+**Accepted review and implementation (2026-10-18)**
+- Claude accepted `8634d26`, checked the four endpoint/peak percentages and read the
+  screening/retention rules. Claude ran nothing and did not inspect the retained scripts.
+- Adopted Claude's non-blocking caveat for discussion: server teardown may move some
+  still-open connections into TIME_WAIT before the endpoint. The earlier separate
+  ESTABLISHED peaks were 96–98 at eight workers and 26–28 at two, a difference of about
+  70 (about 2% of 3400). This is an inferred contribution, not a measured count of
+  teardown closes, and it compares eight with two workers, not the new four-worker arm.
+  Those peaks were not necessarily simultaneous with teardown. No subtraction or bias
+  correction is made. Such a bias would favor a lower four/eight ratio; the observed
+  test-port ratio still misses 0.75 by over seven percentage points.
+- Scratch code reused the previous parser functions unchanged, with a minimal reporter
+  and parent runner. The reporter sends the marker before report serialization. The
+  parent takes the one endpoint snapshot, then polls only during the post-suite drain.
+  Resolved workers/retries are captured from `onBegin` and checked against raw headers
+  and result retry indices, avoiding the earlier optional-callback metadata mistake.
+
+**Checks and probes, measured**
+- Known-row fixtures and the live snapshot cross-check passed. Parser functions were
+  copied from the original artifact, with IPv4/IPv6 and both-endpoints controls retained.
+- Two protocol controls, neither a browser-suite run: one simulated passed case with
+  exit 0 and one simulated failed case with exit 7. Both exits were preserved. They
+  each intentionally logged a positive-control socket warning, which remained visible;
+  those injected warnings are not counted as real transport failures. Their endpoint
+  requests began 0.5077/0.5587 ms after the markers. No in-phase TCP capture occurred.
+  Invalid and late snapshot checks, endpoint uniqueness and D's phase window passed.
+- **Mutation probes: 4 of 4 caught at the intended assertion**, every changed file
+  restored byte for byte, with no survivor or failed probe setup:
+  1. Zero test-port TIME_WAIT: `fixture test-port TIME_WAIT count`.
+  2. Select the preflight instead of endpoint: `endpoint identity excludes preflight and drain`.
+  3. Include extra time in D: `phase duration excludes setup and teardown`.
+  4. Hide an exit-0 socket warning: `exit-0 warning remains visible`.
+- Execution scripts were hashed before run 1 and unchanged through run 4. The analysis
+  script was written after all four browser phases; it checks source, hashes, inventory,
+  retry indices, endpoint identity/freshness and absence of in-suite snapshots before
+  applying rule 8. It does not supply an extra measurement.
+
+**Four observer-off runs, measured (2026-10-18)**
+
+All used accepted source `8634d262db144f15a83e401e78cbb5079081e29d`, the unchanged
+complete inventory (754 cases, title hash
+`4d8ecd39737840ec8a104c612d7bf7f31bf7d32e5caa8fddd2791b8df4ed546f`), fixed
+8 / 4 / 4 / 8 order and `--retries=0`. Every run exited **0**, with **753 passed,
+1 skipped**, **0 test retries**, **0 socket-error messages**, **0 startup reloads**,
+**0 protocol errors** and no capture during the suite. No run was replaced or reordered.
+
+| Run | Workers | E_test | E_total | D (seconds) | CLI (seconds, excluding drain) | Drain (seconds) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 4556 | 4590 | 98.6465971 | 120.5812608 | 121.2899580 |
+| 2 | 4 | 3742 | 3791 | 152.7256599 | 174.2403769 | 121.2379794 |
+| 3 | 4 | 3207 | 3236 | 181.1833613 | 220.9681021 | 121.3161560 |
+| 4 | 8 | 4554 | 4910 | 108.6860928 | 133.6549334 | 362.9587224 |
+
+| Run | Cold-prep TIME_WAIT | Runner's prelaunch TIME_WAIT | Request after onEnd (ms) | Snapshot duration (ms) | Final total TIME_WAIT |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 54 | 55 | 0.6301 | 130.6925 | 53 |
+| 2 | 44 | 45 | 0.4905 | 123.4904 | 98 |
+| 3 | 84 | 85 | 0.5745 | 170.4020 | 51 |
+| 4 | 47 | 48 | 0.6369 | 206.3282 | 74 |
+
+- Before each run: Git root, four gate caches, `.next-visual`, clean source and frozen
+  script hashes verified, then cold cleanup. Before run 3 one preflight was refused at
+  TIME_WAIT **103**, before deletion or browser launch. After waiting, preparation
+  passed at 84 and the runner rechecked 85. This is not a failed or replacement run.
+- Exactly one valid endpoint was requested per run, within the 250-ms/5-second bounds.
+  Request-to-completion windows differed by about 83 ms at most; no unmeasured decay
+  correction is applied. Endpoints are levels over recorded capture windows, not peaks.
+- Samples per run (preflight + endpoint + drain): **14, 14, 14, 38**. All reads valid;
+  maximum drain request gaps **10.1533321, 10.1366535, 10.1761897, 10.2196034 seconds**.
+  Drain time is approximate at that cadence; none reached the 600-second censoring bound.
+
+Endpoint aggregates (each row counted once; test ESTABLISHED was zero in all four):
+
+| Run | All TCP | Total ESTABLISHED | Non-test TCP | Non-test ESTABLISHED | Non-test TIME_WAIT |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 4742 | 59 | 186 | 59 | 34 |
+| 2 | 3940 | 57 | 198 | 57 | 49 |
+| 3 | 3385 | 58 | 178 | 58 | 29 |
+| 4 | 5104 | 100 | 550 | 100 | 356 |
+
+- Background pressure differed, especially run 4. Its test-port TIME_WAIT reached
+  **0** by the 121.4450911-second drain reading, while non-test TIME_WAIT was **217**.
+  The later wait to total below 100 was therefore not continuing test-port TIME_WAIT
+  at the sampled instants; non-test activity continued. No unrelated process/address
+  was inspected and no cause is assigned. This is a limitation, not a reason to drop
+  run 4. Run 1 supplies rule 8's lower total eight-worker denominator anyway.
+- The four-worker runs' D and endpoints vary. These sequential observations do not
+  separate concurrency from other time/load effects or establish an error-rate effect.
+  No comparison with the old instrumented durations is treated as causal evidence.
+
+**Rule 8 applied unchanged**
+- Test-port end level: `3742 / 4554 = 0.8216952129995608`, **not <= 0.75**; conservative
+  observed reduction **17.830478700043916%**, below the required 25%.
+- Total end level: `3791 / 4590 = 0.825925925925926`, **not <= 0.75**; reduction
+  **17.407407407407405%**, below 25%.
+- Duration: `181.1833613 / 108.6860928 = 1.6670335332912067`, **<= 2**. The duration
+  criterion is met; it does not override either end-level criterion.
+- **Screen not met**, with all four runs valid. No Windows worker cap is proposed or
+  built under this contract. Zero real errors in either setting does not prove error
+  prevention, observer suppression, or its absence. There was no instrumented arm.
+  Do not rerun this screen for a favorable selection or lower its threshold after the
+  result. Next: Claude reviews this record, then the user decides whether to close the
+  investigation without a config change or authorize a different, error-focused aim.
+  A trial/permanent cap and its ordinary-gate window are not authorized here.
+
+**Retained artifacts (ignored, local)**
+- `playwright-report/socket-endlevel-20261018/`: all four JSON results, reporter records,
+  raw stdout/stderr, preflight refusal, fixture/probe/smoke logs, `summary.json`, analysis
+  and `frozen-script-hashes.json`. Script contents were archived as `.cjs.txt` after
+  measurement, byte hashes verified before renaming, so temporary scripts do not enter
+  the source lint/build. The earlier `socket-investigation-20261017/` is untouched.
+- Runner SHA-256 `00be156b59f3f5effa6f01b13301ba62325a31f411e84bc671b52928bfe8091d`;
+  reporter `0eab759d5c3ed7270475a0edf30dc786aacf477c5c19a57ea1ef2c8769c1bda1`;
+  protocol `e352181668021716f61d5a8e57ca04ddef17e2e3bd60e1f373d5c15606250b2e`;
+  parser `7758c1497fedbe1d1a9800ae622c09232f2ed7d600e0e7912d9c9b535a88a59c`.
+  The manifest also covers the smoke, checks, probes and smoke validator.
+
+**Measurement-record commit gate**
+The five-step cold gate is separate from these four comparison runs and recorded below.
+- First full cold gate (2026-10-18): TIME_WAIT **63**, root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**, **0 socket-error lines**). All five exits passed on the first run.
+  No failed full gate. Only NEXT-STEPS is committed; source/configuration, default
+  workers, test assertions, timeouts, test retries and startup reload rules are unchanged.
 
 ## Open questions
 
