@@ -102,6 +102,7 @@ Evidence levels:
 | 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 | 2026-10-17 | Slice 3b's PR is opened (#12), with merging decided separately. Claude takes the `keyGuide.spec.ts` flake next, codex reviewing; codex then takes socket pressure, Claude reviewing (user, approving codex's recommendation, 2026-10-17). | Codex approved slice 3b at `e5a5c37`. One change active at a time. |
 | 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
+| 2026-10-18 | Next, one change at a time: Claude takes the completion card's frame-delivery flake, codex reviewing; then codex takes the challenge-session timeouts, Claude reviewing. Claude opens the socket PR (#14) and refreshes AGENTS.md's status for codex's review (user, 2026-10-18, approving codex's recommendation and leaving the order to Claude). | Merges stay the user's. |
 
 ## Principles
 
@@ -4245,6 +4246,73 @@ from the guide's nearest `[data-advice]` ancestor, and the wording above):
 - Codex accepted `c281c43` (2026-10-17).
 - The decision-log row for PR #12's merge (docs only), gate from cold, first run
   (2026-10-17): TIME_WAIT **40**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
+
+### The completion card's motion, measured where nothing competes for its frames: implementation contract
+
+**Why.** `e2e/motion.spec.ts`'s "arrives inside the limits" has failed with "frames were
+never delivered on time" in ordinary gate runs and in one measured run (desktop; codex's
+socket records, 2026-10-18). `onTime` (`e2e/frames.ts:105`) takes a try again when any
+frame in the card's arrival takes over 25 ms, up to three tries. Builder: Claude, reviewer:
+codex (user, 2026-10-18).
+
+**How it works today** (read, then measured):
+- Since `e5a5c37`, each try opens today's **challenge** board in a fresh context, solves
+  it, and reads the card arriving (`e2e/motion.spec.ts:124-139`).
+- The card's motion is one `motion.div` with the same `initial`, `animate` and
+  `transition` on a challenge board and a casual one; nothing in its animation branches
+  on the challenge (`app/dominoFill/CompletionCard.tsx:150-162`). Only its contents and
+  buttons differ.
+- **Measured** (2026-10-18, desktop), with a scratch spec (deleted after). One try per
+  test logged its longest frame gap and the page's long tasks, on the pinned challenge
+  board and on a casual archive board (`openArchiveDay`):
+
+  | Load | Board | Tries | Late (gap > 25 ms) | Worst gap | Tries with a long task |
+  | --- | --- | --- | --- | --- | --- |
+  | 8 workers | challenge | 30 | 2 | 50 ms | 1 |
+  | 8 workers | casual | 30 | 0 | 17 ms | 0 |
+  | 8 workers | challenge | 100 | **14** | 67 ms | 2 (62, 71 ms) |
+  | 8 workers | casual | 100 | **0** | 17 ms | 0 |
+  | 1 worker | challenge | 40 | 0 | 17 ms | 0 |
+  | 1 worker | casual | 40 | 0 | 17 ms | 0 |
+
+- So on a busy machine, a challenge board's solve drops a frame during the card's
+  arrival in about one try in seven; most late tries were one dropped frame (33 ms). A
+  casual board under the same load never did, and neither did either board on an idle
+  machine. Inferred: the work the challenge does when a board is solved (saving the
+  finish, the results and streak updates) shares the main thread with the card's first
+  frames, and only overruns a frame when CPU is scarce. Which part of that work is not
+  measured.
+- Three late tries in a row then fail the test. A full gate's load is heavier than this
+  scratch's, so the rate there is likely higher (inferred).
+
+**The rules:**
+1. The card's motion is measured on a **casual archive board**: each try opens
+   `ARCHIVE_DAY` through `openArchiveDay` (which pins `LATE_IN_A_MONTH`), in its fresh
+   context, then solves it as now. The measurement, limits, freshness check and
+   `onTime` are unchanged; no tolerance, frame budget or try count changes.
+2. Each try asserts it is measuring a casual board before it solves: no challenge clock
+   (`role="timer"`, "Challenge time") on the page. A try on a challenge board then fails
+   at that check, saying so.
+3. A comment at the try says why: the card's motion doesn't depend on the challenge, and
+   on a challenge board the solve's own work competes for the card's frames under load.
+4. **Recorded as its own open item, not fixed here:** a challenge board's solve can drop
+   a frame of the card's arrival on a busy machine. Whether that's worth profiling and
+   reducing is a decision for the user. This change makes no claim about real devices.
+
+**Not in it:** the app; `frames.ts` and its 25-ms clamp; the other motion tests; the
+challenge-session timeouts (codex's, next).
+
+**Tests:**
+- The two completion-card tests, desktop and phone-360, repeated.
+- Mutation probe: the try opening today's challenge board again (`openBoard`). It must
+  fail at the casual-board check.
+- The full gate before each commit.
+
+**Validation record**
+- This contract's commit (docs only, with the decision-log row), gate from cold, first run
+  (2026-10-18): TIME_WAIT **43**, root verified. TypeScript **0**, lint **0**, unit **0**
   (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
   socket errors). No failed run. Committed after it.
 
