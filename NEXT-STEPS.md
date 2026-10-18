@@ -102,6 +102,7 @@ Evidence levels:
 | 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 | 2026-10-17 | Slice 3b's PR is opened (#12), with merging decided separately. Claude takes the `keyGuide.spec.ts` flake next, codex reviewing; codex then takes socket pressure, Claude reviewing (user, approving codex's recommendation, 2026-10-17). | Codex approved slice 3b at `e5a5c37`. One change active at a time. |
 | 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
+| 2026-10-18 | Continue the socket investigation next: codex builds, Claude reviews (user, 2026-10-18). | Write and review the successor measurement contract before any new collector or comparative runs. The motion frame-delivery and challenge-session flakes remain separate follow-ups; this choice assigns neither flake's implementation. |
 
 ## Principles
 
@@ -4922,7 +4923,7 @@ Two limits:
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
-| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. Measure the existing worker default against two workers before choosing a change. No extra retries or weaker assertions. | Measurement first | Yes: codex builds, Claude reviews (user, 2026-10-17; assignment in the decision log). |
+| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The 8/2-worker screen is provisional and did not meet its duration rule. Next: a cheaper observer, timing without it, and an 8/4-worker screen. No extra retries or weaker assertions. | Measurement first | Yes: codex builds, Claude reviews; continue sockets next (user, 2026-10-18; decision log). Successor contract below awaits review. |
 
 ### Windows browser-test socket pressure: investigation contract
 
@@ -5241,10 +5242,201 @@ the default duration. These data do not establish uninstrumented suite performan
   from observer-off runs, instrumented/uninstrumented error counts reported separately,
   and a cheaper collector. Zero instrumented errors must not be read as improvement.
 - Next-change priority and owners for the newly reported flakes await the user's choice.
+  *Amended 2026-10-18:* the user chose to continue sockets, codex building and Claude
+  reviewing. The two flake areas remain separate, without new builder assignments.
 - Date-correction commit gate (2026-10-18), first cold run: TIME_WAIT **68**; repository
   root, four gate caches and `.next-visual` verified before cleanup. TypeScript **0**,
   lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**,
   browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No collector ran.
+
+### Windows socket investigation: cheaper observer and four workers
+
+**Status (2026-10-18): proposed amendment, awaiting Claude's review.** The user chose
+to continue sockets, codex building and Claude reviewing. This adds a new measurement
+stage; it neither changes the completed 8/2 rule nor reclassifies its outcome. No new
+collector, calibration or comparative run has been implemented for this amendment.
+
+**Why (measured, with inferences distinguished)**
+- In `65f3716`'s four runs, the old collector's capture medians were 456/727 ms with
+  eight workers and 113/101 ms with two. Missing intervals were also concentrated in
+  the eight-worker runs. Differential observer cost is plausible, not measured as a
+  causal slowdown. Its size is unknown without observer-off controls.
+- The four instrumented runs had zero socket errors; the separate uninstrumented gate
+  later had two recovered errors. That does not establish suppression or an error-rate
+  difference. It does make a zero under instrumentation insufficient evidence of safety.
+- Four workers is a proposed middle ground. Lower TIME_WAIT peaks do not themselves
+  explain WSAENOBUFS. Connection bursts are a hypothesis, not an established cause.
+
+**How it works today (read)**
+- `playwright.config.ts:20-29` still has no worker override. The prior run headers
+  resolved the default to eight on this 16-logical-CPU Windows host. Local test retries
+  are zero. `e2e/server.ts:18-30`, `:243-306` and `e2e/globalSetup.ts:7-10` own the two
+  existing build/serve lifecycles. None is changed by this amendment.
+- Retained scratch `collector.cjs.txt:20-61`, `:109-151` parses fresh `netstat -an`
+  subprocess output for every sample; `:194-224` records phase events in a reporter.
+  The old worker avoids blocking the runner's event loop but still consumes host work.
+  These paths are inside `playwright-report/socket-investigation-20261017/`, ignored
+  artifacts, not a permanent harness. Their files and four-run outputs stay intact.
+- Microsoft documents separate read-only [GetTcpTable (IPv4)](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-gettcptable)
+  and [GetTcp6Table (IPv6)](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-gettcp6table)
+  APIs in `Iphlpapi.dll`. A persistent helper can call these instead of launching a
+  process per sample. This is a mechanism proposal; its cost here is not yet measured.
+  Table layouts must respect the documented [IPv4 alignment](https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcptable)
+  and [IPv6 layout](https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcp6table),
+  rather than assuming packed rows. [GetExtendedTcpTable](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable)
+  does not support IPv6 basic tables; do not substitute it with `TCP_TABLE_BASIC_ALL`.
+
+**Rules**
+1. Continue on `investigate/windows-socket-pressure`, based on `master` at `9fecf9b`.
+   Preserve the earlier record, acceptance-date correction and original artifacts.
+   Only NEXT-STEPS is committed in this measurement stage. Claude reviews the contract
+   before scratch implementation, and reviews its results before any remedy proposal.
+   App code, tests, configuration, CI, assertions, retries and OS settings stay unchanged.
+2. After acceptance, build a temporary persistent PowerShell/.NET helper using C#
+   interop to the two basic TCP-table APIs, with sorting off, reusable buffers and no
+   process/PID lookup. Compile/warm it before launching Playwright. No tool installation.
+   Use native layout offsets/sizes with bounds checks and explicit network-order port
+   decoding. Up to three buffer-growth attempts per table; any remaining API error,
+   malformed table or failed IPv6 read invalidates the whole sample, never zero-fills it.
+   Bound each request at five seconds; timeout stops collection and is retained as an
+   error. Kill/close only the helper process this runner created, in a `finally`.
+3. A Node parent requests one sample per 250 ms, without overlapping requests or catch-up
+   bursts. It records request/receipt on the same host monotonic origin used by the
+   reporter; no helper-clock or browser-page-clock comparison is needed. Record native
+   call time, full request-to-receipt time including parsing/serialization, and gaps.
+   Keep the previous all-TCP, ESTABLISHED, TIME_WAIT, test-port and non-test aggregates.
+   The matching rule remains loopback port 3100/3101 at either endpoint; a TCP row is
+   counted once even if both endpoints match. Both local ends of a connection can be
+   separate rows, as before. IPv4/IPv6 reads are sequential snapshots, not one atomic
+   host snapshot. Store no unrelated addresses or process information.
+4. Add a diagnostic called **newly observed test-connection tuples per second**:
+   - Keep only test tuples in memory. Exclude listeners. Identity is family and the
+     pair of address/scope/port endpoints, canonicalized so the two local directions
+     count once; state changes do not create a new identity.
+   - For consecutive valid samples, count identities present now but absent before,
+     divided by actual elapsed seconds between sample midpoints. The first sample
+     and the first after an invalid/missing interval have no rate; establish a baseline.
+   - Report aggregate maxima/percentiles with the interval lengths and missing intervals.
+     Do not persist tuple addresses. A net row-count delta is not this measure: arrivals
+     and departures can cancel. Sampling misses short-lived connections and tuple reuse;
+     these are observed appearances, not the true creation rate or a WSAENOBUFS cause.
+5. Validate before full runs: synthetic native-layout IPv4 and IPv6 tables with known
+   counts/ports/states, growth/error paths, identity changes and phase windows; then
+   a live netstat/native cross-check bracketed by native reads. Do not demand equality
+   for changing unrelated connections: retain all aggregates and discrepancies, and
+   make no accuracy claim if unexplained differences remain. No raw unrelated rows
+   are retained. Run 40 warmed samples at the planned cadence, recording timing and
+   this helper's own CPU time. Require zero invalid samples and p95 end-to-end capture
+   at most **10 ms** before the matrix. If this fails, stop and report; do not quietly
+   slow the cadence, remove the rate calculation or replace the mechanism.
+6. Compare eight full browser runs, in this fixed order (two per setting and observer
+   mode, with reversed within-setting order on the second pass):
+
+   | Run | Workers | TCP observer |
+   | --- | --- | --- |
+   | 1 | default (must resolve to 8) | off |
+   | 2 | default (8) | on |
+   | 3 | 4 | on |
+   | 4 | 4 | off |
+   | 5 | 4 | off |
+   | 6 | 4 | on |
+   | 7 | default (8) | on |
+   | 8 | default (8) | off |
+
+   Every run uses the same accepted source, scratch-script hashes and complete test
+   inventory, all projects, `--retries=0`, no altered timeouts and no concurrent suite.
+   Capture the resolved worker header and every result's retry index independently of
+   optional reporter configuration callbacks. Verify root and all five cache targets
+   before deleting, then check total TIME_WAIT below 100 immediately before launch.
+   A refused start is recorded separately; no run is replaced, reordered or discarded.
+7. Both modes use the same minimal phase reporter: first test begin, last test end,
+   `onEnd` after teardown, exact outcomes and inventory hash. **Off** means no TCP
+   collector/helper process or periodic TCP/CPU polling between launch and `onEnd`.
+   Use only prelaunch and post-`onEnd` netstat snapshots plus post-teardown drain polling
+   for that mode; they cannot affect its browser duration. **On** samples through drain.
+   In both modes bound drain observation at 600 seconds, then report censored if needed.
+   A run still starts only below 100. Reporter/logging cost remains common to both modes;
+   observer-off is not a claim of zero measurement overhead.
+8. For each run retain commands, source/script hashes, phase markers, output, outcomes,
+   retry indices, inventory and process duration. Define **D** as last test end minus
+   first test begin. In on runs also record **P/T**, test-port/total TIME_WAIT sampled
+   maxima from first test begin to `onEnd`, using only captures wholly inside that
+   interval; report boundary coverage, sample counts, invalid reads and longest gaps.
+   Record per-capture timings and phase CPU seconds of the sampler helper plus parent
+   (their own counters only), as a fraction of one CPU core over phase wall time.
+9. **Observer qualification, fixed before runs:** for each worker setting, require
+   `max(D_on) / min(D_off) <= 1.10`. In every on run also require p95 end-to-end capture
+   **<= 10 ms**, sampler-helper-plus-parent CPU **<= 5% of one core**, no invalid or
+   missing scheduled samples, longest midpoint gap **<= 500 ms**, and a valid capture
+   within 500 ms of each phase boundary. A scheduled interval missed by at least one
+   full 250-ms slot is missing; report the exact gaps, not just a rounded count.
+   These are proposed engineering budgets, not confidence bounds. Report even a tiny
+   breach without rounding it into a pass. If the warmed check or an on-run collector
+   budget fails, stop further matrix runs and retain the incomplete result for review.
+   The final duration-qualification ratio is judged after the complete matrix.
+10. **Four-worker screening rule, fixed before runs:** propose a Windows-only four-worker
+    default for review only if all observer qualifications pass and:
+    - `max(P_4,on) / min(P_8,on) <= 0.75`;
+    - `max(T_4,on) / min(T_8,on) <= 0.75`; and
+    - `max(D_4,off) / max(D_8,off) <= 2`.
+
+    Counts come only from the four instrumented runs; the deciding duration comes only
+    from the four observer-off runs. This retains the original 25%-pressure/2x-duration
+    engineering screen for the new worker setting. Report on-run durations and all
+    ratios too, without pooling the two modes or comparing these peaks directly with
+    the old one-second collector's peaks. Eight complete runs must account for the
+    same tests. Any failed test, unexpected retry, interrupted run, missing phase or
+    unexplained counter mismatch makes the remedy screen inconclusive. Preserve the
+    failed result; no replacement run is selected to make the matrix pass.
+11. Report a four-cell table (8/on, 8/off, 4/on, 4/off) of raw socket-error messages,
+    recovered startup reloads, and failed tests, including zeroes. Match failures by
+    case only when the logs establish it. Two runs per cell cannot estimate error
+    probability, prove suppression, or establish its absence. If a setting has errors
+    only in its off runs, explicitly flag possible observer suppression and make no
+    worker-remedy recommendation from this matrix, even if rules 9/10 pass. Other
+    error patterns are not proof that the observer is harmless or the error prevented.
+    Burst observations, non-test pressure and drain time are diagnostic only; none
+    substitutes for the pre-stated screening rule. If inconclusive or not met, report
+    that outcome and propose a reviewed next step, without new runs on the same plan.
+
+**Validation / mutation probes (after acceptance, not results claimed now)**
+- Zero the native test-port TIME_WAIT aggregate: fails the known-count fixture.
+- Omit IPv6: fails the IPv6-only fixture. Decode ports in host order: fails a known
+  3100/3101 fixture. Return a table with a bad row count or a failed API call as an empty
+  success: fails the invalid-sample check. Each is a separate probe, then restore.
+- Count both tuple directions or a state change as arrivals: each fails the known-rate
+  fixture. Use net count delta instead: equal-count replacement fails that fixture.
+- Include pre-phase/drain counts in P/T: fails the phase-window assertion. Use D_on
+  instead of D_off for the remedy ratio: a synthetic separating case fails. Treat
+  an invalid read as zero or omit a deliberately missed interval: each fails its
+  quality assertion. Hide an injected socket error in an exit-0 run: fails its log check.
+- A protocol smoke checks native-helper readiness, reporter/collector phase mapping,
+  mode-off absence of sampling and exact child exit propagation before the matrix.
+  It is not counted as a browser-suite run. List all executed probes and intended
+  assertions in As built, including survivors or setup mistakes; restore scripts and
+  freeze their hashes before run 1. If a real run reveals a protocol defect, stop,
+  report the incomplete matrix, and obtain a reviewed amendment before restarting.
+
+**Not in this amendment**
+No permanent collector, worker cap, additional reload or test retry, test/fixture fixes,
+timeout or timing-tolerance changes, port-range/OS tuning, CI change, visual update,
+Docker, external service, or new server. The motion frame-delivery and challenge-session
+phone failures remain separately reported, with no cause or builder assignment claimed.
+
+**As built / validation record**
+- Draft only: existing configuration, scratch mechanism and Windows API documentation
+  read. No new helper, calibration or matrix run. This docs-only contract has no
+  runtime mutation claim. The complete cold commit gate is recorded here before push.
+- Two gate starts (2026-10-18) refused at TIME_WAIT **110** and **101**, after root/cache-path
+  verification but before deletion or any test. Wait for the pool and start from cold;
+  this was a refused preflight, not a failed five-step gate.
+- First full cold gate (2026-10-18): started at TIME_WAIT **90**, after the root, four
+  gate caches and `.next-visual` were verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**). One `ERR_NO_BUFFER_SPACE` startup warning triggered the existing single
+  reload and recovered; the originating test is not established by the split logs.
+  This was a passing five-exit-code gate, not a socket-error-free run. No observer was
+  running; this gate is not a new comparative measurement. No failed five-step run.
 
 ## Open questions
 
