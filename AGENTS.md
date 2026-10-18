@@ -135,13 +135,28 @@ npm run test:e2e;                    echo "e2e=$?"
 - **No servers.** Everything competitive runs on the device, on the honour system
   (Principle 5 in NEXT-STEPS).
 
-## Where things stand (2026-10-12)
+## Where things stand (2026-10-18)
 
-- The Daily Challenge: decisions and Ruleset v1 (D2) are in NEXT-STEPS. Slices 1 (the
-  attempt record, its store and the clock), 2 (the wiring into the game) and 3a (the
-  playable challenge on screen) are merged, and the challenge is still switched off:
-  `RootStore`'s `challenge` option defaults to false. Slice 3b (results, Share, streak,
-  countdown, then switching it on) is Claude's, reviewed by codex; its product choices are
-  in NEXT-STEPS' decision log (2026-10-12), and its contract comes before any code.
-- Known flake to diagnose: `e2e/theme.spec.ts:71` read a background as `[0,0,0]`; its
-  parser also maps transparent to that, so capture the raw CSS value first.
+- **The Daily Challenge is live.** Slices 1 (the attempt record, its store and the clock),
+  2 (the wiring into the game), 3a (the playable challenge on screen) and 3b (results,
+  Share, streak, countdown, and switching it on) are merged; 3b as PR #12 (`9d1df8d`).
+  Decisions, Ruleset v1 (D2) and every slice's contract are in NEXT-STEPS.
+- **Where it's on:** the public page's provider (`app/provider.tsx`) switches it on
+  everywhere except `/visual` pages. `RootStore`'s own `challenge` option still defaults to
+  false, so unit tests and fixtures opt in.
+- **Socket errors on the Windows machine** (`ERR_NO_BUFFER_SPACE` in gate runs) are
+  investigated: fewer workers didn't meet either agreed screen, and the connection level
+  doesn't predict the error, so its cause is unestablished (NEXT-STEPS U8, U9). The
+  harness now logs one aggregate connection snapshot when it diagnoses the error (PR #14).
+  No worker cap; wait for a logged occurrence before changing anything.
+- **Next, one change at a time** (user, 2026-10-18): Claude takes the motion flake below,
+  codex reviewing; then codex takes the challenge-session timeouts, Claude reviewing.
+- Known flakes to diagnose:
+  - `e2e/motion.spec.ts`, the completion card's "arrives inside the limits": "frames were
+    never delivered on time", in gate runs and a measured run (desktop).
+  - `e2e/challengeSession.spec.ts:116` and `:155` timed out in one gate run (phone): the
+    competing-Starts case, and the Check request case.
+  - `e2e/theme.spec.ts:71` read a background as `[0,0,0]`; its parser also maps
+    transparent to that, so capture the raw CSS value first.
+  - `e2e/keyGuide.spec.ts:107` read the guide's line height as NaN. Its check now reports
+    the raw values (PR #13), so wait for a failure's message before fixing.
