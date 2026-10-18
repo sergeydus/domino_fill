@@ -4925,7 +4925,7 @@ Two limits:
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
-| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Revised contract below; no code before acceptance. |
+| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd`; implementation and validation below. No retry-rule or worker-count change. |
 
 ### Windows browser-test socket pressure: investigation contract
 
@@ -5710,8 +5710,9 @@ The five-step cold gate is separate from these four comparison runs and recorded
 
 ### Socket errors: one aggregate snapshot when diagnosed
 
-**Status (2026-10-18): proposed contract, awaiting Claude's review.** The user chose
-this follow-up, codex building and Claude reviewing. No diagnostic code has been written.
+**Status (2026-10-18): contract accepted at `d9896cd`; implementation built, awaiting
+code review after its gate.** The user chose this follow-up, codex building and Claude
+reviewing. Only the test harness changes; no app or worker-count change.
 
 **First review, Claude (`93cb964`, 2026-10-18)**
 - Accept after one correction: Claude inferred that the 750-ms command budget tied to
@@ -5813,8 +5814,8 @@ this follow-up, codex building and Claude reviewing. No diagnostic code has been
    the retry. The snapshot may include connections opened by the reload or later work;
    no claim that it describes the first load exclusively is made.
    Emit no second line on a late completion after a timeout outcome. The one-line
-   guarantee applies while the worker remains executing; termination before settlement
-   or delivery can lose the record. Do not add a flush/teardown wait or placeholder line
+   guarantee assumes an executing worker and functioning sink; termination or sink
+   failure before delivery can lose the record. Do not add a flush/teardown wait or placeholder line
    to conceal that limitation. No URL, IP endpoint, PID, raw netstat text, native stderr or
    unbounded exception message is included. Failed and unsupported captures retain
    bounded status metadata, not fabricated counts. Capture failure cannot throw into
@@ -5881,6 +5882,95 @@ and challenge-session flakes. The 5/19 report is a lead, not an acceptance thres
   browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No refused
   start or failed gate. Only NEXT-STEPS changes. No implementation, smoke or runtime
   mutation claim; the decoupled five-second contract is ready for re-review.
+
+**Implementation / As built (2026-10-18)**
+- Claude accepted `d9896cd` without corrections, reading its diff but not rerunning
+  anything or rechecking the recorder citations. No implementation preceded acceptance.
+- `e2e/socketSnapshot.ts` contains the aggregate parser and nonrejecting background
+  task. `openBoard` invokes it only after the existing eligible socket warning, using
+  `void`, then keeps the original pause/increment/reload path. The pure policy changes
+  only its reason and causal comments; all eligibility conditions remain intact.
+- Counts follow the measured parser's rules. IPv6 spellings are normalized locally
+  using the URL parser (no network request), covering full/compressed loopback and
+  dotted/hexadecimal IPv4-mapped loopback. This avoids treating equivalent numeric
+  address spellings differently. Returned records contain only aggregate counts.
+- The identity provider is called and copied before launching, including a title-array
+  copy and the current load attempt. Later output therefore cannot borrow the next
+  test's identity or the retry's incremented attempt. Unknown context is explicit;
+  request-failure delay remains `unknown`. Non-Windows results are unsupported, with
+  no command. The command uses exactly `-an`, hidden, 5000 ms and 4 MiB maxBuffer.
+- Spawn, command, unavailable, output-limit, timeout and parse outcomes are bounded
+  statuses, with no raw native output/error message. The promise resolves after one
+  warning attempt. A failed sink is contained without a second emission attempt;
+  rule 6 now explicitly includes sink failure with the existing delivery limitation.
+  No teardown hook, flush wait, cancellation-at-reload or persistent sampler was added.
+
+**Tests and deliberate breaks, measured**
+- New unit files: `socketSnapshot.test.ts` **28** tests and `openBoardRetry.test.ts`
+  **11**, **39 new tests**. The orchestration uses the real `instrument`, `waitForReady`
+  and collector with mocked child/Playwright surfaces, not a second retry implementation.
+  Held callbacks prove readiness/reload can complete before the diagnostic; their late
+  success retains the original context and attempt 0 after the real retry increments it.
+- Existing test intentionally amended: `startupRetry.test.ts`, "a chunk lost to
+  ERR_NO_BUFFER_SPACE", retains its original eligibility/code assertions and adds
+  cause-unestablished/no-TIME_WAIT/no-worker-recommendation assertions. No assertion
+  dropped, no test count changed (**18**). No browser test changed or added.
+- First targeted run: **56 passed, 1 failed** of 57, stderr **1894 bytes**. My fake HTTP
+  response lacked `url()`; the failure was test setup, before retry logic. Fixed the
+  fake, not app/harness behavior. Targeted reruns: **57/57**, stderr **0 bytes**; targeted
+  TypeScript **0** and lint **0**. Later assertion ordering was tightened so an awaited
+  capture fails at the reload assertion rather than an earlier pause precondition.
+- **Final mutation sweep: 20 of 20 caught at the intended assertion; all mutated source
+  restored byte for byte.** No surviving code mutation. The list:
+  1. No invocation: eligible diagnosis starts exactly one capture.
+  2. Invoke on every retry: other transient retries never capture sockets.
+  3. Await the capture: reload never waits for the held capture.
+  4. Remove port filtering: a non-test port stays outside test totals.
+  5. Remove IPv6 loopback: loopback contributes to test TIME_WAIT.
+  6. Ignore the remote endpoint: aggregate fixture.
+  7. Double-count both matching endpoints: aggregate fixture.
+  8. Stop counting TIME_WAIT: aggregate fixture.
+  9. Turn command failure into zero-count success: command-failure status.
+  10. Turn parse failure into zero-count success: malformed-output status.
+  11. Expose stdout: raw endpoint never reaches the record.
+  12. Expose stderr: native failure payload stays private.
+  13. Restore 750 ms: command options require the five-second deadline.
+  14. Read identity after settlement: late snapshot retains original identity/attempt.
+  15. Keep the caller's title array: copied identity survives caller changes.
+  16. Spawn on unsupported platforms: no Windows command there.
+  17. Re-throw a synchronous spawn failure: promise must resolve, not reject.
+  18. Restore the causal reason: cause-unestablished assertion.
+  19. Re-throw unavailable context: unknown context still starts the snapshot.
+  20. Re-throw sink failure: task must resolve, not reject.
+- Probe-script corrections, retained alongside successes: first sweep classified 16
+  caught, misclassified probe 17 because Vitest omitted its custom promise-assertion
+  label (the actual test failed at the intended rejection), then stopped before probe
+  18 because its text target occurred twice. Narrowed that target to the socket reason
+  and matched the actual rejection assertion. Full rerun **18/18**. Added context/sink
+  probes and tightened the unknown-context assertion; final full rerun **20/20**.
+  These were script/setup problems, not escaped code mutations or failed commit gates.
+
+**Manual Windows smoke, measured; not an error reproduction**
+- One explicitly labelled manual call through the real TypeScript helper, using
+  `manual-smoke` identity and "not a reproduced socket error" title. Exit **0**, status
+  **success**, one JSON line, diagnosis-to-capture **0.0214 ms**, duration **62.9301 ms**.
+  TCP **207**, ESTABLISHED **75**, TIME_WAIT **43**; test-port counts all **0**, with
+  non-test counts therefore 207/75/43. Request-failure delay **unknown**. No transport
+  failure, page retry or socket-exhaustion cause is claimed by this smoke.
+- Retained ignored artifacts: `playwright-report/socket-diagnostic-20261018/` holds
+  both early/final probe sources, per-probe logs, 18-/20-probe result JSON, raw smoke
+  streams and `manual-smoke.json`. Scratch sources are archived as `.cjs.txt`/`.ts.txt`
+  before the cold gate. Root `.codex-socket-diagnostic-*.log` files retain targeted
+  runs, type/lint checks and sweep summaries; no tests wrote committed assets.
+
+**Implementation commit gate**
+The full cold gate follows, separate from the manual smoke and targeted runs.
+- First cold run (2026-10-18): TIME_WAIT **44**; repository root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1740/1740**, 73 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**, **0 socket-error lines**). All five exits passed; no refused start or
+  failed full gate. No real exhaustion was reproduced, so no natural-error snapshot
+  is claimed: the native smoke and mocked orchestration supply the evidence so far.
 
 ## Open questions
 
