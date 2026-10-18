@@ -82,6 +82,9 @@ describe('the measured case retries', () => {
         expect(d.retry).toBe(true)
         expect(d.diagnosis).toBe('socket-exhaustion')
         expect(d.reason).toContain('ERR_NO_BUFFER_SPACE')
+        expect(d.reason).toContain('cause is not established')
+        expect(d.reason).not.toContain('TIME_WAIT')
+        expect(d.reason).not.toContain('use fewer Playwright workers')
     })
 
     it('the document lost the same way', () => {

@@ -102,6 +102,8 @@ Evidence levels:
 | 2026-10-12 | **The results screen opens by itself 1.5 seconds after the finish that completes a size or the day** (user, 2026-10-12). | The Solved! card shows the board's time first. Opening at once, or after 3 seconds, were the alternatives. |
 | 2026-10-17 | Slice 3b's PR is opened (#12), with merging decided separately. Claude takes the `keyGuide.spec.ts` flake next, codex reviewing; codex then takes socket pressure, Claude reviewing (user, approving codex's recommendation, 2026-10-17). | Codex approved slice 3b at `e5a5c37`. One change active at a time. |
 | 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
+| 2026-10-18 | Continue the socket investigation next: codex builds, Claude reviews (user, 2026-10-18). | Write and review the successor measurement contract before any new collector or comparative runs. The motion frame-delivery and challenge-session flakes remain separate follow-ups; this choice assigns neither flake's implementation. |
+| 2026-10-18 | Continue with an error-time socket diagnostic: codex builds, Claude reviews (user, 2026-10-18). | Contract first. Log one aggregate connection snapshot when the existing harness diagnoses socket exhaustion. No worker cap or new comparison matrix; the motion and challenge-session flakes keep their separate, unassigned follow-ups. See U9. |
 
 ## Principles
 
@@ -4922,6 +4924,1053 @@ Two limits:
 | U5 | Tighten the archive's viewed-day ring | Codex's optional note from row 14: the ring is styled for any `aria-current` value, not only `"date"`. It isn't a live bug. | Small | |
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
+| U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
+| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd`; implementation and validation below. No retry-rule or worker-count change. |
+
+### Windows browser-test socket pressure: investigation contract
+
+**Status (2026-10-18):** Claude accepted `7a3e7a9` on 2026-10-17; the four measurements
+are complete, retained in their original order. The nominal screening rule was not met;
+missing samples make the comparison provisional. No permanent worker cap is proposed or built.
+A successor measurement needs a reviewed amendment; a permanent remedy still needs its
+own evidence, exact mechanism and mutation tests, accepted before code.
+
+**First review, Claude (2026-10-17)**
+- Accepted after one correction: pre-state which socket-count reduction and duration
+  cost justify a remedy proposal. Two runs per setting cannot establish an error-rate
+  reduction. Rules 5 and 7 now give that decision rule before any comparative run.
+- Both optional suggestions adopted in rule 4: sample through the post-run drain, with
+  a bound, and include all local TCP rows, plus total ESTABLISHED and TIME_WAIT counts.
+- Claude accepted the revision at `7a3e7a9` with no corrections before the comparative
+  runs (2026-10-17). Claude read the diff, and did not rerun its gate or check its CI.
+
+**Why**
+- The motion-test As built record reports socket errors in 3 of its last 7 cold gates,
+  with 2 failed gates. Even the passing rerun started at TIME_WAIT 42 and needed one
+  socket-error reload. Those are recorded observations, not a new reproduction here.
+- Starting with a drained pool is insufficient in those observations. Lower concurrency
+  may reduce pressure while the suite runs; it has not yet been shown to do so.
+
+**How it works today (read)**
+- `playwright.config.ts:20-29` enables full parallelism and sets no worker count. Local
+  retries are 0; CI retries are 2. All projects share this configuration.
+- Installed Playwright resolves CLI workers before configuration workers, then defaults
+  to `50%` (`node_modules/playwright/lib/common/index.js:533`, `:628-638`). This host
+  reports 16 logical CPUs, so the current default resolves to 8. The CPU count was
+  measured with Node; the resolved test-run header will confirm the worker count.
+- `e2e/server.ts:18-30`, `:243-306` builds and serves production on port 3100 and the
+  visual fixture on 3101; global setup tears both down (`e2e/globalSetup.ts:7-10`).
+- `e2e/startupRetry.ts:117-149` permits one reload only for the existing narrow startup
+  failure rule. `e2e/openBoard.ts:158-177` announces that reload. A passing exit can
+  therefore still contain a socket error; the investigation reports both separately.
+- The CI gate runs `npm run test:e2e` on Ubuntu (`.github/workflows/ci.yml:25-26`,
+  `:69-74`). The proposed comparison concerns this Windows host, not a measured CI fault.
+
+**Rules**
+1. Work from `master` at `9fecf9b` on `investigate/windows-socket-pressure`, separate from
+   Claude's reviewed `docs/agents-status` branch. The user already assigned this work to
+   codex, with Claude reviewing; no PR is opened or merged by this contract.
+2. After acceptance, compare four complete browser runs on the same unchanged source:
+   default, `--workers=2`, `--workers=2`, default. Use `--retries=0` throughout. Keep every
+   project, test, existing timeout and assertion. Do not select only easy or fast specs.
+   These are diagnostic browser runs, not substitutes for the five-step commit gate.
+3. Before each run, verify the Git root, all cache targets and the harness's
+   `.next-visual` target. Empty the four gate caches and `.next-visual` only after those
+   checks. Start only when total TIME_WAIT is below 100, checked again immediately before
+   launching Playwright. Poll in bounded intervals, reporting waits; a refused start is
+   recorded separately from a failed test run. Never run two suites concurrently.
+4. Sample `netstat -an` once a second, starting before launch. Keep all local TCP rows
+   (all states), total ESTABLISHED and TIME_WAIT, and the same three counts involving
+   loopback ports 3100 or 3101. Derive the non-test counts by subtraction. Count each
+   netstat row once, even if both endpoints match. Record only aggregates, not unrelated
+   addresses or processes. A failed command or unparseable TCP row invalidates the
+   sample; never treat it as zero. Report missing samples and the longest sampling gap.
+   Sampled maxima are lower bounds on the true peak, not exact peak measurements.
+   Continue after teardown until the first valid sample with total TIME_WAIT below 100,
+   or 600 seconds after teardown, whichever comes first. Record the elapsed drain time;
+   at the bound report "more than 600 seconds", not 600 seconds or a successful drain.
+   The next run still requires the existing below-100 preflight, even if this bound fires.
+5. For every run, record the command, source head, worker header, initial and final
+   socket counts, sampled maxima, browser-phase duration, pass/fail/skip/retry counts,
+   and socket-error messages, including recovered ones. Preserve the raw test output.
+   Record unrelated test failures as well. Mark phase boundaries using one host's
+   monotonic clock in a temporary reporter: first test begins, last test ends, and the
+   post-teardown `onEnd` callback. Use that callback as the teardown-end marker for both
+   the peak window and drain time. Browser-phase duration is first begin to last end;
+   separately record process elapsed time excluding the drain observation, and drain
+   time. Setup/build time is outside the browser-phase duration. The same reporter and
+   sampler run in both settings; no timestamps are compared across browser pages.
+
+   **Decision rule, fixed before the four runs:** for run i, let P_i be the sampled
+   test-port TIME_WAIT maximum and T_i the sampled total TIME_WAIT maximum, both from
+   first test begin through teardown end. Let D_i be browser-phase duration. A proposal
+   to cap this Windows suite at two workers is justified for review only if:
+   - the higher P_i of the two 2-worker runs is at most **75%** of the lower P_i of the
+     two default runs;
+   - the higher T_i of the two 2-worker runs is at most **75%** of the lower T_i of the
+     two default runs; and
+   - the slower D_i of the two 2-worker runs is at most **2 times** the slower D_i of the
+     two default runs.
+
+   This requires a 25% reduction with separation in both count measures and caps the
+   measured duration cost at 100%. These are engineering screening thresholds, not
+   statistical confidence bounds or proof that the error is prevented. Report all
+   individual values and ratios, including the non-test loads, so a background-load
+   change is visible. All four runs must account for the same complete set of tests,
+   with retries disabled and usable phase samples. An interrupted run or missing phase
+   boundary makes the comparison inconclusive; do not silently replace or omit it.
+   Any missing samples make the threshold comparison provisional, requiring review.
+   Error and no-error outcomes are reported but are **not** votes for or against an
+   error-rate claim: two runs per setting cannot settle that. A lower ending count alone
+   also does not establish improvement. The run order reduces, but does not remove,
+   time/order effects; external-load differences and failure-induced stalls remain
+   confounders to discuss before any remedy is accepted.
+6. Use temporary measurement scripts and logs, removed or kept outside the committed
+   source. They do not change the app, browser request handling, server lifecycle or
+   Playwright configuration. Validate the counter on saved representative netstat rows
+   and against one direct live snapshot before trusting it. Confirm that a deliberate
+   zeroing of the test-port counts fails the fixture check at its count assertion, and
+   that an injected `ERR_NO_BUFFER_SPACE` log line is reported even for an exit-0 run.
+7. Summarize the four runs in As built, applying rule 5 unchanged. If its threshold is
+   met, propose a Windows-only two-worker default as a contract amendment for Claude,
+   with the exact mechanism and acceptance checks; do not implement it yet. If it is
+   not met, record that the screening rule was not met (or the comparison was
+   inconclusive), without claiming that fewer workers cannot help, and propose the next
+   measurement.
+   Drain time and all-connection counts are diagnostic evidence, not alternative ways
+   to declare the worker comparison a success. A pause or other remedy needs its own
+   pre-stated rule and review; a post-run drain time cannot explain or cure a mid-run
+   failure by itself. Do not assume a particular Windows port limit or change the OS
+   to make the suite pass. Read-only inspection here
+   found the IPv4 dynamic TCP range starts at 49152 with 16384 ports; that alone does not
+   identify the resource behind Chromium's error.
+
+**Not in this change**
+No additional reloads, test retries, sleeps inside app flows, dropped tests, looser timing
+or layout checks, CI changes, visual baseline updates, app changes, Windows networking
+settings, or claim that Daily Challenge activation caused the transport error. The
+`keyGuide` and theme flakes retain their separate diagnoses. No Docker or new servers.
+
+**Validation and review**
+- This is a docs-only contract; no runtime mutation result is claimed for its commit.
+- After acceptance, the measurement probes in rule 6 check the scratch collector, and
+  the full-suite comparison checks the concurrency hypothesis. Any later code correction
+  needs its own intended-assertion mutation probes, cold gate and review.
+- Before this contract is committed: the complete cold gate, five exit codes checked
+  separately and unit stderr empty. Record every failed run and passing rerun below.
+
+**As built / validation record**
+- Draft: source and installed runner read; Node reports Windows, 16 logical CPUs and
+  available parallelism 16. No comparative browser run or remedy implemented yet.
+- Contract commit, cold gate, first run (2026-10-17): initial TIME_WAIT **53**; Git root,
+  four cache paths, and `.next-visual` verified before cleanup. TypeScript **0**, lint
+  **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser
+  **0** (**753 passed, 1 skipped**, **0 socket-error lines**). The browser header confirms
+  **754 tests using 8 workers**. No failed run. No source mutation is claimed for this
+  docs-only contract; the comparison and collector probes await Claude's acceptance.
+- Revision for Claude's first review, cold gate, first run (2026-10-17): initial
+  TIME_WAIT **46**; Git root, four cache paths and `.next-visual` verified before cleanup.
+  TypeScript **0**, lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**),
+  build **0**, browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**).
+  No failed run. Only NEXT-STEPS changed; the decision thresholds, drain observation
+  and wider counts are specified before the comparative runs, which have not started.
+
+**Four comparative runs, measured (2026-10-18)**
+
+All four used unchanged source `7a3e7a9dd23386940698cfcdcc1495b4fec5e9f5`, in the agreed
+8 / 2 / 2 / 8 order. Before each: root and all five cache targets verified, caches
+cleared, total TIME_WAIT below 100. A separate sampler was ready, with another below-100
+reading, before the Playwright child launched. No run was replaced or rerun.
+
+Command: `node node_modules/playwright/cli.js test --retries=0
+--reporter=line,<temporary reporter>`; add `--workers=2` only for runs 2 and 3. The raw
+headers confirm 754 tests using the requested worker counts. The sorted test-title hash
+is identical in all four runs (`4d8ecd39737840ec8a104c612d7bf7f31bf7d32e5caa8fddd2791b8df4ed546f`).
+Every run accounts for all 754 results, with 0 test retries and 0 socket-error lines.
+The raw output also has no startup-reload announcements or the other two transient
+startup error codes. This does not estimate the rare error's rate or establish its cause.
+
+P and T below are **sampled** TIME_WAIT maxima during the pre-stated phase window.
+CLI time excludes drain observation; browser time excludes setup/build and teardown.
+Drain is the first observed post-teardown sample below 100, not the exact crossing.
+
+| Run | Workers | Browser result / exit | P: test ports | T: all | Browser seconds | CLI seconds | Drain seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 (default) | 753 passed, 1 skipped / 0 | 3532 | 3574 | 157.163 | 201.053 | 117.182 |
+| 2 | 2 | 753 passed, 1 skipped / 0 | 1889 | 1906 | 341.117 | 389.873 | 114.178 |
+| 3 | 2 | 753 passed, 1 skipped / 0 | 1978 | 2023 | 322.216 | 354.954 | 114.838 |
+| 4 | 8 (default) | **752 passed, 1 failed, 1 skipped / 1** | 3353 | 3375 | 170.549 | 220.956 | 117.217 |
+
+Run 4's failure: desktop, `motion.spec.ts:152`, the completion card's "arrives inside
+the limits". Exact message: **"frames were never delivered on time: longest gaps 83,
+33, 50ms"**. It completed the suite. This is a frame-delivery failure, not the old
+missing-cell retry sequence; its cause is not established. Instrumentation overhead and
+machine load are confounders. Its artifacts and error are retained; no motion fix is
+included or assigned by this record.
+
+For the wider connection counts, each triple is **all / test ports / other**. Each
+metric's maximum is evaluated separately, so maxima in a triple need not sum.
+Test-port classification requires a loopback endpoint on 3100 or 3101; wildcard
+LISTENING rows are outside that category. Each OS row counts once, including when both
+endpoints match; separate client/server ESTABLISHED rows remain separate OS rows.
+
+| Run | Peak TCP rows, all states | Peak ESTABLISHED | Peak other TIME_WAIT |
+| --- | --- | --- | --- |
+| 1 | 3816 / 3598 / 224 | 170 / 98 / 75 | 51 |
+| 2 | 2094 / 1913 / 212 | 98 / 26 / 74 | 48 |
+| 3 | 2200 / 1990 / 211 | 99 / 28 / 75 | 46 |
+| 4 | 3591 / 3407 / 194 | 162 / 96 / 68 | 31 |
+
+Snapshots below give **TCP rows / ESTABLISHED / TIME_WAIT**, first for all connections,
+then test ports in parentheses. Other counts at each snapshot are the difference.
+"After teardown" is the first valid sample after the callback, outside the peak window.
+
+| Run | Before launch: all (test) | After teardown: all (test) | At drained stop: all (test) |
+| --- | --- | --- | --- |
+| 1 | 202 / 71 / 36 (0 / 0 / 0) | 3714 / 74 / 3544 (3502 / 0 / 3502) | 252 / 69 / 87 (66 / 0 / 66) |
+| 2 | 199 / 71 / 33 (0 / 0 / 0) | 2072 / 65 / 1912 (1895 / 0 / 1895) | 264 / 70 / 99 (72 / 0 / 72) |
+| 3 | 252 / 69 / 87 (60 / 0 / 60) | 2190 / 64 / 2030 (1984 / 0 / 1984) | 248 / 63 / 91 (66 / 0 / 66) |
+| 4 | 237 / 63 / 79 (54 / 0 / 54) | 3483 / 63 / 3326 (3310 / 0 / 3310) | 258 / 65 / 97 (72 / 0 / 72) |
+
+**Sample quality and observer cost**
+
+No command or TCP-row parse failed; all samples are valid reads. There were delayed or
+missed sampling intervals. The collector counted missed intervals as
+`sum(max(0, round(gapMs / 1000) - 1))`, fixed in its code before run 1. This is a timing
+diagnostic, not a count of failed reads. Raw monotonic sample times and capture durations
+are retained, including gaps. Maxima remain lower bounds on actual peaks.
+
+| Run | Samples all / phase | Invalid reads | Missed intervals all / phase | Longest gap ms all / phase | Phase capture ms median / p95 / max |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 310 / 149 | 0 | 15 / 14 | 3678.977 / 3678.977 | 456.050 / 1309.419 / 2934.632 |
+| 2 | 502 / 339 | 0 | 0 / 0 | 1277.665 / 1277.665 | 113.363 / 196.446 / 377.632 |
+| 3 | 468 / 320 | 0 | 1 / 0 | 2349.739 / 1216.518 | 100.779 / 182.839 / 315.711 |
+| 4 | 329 / 161 | 0 | 19 / 18 | 2194.409 / 2194.409 | 727.015 / 1360.240 / 1976.703 |
+
+Thus rule 5 makes the comparison **provisional**, even apart from the screening result.
+The scans themselves were costly, especially during the 8-worker runs. The same
+observer was used throughout, but that does not prove its performance impact equal
+across settings. No observer-off control was run. The failed motion case also confounds
+the default duration. These data do not establish uninstrumented suite performance.
+
+**Collector checks and an instrumentation mistake**
+- Before run 1: representative IPv4/IPv6 rows, both endpoints matching counted once,
+  non-test connections, malformed TCP rows, and a direct live snapshot checked. Peak
+  window controls exclude setup and drain, and retain invalid-read information.
+- **2 of 2 deliberate collector breaks caught at their intended assertions:** zeroing
+  test-port TIME_WAIT failed "fixture test-port TIME_WAIT count"; including setup/drain
+  in the peak failed "phase peak excludes setup and drain". Probe environment restored;
+  collector bytes unchanged. An exit-0 log with an injected `ERR_NO_BUFFER_SPACE` was
+  also reported. That is a positive diagnostic control, not an observed browser error.
+- A simulated one-result protocol calibration checked prelaunch sampling and ordered
+  phase markers. It was not a browser test and is not included in the counts above.
+- **My wrapper check failed after run 1**, reporting "Unexpected retries". The public
+  reporter did not receive my `onConfigure` hook, so optional configuration metadata
+  was absent. The calibration had manually called that hook and missed the mistake.
+  Actual test retry indices were 0; the CLI explicitly used `--retries=0`. The raw
+  Playwright worker header supplies the required worker count. I corrected the outer
+  validation to read that retained header and resumed at run 2. Run 1's data was not
+  changed, and no comparative run was discarded or replaced.
+- The reporter/sampler and runner stayed byte-for-byte identical in all four runs.
+  SHA-256: `collector.cjs` =
+  `963faf23bda9e2633cccdf54bd03aedf5577b5c75b7da271765ad44074219f23`;
+  `runner.cjs` = `be91d916e3ca3b01b7a0f273d202b79faf2ddcb21317f3514d57e6e4b8f47b44`.
+- Raw stdout/stderr, per-sample aggregates, phase markers, derived comparison and test
+  artifacts remain locally in `playwright-report/socket-investigation-20261017/`, outside
+  committed source. The directory name reflects preparation on the 17th; the runs were
+  on the 18th. Scripts are archived as text before the gate, so lint does not treat
+  temporary instrumentation as project code. No raw netstat rows or unrelated OS
+  addresses/process IDs were saved; test output retains its normal diagnostics.
+
+**Apply the rule unchanged**
+- P ratio: `1978 / 3353 = 0.5899194751`, within the 0.75 bound.
+- T ratio: `2023 / 3375 = 0.5994074074`, within the 0.75 bound.
+- D ratio: `341116.6814 / 170549.3141 = 2.0001058533`, **above** the 2 bound. Using the
+  raw values, the slow 2-worker duration exceeds twice the slow default by **18.0532 ms**.
+  Rounding the table cannot turn that into a pass. That difference is tiny relative to
+  the observed timing variation; it is not evidence that two workers cannot help.
+- **The nominal screening rule is not met, and the comparison is provisional.** No
+  Windows two-worker default is proposed under this contract. No socket error was
+  reproduced; the error-rate and root-cause questions remain open. Drain times were
+  about two minutes in all settings and are not a separate route to declaring success.
+- **Proposed next measurement, not accepted or started:** first reduce or quantify
+  observer overhead, then compare four workers with the default as a possible middle
+  ground in time and socket counts. The exact collector, coverage/overhead checks and
+  decision rule need a separate amendment reviewed by Claude before more runs. No
+  permanent harness, application or CI change is built by this record.
+
+**Measurement-record commit gate (separate from the comparison)**
+- Cold gate run 1 (2026-10-18), **failed; no commit**. TIME_WAIT **52**; root, four gate
+  caches and `.next-visual` checked before cleanup. TypeScript **0**, lint **0**, unit
+  **0** (**1701/1701**, stderr **0 bytes**), build **0**, browser **1** (**750 passed,
+  3 failed, 1 skipped**, **0 socket-error lines**). No temporary collector was running.
+  - Desktop `motion.spec.ts:152`: "frames were never delivered on time: longest gaps
+    67, 50, 50ms". The frame-delivery failure can therefore occur without the collector;
+    it is not established as an observer-only effect.
+  - Phone `challengeSession.spec.ts:116`: the competing-Starts case timed out at line
+    123 after 5 seconds, waiting for the other tab's created-transaction count to rise
+    above 8; it stayed 8.
+  - Phone `challengeSession.spec.ts:155`: the Check request-success/abort case timed out
+    at `start`'s line 44 after 5 seconds, waiting for `covered` to become false.
+  - Errors and artifacts retained alongside the comparative output. These failures are
+    reported with no cause claimed or test weakened. Rerun the entire gate from cold;
+    the completed comparison remains unchanged and is not rerun for a passing result.
+  - A one-second aggregate snapshot after this gate read 5.66% CPU busy, 7.05 GiB free
+    of 31.92 GiB physical memory, and 16 logical CPUs. It was outside the failed tests
+    and does not diagnose their load or cause. No unrelated processes were inspected.
+- Full cold gate run 2 (2026-10-18): TIME_WAIT **23**; root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**). Same default 8-worker configuration, no temporary collector and no new
+  retry flag. All five exits passed; the existing startup helper performed **two
+  recovered `ERR_NO_BUFFER_SPACE` reloads**, recorded as two separate warning messages.
+  The originating tests cannot be identified reliably from the split logs, so no test
+  names are claimed for them. This gate was not socket-error-free. It is recorded as
+  verification, not a replacement or extra arm in the comparative experiment.
+- Thus the socket error was not reproduced in the four instrumented runs, but **was
+  reproduced in the separate uninstrumented gate**, with recovery. Counts at those
+  failure instants were not sampled. The source, rate and root-cause questions stay
+  open; the four-run screening outcome and provisional status are unchanged.
+- Only NEXT-STEPS is committed for this investigation stage. The motion/fixture
+  failures and the recovered socket errors remain follow-ups; no tests, timeouts,
+  assertions, default worker counts or retry mechanisms were changed to pass the gate.
+
+**Measurement-record review, Claude (2026-10-18)**
+- Accepted `65f3716` with one factual correction: acceptance of `7a3e7a9` was on
+  **2026-10-17**, not 2026-10-18. Corrected above; the measurement and gate dates remain
+  2026-10-18. This changes documentation only; no runtime mutation probe applies.
+- Claude read the record only, without inspecting the retained artifacts or rerunning
+  anything. A further socket experiment needs a reviewed amendment, including duration
+  from observer-off runs, instrumented/uninstrumented error counts reported separately,
+  and a cheaper collector. Zero instrumented errors must not be read as improvement.
+- Next-change priority and owners for the newly reported flakes await the user's choice.
+  *Amended 2026-10-18:* the user chose to continue sockets, codex building and Claude
+  reviewing. The two flake areas remain separate, without new builder assignments.
+- Date-correction commit gate (2026-10-18), first cold run: TIME_WAIT **68**; repository
+  root, four gate caches and `.next-visual` verified before cleanup. TypeScript **0**,
+  lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**,
+  browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No collector ran.
+
+### Windows socket investigation: cheaper observer and four workers
+
+**Status (2026-10-18): superseded before implementation by the four-run contract below.**
+Claude accepted `516baf6` as sound but recommended the simpler decision path. Codex
+adopts that recommendation as an engineering choice, not a new user decision. These
+original rules and their gate record remain historical; no native helper, calibration
+or eight-run matrix was implemented. The revised metric and decision rule need Claude's
+review before any new runs. The completed 8/2 rule and its outcome remain unchanged.
+
+**Why (measured, with inferences distinguished)**
+- In `65f3716`'s four runs, the old collector's capture medians were 456/727 ms with
+  eight workers and 113/101 ms with two. Missing intervals were also concentrated in
+  the eight-worker runs. Differential observer cost is plausible, not measured as a
+  causal slowdown. Its size is unknown without observer-off controls.
+- The four instrumented runs had zero socket errors; the separate uninstrumented gate
+  later had two recovered errors. That does not establish suppression or an error-rate
+  difference. It does make a zero under instrumentation insufficient evidence of safety.
+- Four workers is a proposed middle ground. Lower TIME_WAIT peaks do not themselves
+  explain WSAENOBUFS. Connection bursts are a hypothesis, not an established cause.
+
+**How it works today (read)**
+- `playwright.config.ts:20-29` still has no worker override. The prior run headers
+  resolved the default to eight on this 16-logical-CPU Windows host. Local test retries
+  are zero. `e2e/server.ts:18-30`, `:243-306` and `e2e/globalSetup.ts:7-10` own the two
+  existing build/serve lifecycles. None is changed by this amendment.
+- Retained scratch `collector.cjs.txt:20-61`, `:109-151` parses fresh `netstat -an`
+  subprocess output for every sample; `:194-224` records phase events in a reporter.
+  The old worker avoids blocking the runner's event loop but still consumes host work.
+  These paths are inside `playwright-report/socket-investigation-20261017/`, ignored
+  artifacts, not a permanent harness. Their files and four-run outputs stay intact.
+- Microsoft documents separate read-only [GetTcpTable (IPv4)](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-gettcptable)
+  and [GetTcp6Table (IPv6)](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-gettcp6table)
+  APIs in `Iphlpapi.dll`. A persistent helper can call these instead of launching a
+  process per sample. This is a mechanism proposal; its cost here is not yet measured.
+  Table layouts must respect the documented [IPv4 alignment](https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcptable)
+  and [IPv6 layout](https://learn.microsoft.com/en-us/windows/win32/api/tcpmib/ns-tcpmib-mib_tcp6table),
+  rather than assuming packed rows. [GetExtendedTcpTable](https://learn.microsoft.com/en-us/windows/win32/api/iphlpapi/nf-iphlpapi-getextendedtcptable)
+  does not support IPv6 basic tables; do not substitute it with `TCP_TABLE_BASIC_ALL`.
+
+**Rules**
+1. Continue on `investigate/windows-socket-pressure`, based on `master` at `9fecf9b`.
+   Preserve the earlier record, acceptance-date correction and original artifacts.
+   Only NEXT-STEPS is committed in this measurement stage. Claude reviews the contract
+   before scratch implementation, and reviews its results before any remedy proposal.
+   App code, tests, configuration, CI, assertions, retries and OS settings stay unchanged.
+2. After acceptance, build a temporary persistent PowerShell/.NET helper using C#
+   interop to the two basic TCP-table APIs, with sorting off, reusable buffers and no
+   process/PID lookup. Compile/warm it before launching Playwright. No tool installation.
+   Use native layout offsets/sizes with bounds checks and explicit network-order port
+   decoding. Up to three buffer-growth attempts per table; any remaining API error,
+   malformed table or failed IPv6 read invalidates the whole sample, never zero-fills it.
+   Bound each request at five seconds; timeout stops collection and is retained as an
+   error. Kill/close only the helper process this runner created, in a `finally`.
+3. A Node parent requests one sample per 250 ms, without overlapping requests or catch-up
+   bursts. It records request/receipt on the same host monotonic origin used by the
+   reporter; no helper-clock or browser-page-clock comparison is needed. Record native
+   call time, full request-to-receipt time including parsing/serialization, and gaps.
+   Keep the previous all-TCP, ESTABLISHED, TIME_WAIT, test-port and non-test aggregates.
+   The matching rule remains loopback port 3100/3101 at either endpoint; a TCP row is
+   counted once even if both endpoints match. Both local ends of a connection can be
+   separate rows, as before. IPv4/IPv6 reads are sequential snapshots, not one atomic
+   host snapshot. Store no unrelated addresses or process information.
+4. Add a diagnostic called **newly observed test-connection tuples per second**:
+   - Keep only test tuples in memory. Exclude listeners. Identity is family and the
+     pair of address/scope/port endpoints, canonicalized so the two local directions
+     count once; state changes do not create a new identity.
+   - For consecutive valid samples, count identities present now but absent before,
+     divided by actual elapsed seconds between sample midpoints. The first sample
+     and the first after an invalid/missing interval have no rate; establish a baseline.
+   - Report aggregate maxima/percentiles with the interval lengths and missing intervals.
+     Do not persist tuple addresses. A net row-count delta is not this measure: arrivals
+     and departures can cancel. Sampling misses short-lived connections and tuple reuse;
+     these are observed appearances, not the true creation rate or a WSAENOBUFS cause.
+5. Validate before full runs: synthetic native-layout IPv4 and IPv6 tables with known
+   counts/ports/states, growth/error paths, identity changes and phase windows; then
+   a live netstat/native cross-check bracketed by native reads. Do not demand equality
+   for changing unrelated connections: retain all aggregates and discrepancies, and
+   make no accuracy claim if unexplained differences remain. No raw unrelated rows
+   are retained. Run 40 warmed samples at the planned cadence, recording timing and
+   this helper's own CPU time. Require zero invalid samples and p95 end-to-end capture
+   at most **10 ms** before the matrix. If this fails, stop and report; do not quietly
+   slow the cadence, remove the rate calculation or replace the mechanism.
+6. Compare eight full browser runs, in this fixed order (two per setting and observer
+   mode, with reversed within-setting order on the second pass):
+
+   | Run | Workers | TCP observer |
+   | --- | --- | --- |
+   | 1 | default (must resolve to 8) | off |
+   | 2 | default (8) | on |
+   | 3 | 4 | on |
+   | 4 | 4 | off |
+   | 5 | 4 | off |
+   | 6 | 4 | on |
+   | 7 | default (8) | on |
+   | 8 | default (8) | off |
+
+   Every run uses the same accepted source, scratch-script hashes and complete test
+   inventory, all projects, `--retries=0`, no altered timeouts and no concurrent suite.
+   Capture the resolved worker header and every result's retry index independently of
+   optional reporter configuration callbacks. Verify root and all five cache targets
+   before deleting, then check total TIME_WAIT below 100 immediately before launch.
+   A refused start is recorded separately; no run is replaced, reordered or discarded.
+7. Both modes use the same minimal phase reporter: first test begin, last test end,
+   `onEnd` after teardown, exact outcomes and inventory hash. **Off** means no TCP
+   collector/helper process or periodic TCP/CPU polling between launch and `onEnd`.
+   Use only prelaunch and post-`onEnd` netstat snapshots plus post-teardown drain polling
+   for that mode; they cannot affect its browser duration. **On** samples through drain.
+   In both modes bound drain observation at 600 seconds, then report censored if needed.
+   A run still starts only below 100. Reporter/logging cost remains common to both modes;
+   observer-off is not a claim of zero measurement overhead.
+8. For each run retain commands, source/script hashes, phase markers, output, outcomes,
+   retry indices, inventory and process duration. Define **D** as last test end minus
+   first test begin. In on runs also record **P/T**, test-port/total TIME_WAIT sampled
+   maxima from first test begin to `onEnd`, using only captures wholly inside that
+   interval; report boundary coverage, sample counts, invalid reads and longest gaps.
+   Record per-capture timings and phase CPU seconds of the sampler helper plus parent
+   (their own counters only), as a fraction of one CPU core over phase wall time.
+9. **Observer qualification, fixed before runs:** for each worker setting, require
+   `max(D_on) / min(D_off) <= 1.10`. In every on run also require p95 end-to-end capture
+   **<= 10 ms**, sampler-helper-plus-parent CPU **<= 5% of one core**, no invalid or
+   missing scheduled samples, longest midpoint gap **<= 500 ms**, and a valid capture
+   within 500 ms of each phase boundary. A scheduled interval missed by at least one
+   full 250-ms slot is missing; report the exact gaps, not just a rounded count.
+   These are proposed engineering budgets, not confidence bounds. Report even a tiny
+   breach without rounding it into a pass. If the warmed check or an on-run collector
+   budget fails, stop further matrix runs and retain the incomplete result for review.
+   The final duration-qualification ratio is judged after the complete matrix.
+10. **Four-worker screening rule, fixed before runs:** propose a Windows-only four-worker
+    default for review only if all observer qualifications pass and:
+    - `max(P_4,on) / min(P_8,on) <= 0.75`;
+    - `max(T_4,on) / min(T_8,on) <= 0.75`; and
+    - `max(D_4,off) / max(D_8,off) <= 2`.
+
+    Counts come only from the four instrumented runs; the deciding duration comes only
+    from the four observer-off runs. This retains the original 25%-pressure/2x-duration
+    engineering screen for the new worker setting. Report on-run durations and all
+    ratios too, without pooling the two modes or comparing these peaks directly with
+    the old one-second collector's peaks. Eight complete runs must account for the
+    same tests. Any failed test, unexpected retry, interrupted run, missing phase or
+    unexplained counter mismatch makes the remedy screen inconclusive. Preserve the
+    failed result; no replacement run is selected to make the matrix pass.
+11. Report a four-cell table (8/on, 8/off, 4/on, 4/off) of raw socket-error messages,
+    recovered startup reloads, and failed tests, including zeroes. Match failures by
+    case only when the logs establish it. Two runs per cell cannot estimate error
+    probability, prove suppression, or establish its absence. If a setting has errors
+    only in its off runs, explicitly flag possible observer suppression and make no
+    worker-remedy recommendation from this matrix, even if rules 9/10 pass. Other
+    error patterns are not proof that the observer is harmless or the error prevented.
+    Burst observations, non-test pressure and drain time are diagnostic only; none
+    substitutes for the pre-stated screening rule. If inconclusive or not met, report
+    that outcome and propose a reviewed next step, without new runs on the same plan.
+
+**Validation / mutation probes (after acceptance, not results claimed now)**
+- Zero the native test-port TIME_WAIT aggregate: fails the known-count fixture.
+- Omit IPv6: fails the IPv6-only fixture. Decode ports in host order: fails a known
+  3100/3101 fixture. Return a table with a bad row count or a failed API call as an empty
+  success: fails the invalid-sample check. Each is a separate probe, then restore.
+- Count both tuple directions or a state change as arrivals: each fails the known-rate
+  fixture. Use net count delta instead: equal-count replacement fails that fixture.
+- Include pre-phase/drain counts in P/T: fails the phase-window assertion. Use D_on
+  instead of D_off for the remedy ratio: a synthetic separating case fails. Treat
+  an invalid read as zero or omit a deliberately missed interval: each fails its
+  quality assertion. Hide an injected socket error in an exit-0 run: fails its log check.
+- A protocol smoke checks native-helper readiness, reporter/collector phase mapping,
+  mode-off absence of sampling and exact child exit propagation before the matrix.
+  It is not counted as a browser-suite run. List all executed probes and intended
+  assertions in As built, including survivors or setup mistakes; restore scripts and
+  freeze their hashes before run 1. If a real run reveals a protocol defect, stop,
+  report the incomplete matrix, and obtain a reviewed amendment before restarting.
+
+**Not in this amendment**
+No permanent collector, worker cap, additional reload or test retry, test/fixture fixes,
+timeout or timing-tolerance changes, port-range/OS tuning, CI change, visual update,
+Docker, external service, or new server. The motion frame-delivery and challenge-session
+phone failures remain separately reported, with no cause or builder assignment claimed.
+
+**As built / validation record**
+- Draft only: existing configuration, scratch mechanism and Windows API documentation
+  read. No new helper, calibration or matrix run. This docs-only contract has no
+  runtime mutation claim. The complete cold commit gate is recorded here before push.
+- Two gate starts (2026-10-18) refused at TIME_WAIT **110** and **101**, after root/cache-path
+  verification but before deletion or any test. Wait for the pool and start from cold;
+  this was a refused preflight, not a failed five-step gate.
+- First full cold gate (2026-10-18): started at TIME_WAIT **90**, after the root, four
+  gate caches and `.next-visual` were verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**). One `ERR_NO_BUFFER_SPACE` startup warning triggered the existing single
+  reload and recovered; the originating test is not established by the split logs.
+  This was a passing five-exit-code gate, not a socket-error-free run. No observer was
+  running; this gate is not a new comparative measurement. No failed five-step run.
+
+### Windows socket investigation: four observer-off runs
+
+**Status (2026-10-18): contract accepted at `8634d26`; Claude accepted the completed
+record at `132dfd1`.** The fixed end-level screen was **not met**; its duration limit was
+met. All four runs were valid and passed, without socket errors or test retries. No
+worker cap is proposed or built. This stage replaces the unbuilt native helper and
+eight-run matrix; it does not change the completed 8/2 rule or reclassify that outcome.
+
+**Review of `516baf6`, Claude (2026-10-18)**
+- Accepted the plan as sound, while recommending four observer-off runs and a snapshot
+  after teardown. Claude verified the earlier test-port endpoint/peak differences;
+  Claude did not run anything or verify the proposed native API helper's feasibility.
+- Codex adopts the recommendation. The native collector, its qualification runs and
+  tuple-rate diagnostic are deferred; none gates the screen below. They would require
+  their own reviewed investigation if the burst hypothesis is pursued later.
+- The complementary reversible-cap experiment remains a proposal, not authorized by
+  this contract. Its exact mechanism, next N ordinary gates and reporting rule must be
+  fixed in a separate accepted contract, with the user's decision, before a cap is built.
+
+**Why (measured values, with limits)**
+- The first post-teardown test-port TIME_WAIT counts in `65f3716` were 3502, 1895,
+  1984 and 3310; the sampled phase peaks were 3532, 1889, 1978 and 3353. Codex checked
+  the arithmetic: absolute differences are **0.8494%, 0.3176%, 0.3033% and 1.2824%**
+  of the respective peaks. This supports trying an end-level screen on this suite;
+  it does not make endpoints interchangeable with peaks in future runs.
+- The two middle endpoints even exceed the earlier phase peaks: the windows differ,
+  and the old peak was sampled. The new metric is explicitly an **end-of-phase level**,
+  never a peak or maximum. No observer is needed during the tests to measure it.
+- This measures connection level and time, not error prevention. The previous four
+  instrumented runs had zero socket errors at high levels, followed by two recovered
+  errors in an ordinary gate. A level/error relationship has not been established.
+
+**How it works today (read)**
+- `playwright.config.ts:20-29` still sets no workers and local retries are zero. The
+  earlier headers resolved eight workers on this host. All projects and both existing
+  server lifecycles (`e2e/server.ts:18-30`, `:243-306`; `e2e/globalSetup.ts:7-10`) stay.
+- The retained scratch `collector.cjs.txt:20-61` has the validated `netstat -an` parser;
+  `:194-224` records first begin, last end and `onEnd` on one host monotonic clock.
+  Its `onEnd` currently sends IPC after writing the report. For the new scratch runner,
+  send the teardown marker immediately on callback entry, before serializing results,
+  so the parent can request the snapshot promptly. No committed reporter is changed.
+
+**Rules**
+1. Continue on `investigate/windows-socket-pressure`, based on `master` at `9fecf9b`.
+   Preserve all previous records and artifacts. Only NEXT-STEPS is committed in this
+   stage. After Claude accepts this revision, adapt the scratch reporter/runner, reusing
+   the validated parser, in a new ignored artifact directory. Hash those scripts before
+   run 1. No native helper or new dependency, and no app, test, CI or configuration edit.
+2. Run the complete browser suite four times in fixed order **default / 4 / 4 / default**,
+   with `--retries=0`, unchanged accepted source, all projects, tests, timeouts and
+   assertions. Confirm default resolves to eight and both explicit runs to four from
+   the headers. Retain every retry index and inventory hash, independently of optional
+   reporter callbacks. No simultaneous suite or selected subset. These runs are not
+   substitutes for the five-step commit gate.
+3. Before each run, verify the repository root and all four gate cache paths plus the
+   harness's `.next-visual` target, then delete only those verified caches. Check total
+   TIME_WAIT below 100 again immediately before Playwright launches. Record refused
+   starts separately. Do not replace, discard or reorder any attempted comparison run.
+4. Use the same minimal reporter in every run: first test begin, last test end and
+   teardown `onEnd`, from the common host monotonic origin. **D** is first begin to last
+   end, excluding builds and teardown. There is no TCP collector, helper, periodic
+   polling or burst diagnostic between launch and `onEnd`; reporter/logging overhead
+   remains common to all runs. No timestamps are compared across browser pages.
+5. On the teardown IPC marker, request exactly one `netstat -an` snapshot. Record the
+   request and completion times relative to the marker, not just its counts. The
+   request must begin within **250 ms** of `onEnd` and finish within **5 seconds** of
+   the request. Those are proposed freshness bounds, not an instantaneous snapshot
+   claim. A late, failed or malformed snapshot is invalid; never retry it to select a
+   better reading or substitute a later drain sample. Stop further comparison runs
+   and report the incomplete protocol for review if this happens.
+6. Let **E_test** and **E_total** be test-port and total TIME_WAIT in that one snapshot.
+   Also retain all-TCP, ESTABLISHED and the corresponding test/non-test aggregates for
+   context. Match loopback 3100/3101 at either endpoint, counting each row once even
+   if both endpoints match, exactly as the old parser did. Retain aggregates only,
+   without unrelated addresses or PIDs. Count levels have a recorded capture window;
+   if windows differ, discuss that limitation rather than correcting for unmeasured
+   decay. Do not mix old P/T peaks or any drain sample into E_test/E_total.
+7. After the snapshot, observe drain every ten seconds until the first valid total
+   TIME_WAIT below 100, or 600 seconds after `onEnd`. Retain gaps and failed reads;
+   the final interval makes drain time approximate. At the bound report "more than
+   600 seconds". Drain is diagnostic only, never a substitute endpoint or a screen
+   criterion. A next run still requires a fresh below-100 preflight.
+8. **Screening rule, fixed before runs:** a Windows-only four-worker remedy may be
+   proposed for review only if all four runs and snapshots are valid and:
+   - `max(E_test_4) / min(E_test_8) <= 0.75`;
+   - `max(E_total_4) / min(E_total_8) <= 0.75`; and
+   - `max(D_4) / max(D_8) <= 2`.
+
+   This is a new end-level screen, retaining the 25%-reduction/2x-duration engineering
+   limits, not a reapplication of the old peak rule. Report exact values and ratios;
+   no rounding into a pass. Zero denominators, missing markers/results, unexpected
+   retries or mismatched inventories make it inconclusive. Retain and report failed
+   tests; any failed test also makes the remedy screen inconclusive, since its stalls
+   can change both D and the endpoint. Do not rerun the matrix for a passing selection.
+9. Report each command, source/script hashes, worker header, phase markers, D, endpoint
+   timing window, E_test/E_total, background aggregates, process duration and drain,
+   exact pass/fail/skip/retry totals, and raw socket-error/recovered-reload counts,
+   including zeroes. Preserve raw test output and failed-run artifacts. Attribute an
+   error to a case only if the logs establish that identity. Report all four runs;
+   a missing/interrupted run makes the comparison incomplete, never silently replaced.
+10. A pass supports only a lower **observed end level at the stated time cost**. Four
+    runs cannot prove the socket error is prevented, estimate its rate, or show that
+    levels cause it. Recovered errors still count as errors, even with exit zero.
+    There is no instrumented arm, so do not claim to have tested observer suppression.
+    Error/no-error outcomes are evidence to report, not votes that override rule 8.
+    A permanent cap or a reversible cap trial requires a separate reviewed contract;
+    the user decides whether to run that trial. Neither is built under this plan.
+
+**Validation / probes, after acceptance**
+- Reuse the existing known-row parser fixtures and live snapshot check. One deliberate
+  zeroing of the test-port count must fail the known-count assertion.
+- A protocol smoke confirms the snapshot starts after the teardown marker, no TCP
+  capture happens during the simulated test phase, invalid/late captures are refused,
+  D excludes setup/teardown, child exit is preserved and exit-0 socket warnings remain
+  visible. No browser-suite run is counted for this smoke.
+- Deliberately select a different preflight/drain snapshot: fail the endpoint-identity
+  assertion. Deliberately include build/teardown in D: fail the phase-duration assertion.
+  Hide an injected `ERR_NO_BUFFER_SPACE` in an exit-0 log: fail its diagnostic assertion.
+  Restore scripts and record each intended failure and all survivors before run 1.
+  A real-run protocol defect stops the comparison for review, rather than being fixed
+  between arms or having the affected run replaced.
+
+**Not in this revision**
+No native helper, collector benchmarking, burst/tuple-rate investigation, permanent or
+trial cap, additional reload/test retry, flake fix, tolerance/timeout change, OS tuning,
+CI change, visual update, Docker, external service or new server. The two flake areas
+keep their separate reports and have no newly assigned builder.
+
+**As built / validation record**
+- Draft only: the retained reporter was read and the four endpoint/peak differences
+  calculated from the published record. No new scripts, smoke or comparison runs.
+  This docs-only revision has no runtime mutation claim. Its cold gate follows here.
+- Gate start (2026-10-18) refused at TIME_WAIT **105**, after root/cache-path checks
+  and before deletion or tests. This is a refused preflight, not a failed full gate.
+- First full cold gate (2026-10-18): TIME_WAIT **79**; root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**, **0 socket-error lines**). No failed full gate and no TCP collector.
+  This is verification for the docs commit, not a comparative run under the new plan.
+
+**Accepted review and implementation (2026-10-18)**
+- Claude accepted `8634d26`, checked the four endpoint/peak percentages and read the
+  screening/retention rules. Claude ran nothing and did not inspect the retained scripts.
+- Adopted Claude's non-blocking caveat for discussion: server teardown may move some
+  still-open connections into TIME_WAIT before the endpoint. The earlier separate
+  ESTABLISHED peaks were 96–98 at eight workers and 26–28 at two, a difference of about
+  70 (about 2% of 3400). This is an inferred contribution, not a measured count of
+  teardown closes, and it compares eight with two workers, not the new four-worker arm.
+  Those peaks were not necessarily simultaneous with teardown. No subtraction or bias
+  correction is made. Such a bias would favor a lower four/eight ratio; the observed
+  test-port ratio still misses 0.75 by over seven percentage points.
+- Scratch code reused the previous parser functions unchanged, with a minimal reporter
+  and parent runner. The reporter sends the marker before report serialization. The
+  parent takes the one endpoint snapshot, then polls only during the post-suite drain.
+  Resolved workers/retries are captured from `onBegin` and checked against raw headers
+  and result retry indices, avoiding the earlier optional-callback metadata mistake.
+
+**Checks and probes, measured**
+- Known-row fixtures and the live snapshot cross-check passed. Parser functions were
+  copied from the original artifact, with IPv4/IPv6 and both-endpoints controls retained.
+- Two protocol controls, neither a browser-suite run: one simulated passed case with
+  exit 0 and one simulated failed case with exit 7. Both exits were preserved. They
+  each intentionally logged a positive-control socket warning, which remained visible;
+  those injected warnings are not counted as real transport failures. Their endpoint
+  requests began 0.5077/0.5587 ms after the markers. No in-phase TCP capture occurred.
+  Invalid and late snapshot checks, endpoint uniqueness and D's phase window passed.
+- **Mutation probes: 4 of 4 caught at the intended assertion**, every changed file
+  restored byte for byte, with no survivor or failed probe setup:
+  1. Zero test-port TIME_WAIT: `fixture test-port TIME_WAIT count`.
+  2. Select the preflight instead of endpoint: `endpoint identity excludes preflight and drain`.
+  3. Include extra time in D: `phase duration excludes setup and teardown`.
+  4. Hide an exit-0 socket warning: `exit-0 warning remains visible`.
+- Execution scripts were hashed before run 1 and unchanged through run 4. The analysis
+  script was written after all four browser phases; it checks source, hashes, inventory,
+  retry indices, endpoint identity/freshness and absence of in-suite snapshots before
+  applying rule 8. It does not supply an extra measurement.
+
+**Four observer-off runs, measured (2026-10-18)**
+
+All used accepted source `8634d262db144f15a83e401e78cbb5079081e29d`, the unchanged
+complete inventory (754 cases, title hash
+`4d8ecd39737840ec8a104c612d7bf7f31bf7d32e5caa8fddd2791b8df4ed546f`), fixed
+8 / 4 / 4 / 8 order and `--retries=0`. Every run exited **0**, with **753 passed,
+1 skipped**, **0 test retries**, **0 socket-error messages**, **0 startup reloads**,
+**0 protocol errors** and no capture during the suite. No run was replaced or reordered.
+
+| Run | Workers | E_test | E_total | D (seconds) | CLI (seconds, excluding drain) | Drain (seconds) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 8 | 4556 | 4590 | 98.6465971 | 120.5812608 | 121.2899580 |
+| 2 | 4 | 3742 | 3791 | 152.7256599 | 174.2403769 | 121.2379794 |
+| 3 | 4 | 3207 | 3236 | 181.1833613 | 220.9681021 | 121.3161560 |
+| 4 | 8 | 4554 | 4910 | 108.6860928 | 133.6549334 | 362.9587224 |
+
+| Run | Cold-prep TIME_WAIT | Runner's prelaunch TIME_WAIT | Request after onEnd (ms) | Snapshot duration (ms) | Final total TIME_WAIT |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 54 | 55 | 0.6301 | 130.6925 | 53 |
+| 2 | 44 | 45 | 0.4905 | 123.4904 | 98 |
+| 3 | 84 | 85 | 0.5745 | 170.4020 | 51 |
+| 4 | 47 | 48 | 0.6369 | 206.3282 | 74 |
+
+- Before each run: Git root, four gate caches, `.next-visual`, clean source and frozen
+  script hashes verified, then cold cleanup. Before run 3 one preflight was refused at
+  TIME_WAIT **103**, before deletion or browser launch. After waiting, preparation
+  passed at 84 and the runner rechecked 85. This is not a failed or replacement run.
+- Exactly one valid endpoint was requested per run, within the 250-ms/5-second bounds.
+  Request-to-completion windows differed by about 83 ms at most; no unmeasured decay
+  correction is applied. Endpoints are levels over recorded capture windows, not peaks.
+- Samples per run (preflight + endpoint + drain): **14, 14, 14, 38**. All reads valid;
+  maximum drain request gaps **10.1533321, 10.1366535, 10.1761897, 10.2196034 seconds**.
+  Drain time is approximate at that cadence; none reached the 600-second censoring bound.
+
+Endpoint aggregates (each row counted once; test ESTABLISHED was zero in all four):
+
+| Run | All TCP | Total ESTABLISHED | Non-test TCP | Non-test ESTABLISHED | Non-test TIME_WAIT |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 4742 | 59 | 186 | 59 | 34 |
+| 2 | 3940 | 57 | 198 | 57 | 49 |
+| 3 | 3385 | 58 | 178 | 58 | 29 |
+| 4 | 5104 | 100 | 550 | 100 | 356 |
+
+- Background pressure differed, especially run 4. Its test-port TIME_WAIT reached
+  **0** by the 121.4450911-second drain reading, while non-test TIME_WAIT was **217**.
+  The later wait to total below 100 was therefore not continuing test-port TIME_WAIT
+  at the sampled instants; non-test activity continued. No unrelated process/address
+  was inspected and no cause is assigned. This is a limitation, not a reason to drop
+  run 4. Run 1 supplies rule 8's lower total eight-worker denominator anyway.
+- The four-worker runs' D and endpoints vary. These sequential observations do not
+  separate concurrency from other time/load effects or establish an error-rate effect.
+  No comparison with the old instrumented durations is treated as causal evidence.
+
+**Rule 8 applied unchanged**
+- Test-port end level: `3742 / 4554 = 0.8216952129995608`, **not <= 0.75**; conservative
+  observed reduction **17.830478700043916%**, below the required 25%.
+- Total end level: `3791 / 4590 = 0.825925925925926`, **not <= 0.75**; reduction
+  **17.407407407407405%**, below 25%.
+- Duration: `181.1833613 / 108.6860928 = 1.6670335332912067`, **<= 2**. The duration
+  criterion is met; it does not override either end-level criterion.
+- **Screen not met**, with all four runs valid. No Windows worker cap is proposed or
+  built under this contract. Zero real errors in either setting does not prove error
+  prevention, observer suppression, or its absence. There was no instrumented arm.
+  Do not rerun this screen for a favorable selection or lower its threshold after the
+  result. Next: Claude reviews this record, then the user decides whether to close the
+  investigation without a config change or authorize a different, error-focused aim.
+  A trial/permanent cap and its ordinary-gate window are not authorized here.
+
+**Retained artifacts (ignored, local)**
+- `playwright-report/socket-endlevel-20261018/`: all four JSON results, reporter records,
+  raw stdout/stderr, preflight refusal, fixture/probe/smoke logs, `summary.json`, analysis
+  and `frozen-script-hashes.json`. Script contents were archived as `.cjs.txt` after
+  measurement, byte hashes verified before renaming, so temporary scripts do not enter
+  the source lint/build. The earlier `socket-investigation-20261017/` is untouched.
+- Runner SHA-256 `00be156b59f3f5effa6f01b13301ba62325a31f411e84bc671b52928bfe8091d`;
+  reporter `0eab759d5c3ed7270475a0edf30dc786aacf477c5c19a57ea1ef2c8769c1bda1`;
+  protocol `e352181668021716f61d5a8e57ca04ddef17e2e3bd60e1f373d5c15606250b2e`;
+  parser `7758c1497fedbe1d1a9800ae622c09232f2ed7d600e0e7912d9c9b535a88a59c`.
+  The manifest also covers the smoke, checks, probes and smoke validator.
+
+**Measurement-record commit gate**
+The five-step cold gate is separate from these four comparison runs and recorded below.
+- First full cold gate (2026-10-18): TIME_WAIT **63**, root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**, **0 socket-error lines**). All five exits passed on the first run.
+  No failed full gate. Only NEXT-STEPS is committed; source/configuration, default
+  workers, test assertions, timeouts, test retries and startup reload rules are unchanged.
+
+### Socket errors: one aggregate snapshot when diagnosed
+
+**Status (2026-10-18): contract accepted at `d9896cd`; implementation built, awaiting
+code review after its gate.** The user chose this follow-up, codex building and Claude
+reviewing. Only the test harness changes; no app or worker-count change.
+
+**First review, Claude (`93cb964`, 2026-10-18)**
+- Accept after one correction: Claude inferred that the 750-ms command budget tied to
+  the one-second pause would often miss loaded cases. The old eight-worker capture
+  medians were 456/727 ms, p95 1309/1360 ms and maxima 2934/1977 ms; idle post-teardown
+  captures in the four-run screen were only 123–206 ms. Claude read the citations and
+  ran nothing. Rules 4–6 and the tests below now decouple settlement from the reload.
+- Adopted: a five-second asynchronous capture, with one settlement line, never awaited
+  by retry handling. No cancellation or `incomplete-at-reload` result at the end of the
+  pause. The cancellation-at-reload probe is removed with that path.
+- Lifecycle choice: no afterEach/teardown wait or new hook. If the worker survives the
+  test, the capture can log later using the original context. If it exits or is killed
+  before settlement/output delivery, the line can be lost. This is best effort, not a
+  guaranteed record under worker termination. No diagnostic completion is awaited to
+  preserve it; no claim of instantaneous worker shutdown or zero observer cost follows.
+- Non-blocking timing suggestion: the current recorder has no request-observation
+  timestamp (`openBoard.ts:67-68`, `:89-105`). Log request-failure-to-capture delay as
+  **unknown**. Do not invent a value from the visibility timeout or add recorder timing
+  in this change. Diagnosis-to-capture delay and capture duration remain measured.
+
+**Why / evidence limits**
+- Claude accepted `132dfd1`, read the record and recomputed the ratios; Claude did not
+  inspect artifacts or rerun anything. Both screens remain unchanged and no cap is proposed.
+- Across the two comparisons, eight measured browser runs reproduced no socket errors.
+  Ordinary cold gates have reproduced them, including recovered ones. Claude reports
+  5 of 19 gate runs with an error (2 failed, 3 recovered); that tally is not independently
+  recounted here. Gate-sequence effects are a lead, not an established cause or rate.
+- Claude infers that the roughly 100–110-second eight-worker phase ends while many
+  connections still occupy TIME_WAIT, since the sampled test-port drain is about
+  121 seconds. Spreading the work can allow more to expire before the endpoint. That
+  explains a possible level effect; E_test is not a measured count of connections
+  created, and no claim about connection births or the resource causing the error follows.
+- The next diagnostic records what can be observed after an actual diagnosis. It is
+  not an error-prevention fix, a new benchmark, or a way to establish causation from one row.
+  Collection itself consumes host resources and may perturb recovery. It may finish
+  after reload or during a later test; its delayed capture window does not reveal
+  conditions at the original fault.
+
+**How it works today (read)**
+- `e2e/openBoard.ts:97-106` records request failures/responses. `waitForReady:140-178`
+  first waits for visibility (default 15 seconds), then gathers hydration state and
+  calls `shouldRetryStartup`. On an eligible retry it warns, waits one second, increments
+  the recorded attempt and reloads once. A second unsuccessful wait reports failure.
+- `e2e/startupRetry.ts:117-149` refuses a reload after one was used, after hydration,
+  or without a failed critical transport request. Only a critical `ERR_NO_BUFFER_SPACE`
+  gives `diagnosis: 'socket-exhaustion'`. Other transient codes retry without that
+  diagnosis (`:151-160`). The new capture must not broaden this rule.
+- Its current reason (`:142-147`) asserts the socket pool is exhausted at roughly 2500
+  TIME_WAIT rows and recommends fewer workers. The measurements establish the error
+  code, not that causal explanation. Update the reason and matching comments to say
+  the critical request failed with the observed code and the cause is not established.
+- `tests/startupRetry.test.ts` checks eligibility, refusals, one reload and reportable
+  reasons. Vitest uses a Node environment by default (`vitest.config.ts:6-10`), so the
+  collector and mocked orchestration can be tested without real browser exhaustion.
+- Playwright's local test output and CI logs already retain warnings. CI uploads failed
+  artifacts (`.github/workflows/ci.yml:76-86`); this diagnostic needs no workflow change.
+
+**Rules**
+1. Continue the user-assigned investigation on `investigate/windows-socket-pressure`,
+   based on `master` at `9fecf9b`. Preserve the accepted records. After Claude accepts
+   this contract, one atomic implementation commit adds the helper, its integration,
+   tests and As built notes. No PR or merge without the user's separate instruction.
+2. Add a Node-only helper in `e2e/socketSnapshot.ts`. It parses `netstat -an` into the
+   existing nine aggregates: all TCP rows, ESTABLISHED and TIME_WAIT; the corresponding
+   loopback 3100/3101 counts; and non-test counts by subtraction. Reuse the measured
+   parser's rules, expressed in TypeScript. Count a row once when either endpoint
+   matches, including a row matching both; cover IPv4, IPv6 and mapped loopback.
+   Malformed TCP output is an explicit parse failure, never a zero-count success.
+3. Invoke the helper exactly once for a `waitForReady` retry decision with
+   `diagnosis === 'socket-exhaustion'`. Do not capture per failed request, on successful
+   starts, on refused retries, for other transient codes, or after the second wait.
+   `shouldRetryStartup` stays pure. This is a diagnosis-time capture: the visibility
+   timeout may already have delayed it by 15 seconds or the caller's custom timeout.
+   It must not be described as a reading at the instant the request failed.
+4. On Windows use asynchronous `execFile('netstat', ['-an'])`, `windowsHide: true`, a
+   **5000-ms command timeout** and **4 MiB maxBuffer**. No shell, hostname resolution,
+   PID query, native helper, polling, privilege change or dependency installation.
+   On other platforms return an explicit unsupported-platform status without spawning.
+   Spawn/nonzero-exit/timeout/overflow/parse errors are diagnostic statuses, never thrown
+   into game-readiness handling. Do not log command stdout/stderr or native error text.
+5. Start the asynchronous capture once after the eligible decision's warning, without
+   awaiting its task. Keep the original `await page.waitForTimeout(1000)`, then attempt
+   increment and single reload, independent of capture completion. Do not await it on
+   success, retry failure, test teardown or worker shutdown; do not cancel it at reload,
+   add a sleep, retry the command or poll it. The task handles its own synchronous and
+   asynchronous failures so it cannot create an unhandled rejection. Its own timeout
+   requests termination only of its child and settles as a diagnostic failure.
+   Timeout/termination under host starvation is best effort, not a hard real-time
+   guarantee. The retry gains no collection wait; resource costs can still affect load.
+6. When capture settles, print exactly one structured JSON line with a fixed snapshot
+   prefix, for success or failure (including command timeout and unsupported platform):
+   the diagnosis, platform, Playwright project/title path/worker index/test retry,
+   load attempt **at diagnosis**, diagnosis UTC time, monotonic diagnosis-to-capture
+   delay/duration, request-failure-to-capture delay **unknown**, status, and counts only
+   on success. Copy test identity and attempt at diagnosis, before launching; a later
+   callback must not query the then-current test or read its mutable attempt counter.
+   This attributes a recovered error even if the line arrives during another test or
+   parallel output interleaves. If context is unavailable, mark it unknown and preserve
+   the retry. The snapshot may include connections opened by the reload or later work;
+   no claim that it describes the first load exclusively is made.
+   Emit no second line on a late completion after a timeout outcome. The one-line
+   guarantee assumes an executing worker and functioning sink; termination or sink
+   failure before delivery can lose the record. Do not add a flush/teardown wait or placeholder line
+   to conceal that limitation. No URL, IP endpoint, PID, raw netstat text, native stderr or
+   unbounded exception message is included. Failed and unsupported captures retain
+   bounded status metadata, not fabricated counts. Capture failure cannot throw into
+   readiness, suppress its failure or authorize an extra retry. Console warnings are
+   mocked/asserted in unit tests so the full unit run still has zero stderr.
+7. Update `startupRetry`'s socket reason and causal comments to match the evidence:
+   observed `ERR_NO_BUFFER_SPACE`, cause unestablished, reloading once. Retain the
+   existing internal diagnosis string. Eligibility, the 15-second/custom visibility
+   timeout, one-second pause, attempt ordering and one-reload budget stay intact.
+   List the intentionally amended reason tests, retaining all eligibility assertions.
+8. No fresh comparison matrix or requirement to reproduce exhaustion. After unit and
+   orchestration checks, take one explicitly labelled manual Windows snapshot smoke,
+   without claiming a real socket error. Record its counts/status/timing. The normal
+   cold gate verifies the integration; if it naturally encounters the error, retain
+   the diagnostic and its recovery/failure outcome. No cause or fix is claimed until
+   a future observation supplies evidence. Ordinary errors on unsupported platforms
+   remain reported, without a Windows command attempt.
+
+**Tests and mutation probes after acceptance**
+- Parser fixtures: separate IPv4/IPv6/mapped loopback, both endpoints matching, non-test
+  TCP, ESTABLISHED versus TIME_WAIT, listeners/UDP, malformed rows. Check exact aggregate
+  values and ensure recognizable endpoint/stderr sentinels never reach the JSON log.
+- Mocked child/timers: success, nonzero exit, unavailable command, overflow, timeout,
+  malformed output and unsupported platform. Assert the 5000-ms command timeout, not
+  the previous 750-ms limit. A capture held beyond the pause can still succeed and log
+  once later. A timeout produces one terminal failure line, not zero counts. No
+  cancellation or settlement line is forced when the pause/reload happens.
+- Drive the real `waitForReady`/`instrument` orchestration with mocked Playwright/page
+  surfaces: successful first load, eligible socket retry, other transient retry,
+  hydrated/HTTP/noncritical refusals, and failure after the one reload. Assert one
+  snapshot only on the eligible branch, metadata and one settlement line, the existing
+  pause/increment/reload order, and reload proceeding with a pending/failed capture.
+  Hold the actual collector's mocked child callback past one second; readiness must
+  resolve without it, then a later success must log under the original test/attempt
+  even after the test-context getter changes and the real retry increments the recorder
+  from attempt 0 to 1. Do not use real host timings to assert this. Request-failure
+  delay stays explicitly unknown.
+- Planned probes: remove the capture invocation; trigger it for other retries; lose
+  test-port or IPv6 filtering; accept a failed/malformed snapshot as zero counts;
+  leak a raw endpoint/stderr sentinel; await a held capture before reloading; restore
+  the 750-ms timeout; read test/attempt identity only at settlement; restore the
+  unsupported causal reason. Each must fail at its intended
+  assertion, one at a time. List separate mutations, survivors and any correction in
+  As built, restoring source bytes before the gate. No runtime tally is claimed now.
+
+**Not in this change**
+No app changes, pixels/baselines, worker cap, new benchmark or gate runner, extra retry,
+new shortcut, wider retry eligibility, longer wait, OS/network tuning, CI changes, raw
+connection logging, Docker or new server. No fixes or builder assignment for the motion
+and challenge-session flakes. The 5/19 report is a lead, not an acceptance threshold.
+
+**As built / validation record**
+- Contract only: current retry code, tests, Playwright context types and CI read. No
+  diagnostic code or smoke has been run. Record the five-step cold gate before commit.
+- Contract commit gate (2026-10-18), first cold run: TIME_WAIT **40**; root, four gate
+  caches and `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit
+  **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**, browser **0**
+  (**753 passed, 1 skipped**, **0 socket-error lines**). All five exits passed; no
+  refused start or failed gate. Only NEXT-STEPS changes, with no runtime mutation
+  claim. Implementation and its probes await Claude's acceptance of this contract.
+- Revision for Claude's first review (2026-10-18), first cold gate: TIME_WAIT **35**;
+  root, four gate caches and `.next-visual` verified before cleanup. TypeScript **0**,
+  lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**,
+  browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No refused
+  start or failed gate. Only NEXT-STEPS changes. No implementation, smoke or runtime
+  mutation claim; the decoupled five-second contract is ready for re-review.
+
+**Implementation / As built (2026-10-18)**
+- Claude accepted `d9896cd` without corrections, reading its diff but not rerunning
+  anything or rechecking the recorder citations. No implementation preceded acceptance.
+- `e2e/socketSnapshot.ts` contains the aggregate parser and nonrejecting background
+  task. `openBoard` invokes it only after the existing eligible socket warning, using
+  `void`, then keeps the original pause/increment/reload path. The pure policy changes
+  only its reason and causal comments; all eligibility conditions remain intact.
+- Counts follow the measured parser's rules. IPv6 spellings are normalized locally
+  using the URL parser (no network request), covering full/compressed loopback and
+  dotted/hexadecimal IPv4-mapped loopback. This avoids treating equivalent numeric
+  address spellings differently. Returned records contain only aggregate counts.
+- The identity provider is called and copied before launching, including a title-array
+  copy and the current load attempt. Later output therefore cannot borrow the next
+  test's identity or the retry's incremented attempt. Unknown context is explicit;
+  request-failure delay remains `unknown`. Non-Windows results are unsupported, with
+  no command. The command uses exactly `-an`, hidden, 5000 ms and 4 MiB maxBuffer.
+- Spawn, command, unavailable, output-limit, timeout and parse outcomes are bounded
+  statuses, with no raw native output/error message. The promise resolves after one
+  warning attempt. A failed sink is contained without a second emission attempt;
+  rule 6 now explicitly includes sink failure with the existing delivery limitation.
+  No teardown hook, flush wait, cancellation-at-reload or persistent sampler was added.
+
+**Tests and deliberate breaks, measured**
+- New unit files: `socketSnapshot.test.ts` **28** tests and `openBoardRetry.test.ts`
+  **11**, **39 new tests**. The orchestration uses the real `instrument`, `waitForReady`
+  and collector with mocked child/Playwright surfaces, not a second retry implementation.
+  Held callbacks prove readiness/reload can complete before the diagnostic; their late
+  success retains the original context and attempt 0 after the real retry increments it.
+- Existing test intentionally amended: `startupRetry.test.ts`, "a chunk lost to
+  ERR_NO_BUFFER_SPACE", retains its original eligibility/code assertions and adds
+  cause-unestablished/no-TIME_WAIT/no-worker-recommendation assertions. No assertion
+  dropped, no test count changed (**18**). No browser test changed or added.
+- First targeted run: **56 passed, 1 failed** of 57, stderr **1894 bytes**. My fake HTTP
+  response lacked `url()`; the failure was test setup, before retry logic. Fixed the
+  fake, not app/harness behavior. Targeted reruns: **57/57**, stderr **0 bytes**; targeted
+  TypeScript **0** and lint **0**. Later assertion ordering was tightened so an awaited
+  capture fails at the reload assertion rather than an earlier pause precondition.
+- **Final mutation sweep: 20 of 20 caught at the intended assertion; all mutated source
+  restored byte for byte.** No surviving code mutation. The list:
+  1. No invocation: eligible diagnosis starts exactly one capture.
+  2. Invoke on every retry: other transient retries never capture sockets.
+  3. Await the capture: reload never waits for the held capture.
+  4. Remove port filtering: a non-test port stays outside test totals.
+  5. Remove IPv6 loopback: loopback contributes to test TIME_WAIT.
+  6. Ignore the remote endpoint: aggregate fixture.
+  7. Double-count both matching endpoints: aggregate fixture.
+  8. Stop counting TIME_WAIT: aggregate fixture.
+  9. Turn command failure into zero-count success: command-failure status.
+  10. Turn parse failure into zero-count success: malformed-output status.
+  11. Expose stdout: raw endpoint never reaches the record.
+  12. Expose stderr: native failure payload stays private.
+  13. Restore 750 ms: command options require the five-second deadline.
+  14. Read identity after settlement: late snapshot retains original identity/attempt.
+  15. Keep the caller's title array: copied identity survives caller changes.
+  16. Spawn on unsupported platforms: no Windows command there.
+  17. Re-throw a synchronous spawn failure: promise must resolve, not reject.
+  18. Restore the causal reason: cause-unestablished assertion.
+  19. Re-throw unavailable context: unknown context still starts the snapshot.
+  20. Re-throw sink failure: task must resolve, not reject.
+- Probe-script corrections, retained alongside successes: first sweep classified 16
+  caught, misclassified probe 17 because Vitest omitted its custom promise-assertion
+  label (the actual test failed at the intended rejection), then stopped before probe
+  18 because its text target occurred twice. Narrowed that target to the socket reason
+  and matched the actual rejection assertion. Full rerun **18/18**. Added context/sink
+  probes and tightened the unknown-context assertion; final full rerun **20/20**.
+  These were script/setup problems, not escaped code mutations or failed commit gates.
+
+**Manual Windows smoke, measured; not an error reproduction**
+- One explicitly labelled manual call through the real TypeScript helper, using
+  `manual-smoke` identity and "not a reproduced socket error" title. Exit **0**, status
+  **success**, one JSON line, diagnosis-to-capture **0.0214 ms**, duration **62.9301 ms**.
+  TCP **207**, ESTABLISHED **75**, TIME_WAIT **43**; test-port counts all **0**, with
+  non-test counts therefore 207/75/43. Request-failure delay **unknown**. No transport
+  failure, page retry or socket-exhaustion cause is claimed by this smoke.
+- Retained ignored artifacts: `playwright-report/socket-diagnostic-20261018/` holds
+  both early/final probe sources, per-probe logs, 18-/20-probe result JSON, raw smoke
+  streams and `manual-smoke.json`. Scratch sources are archived as `.cjs.txt`/`.ts.txt`
+  before the cold gate. Root `.codex-socket-diagnostic-*.log` files retain targeted
+  runs, type/lint checks and sweep summaries; no tests wrote committed assets.
+
+**Implementation commit gate**
+The full cold gate follows, separate from the manual smoke and targeted runs.
+- First cold run (2026-10-18): TIME_WAIT **44**; repository root, four gate caches and
+  `.next-visual` verified before cleanup. TypeScript **0**, lint **0**, unit **0**
+  (**1740/1740**, 73 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+  1 skipped**, **0 socket-error lines**). All five exits passed; no refused start or
+  failed full gate. No real exhaustion was reproduced, so no natural-error snapshot
+  is claimed: the native smoke and mocked orchestration supply the evidence so far.
 
 ## Open questions
 
