@@ -4925,7 +4925,7 @@ Two limits:
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
-| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Capture one aggregate Windows TCP snapshot during its existing pause, with timing and test identity. No polling or work on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Contract below; no code before acceptance. |
+| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Revised contract below; no code before acceptance. |
 
 ### Windows browser-test socket pressure: investigation contract
 
@@ -5713,6 +5713,25 @@ The five-step cold gate is separate from these four comparison runs and recorded
 **Status (2026-10-18): proposed contract, awaiting Claude's review.** The user chose
 this follow-up, codex building and Claude reviewing. No diagnostic code has been written.
 
+**First review, Claude (`93cb964`, 2026-10-18)**
+- Accept after one correction: Claude inferred that the 750-ms command budget tied to
+  the one-second pause would often miss loaded cases. The old eight-worker capture
+  medians were 456/727 ms, p95 1309/1360 ms and maxima 2934/1977 ms; idle post-teardown
+  captures in the four-run screen were only 123–206 ms. Claude read the citations and
+  ran nothing. Rules 4–6 and the tests below now decouple settlement from the reload.
+- Adopted: a five-second asynchronous capture, with one settlement line, never awaited
+  by retry handling. No cancellation or `incomplete-at-reload` result at the end of the
+  pause. The cancellation-at-reload probe is removed with that path.
+- Lifecycle choice: no afterEach/teardown wait or new hook. If the worker survives the
+  test, the capture can log later using the original context. If it exits or is killed
+  before settlement/output delivery, the line can be lost. This is best effort, not a
+  guaranteed record under worker termination. No diagnostic completion is awaited to
+  preserve it; no claim of instantaneous worker shutdown or zero observer cost follows.
+- Non-blocking timing suggestion: the current recorder has no request-observation
+  timestamp (`openBoard.ts:67-68`, `:89-105`). Log request-failure-to-capture delay as
+  **unknown**. Do not invent a value from the visibility timeout or add recorder timing
+  in this change. Diagnosis-to-capture delay and capture duration remain measured.
+
 **Why / evidence limits**
 - Claude accepted `132dfd1`, read the record and recomputed the ratios; Claude did not
   inspect artifacts or rerun anything. Both screens remain unchanged and no cap is proposed.
@@ -5727,8 +5746,9 @@ this follow-up, codex building and Claude reviewing. No diagnostic code has been
   created, and no claim about connection births or the resource causing the error follows.
 - The next diagnostic records what can be observed after an actual diagnosis. It is
   not an error-prevention fix, a new benchmark, or a way to establish causation from one row.
-  Collection itself consumes host resources and may perturb recovery even within the
-  existing pause. Its delayed capture window does not reveal conditions at the fault.
+  Collection itself consumes host resources and may perturb recovery. It may finish
+  after reload or during a later test; its delayed capture window does not reveal
+  conditions at the original fault.
 
 **How it works today (read)**
 - `e2e/openBoard.ts:97-106` records request failures/responses. `waitForReady:140-178`
@@ -5767,26 +5787,35 @@ this follow-up, codex building and Claude reviewing. No diagnostic code has been
    timeout may already have delayed it by 15 seconds or the caller's custom timeout.
    It must not be described as a reading at the instant the request failed.
 4. On Windows use asynchronous `execFile('netstat', ['-an'])`, `windowsHide: true`, a
-   **750-ms command timeout** and **4 MiB maxBuffer**. No shell, hostname resolution,
+   **5000-ms command timeout** and **4 MiB maxBuffer**. No shell, hostname resolution,
    PID query, native helper, polling, privilege change or dependency installation.
    On other platforms return an explicit unsupported-platform status without spawning.
    Spawn/nonzero-exit/timeout/overflow/parse errors are diagnostic statuses, never thrown
    into game-readiness handling. Do not log command stdout/stderr or native error text.
-5. Fit collection into the existing pause. Start the existing `page.waitForTimeout(1000)`
-   before starting the asynchronous capture. Await only that existing pause, then take
-   the collector's settled result, or request cancellation of its own child and record
-   `incomplete-at-reload` if it is still pending. Do not await collection or termination
-   beyond the pause, add a sleep, or retry the command. A synchronous spawn failure also
-   produces a diagnostic status. Timer/process cancellation is best effort under host
-   starvation; do not claim a hard real-time bound. The code adds no wait for it.
-   Then increment the existing attempt marker and call the original single reload.
-   A late callback cannot emit another line or change the already-emitted record.
-6. Print one structured JSON line, with a fixed socket-snapshot prefix, before reload:
+5. Start the asynchronous capture once after the eligible decision's warning, without
+   awaiting its task. Keep the original `await page.waitForTimeout(1000)`, then attempt
+   increment and single reload, independent of capture completion. Do not await it on
+   success, retry failure, test teardown or worker shutdown; do not cancel it at reload,
+   add a sleep, retry the command or poll it. The task handles its own synchronous and
+   asynchronous failures so it cannot create an unhandled rejection. Its own timeout
+   requests termination only of its child and settles as a diagnostic failure.
+   Timeout/termination under host starvation is best effort, not a hard real-time
+   guarantee. The retry gains no collection wait; resource costs can still affect load.
+6. When capture settles, print exactly one structured JSON line with a fixed snapshot
+   prefix, for success or failure (including command timeout and unsupported platform):
    the diagnosis, platform, Playwright project/title path/worker index/test retry,
-   load attempt, diagnosis UTC time, monotonic capture delay/duration, status, and counts
-   only on success. Use the test context to make a recovered error attributable even
-   when parallel stdout/stderr interleave. If context is unavailable, mark it unknown
-   and preserve the retry. No URL, IP endpoint, PID, raw netstat text, native stderr or
+   load attempt **at diagnosis**, diagnosis UTC time, monotonic diagnosis-to-capture
+   delay/duration, request-failure-to-capture delay **unknown**, status, and counts only
+   on success. Copy test identity and attempt at diagnosis, before launching; a later
+   callback must not query the then-current test or read its mutable attempt counter.
+   This attributes a recovered error even if the line arrives during another test or
+   parallel output interleaves. If context is unavailable, mark it unknown and preserve
+   the retry. The snapshot may include connections opened by the reload or later work;
+   no claim that it describes the first load exclusively is made.
+   Emit no second line on a late completion after a timeout outcome. The one-line
+   guarantee applies while the worker remains executing; termination before settlement
+   or delivery can lose the record. Do not add a flush/teardown wait or placeholder line
+   to conceal that limitation. No URL, IP endpoint, PID, raw netstat text, native stderr or
    unbounded exception message is included. Failed and unsupported captures retain
    bounded status metadata, not fabricated counts. Capture failure cannot throw into
    readiness, suppress its failure or authorize an extra retry. Console warnings are
@@ -5809,18 +5838,25 @@ this follow-up, codex building and Claude reviewing. No diagnostic code has been
   TCP, ESTABLISHED versus TIME_WAIT, listeners/UDP, malformed rows. Check exact aggregate
   values and ensure recognizable endpoint/stderr sentinels never reach the JSON log.
 - Mocked child/timers: success, nonzero exit, unavailable command, overflow, timeout,
-  malformed output, unsupported platform and pending capture when the pause ends.
-  Cancellation requests only this child; a late callback produces no second log.
+  malformed output and unsupported platform. Assert the 5000-ms command timeout, not
+  the previous 750-ms limit. A capture held beyond the pause can still succeed and log
+  once later. A timeout produces one terminal failure line, not zero counts. No
+  cancellation or settlement line is forced when the pause/reload happens.
 - Drive the real `waitForReady`/`instrument` orchestration with mocked Playwright/page
   surfaces: successful first load, eligible socket retry, other transient retry,
   hydrated/HTTP/noncritical refusals, and failure after the one reload. Assert one
-  snapshot only on the eligible branch, metadata and one line, pause starts before
-  collection, attempt increments after it, and reload proceeds with a pending/failed
-  capture. A held child must not postpone reload beyond the mocked existing pause.
+  snapshot only on the eligible branch, metadata and one settlement line, the existing
+  pause/increment/reload order, and reload proceeding with a pending/failed capture.
+  Hold the actual collector's mocked child callback past one second; readiness must
+  resolve without it, then a later success must log under the original test/attempt
+  even after the test-context getter changes and the real retry increments the recorder
+  from attempt 0 to 1. Do not use real host timings to assert this. Request-failure
+  delay stays explicitly unknown.
 - Planned probes: remove the capture invocation; trigger it for other retries; lose
   test-port or IPv6 filtering; accept a failed/malformed snapshot as zero counts;
-  leak a raw endpoint/stderr sentinel; wait for a held child after the pause; remove
-  cancellation; restore the unsupported causal reason. Each must fail at its intended
+  leak a raw endpoint/stderr sentinel; await a held capture before reloading; restore
+  the 750-ms timeout; read test/attempt identity only at settlement; restore the
+  unsupported causal reason. Each must fail at its intended
   assertion, one at a time. List separate mutations, survivors and any correction in
   As built, restoring source bytes before the gate. No runtime tally is claimed now.
 
@@ -5839,6 +5875,12 @@ and challenge-session flakes. The 5/19 report is a lead, not an acceptance thres
   (**753 passed, 1 skipped**, **0 socket-error lines**). All five exits passed; no
   refused start or failed gate. Only NEXT-STEPS changes, with no runtime mutation
   claim. Implementation and its probes await Claude's acceptance of this contract.
+- Revision for Claude's first review (2026-10-18), first cold gate: TIME_WAIT **35**;
+  root, four gate caches and `.next-visual` verified before cleanup. TypeScript **0**,
+  lint **0**, unit **0** (**1701/1701**, 71 files, stderr **0 bytes**), build **0**,
+  browser **0** (**753 passed, 1 skipped**, **0 socket-error lines**). No refused
+  start or failed gate. Only NEXT-STEPS changes. No implementation, smoke or runtime
+  mutation claim; the decoupled five-second contract is ready for re-review.
 
 ## Open questions
 
