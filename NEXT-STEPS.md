@@ -105,6 +105,8 @@ Evidence levels:
 | 2026-10-18 | Continue the socket investigation next: codex builds, Claude reviews (user, 2026-10-18). | Write and review the successor measurement contract before any new collector or comparative runs. The motion frame-delivery and challenge-session flakes remain separate follow-ups; this choice assigns neither flake's implementation. |
 | 2026-10-18 | Continue with an error-time socket diagnostic: codex builds, Claude reviews (user, 2026-10-18). | Contract first. Log one aggregate connection snapshot when the existing harness diagnoses socket exhaustion. No worker cap or new comparison matrix; the motion and challenge-session flakes keep their separate, unassigned follow-ups. See U9. |
 | 2026-10-18 | Next, one change at a time: Claude takes the completion card's frame-delivery flake, codex reviewing; then codex takes the challenge-session timeouts, Claude reviewing. Claude opens the socket PR (#14) and refreshes AGENTS.md's status for codex's review (user, 2026-10-18, approving codex's recommendation and leaving the order to Claude). | Merges stay the user's. |
+| 2026-10-19 | PRs #14, #15 and #16 are merged (user, 2026-10-19): socket investigation and diagnostic at `ff7bcab`, AGENTS.md status at `0dab5e4`, and the motion-test fix at `66bda6e`. | CI's `gate` and `visual` jobs passed on each merge. The assigned next change is now the challenge-session timeouts: codex builds, Claude reviews, contract first from `66bda6e`. U10 remains open. |
+| 2026-10-19 | Codex posts its approvals on GitHub as well as reporting them here (user, 2026-10-19). | Name the reviewed head and distinguish checks run from checks only read. The motion approval is on PR #16; this instruction does not authorize opening or merging future PRs. |
 
 ## Principles
 
@@ -4343,6 +4345,116 @@ challenge-session timeouts (codex's, next).
   **0**, browser **0** (**753 passed, 1 skipped**, 0 socket errors). No failed run.
   Committed after it.
 
+### Challenge-session timeouts: investigation contract
+
+**Status (2026-10-19):** proposed, awaiting Claude's review before measurements or
+instrumentation. Builder: codex; reviewer: Claude, in the user's 2026-10-18 order. Start
+from `master` at `66bda6e93357124524e69af9c5d75866849e05e1` on
+`investigate/challenge-session-timeouts`. This first stage gathers evidence; it does not
+presume a fix, a shared cause, or a need to raise a timeout.
+
+**Why and retained evidence (read, not reproduced this round).** The first cold gate
+for the socket measurement record (`65f3716`) failed two phone tests,
+with no socket-error lines. The original `error-context.md` files are retained under
+`playwright-report/socket-investigation-20261017/record-gate1-test-results/`:
+- `competing Starts overlap and both adopt the one committed attempt`
+  (`e2e/challengeSession.spec.ts:116-132`) failed at line 123. After A's write was held
+  and B's Start clicked, B's readwrite-transaction count stayed 8 for the five-second
+  assertion, instead of increasing above 8.
+- `Check remains unpublished after request success and abort` (generated at
+  `e2e/challengeSession.spec.ts:155-169`) failed inside `start` at line 44. Its initial
+  Start stayed covered for five seconds, before the test armed a hold or pressed Check.
+  The snapshot shows `status: ready`, `ready: true`, `canStart: true`, `starting: false`,
+  `attempt: null`. In the competing-Starts snapshot, by contrast, `starting` is true.
+  It is a Start failure in a Check test, not evidence that Check's save was late.
+
+**How it works today (read).**
+- `open` pins `LATE_IN_A_MONTH`, installs the real-transaction hold, loads the visual-only
+  challenge fixture and waits for its binding's `ready` (`challengeSession.spec.ts:20-26`).
+  `pair` opens a second page in the same context; its optional progress-notice filter is
+  not enabled for the competing-Starts test (`:27-41`, `:117`). `start` clicks the real
+  fixture button and polls the rendered `covered` state (`:42-45`).
+- `instrument` counts readwrite transactions when created. It keeps an armed transaction
+  open with real pending reads after a put, and releases or aborts it only on the test's
+  request (`e2e/challengeTransaction.ts:18-57`, `:61-73`). A transaction-count increment
+  proves creation, not that the Start operation specifically created it.
+- The fixture renders the binding's state and invokes `session.startChallenge()` from
+  the button (`app/visual/challenge/ChallengeFixture.tsx:42-67`). The root is real and
+  enabled, using deterministic puzzle definitions (`:27-31`, `:72-94`).
+- Start uses the coordinator's per-puzzle promise queue (`app/challenge/coordinator.ts:
+  616-652`, `:694-742`). Hydration also uses this queue (`:849-856`). Focus, visibility,
+  storage and broadcast notices can cause refresh or reconciliation (`:161-185`,
+  `:920-959`). The IndexedDB store reports a change only after transaction completion,
+  and notifies other tabs on a changed commit (`app/challenge/attemptStore.ts:154-194`).
+- Those paths suggest queue ordering, background reconciliation or delayed browser work
+  or the Start click not reaching its handler as hypotheses. The historical snapshots and
+  counts do not identify which occurred.
+  The two phone failures could have different causes. No cause is claimed here.
+
+**Rules.**
+1. Before any measurement, Claude accepts this contract. Only NEXT-STEPS changes in its
+   commit: this contract, U11, the merge record and U9's completion. No application,
+   fixture, transaction helper, test or configuration change is built at this stage.
+2. After acceptance, run the two exact tests unchanged in desktop and phone-360, first
+   with `--workers=1`, then with `--workers=8`. Each batch uses `--repeat-each=10`,
+   `--retries=0` and the same grep:
+   `competing Starts overlap|Check remains unpublished after request success and abort`.
+   Check discovery first: exactly four project/test combinations, hence 40 executions
+   per batch and 80 in total. Do not replace a failed run or keep repeating until green.
+   These batches inspect failures under different suite concurrency, not error-rate
+   estimates or a proposal for a worker cap. Two successful batches cannot close the flake.
+3. Use Playwright's `--trace=retain-on-failure` in both batches. Keep native traces,
+   screenshots/error contexts, stdout/stderr, command, source SHA, discovered inventory,
+   resolved worker header, exits, duration and every result, including retry/reload or
+   socket-diagnostic output. Put each batch's output in a separate directory under
+   `playwright-report/challenge-session-timeouts-20261019/` so a later run cannot overwrite
+   it. Tracing can change timing; absence under trace does not prove absence without it.
+   Do not add a timing observer, synthetic CPU load, page-clock comparisons or new retries.
+4. Before each batch, verify the repository root and harness/output cleanup targets stay
+   inside it, and start below 100 total TIME_WAIT sockets. Record any refused start
+   separately. Run batches sequentially; close each suite's servers before the next.
+   Preserve normal fresh contexts, the pinned day and every existing assertion/timeout.
+   No sleeps or extra page focus/refresh/settling calls are inserted into the tests.
+5. Read failures by their actual phase: opening, own Start, competing Start, held put,
+   abort, retry, or publication. Compare the old signatures with new ones. Do not label a
+   transaction count, page timeout or unrelated socket error as an IndexedDB bug without
+   evidence. The Check test's initial Start must be analyzed separately from assistance.
+6. Stop this measurement stage after the two batches, even if neither reproduces. Write
+   the exact outcomes and limitations here. If a batch cannot complete, retain its
+   partial results and report the stage incomplete; do not silently substitute a run.
+   Existing commit gates are verification, not extra comparative batches; report any
+   failures in them separately.
+7. Any proposed fix, deterministic reproduction, additional observer or persistent
+   failure diagnostic requires a written amendment with its exact mechanism and tests,
+   accepted by Claude before code. If the cause remains unknown, propose a small
+   failure-reporting amendment rather than weakening the tests or claiming they are fixed.
+   No production logic, timeout increase, new test retry, notice suppression or shared
+   helper rewrite is authorized by this investigation contract.
+
+**Tests and mutations.** Discovery must name the two intended tests in both projects.
+No runtime code changes in this stage, so no runtime mutation tally is claimed for the
+docs or native repeat commands. The subsequent implementation amendment must list
+mutation probes and the assertion intended to catch each; temporary sources, if any,
+are restored byte for byte. The full five-step cold gate precedes every commit, with
+unit stderr zero and every failed gate retained and reported.
+
+**Not in this change.** U10 or other app profiling, other flaky tests, socket remedies,
+worker defaults, CI, visual baselines, AGENTS.md rules, product decisions, a PR or merge.
+
+**Validation record (2026-10-19).**
+- Read the two retained failure contexts and checked the cited current code. No diagnostic
+  batches or new instrumentation have run; the 80-execution plan awaits Claude's review.
+- Contract commit, cold gate **run 1**: initial TIME_WAIT **26**. Verified the repository
+  root, four gate caches and the harness's `.next-visual` target before cleanup.
+  TypeScript **0**, lint **0**, unit **0** (**1740/1740**, 73 files, stderr **0 bytes**),
+  build **0**, browser **0** (**753 passed, 1 skipped**). **0 socket-error lines**, no
+  socket-diagnostic output. All five exits checked separately; no failed gate or refused
+  start this round. Both historical phone cases passed in this verification run; that
+  single pass does not close either flake.
+- Raw gate logs and exit metadata retained under
+  `playwright-report/challenge-session-timeouts-20261019/`. Only NEXT-STEPS is committed;
+  no runtime mutation probe applies to this documentation-only stage.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
@@ -5018,8 +5130,9 @@ Two limits:
 | U6 | Say a refusal out loud | A refused move is a shake, a cross and a vibration. The cross is `aria-hidden`, the vibration is phone-only, there's no sound, and no live region announces it (read: `feedback.ts`, `Selection.tsx`, `cellLabel.ts`). So a screen-reader user on a computer gets no sign a move was refused (codex). A polite live region, such as "Can't place there", would fix it. Check this before changing how long the cross stays. | Small | Yes: moved up into the keyboard polish (user, 2026-09-30) |
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
-| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd`; implementation and validation below. No retry-rule or worker-count change. |
+| U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd` and implementation `5073f46`; merged as PR #14 at `ff7bcab` (user, 2026-10-19), with CI passed on master. Implementation and validation below. No retry-rule or worker-count change. |
 | U10 | A challenge solve can delay the completion card | On a busy machine (8 test workers), solving a challenge board dropped a frame of the card's arrival in 14 of 100 tries, mostly one frame (33 ms); a casual board never did, and neither did on an idle machine (measured, desktop; see "The completion card's motion, measured where nothing competes for its frames"). Inferred: the solve's own work (saving the finish, results and streak) shares the main thread with the card's first frames; which part isn't measured. No claim about real devices. The motion test now measures a casual board. | Profile first | |
+| U11 | Diagnose the challenge-session phone timeouts | Two failures in one gate: competing Starts did not create another transaction, and the Check case stalled during its initial Start. Cause unestablished; original artifacts retained. | Investigation | Yes: codex builds, Claude reviews, after the motion fix (user, 2026-10-18). See the investigation contract; measurements await acceptance. |
 
 ### Windows browser-test socket pressure: investigation contract
 
