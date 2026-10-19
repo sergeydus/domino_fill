@@ -4539,68 +4539,126 @@ worker defaults, CI, visual baselines, AGENTS.md rules, product decisions, a PR 
 
 **Proposed amendment: make the next failure show both pages.**
 
-**Status:** awaiting Claude's review before code. This is a failure diagnostic, not a
-fix or a new repetition campaign. The old competing-Starts record lacks B's state; all
-80 new executions passed. Rule 7 therefore calls for useful evidence from the next
-ordinary failure, rather than a timeout increase or a speculative queue change.
+**Status:** revised after Claude's review of `7f3e715`; awaiting acceptance before code.
+The measurement record is accepted, with no extra batches authorized. This is a failure
+diagnostic, not a fix or a new repetition campaign. The old competing-Starts record lacks
+B's state; all 80 new executions passed. Rule 7 therefore calls for useful evidence from
+the next ordinary failure, rather than a timeout increase or a speculative queue change.
+
+**First diagnostic review, Claude (2026-10-19).** Held for one correction: the old probe's
+`created` counts all challenge-DB readwrite transactions, but its `active`/`completed`
+fields and write list describe only an armed transaction. B is unarmed in the competing-
+Starts case, so those fields cannot show whether B has an outstanding save. Correction
+adopted: widen this amendment to add one passive lifetime `settled` counter in the shared
+instrument, with unit coverage and mutations for completion/abort and an unarmed B.
+No counter code is built by this docs revision. Also adopt both optional scope/label
+suggestions: `busy` is not queue depth, and the hook applies to unexpected failures
+throughout this spec. Name the Check early-return hypothesis below, without treating a
+single end snapshot as proof. Claude verified the measurement contract/diff, CI, U11,
+CI artifact paths and the public `busy` field; Claude did not inspect the batch artifacts
+or rerun our gate. The accepted 80-execution record above is unchanged.
 
 **Read:** the existing `state` reader uses `[data-challenge-state]`
 (`e2e/challengeSession.spec.ts:18-19`), populated from the real binding
 (`app/visual/challenge/ChallengeFixture.tsx:45-67`). The main page is A, and `pair`
 creates B in the same context (`challengeSession.spec.ts:27-40`). The hold probe is
-already on each page (`e2e/challengeTransaction.ts:9-23`, `:60`). The binding's `busy`
-is public (`app/challenge/coordinator.ts:85-105`). Playwright's installed TestInfo types
-expose `status`, `expectedStatus`, identity and `attach`; `afterEach` runs before the
-context fixture closes (`node_modules/playwright/types/test.d.ts`, TestInfo/TestType).
+already on each page (`e2e/challengeTransaction.ts:9-23`, `:60`). Its `created` increment
+is before the armed-store check (`:27-30`); its `complete`/`abort` listeners are after that
+check (`:51-55`) and `completed` is only a boolean. `arm` resets armed-transaction fields,
+not `created` (`:61-65`). The binding's `busy` is public (`coordinator.ts:90`), incremented
+by `change`/`hydrate`, not by refresh/notice's direct `transact` (`:670-691`, `:849-850`,
+`:920-956`): it counts binding operations in flight, not queue depth. Playwright's installed
+TestInfo types expose `status`, `expectedStatus`, identity and `attach`; `afterEach` runs
+before the context fixture closes (`node_modules/playwright/types/test.d.ts`, TestInfo/TestType).
+
+**Check candidate, untested:** `change`'s early return (`coordinator.ts:672-674`) can let
+`startBoard` finish without a transaction, reset `starting` to false and leave `error`
+null and `attempt` null (`:694-742`). That fits the retained Check snapshot, but does not
+establish the cause. A single lifetime transaction count has no pre-click baseline, so
+this diagnostic cannot confirm that candidate. This amendment adds no baseline read or
+new test step.
 
 1. Add a small Node-side test helper, `e2e/challengeFailure.ts`, and an `afterEach` hook
-   in `challengeSession.spec.ts`. Run it only for an unexpected failed/timed-out result
-   of the two exact tests named in this contract. Passing, skipped, expected-failure and
-   other tests perform no page enumeration, browser read, log or attachment.
+   scoped to `challengeSession.spec.ts`. Capture any unexpected failed/timed-out result
+   in this file, including the Hint twin and finish races; no title filter. Passing,
+   skipped and expected-failure results perform no page enumeration, browser read, log
+   or attachment. Other spec files do not install the hook. The passive transaction
+   counter below does observe normal instrumented runs; it is not zero-overhead capture.
 2. Capture project, title path, retry and worker once from TestInfo. Enumerate this test's
    existing context pages, label the supplied `page` fixture A by object identity, and
    label the other existing page B (additional pages, if any, get distinct extra labels).
    Do not infer the failed operation's page from a snapshot or swap identities by focus.
-3. For each page, one read-only `evaluate` takes its rendered challenge-state JSON,
-   binding `busy` if available, visibility/focus state and a whitelisted copy of the
-   existing probe: `armed`, `active`, `created`, `completed`, `release`, `abort` and
-   `writes.length`. Record the fixture path, not arbitrary page contents or network data.
-   No new IndexedDB/localStorage read, refresh, focus, notice interception or app action;
-   no access to private coordinator queues. Missing fixture/probe, malformed state,
-   closed page or evaluation failure is explicit unavailable/error data, never zero.
-4. Capture pages concurrently with one **1000-ms total browser-capture deadline**.
+3. Allow this one passive addition in `e2e/challengeTransaction.ts`: `settled` starts at
+   zero beside `created`. Immediately after each counted challenge-DB readwrite is
+   created, attach `complete` and `abort` listeners that each increment `settled` on that
+   transaction's terminal event, before any armed/store early return. Thus unarmed and
+   no-op transactions settle too; readonly/other-DB transactions count in neither total.
+   Both counters are cumulative for the page's installed instrument and neither resets
+   in `arm`. Preserve the existing armed-only listeners, pending-read spin, put wrapper,
+   active/completed flags, arm, hold, release and abort behaviour. No extra IDB requests,
+   scheduling, polling, waits or callbacks that mutate the transaction itself.
+4. For each page, one read-only `evaluate` takes its rendered challenge-state JSON,
+   visibility/focus and `bindingBusy` if available, explicitly labelled binding operations
+   in flight, not queue depth. Capture `transactions: { created, settled, outstanding }`,
+   with `outstanding = created - settled`, for all counted challenge-DB readwrites.
+   These are database-wide totals, not a count of this puzzle's queued operations.
+   Separately label `armedTransaction: { armed, active, completed, release, abort,
+   writesCount }`; these fields describe only the armed hold, never all outstanding work.
+   On an unarmed B, `active: false` must not be read as no outstanding transaction.
+   Outstanding >= 1 while B is starting fits the queue hypothesis but does not prove
+   which operation/board is blocked; zero points elsewhere, without proving a cause.
+   Record the fixture path, not arbitrary page contents or network data. No new
+   IndexedDB/localStorage read, refresh, focus, notice interception or app action; no
+   access to private coordinator queues. Missing fixture/probe/counters, malformed state,
+   closed page or evaluation failure is explicit unavailable/error data, never zero;
+   do not clamp or invent a counter value.
+5. Capture pages concurrently with one **1000-ms total browser-capture deadline**.
    A slow page is labelled unavailable at the deadline without losing a timely other
    page's data. Clear the timer and contain late rejections. This runs after failure,
    not during the original assertion; it is not a reconstruction of B's earlier state
    and cannot by itself prove what was queued before Start. No cross-page timestamps.
-5. Emit one prefixed JSON line, `[e2e challenge failure]`, and attach the same payload
+6. Emit one prefixed JSON line, `[e2e challenge failure]`, and attach the same payload
    with `testInfo.attach('challenge-session-failure', ...)` as `application/json`.
    The payload contains identity, original status and explicitly labelled per-page
    samples. Browser reads and both sinks are best effort: failures must not replace the
    original assertion/error or reject the hook. A killed worker can still lose output.
    Attachments land in the existing test output, retained by CI on failure
    (`.github/workflows/ci.yml:72-81`); stdout is retained with the ordinary gate logs.
-6. Limit implementation to that helper, its unit tests, the one hook and NEXT-STEPS.
-   Leave both tests' steps, assertions, five-second polls, hold/release behaviour,
-   normal retry budgets, fixture, app, CI and worker settings unchanged. No diagnostic
-   code is built until this amendment is accepted.
+7. Limit implementation to the diagnostic helper and unit tests, the one spec hook,
+   `challengeTransaction.ts`'s passive counter, `tests/challengeTransaction.test.ts`, and
+   NEXT-STEPS. Leave test steps, assertions, five-second polls, hold/release behaviour,
+   normal retry budgets, fixture, app, CI and worker settings unchanged. The shared
+   instrument's other consumer, `challengeUi.spec.ts`, keeps its behaviour and must be
+   run too. No diagnostic or counter code is built until this amendment is accepted.
 
 **Tests and probes for the amendment (planned, not run).**
-- Unit tests with fake pages/TestInfo: no work on healthy, expected or unrelated results;
-  distinct A/B states and probe values stay under the correct labels; missing/throwing
-  page is explicit; a held page reaches the 1000-ms deadline while the other sample is
-  kept; browser/log/attachment errors never mask the original failure.
-- One temporary Chromium probe, desktop and phone: inject a deliberate labelled assertion
-  failure into the real competing-Starts test immediately after A's held write. Read the
-  native JSON attachment to verify A is starting/held, B is separately present, the probe
-  values are present and the original deliberate failure is retained. Restore the test
-  byte for byte. It is diagnostic validation, not a reproduced natural flake or a gate.
-- Mutation probes: capture a healthy result; capture an unrelated title; keep only A;
-  swap A/B labels; omit the transaction probe; remove the capture deadline; let read/sink
-  errors escape; remove the actual hook (caught by the Chromium payload check). Each must
-  fail at the intended assertion, with every altered file restored byte for byte.
-- Then run the original challenge-session suite and the full cold gate. Record all failed
-  runs and probes, exact counts, unit stderr and any naturally captured failure separately.
+- Diagnostic unit tests with fake pages/TestInfo: no capture on healthy, skipped or
+  expected failures; distinct A/B states stay under the correct labels; an unarmed B
+  with created > settled reports outstanding > 0 despite armedTransaction.active false;
+  missing counters/throwing page is explicit, not zero; a held page reaches the 1000-ms
+  deadline while the other sample is kept; read/log/attachment errors never mask the
+  original failure. Exercise the file-wide policy on the Hint twin or another title.
+- Instrument unit tests using real `fake-indexeddb` transactions: unarmed completion and
+  abort each increment settled; pending and no-op readwrites count; readonly and other
+  databases are excluded; re-arming resets neither lifetime counter; the armed hold,
+  release and abort still work with the original flags and write-success semantics.
+- One temporary Chromium probe, desktop and phone: after A's real held write, create a
+  genuine unarmed readwrite on B's challenge DB, with a get request, without awaiting
+  settlement (its completion is blocked by A). Inject a deliberate labelled assertion
+  failure. Verify the native JSON attachment has A starting/held, B separately present
+  and unarmed with created > settled/outstanding >= 1, plus the original deliberate
+  failure. The extra transaction exists only in this temporary validation probe; no
+  normal test step changes. Restore byte for byte. This is diagnostic validation, not
+  a reproduced natural flake or a gate.
+- Mutation probes: omit the unarmed complete increment; omit the abort increment;
+  attach settlement listeners only after the armed-store check; reset settled on arm;
+  count readonly/other-DB transactions; capture a healthy result; keep only A; swap A/B;
+  omit the transaction totals or derive outstanding from active; remove the deadline;
+  let read/sink errors escape; remove the actual hook (Chromium payload check). Each
+  must fail at its intended assertion, with every altered file restored byte for byte.
+- Then run the original challenge-session and challenge-UI suites, and the full cold gate.
+  Record all failed runs and probes, exact counts, unit stderr and any naturally captured
+  failure separately. No plan for another comparative repetition campaign.
 
 **Measurement-record gate (separate from the batches).** Cold gate **run 1**
 (2026-10-19), initial TIME_WAIT **51**: repository root, all four cache targets, the
@@ -4615,6 +4673,19 @@ Only NEXT-STEPS changes in this commit. The diagnostic remains proposed; no runt
 or runtime mutation tests have run in this stage. Its tests/probes above are future work,
 not a claimed validation tally. No additional measurement campaign or fix is authorized
 by these clean repeats.
+
+**Diagnostic-amendment revision gate (2026-10-19).** Cold gate **run 1**, initial
+TIME_WAIT **54**. Repository root, four gate caches, their `node_modules` parent and
+`.next-visual` checked before cleanup. TypeScript **0**, lint **0**, unit **0**
+(**1740/1740**, 73 files, stderr **0 bytes**), build **0**, browser **0** (**753 passed,
+1 skipped**), **0 socket-error lines** and no socket-diagnostic output. Every exit
+checked separately; no failed gate or refused invocation. Logs/metadata are retained as
+`diagnostic-revision-gate1*` in the same report directory. The 80-execution measurement
+record is unchanged; no extra comparative batches ran.
+
+Only NEXT-STEPS changes in this revision; no counter, hook, runtime tests or mutation
+probes have been built/run. The widened instrumentation and its planned tests remain
+proposed until Claude accepts this revision.
 
 ### Would need a server (rejected)
 
