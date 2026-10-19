@@ -10,10 +10,9 @@
  *
  * So the rule is narrow and the vocabulary is honest:
  *
- * - `ERR_NO_BUFFER_SPACE` is the **measured** diagnosis. One full run leaves ~2500 sockets
- *   to the test port in `TIME_WAIT`; under that pressure Chromium fails a request at the
- *   transport layer with exactly this code. That is the failure that was captured, so it
- *   is the only one named as socket exhaustion.
+ * - `ERR_NO_BUFFER_SPACE` is the observed code behind the `socket-exhaustion` label.
+ *   Connection levels have not established its cause. A snapshot after the diagnosis
+ *   supplies evidence without claiming to show conditions at the instant of failure.
  * - `ERR_INSUFFICIENT_RESOURCES` and `ERR_NETWORK_CHANGED` are transient browser/network
  *   resource failures. They are retried on the same reasoning but **not** diagnosed: no
  *   cause is claimed for them, because none was measured.
@@ -60,13 +59,13 @@ export type NetworkFailure = {
 
 export type RetryDecision = {
     retry: boolean
-    /** The measured diagnosis, or null when the cause is not established. */
+    /** The observed error category, or null for other failures. Not a root-cause finding. */
     diagnosis: 'socket-exhaustion' | null
     /** One line, suitable for the console, phrased to match what is actually known. */
     reason: string
 }
 
-/** The only code whose cause has been measured. */
+/** The code observed in the socket investigation; its cause remains unestablished. */
 const MEASURED_EXHAUSTION = 'ERR_NO_BUFFER_SPACE'
 
 /** Transient transport failures retried without claiming to know why they happened. */
@@ -140,10 +139,8 @@ export const shouldRetryStartup = (state: {
             retry: true,
             diagnosis: 'socket-exhaustion',
             reason:
-                `a bootstrap request failed with ${MEASURED_EXHAUSTION}, which on this machine ` +
-                `means the socket pool is exhausted -- roughly 2500 sockets to the test port sit ` +
-                `in TIME_WAIT after a full run. Not an application failure. Reloading once; if ` +
-                `this is frequent, use fewer Playwright workers or pause between runs`,
+                `a bootstrap request failed with ${MEASURED_EXHAUSTION}. ` +
+                `The cause is not established. Reloading once`,
         }
     }
 

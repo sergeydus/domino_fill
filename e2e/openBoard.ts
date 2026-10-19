@@ -1,6 +1,7 @@
-import { expect, type Locator, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { shouldRetryStartup, type NetworkFailure, type ResourceType } from './startupRetry'
 import { LATE_IN_A_MONTH, pinDay } from './calendar'
+import { logSocketSnapshot } from './socketSnapshot'
 
 /**
  * Open the page with the board ready, and explain itself when it is not.
@@ -156,6 +157,16 @@ export const waitForReady = async (
         if (!decision.retry) throw await describeFailure(page, err, what, timeout, decision.reason)
 
         console.warn(`[e2e] ${what} did not load: ${decision.reason}.`)
+        if (decision.diagnosis === 'socket-exhaustion') {
+            void logSocketSnapshot(() => {
+                const info = test.info()
+                return {
+                    project: info.project.name, titlePath: info.titlePath,
+                    workerIndex: info.workerIndex, testRetry: info.retry,
+                    loadAttemptAtDiagnosis: NETWORK.get(page)?.attempt ?? 'unknown',
+                }
+            })
+        }
 
         // Pause first, then mark the new attempt, then reload -- in that order.
         //
