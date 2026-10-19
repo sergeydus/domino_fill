@@ -104,6 +104,7 @@ Evidence levels:
 | 2026-10-17 | **Slice 3b merged as PR #12 (`9d1df8d`): the Daily Challenge is on for players** (user, 2026-10-17). | Merged at codex's approved head `e5a5c37`, as a merge commit. CI passed on `master` (`gate` and `visual`). The `keyGuide` diagnostic follows as its own PR, merged only with the user's approval. |
 | 2026-10-18 | Continue the socket investigation next: codex builds, Claude reviews (user, 2026-10-18). | Write and review the successor measurement contract before any new collector or comparative runs. The motion frame-delivery and challenge-session flakes remain separate follow-ups; this choice assigns neither flake's implementation. |
 | 2026-10-18 | Continue with an error-time socket diagnostic: codex builds, Claude reviews (user, 2026-10-18). | Contract first. Log one aggregate connection snapshot when the existing harness diagnoses socket exhaustion. No worker cap or new comparison matrix; the motion and challenge-session flakes keep their separate, unassigned follow-ups. See U9. |
+| 2026-10-18 | Next, one change at a time: Claude takes the completion card's frame-delivery flake, codex reviewing; then codex takes the challenge-session timeouts, Claude reviewing. Claude opens the socket PR (#14) and refreshes AGENTS.md's status for codex's review (user, 2026-10-18, approving codex's recommendation and leaving the order to Claude). | Merges stay the user's. |
 
 ## Principles
 
@@ -4250,6 +4251,98 @@ from the guide's nearest `[data-advice]` ancestor, and the wording above):
   (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
   socket errors). No failed run. Committed after it.
 
+### The completion card's motion, measured where nothing competes for its frames: implementation contract
+
+**Why.** `e2e/motion.spec.ts`'s "arrives inside the limits" has failed with "frames were
+never delivered on time" in ordinary gate runs and in one measured run (desktop; codex's
+socket records, 2026-10-18). `onTime` (`e2e/frames.ts:105`) takes a try again when any
+frame in the card's arrival takes over 25 ms, up to three tries. Builder: Claude, reviewer:
+codex (user, 2026-10-18).
+
+**How it works today** (read, then measured):
+- Since `e5a5c37`, each try opens today's **challenge** board in a fresh context, solves
+  it, and reads the card arriving (`e2e/motion.spec.ts:124-139`).
+- The card's motion is one `motion.div` with the same `initial`, `animate` and
+  `transition` on a challenge board and a casual one; nothing in its animation branches
+  on the challenge (`app/dominoFill/CompletionCard.tsx:150-162`). Only its contents and
+  buttons differ.
+- **Measured** (2026-10-18, desktop), with a scratch spec (deleted after). One try per
+  test logged its longest frame gap and the page's long tasks, on the pinned challenge
+  board and on a casual archive board (`openArchiveDay`):
+
+  | Load | Board | Tries | Late (gap > 25 ms) | Worst gap | Tries with a long task |
+  | --- | --- | --- | --- | --- | --- |
+  | 8 workers | challenge | 30 | 2 | 50 ms | 1 |
+  | 8 workers | casual | 30 | 0 | 17 ms | 0 |
+  | 8 workers | challenge | 100 | **14** | 67 ms | 2 (62, 71 ms) |
+  | 8 workers | casual | 100 | **0** | 17 ms | 0 |
+  | 1 worker | challenge | 40 | 0 | 17 ms | 0 |
+  | 1 worker | casual | 40 | 0 | 17 ms | 0 |
+
+- So on a busy machine, a challenge board's solve drops a frame during the card's
+  arrival in about one try in seven; most late tries were one dropped frame (33 ms). A
+  casual board under the same load never did, and neither did either board on an idle
+  machine. Inferred: the work the challenge does when a board is solved (saving the
+  finish, the results and streak updates) shares the main thread with the card's first
+  frames, and only overruns a frame when CPU is scarce. Which part of that work is not
+  measured.
+- Three late tries in a row then fail the test. A full gate's load is heavier than this
+  scratch's, so the rate there is likely higher (inferred).
+
+**The rules:**
+1. The card's motion is measured on a **casual archive board**: each try opens
+   `ARCHIVE_DAY` through `openArchiveDay` (which pins `LATE_IN_A_MONTH`), in its fresh
+   context, then solves it as now. The measurement, limits, freshness check and
+   `onTime` are unchanged; no tolerance, frame budget or try count changes.
+2. Each try asserts it is measuring a casual board before it solves: no challenge clock
+   (`role="timer"`, "Challenge time") on the page. A try on a challenge board then fails
+   at that check, saying so.
+3. A comment at the try says why: the card's motion doesn't depend on the challenge, and
+   on a challenge board the solve's own work competes for the card's frames under load.
+4. **Recorded as its own open item, not fixed here:** a challenge board's solve can drop
+   a frame of the card's arrival on a busy machine. Whether that's worth profiling and
+   reducing is a decision for the user. This change makes no claim about real devices.
+
+**Not in it:** the app; `frames.ts` and its 25-ms clamp; the other motion tests; the
+challenge-session timeouts (codex's, next).
+
+**Tests:**
+- The two completion-card tests, desktop and phone-360, repeated.
+- Mutation probe: the try opening today's challenge board again (`openBoard`). It must
+  fail at the casual-board check.
+- The full gate before each commit.
+
+**Validation record**
+- This contract's commit (docs only, with the decision-log row), gate from cold, first run
+  (2026-10-18): TIME_WAIT **43**, root verified. TypeScript **0**, lint **0**, unit **0**
+  (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
+  socket errors). No failed run. Committed after it.
+- Codex accepted the contract with no corrections (2026-10-18). PRs #14 and #15 merged
+  before the build; `master` merged into this branch (`9597154`), its one conflict the
+  decision log's 2026-10-18 rows, put in the order they were written. Gate from cold on
+  that merge, first run: TIME_WAIT **48**, all steps **0**, unit **1740** (stderr **0
+  bytes**), browser **753 passed, 1 skipped**, 0 socket errors.
+
+**As built** (2026-10-19):
+- `e2e/motion.spec.ts`: `cardArrival` opens `ARCHIVE_DAY` with `openArchiveDay` in place of
+  `pinDay` and `openBoard`, then asserts no `role="timer"` named "Challenge time"
+  (`toHaveCount(0)`), with the message "the try measures a casual board: no challenge
+  clock". The comment at the try gives the reason and the measured counts (rule 3). The
+  freshness comment now says a solve leaves a finish in storage, since a casual solve
+  isn't a challenge attempt; the check itself is unchanged. Nothing else in the file, and
+  nothing outside it, changed.
+- Measured, before the gate: the two card tests, desktop and phone-360, 5 repeats each:
+  **20 of 20 passed** (that run started at TIME_WAIT 2764, left by the merge's gate).
+- **Mutation: 1 of 1 caught.** The probe put back `pinDay(page, LATE_IN_A_MONTH)` and
+  `openBoard(page)`. Both tests, in both projects, failed at the casual-board check
+  (`Expected: 0, Received: 1`; line 137 here, 140 in the probe's edited copy), 4 of 4 runs. Restored byte for
+  byte (hash checked).
+- Rule 4's open item is U10 under Upkeep, with its decision left to the user.
+- This change's commit, gate from cold, first run (2026-10-19): TIME_WAIT **39**, root
+  verified. TypeScript **0**, lint **0**, unit **0** (**1740**, stderr **0 bytes**), build
+  **0**, browser **0** (**753 passed, 1 skipped**, 0 socket errors). No failed run.
+  Committed after it.
+
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the
@@ -4926,6 +5019,7 @@ Two limits:
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
 | U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd`; implementation and validation below. No retry-rule or worker-count change. |
+| U10 | A challenge solve can delay the completion card | On a busy machine (8 test workers), solving a challenge board dropped a frame of the card's arrival in 14 of 100 tries, mostly one frame (33 ms); a casual board never did, and neither did on an idle machine (measured, desktop; see "The completion card's motion, measured where nothing competes for its frames"). Inferred: the solve's own work (saving the finish, results and streak) shares the main thread with the card's first frames; which part isn't measured. No claim about real devices. The motion test now measures a casual board. | Profile first | |
 
 ### Windows browser-test socket pressure: investigation contract
 
