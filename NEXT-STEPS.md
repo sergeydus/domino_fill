@@ -4353,6 +4353,17 @@ from `master` at `66bda6e93357124524e69af9c5d75866849e05e1` on
 `investigate/challenge-session-timeouts`. This first stage gathers evidence; it does not
 presume a fix, a shared cause, or a need to raise a timeout.
 
+**First review, Claude (2026-10-19).** Hold for one evidence correction; everything else
+accepted. The original contrast between `starting` values attributed the competing-Starts
+snapshot to B without evidence. That was my mistake: the snapshot is most likely A's,
+whose Start is intentionally held; it says nothing about B's `starting`. Corrected below,
+with the historical attribution labelled inferred and the current Playwright selection
+path checked in installed code. All three suggestions adopted: name the untested queue
+hypothesis, set `--output` separately for each batch, and state that these batches are
+lighter than a gate. No measurements or instrumentation have started; this revision
+still awaits acceptance. The GitHub approval-comment row records the user's direct
+2026-10-19 instruction, "i want you to comment your approval on github when you approve".
+
 **Why and retained evidence (read, not reproduced this round).** The first cold gate
 for the socket measurement record (`65f3716`) failed two phone tests,
 with no socket-error lines. The original `error-context.md` files are retained under
@@ -4365,8 +4376,16 @@ with no socket-error lines. The original `error-context.md` files are retained u
   `e2e/challengeSession.spec.ts:155-169`) failed inside `start` at line 44. Its initial
   Start stayed covered for five seconds, before the test armed a hold or pressed Check.
   The snapshot shows `status: ready`, `ready: true`, `canStart: true`, `starting: false`,
-  `attempt: null`. In the competing-Starts snapshot, by contrast, `starting` is true.
-  It is a Start failure in a Check test, not evidence that Check's save was late.
+  `attempt: null`. This test has only one page, so these values belong to the page whose
+  Start is under test. It is a Start failure in a Check test, not evidence that Check's
+  save was late.
+- The competing-Starts error context has one unlabelled page snapshot, most likely A's,
+  not B's. Its `starting: true`, `canStart: false`, `attempt: null` are consistent with A's
+  deliberately held Start. B's state is not recorded there, so that snapshot cannot be
+  contrasted with the Check test's `starting: false` to distinguish the stalled operations.
+  Attribution is inferred for the historical file. Read in the installed Playwright:
+  `node_modules/playwright/lib/index.js:657-671` takes `context.pages()[0]`, and
+  `:702-709` writes the one captured snapshot into `error-context.md`.
 
 **How it works today (read).**
 - `open` pins `LATE_IN_A_MONTH`, installs the real-transaction hold, loads the visual-only
@@ -4386,10 +4405,18 @@ with no socket-error lines. The original `error-context.md` files are retained u
   storage and broadcast notices can cause refresh or reconciliation (`:161-185`,
   `:920-959`). The IndexedDB store reports a change only after transaction completion,
   and notifies other tabs on a changed commit (`app/challenge/attemptStore.ts:154-194`).
-- Those paths suggest queue ordering, background reconciliation or delayed browser work
-  or the Start click not reaching its handler as hypotheses. The historical snapshots and
-  counts do not identify which occurred.
-  The two phone failures could have different causes. No cause is claimed here.
+- A specific competing-Starts hypothesis (read in the code, not tested): B keeps its
+  progress/storage, focus and broadcast wakes because `pair(page)` does not enable
+  `isolateSaveRace`. A wake might create a reconciliation transaction on B before the
+  test records `before`. That transaction would already be included in the count of 8
+  and blocked behind A's deliberately held write. B's Start, queued behind B's earlier
+  work by `enqueue`, would then create no further transaction until A is released. The
+  cited listeners/queue/refresh paths allow this ordering; no retained artifact establishes
+  that it happened. Testing it or recording B's baseline across passing runs needs the
+  subsequent amendment in rule 7. A new failure's retained context trace can show B too.
+- Background reconciliation, delayed browser work, or the Start click not reaching its
+  handler remain hypotheses. The two phone failures could have different causes. No
+  shared cause is assumed, and no cause is claimed from either snapshot.
 
 **Rules.**
 1. Before any measurement, Claude accepts this contract. Only NEXT-STEPS changes in its
@@ -4402,13 +4429,21 @@ with no socket-error lines. The original `error-context.md` files are retained u
    Check discovery first: exactly four project/test combinations, hence 40 executions
    per batch and 80 in total. Do not replace a failed run or keep repeating until green.
    These batches inspect failures under different suite concurrency, not error-rate
-   estimates or a proposal for a worker cap. Two successful batches cannot close the flake.
+   estimates or a proposal for a worker cap. Only two tests run in this eight-worker batch;
+   that is a lighter workload than the original full gate, not a recreation of its load.
+   Two successful batches cannot close the flake or rule out a load-dependent cause.
 3. Use Playwright's `--trace=retain-on-failure` in both batches. Keep native traces,
    screenshots/error contexts, stdout/stderr, command, source SHA, discovered inventory,
    resolved worker header, exits, duration and every result, including retry/reload or
-   socket-diagnostic output. Put each batch's output in a separate directory under
-   `playwright-report/challenge-session-timeouts-20261019/` so a later run cannot overwrite
-   it. Tracing can change timing; absence under trace does not prove absence without it.
+   socket-diagnostic output. Explicitly set
+   `--output=playwright-report/challenge-session-timeouts-20261019/batch-1/results` for
+   the one-worker batch and the corresponding `batch-2/results` for eight workers.
+   Keep each batch's stdout/stderr and metadata in its parent `batch-N` directory,
+   outside `results`, which Playwright clears at startup. Refuse an already used batch
+   directory rather than overwrite or copy from the default `test-results/` afterwards.
+   Retained traces cover the browser context, including B, rather than relying on the
+   error context's one page snapshot. Tracing can change timing; absence under trace
+   does not prove absence without it.
    Do not add a timing observer, synthetic CPU load, page-clock comparisons or new retries.
 4. Before each batch, verify the repository root and harness/output cleanup targets stay
    inside it, and start below 100 total TIME_WAIT sockets. Record any refused start
@@ -4454,6 +4489,14 @@ worker defaults, CI, visual baselines, AGENTS.md rules, product decisions, a PR 
 - Raw gate logs and exit metadata retained under
   `playwright-report/challenge-session-timeouts-20261019/`. Only NEXT-STEPS is committed;
   no runtime mutation probe applies to this documentation-only stage.
+- First-review revision, cold gate **run 1** (2026-10-19): waited for total TIME_WAIT to
+  fall below 100 before invoking the gate; the actual start count was **64**. Root, all
+  four gate-cache targets, their `node_modules` parent, and `.next-visual` checked before
+  cleanup. TypeScript **0**, lint **0**, unit **0** (**1740/1740**, 73 files, stderr **0
+  bytes**), build **0**, browser **0** (**753 passed, 1 skipped**), **0 socket-error
+  lines** and no socket-diagnostic output. No failed gate or refused invocation. Logs and
+  exits are retained as `revision-gate1*` in the same report directory. Only NEXT-STEPS
+  changed; no diagnostic batches, code edits or runtime mutation probes ran.
 
 ### Would need a server (rejected)
 
