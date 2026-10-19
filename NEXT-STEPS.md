@@ -4317,6 +4317,31 @@ challenge-session timeouts (codex's, next).
   (2026-10-18): TIME_WAIT **43**, root verified. TypeScript **0**, lint **0**, unit **0**
   (**1701**, stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**, 0
   socket errors). No failed run. Committed after it.
+- Codex accepted the contract with no corrections (2026-10-18). PRs #14 and #15 merged
+  before the build; `master` merged into this branch (`9597154`), its one conflict the
+  decision log's 2026-10-18 rows, put in the order they were written. Gate from cold on
+  that merge, first run: TIME_WAIT **48**, all steps **0**, unit **1740** (stderr **0
+  bytes**), browser **753 passed, 1 skipped**, 0 socket errors.
+
+**As built** (2026-10-19):
+- `e2e/motion.spec.ts`: `cardArrival` opens `ARCHIVE_DAY` with `openArchiveDay` in place of
+  `pinDay` and `openBoard`, then asserts no `role="timer"` named "Challenge time"
+  (`toHaveCount(0)`), with the message "the try measures a casual board: no challenge
+  clock". The comment at the try gives the reason and the measured counts (rule 3). The
+  freshness comment now says a solve leaves a finish in storage, since a casual solve
+  isn't a challenge attempt; the check itself is unchanged. Nothing else in the file, and
+  nothing outside it, changed.
+- Measured, before the gate: the two card tests, desktop and phone-360, 5 repeats each:
+  **20 of 20 passed** (that run started at TIME_WAIT 2764, left by the merge's gate).
+- **Mutation: 1 of 1 caught.** The probe put back `pinDay(page, LATE_IN_A_MONTH)` and
+  `openBoard(page)`. Both tests, in both projects, failed at the casual-board check
+  (`Expected: 0, Received: 1`; line 137 here, 140 in the probe's edited copy), 4 of 4 runs. Restored byte for
+  byte (hash checked).
+- Rule 4's open item is U10 under Upkeep, with its decision left to the user.
+- This change's commit, gate from cold, first run (2026-10-19): TIME_WAIT **39**, root
+  verified. TypeScript **0**, lint **0**, unit **0** (**1740**, stderr **0 bytes**), build
+  **0**, browser **0** (**753 passed, 1 skipped**, 0 socket errors). No failed run.
+  Committed after it.
 
 ### Would need a server (rejected)
 
@@ -4994,6 +5019,7 @@ Two limits:
 | U7 | Full-page Pick a piece baselines | The two full-page baselines show the default controls, so no baseline shows the chips on a whole game page. The sheet does, and browser tests hold their layout (codex, reviewing the chips). Add phone and desktop pages in Pick a piece mode. | Small | |
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
 | U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd`; implementation and validation below. No retry-rule or worker-count change. |
+| U10 | A challenge solve can delay the completion card | On a busy machine (8 test workers), solving a challenge board dropped a frame of the card's arrival in 14 of 100 tries, mostly one frame (33 ms); a casual board never did, and neither did on an idle machine (measured, desktop; see "The completion card's motion, measured where nothing competes for its frames"). Inferred: the solve's own work (saving the finish, results and streak) shares the main thread with the card's first frames; which part isn't measured. No claim about real devices. The motion test now measures a casual board. | Profile first | |
 
 ### Windows browser-test socket pressure: investigation contract
 

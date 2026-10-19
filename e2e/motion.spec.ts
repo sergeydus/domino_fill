@@ -1,9 +1,8 @@
 import { test, expect, type Browser, type BrowserContext, type BrowserContextOptions, type Page } from '@playwright/test'
-import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { VISUAL_URL } from './server'
 import { waitForRest } from './rest'
 import { frames, movement, onTime, track, type Sample } from './frames'
-import { openBoard } from './openBoard'
+import { openArchiveDay } from './openBoard'
 import { playSolution } from './play'
 import { LIMITS } from '../app/dominoFill/motion'
 
@@ -115,21 +114,27 @@ test.describe('the completion card', () => {
         'viewport' | 'userAgent' | 'deviceScaleFactor' | 'isMobile' | 'hasTouch' | 'baseURL'>
 
     /**
-     * One try: solve the pinned day's first board and read the card arriving.
+     * One try: solve an archive day's first board and read the card arriving.
      *
      * Read from its transform, not its box: arriving, the card scrolls itself into view
      * (CompletionCard says why), and the page scrolling moves the box by far more than the
      * animation does -- measured, 0.56 of a cell.
      */
     const cardArrival = async (context: BrowserContext) => {
-        // Fresh, checked before anything loads: a solve is a challenge attempt, kept in the
-        // context's storage, and a try that inherited one opened another board (measured: 3
-        // of 10 second tries in one page, twice on a covered board with no cell).
+        // Fresh, checked before anything loads: a solve leaves a finish in the context's
+        // storage, and a try that inherited a challenge attempt opened another board
+        // (measured: 3 of 10 second tries in one page, twice on a covered board with no cell).
         expect(await context.storageState({ indexedDB: true }), 'the try starts on a fresh device')
             .toEqual({ cookies: [], origins: [] })
         const page = await context.newPage()
-        await pinDay(page, LATE_IN_A_MONTH)
-        await openBoard(page)
+        // A casual board, not today's challenge. The card's motion is the same on both
+        // (CompletionCard's one motion.div doesn't branch on the challenge), but a challenge
+        // solve's own work shares the main thread with the card's first frames, and on a busy
+        // machine it dropped one in 14 of 100 tries; a casual board's, in 0 of 100 (NEXT-STEPS,
+        // "The completion card's motion, measured where nothing competes for its frames").
+        await openArchiveDay(page)
+        await expect(page.getByRole('timer', { name: 'Challenge time' }),
+            'the try measures a casual board: no challenge clock').toHaveCount(0)
         const cell = (await page.locator('[data-cell="0,0"]').boundingBox())!.width
         await track(page, 'card', '[data-completion-card]')
         await playSolution(page)
