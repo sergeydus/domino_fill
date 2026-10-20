@@ -134,6 +134,11 @@ cell); the picture does not.
 
 ### 2.1 Art direction
 
+*Amended 2026-10-20:* superseded by the user's decision to redesign the UI for the Play
+Store in a modern, soft tactile direction, in light and dark (NEXT-STEPS, L1). `UI-SPEC.md`
+holds the new direction; where the two differ, it wins. The text below is kept as the
+record of what rows 1–16 built.
+
 **Preserve the game's visual identity and improve it comprehensively in a distinctly
 cartoony direction. This is an evolution, not a redesign.** Someone who played yesterday
 must recognise it today; someone new should meet a polished physical toy rather than a
@@ -197,6 +202,9 @@ Recorded up front, because an unwritten exclusion is indistinguishable from an o
   **1.05:1** under `prefers-color-scheme: dark`, and `e2e/theme.spec.ts` now asserts the two
   schemes render identically. A second ground means re-proving every contrast pair in this
   document against it. Light-only stays a deliberate cut.
+  *Amended 2026-10-20:* reversed by the user, who chose light and dark themes following the
+  phone (NEXT-STEPS, L1). `UI-SPEC.md` §3.1 pays the bill this bullet describes: every pair
+  re-proved in both themes, and `e2e/theme.spec.ts` rewritten.
 - **No canvas, WebGL, sprite sheets or illustration pipeline.** Row 19 spent itself making
   the board a real `role="grid"` with per-cell labels, roving tabindex and programmatic
   focus. A canvas board gives that up, and no visual gain is worth it.
@@ -2567,8 +2575,11 @@ is about to change are baselines taken twice.
 Recorded so nobody re-opens them by accident, and so the reasoning survives the decision.
 
 - **The art direction is settled** (§2.1): a cartoony evolution of the existing identity, not
-  a redesign and not a new aesthetic.
+  a redesign and not a new aesthetic. *Amended 2026-10-20:* reopened and replaced by the
+  user's redesign decision (NEXT-STEPS, L1; `UI-SPEC.md`).
 - **Four baselines, final** (P0-4). Not a starting point to be argued up or down.
+  *Amended 2026-10-20:* replaced by the user's decision for eight, the four in each theme
+  (`UI-SPEC.md` §11 and §13). They arrive with that spec's row 1; until then, these four stand.
 - **The rail's contents are settled** (§2.3): difficulty, navigation and Archive, the
   Check/Hint/Undo/Reset group, and Sound. The legend stays with the board.
 - **The ground becomes a subtly warm off-white in P1-3**, and every contrast guarantee is
