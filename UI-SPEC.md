@@ -12,9 +12,9 @@ The decisions behind it are the user's (NEXT-STEPS decision log, 2026-10-20, and
 - later, and not in this spec, **seasonal obstacles**: a pumpkin at Halloween, a snowman at
   Christmas (L2). This spec only prepares the seam for them (§4.4).
 
-The mockups are a private canvas (https://claude.ai/artifact/TfEMxxhw8pz5K4iW9Bm6yY), which
-only the user can open until they share it. Every value this spec needs is written here, and
-where the mockup and the spec differ, the spec wins.
+The mockups are a canvas the user has shared (https://claude.ai/artifact/TfEMxxhw8pz5K4iW9Bm6yY):
+today's phone screen beside the three directions. Every value this spec needs is still written
+here, and where the mockup and the spec differ, the spec wins.
 
 **How it relates to the other specs.** `SPEC.md` still wins on what the game promises: the
 38px cell floor, an 8×8 board at 360px, the accessibility tree and the layout budget.
