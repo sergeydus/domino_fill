@@ -2578,8 +2578,8 @@ Recorded so nobody re-opens them by accident, and so the reasoning survives the 
   a redesign and not a new aesthetic. *Amended 2026-10-20:* reopened and replaced by the
   user's redesign decision (NEXT-STEPS, L1; `UI-SPEC.md`).
 - **Four baselines, final** (P0-4). Not a starting point to be argued up or down.
-  *Amended 2026-10-20:* `UI-SPEC.md` §11 proposes eight, the four in each theme. That waits
-  for the user; until they decide, this stands.
+  *Amended 2026-10-20:* replaced by the user's decision for eight, the four in each theme
+  (`UI-SPEC.md` §11 and §13). They arrive with that spec's row 1; until then, these four stand.
 - **The rail's contents are settled** (§2.3): difficulty, navigation and Archive, the
   Check/Hint/Undo/Reset group, and Sound. The legend stays with the board.
 - **The ground becomes a subtly warm off-white in P1-3**, and every contrast guarantee is
