@@ -57,6 +57,17 @@ Notes: the shared sheet adds focus containment and restoration to Archive, which
 and its history contract now covers Settings opening the tutorial, Results opening by itself,
 Results closing when its day expires, and back and forward (§6.1).
 
+**Codex's second review (2026-10-20, through `cc2d8f7`): every correction and note accepted;
+held for one issue in the new history rules, now fixed.**
+- **The issue:** answering a stale Forward with `replaceState` left a duplicate game entry,
+  so leaving took two Backs (codex measured the sequence in Chromium). Forward now goes
+  straight back, and that sequence is a named regression test (§6.1, §11).
+- **Two notes, both taken:** "360×720 fits" is qualified as before safe areas (§5). And
+  row 1 adds a sentinel probe, because until row 4 a theme switch can't expose a literal on
+  the board's drawings (§3.1).
+- **Codex's check of the minimum heights:** rounded to whole pixels they come to 630, 668 and
+  706px. §5's 631 and 669 are a pixel conservative.
+
 ---
 
 ## 1. What's wrong today (measured)
@@ -203,6 +214,11 @@ redefined by the rows that restyle them, each with its ratio rule in both themes
 - **The test** reads the computed `fill` and `stroke` of the actual drawings after switching
   the system scheme, and after each override. A drawing that still holds a literal shows up as
   the wrong theme's colour.
+  - Until row 4, though, the board and piece tokens are the same in both themes, so switching
+    can't expose a literal left on those drawings (codex).
+  - Row 1 therefore also sets each drawing token's custom property to a sentinel colour on
+    `:root` and checks that every drawing's computed colour follows it. The source audit backs
+    this up.
 
 **Every row keeps every guarantee on its way in.** An intermediate palette is fine; a commit
 that drops a guarantee is not.
@@ -460,7 +476,8 @@ safe areas, is at least 631px tall for 6×6, 669px for 7×7, and 706px for 8×8.
 
 - At 360×640, 6×6 fits, and 7×7 and 8×8 scroll vertically, as the floor allows today
   (`cellFloor.ts`).
-- At 360×720 and up, all three fit.
+- At 360×720 and up, all three fit before safe areas. The 8×8 board has only 14px to spare at
+  360×720, so a device with larger insets scrolls there.
 - At 393×852, the 8×8 board is width-bound at 42px cells, and about 110px is left over.
 
 The action bar stays fixed while the page scrolls, and the page's bottom padding keeps
@@ -499,8 +516,11 @@ In landscape the page may scroll, as it does today.
     the tutorial returns to the game, not to Settings.
   - **Results opening by itself,** after the solve that finishes a size, pushes its entry like
     any other opening, and back closes it.
-  - **Forward,** onto an entry whose sheet is no longer open, doesn't reopen it: the app
-    replaces that entry with a plain one and stays on the game.
+  - **Forward,** onto an entry whose sheet is no longer open, doesn't reopen it: the app goes
+    straight back (`history.back()`). The list of entries is then exactly what it was before
+    Forward, so one Back with no sheet open still leaves the game. Replacing the entry instead
+    would leave a second game entry, and leaving would take two Backs (codex measured that
+    sequence in Chromium).
   - **The board** never pushes history, so back with no sheet open leaves the game, as today.
 - **On wide screens** the same component is a centred dialog, 480px wide at most.
 - **Not here:** swipe-down to close.
@@ -659,7 +679,9 @@ Every row keeps these, and stops and says so rather than retune one:
   - closing by the button, by the scrim, and by back;
   - Escape does nothing;
   - each history case in §6.1: Settings opening the tutorial, Results opening by itself,
-    Results closing on expiry, and forward not reopening a sheet.
+    Results closing on expiry, and forward not reopening a sheet;
+  - **the regression codex measured:** visit another page, then the game; open a sheet; Back
+    closes it; Forward doesn't reopen it; **one** Back then lands on the other page.
 - **The theme choice:** System follows `emulateMedia` in both directions; Light and Dark each
   win over the opposite system setting; the choice survives a reload; and the first paint is
   already in the chosen theme. That last one means reading the ground's computed colour
@@ -734,5 +756,8 @@ composition, and each one re-measures the board's budget against §5's table.
 - **`7484191`** (the shared canvas), gate from cold, first run: TIME_WAIT **45**, every step
   **0**, unit **1777** (stderr **0 bytes**), browser **753 passed, 1 skipped**. One
   `ERR_NO_BUFFER_SPACE` page load recovered by the reload.
-- **The revision after codex's first review:** its gate is reported with its commit, and
+- **`cc2d8f7`** (after codex's first review), gate from cold, first run: TIME_WAIT **39**, every
+  step **0**, unit **1777** (stderr **0 bytes**), browser **753 passed, 1 skipped**, 0 socket
+  errors.
+- **The revision after codex's second review:** its gate is reported with its commit, and
   recorded here in the next one.
