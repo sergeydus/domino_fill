@@ -5531,6 +5531,25 @@ gets its own implementation contract here before code.
 Claude, reviewer: codex (user, 2026-10-20). Branch `feature/ui-themes`, from `master` at
 `95eb99d`.
 
+**Codex's review of `728a79f` (2026-10-21): held for three test-contract corrections, all
+taken below.** Codex accepted the interim-palette amendment and recomputed 23 of the dark
+ratios, all matching.
+1. **The first-paint tests blocked the stylesheet too.**
+   - Aborting every `/_next/static/` request also aborts the CSS. Codex measured the body's
+     background as `rgba(0, 0, 0, 0)` that way, and `rgb(244, 240, 232)` with only scripts
+     blocked.
+   - Theme tests 6 and 7 now block script requests only, and first check that the
+     stylesheet loaded while hydration didn't.
+2. **The invalid-value test couldn't catch probe 4.** A `data-theme="sepia"` attribute also
+   follows the system under these selectors (measured by codex), so the test now also
+   asserts that the attribute is absent.
+3. **The existing tests that change were unlisted.** They are now listed, with the audit
+   helper's extension and the metadata test's two theme-color tags (Tests, "Existing tests
+   that change"). The board-dependent theme cases pin the day.
+
+Two notes taken: a same-page system light → dark → light check (theme test 8), and the import
+audit covers both `PALETTE` and `PALETTE_DARK`.
+
 **How it works today (read).**
 - `app/palette.ts` has one `PALETTE` of 36 role-named tokens, plain TypeScript with no
   imports. It has four kinds of consumer:
@@ -5624,9 +5643,11 @@ values in row 3, the board in row 4, and the cell states in row 5.
    property, not as an SVG presentation attribute, so nothing depends on browsers resolving
    `var()` inside one. `LABEL_COLORS` become these references too.
 
-   `PALETTE` may then be imported in `app/` only by `palette.ts`, `siteMetadata.ts` (the
-   viewport and manifest, at build time) and `controls.ts` (types only). `tests/palette.test.ts`
-   enforces that list.
+   `PALETTE` and `PALETTE_DARK` may then be imported in `app/` only by `palette.ts` and
+   `siteMetadata.ts` (the viewport and manifest, at build time). `layout.tsx` takes the
+   pre-paint script's two grounds from `siteMetadata.ts` (`GROUND`, `GROUND_DARK`), and
+   `controls.ts` imports the `Token` type only.
+   `tests/palette.test.ts` enforces that list for both exports.
 6. **The override.**
    - `<html data-theme="light|dark">` comes from the local-storage key `dominoFill.theme`.
      Any other value, or none, leaves the attribute off, and the phone decides.
@@ -5664,7 +5685,8 @@ values in row 3, the board in row 4, and the cell states in row 5.
   - Dark pins its own, computed above: 4.63, 9.02 and 10.88; 3.02, 3.08 and 3.37; 5.75 and
     8.38; 9.51.
   - The refusal tests read `refusedCross`.
-- **`e2e/theme.spec.ts`, rewritten:**
+- **`e2e/theme.spec.ts`, rewritten.** Every case that reads the board pins its day
+  (`pinDay`, `LATE_IN_A_MONTH`), as AGENTS.md requires.
   1. With the system light, the page computes the light tokens: the ground, the advice text,
      a cell, a line target and a control's surface.
   2. With the system dark, the chrome computes the dark tokens and the cell its unchanged
@@ -5672,11 +5694,17 @@ values in row 3, the board in row 4, and the cell states in row 5.
   3. In both, the advice text and the line target clear 4.5:1 on the ground as computed.
   4. `light` stored under a dark system renders light; `dark` under a light system renders
      dark.
-  5. A stored `sepia` follows the system.
-  6. **The first paint:** with every `/_next/static/` request aborted, so no app script runs,
-     the body's computed ground is already the stored theme's.
+  5. A stored `sepia` follows the system in both schemes, **and `<html>` has no `data-theme`
+     attribute**. The whitelist is what this checks (probe 4).
+  6. **The first paint,** with every script request under `/_next/static/` aborted and the
+     stylesheets and fonts left to load:
+     - first, check the conditions: a stylesheet has applied (the ground isn't transparent),
+       and the app hasn't hydrated;
+     - then, the body's computed ground is already the stored theme's.
   7. Two theme-color tags, one per scheme. With a stored theme, both carry its ground, with
-     the app's scripts blocked as well as loaded.
+     the app's scripts blocked (as in 6) and loaded.
+  8. On one page, with nothing stored, the system going light, then dark, then light again
+     moves the ground and a line target with it each time, while a cell stays put.
 - **A sentinel probe** (`e2e/themeTokens.spec.ts`, new), on the component sheet, which draws
   every piece and every cell state statically:
   - set each drawing token's custom property on `<html>` to its own sentinel colour;
@@ -5686,6 +5714,26 @@ values in row 3, the board in row 4, and the cell states in row 5.
   - Until row 4 the board's tokens match across themes, so a theme switch can't expose a
     literal left in a drawing; this probe can (codex).
 - **The baselines:** eight, with the light four byte-identical (rule 8).
+- **Existing tests that change** (each in this commit, with why):
+  - `tests/cellStates.test.tsx:35, 46, 57, 67, 79, 91, 92` read each mark's literal `fill` or
+    `stroke` attribute. They become assertions that the mark's `style` names its token's
+    reference (`var(--anchor)`, and the cross `var(--refused-cross)`). The geometry and shape
+    checks, such as `fill` `none` and the dash pattern, stay as they are.
+  - `tests/colourAudit.ts`'s `isRead` doesn't recognise `cssVar('token')`. It is extended to,
+    keeping its comment exclusion and whole-name matching, with cases added to
+    `tests/palette.test.ts`'s audit tests (a name only in a comment, and a longer name that
+    contains it, are still not reads).
+  - `tests/lineFeedback.test.ts:145–152` computes contrast from `LABEL_COLORS`' values, which
+    become CSS references. It computes from the labels' tokens instead, in both themes.
+  - `e2e/metadata.spec.ts:130` reads one theme-color tag. It selects the
+    `(prefers-color-scheme: light)` one, and keeps requiring that the manifest's
+    `theme_color` and `background_color` are the light ground. The manifest stays light even
+    on a page forced dark.
+  - `e2e/controlStates.spec.ts:103–134` compare focus rings with `PALETTE.accentEdge`. They run
+    in the light scheme, which computes the same value, so they don't change; this is
+    recorded so the import audit, which covers `app/` only, isn't read as covering tests.
+  - `e2e/theme.spec.ts`, rewritten (above). Its old assertion, that the two schemes render
+    alike, is exactly what this row reverses.
 
 **Mutation probes (planned).** Each must fail at the assertion named.
 1. The renderer leaves out the media-query dark block → theme 2 and the byte-identical check.
