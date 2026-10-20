@@ -112,6 +112,7 @@ Evidence levels:
 | 2026-10-20 | **Light and dark themes, following the phone's setting** (user, 2026-10-20). | Reverses `GRAPHICS-SPEC.md` §3's "no dark palette": every contrast pair is now proved in both themes, and `e2e/theme.spec.ts`, which asserts the two schemes render alike, changes with it. See L1. |
 | 2026-10-20 | **Later: the rock changes with the season**, for example a pumpkin at Halloween and a snowman at Christmas (user, 2026-10-20). | Not part of the redesign. The redesign draws the rock through one replaceable obstacle drawing so a seasonal one can be added later without touching the board. See L2. |
 | 2026-10-20 | **`UI-SPEC.md`'s three questions** (user, 2026-10-20): labels under Undo, Hint and Reset, yes; eight visual baselines, the four screens in each theme, yes; a theme choice in Settings (System, Light, Dark), yes. | The baselines replace `GRAPHICS-SPEC.md` §9's "four, final" and arrive with the spec's row 1. The theme choice defaults to System, so following the phone is still what a player gets untouched; it adds a `data-theme` override and a pre-paint script (`UI-SPEC.md` §3.1). |
+| 2026-10-20 | **PR #18, the UI spec, merged** (user, 2026-10-20, after codex's approval), at `95eb99d`; CI passed on `master`. **Claude builds the redesign, codex reviews** (user, 2026-10-20). | Each of `UI-SPEC.md`'s 15 rows gets its contract first. Row 1, the two themes, is below L2. |
 
 ## Principles
 
@@ -5521,8 +5522,187 @@ gets its own implementation contract here before code.
 
 | # | Idea | Why, and the boundary | Effort | Decision |
 | --- | --- | --- | --- | --- |
-| L1 | The soft tactile redesign | Today's screens are a column of mismatched controls under a brown board with black-outlined pieces (measured on a 393x852 phone, `UI-SPEC.md` §1). The redesign gives the phone a top bar, a bottom action bar and bottom sheets, redraws the board and pieces without outlines, and adds a dark theme. It keeps every accessibility and layout guarantee. Gameplay and the challenge don't change. | Large: about 16 rows | Yes: direction B, light and dark following the phone (user, 2026-10-20). Spec by Claude, review by codex; the builder is not chosen yet. |
+| L1 | The soft tactile redesign | Today's screens are a column of mismatched controls under a brown board with black-outlined pieces (measured on a 393x852 phone, `UI-SPEC.md` §1). The redesign gives the phone a top bar, a bottom action bar and bottom sheets, redraws the board and pieces without outlines, and adds a dark theme. It keeps every accessibility and layout guarantee. Gameplay and the challenge don't change. | Large: 15 rows | Yes: direction B, light and dark following the phone (user, 2026-10-20). Spec by Claude, reviewed by codex, merged as PR #18. Claude builds, codex reviews (user, 2026-10-20). |
 | L2 | Seasonal obstacles | The rock becomes a pumpkin around Halloween, a snowman around Christmas, and so on. Each one must still read as an obstacle and never as a domino, keep the rock's footprint and contrast, and be chosen by the device's own date, with no server. | Small to medium, after L1 | Later (user, 2026-10-20). L1 prepares for it: the rock is drawn through one replaceable obstacle drawing. |
+
+### UI row 1, two themes: implementation contract
+
+**Why.** `UI-SPEC.md` row 1: the theme mechanism every later row is drawn in. Builder:
+Claude, reviewer: codex (user, 2026-10-20). Branch `feature/ui-themes`, from `master` at
+`95eb99d`.
+
+**How it works today (read).**
+- `app/palette.ts` has one `PALETTE` of 36 role-named tokens, plain TypeScript with no
+  imports. It has four kinds of consumer:
+  - the components;
+  - `scripts/icon.ts`, in Node;
+  - CSS, through `app/palette.css`, which `scripts/palette-css.ts` renders: one `:root` block
+    of custom properties, and one `@theme inline` block mapping each to a Tailwind colour;
+  - `siteMetadata.ts`'s `GROUND`, for the viewport's `themeColor` and the manifest.
+- `app/globals.css:23` declares `color-scheme: light`. `body` is drawn in `var(--ground)` and
+  `var(--ink)`.
+- **31 lines of browser code read a literal `PALETTE` value**, which CSS can't switch.
+  `UI-SPEC.md` §3.1 counted the 27 SVG `fill`/`stroke` lines; the other four are a background
+  and three label colours.
+  - `BoardSquare.tsx:38`: the checker colour, as an inline style;
+  - `cellStates.tsx:69, 77, 78, 98, 100, 121, 123, 134`;
+  - `LevelSelector.tsx:48`;
+  - `lineLabel.ts:45–47`: `LABEL_COLORS`;
+  - `Pieces/DominoPieceOne.tsx:33–37`, `Pieces/DominoPieceTwo.tsx:34–40`,
+    `Pieces/DominoPieces.tsx:49–50`, `Pieces/Rock.tsx:20–25`.
+- **One token paints both sides.** `problem` is chrome (the overshot label, advice, the
+  archive's error, Reset's edge) and also the board's refused cross (`cellStates.tsx:123`).
+  The other tokens are one side or the other.
+- **Today's chrome pairs** (`tests/contrast.test.ts`):
+  - `ink` on `accent` is the primary control's text (P1-4);
+  - `accentEdge` is every focus ring, on `ground`, `controlSurface`, `panel` and
+    `bannerSurface`;
+  - disabled controls are pinned at 2.30, 2.24 and 2.55:1;
+  - Reset's `problem` edge is pinned at 5.97 on its surface and 7.35 on the ground.
+- **The tests assume one theme:**
+  - `e2e/theme.spec.ts` asserts the two schemes render identically;
+  - the four visual baselines run with `colorScheme: 'light'`
+    (`playwright.visual.config.ts:77`), named by `{arg}` (`:24`).
+- `next.config.ts`'s `headers()` sets cache policy only. There is no content security policy
+  to stop an inline script.
+
+**An amendment to `UI-SPEC.md` (§3.1, §12), recorded there in this commit.** The spec gave the
+chrome and text tokens their final values in row 1. They can't have them yet:
+- the primary control draws `ink` on `accent`, and the final accent needs white text
+  (`onAccent`), which is a control change (row 3);
+- the new roles (`surface`, `raisedEdge`, `inkMuted`, `onAccent`, `onSuccess`, `onProblem`)
+  have no consumer before row 3.
+
+So **row 1 changes no light value, and the light theme is pixel-identical.** The dark set is an
+interim one, chosen to keep every pairing today's components draw. The chrome reaches its final
+values in row 3, the board in row 4, and the cell states in row 5.
+
+**The rules.**
+1. **Two sets, the same keys.**
+   - `PALETTE` stays the light set, at today's values, so Node consumers are unchanged.
+   - New `PALETTE_DARK`, typed so it must have exactly `PALETTE`'s keys.
+   - New `BOARD_TOKENS`, the tokens that stay equal in both themes until row 4 (§3.1's
+     rollout): `checkerLight`, `checkerDark`, `boardFrame`, `tileFace`, `tileSide`,
+     `rockFace`, `rockLit`, `rockShade`, `rockSide`, `pieceOutline`, `pip`, `divider`,
+     `hint`, `anchor`, `candidateEdge`, `candidateWash`, `cellFocus`, `cellFocusHalo`,
+     `refusedHalo`, `refusedCross` and `dragWash`.
+2. **`problem` splits.** New `refusedCross`, `#a10000` in both themes, as `problem` is in light
+   today, draws the cross. `problem` keeps its chrome uses. Light is unchanged.
+3. **The interim dark chrome**, computed with the WCAG formula. Every chrome pair is the same
+   pair the light theme draws:
+
+| Token | Dark | The pairs it keeps (computed) |
+| --- | --- | --- |
+| `ground` | `#16110E` | |
+| `ink` | `#F3EBE1` | 15.87 on `ground`; 4.63 on `accent` (the primary's text); 10.88 on `controlSurface`; 13.91 on `panel` |
+| `lineNeutral` | `#CDBFB1` | 10.43 on `ground` |
+| `success` | `#5BD69A` | 10.29 on `ground`; 9.02 on `panel` ("Solved!") |
+| `problem` | `#FF8F6B` | 8.38 on `ground`; 7.35 on `panel`; Reset's edge: 5.75 on `controlSurface`, 8.38 on `ground` |
+| `accent` | `#0F766E` | Behind `ink` |
+| `accentEdge` | `#6FD6CB` | Focus rings: 10.85 on `ground`, 7.44 on `controlSurface`, 9.51 on `panel`, 7.53 on `bannerSurface` |
+| `controlSurface` | `#3A3029` | |
+| `panel`, `panelInk` | `#251E19`, `#F3EBE1` | 13.91 |
+| `scrim` | `#000000` | Unchanged |
+| `markNone`, `markStarted`, `markPartial`, `markComplete` | `#2A221C`, `#4A3D16`, `#6A4D0C`, `#0F5A44` | `ink` on each: 13.23, 9.02, 6.64, 6.93 |
+| `bannerSurface` | `#3A3016` | `ink` 11.02 |
+
+   The disabled controls come out at 3.02 (secondary on the ground), 3.08 (primary on the
+   panel) and 3.37:1 (quiet on the panel), each above light's pinned 2.30, 2.24 and 2.55. The
+   completion card's ring stays under 3:1 on `success` (1.05), as the light test expects of
+   that pair.
+4. **The generated CSS** declares:
+   - the light set on `:root`;
+   - the dark set on `:root:not([data-theme="light"])` inside
+     `@media (prefers-color-scheme: dark)`;
+   - the dark set again on `:root[data-theme="dark"]`.
+
+   Each dark block declares every token. `@theme inline` is unchanged. `globals.css` replaces
+   `color-scheme: light` with `light dark` on `:root`, and `light` or `dark` under each
+   `data-theme`.
+5. **Every browser drawing reads its token through CSS.** The 31 lines use `cssVar(token)`, a
+   new export of `palette.ts` that returns `var(--token)`. Drawings apply it as a `style`
+   property, not as an SVG presentation attribute, so nothing depends on browsers resolving
+   `var()` inside one. `LABEL_COLORS` become these references too.
+
+   `PALETTE` may then be imported in `app/` only by `palette.ts`, `siteMetadata.ts` (the
+   viewport and manifest, at build time) and `controls.ts` (types only). `tests/palette.test.ts`
+   enforces that list.
+6. **The override.**
+   - `<html data-theme="light|dark">` comes from the local-storage key `dominoFill.theme`.
+     Any other value, or none, leaves the attribute off, and the phone decides.
+   - An inline script, first in `<head>` (`layout.tsx`), reads the key in a `try`, sets the
+     attribute, and points both theme-color tags at the chosen theme's ground, all before the
+     first paint. Its colours come from the palette when the layout renders, not from
+     literals.
+   - `<html>` gets `suppressHydrationWarning`, for the attribute the script adds.
+   - Nothing in this row writes the key: the Settings choice is row 8. The tests write it.
+7. **Theme colour.** `viewport.themeColor` becomes two entries, `(prefers-color-scheme: light)`
+   with `GROUND` and `(prefers-color-scheme: dark)` with a new `GROUND_DARK`. The manifest and
+   the icons keep the light values.
+8. **Eight baselines.**
+   - `visual-tests/baselines.spec.ts` runs each of its four shots in both schemes. A dark shot
+     is named with `-dark` (`phone-dark.png`), so the light names are unchanged.
+   - The `[visual update]` commit adds the four dark files. **The four light files it
+     regenerates must be byte-identical to the committed ones,** the visual proof that light
+     didn't move, checked with `git diff --exit-code` on them before the baseline commit.
+
+**Not in it:**
+- any light value, any new role, or the final dark chrome (row 3);
+- the board's, pieces' or cell states' dark values (rows 4–5);
+- Nunito (row 2), any control or layout change, and the Settings choice (row 8).
+
+**Tests.**
+- **`tests/palette.test.ts`:**
+  - the generated CSS stays byte-identical to the renderer, now with its three blocks;
+  - `PALETTE_DARK` has exactly `PALETTE`'s keys;
+  - every `BOARD_TOKENS` token is equal across the themes;
+  - the import allow-list (rule 5);
+  - no dead token, which covers `refusedCross`.
+- **`tests/contrast.test.ts`:** every table runs for each theme.
+  - Light keeps its pinned values: 5.87, 7.13 and 12.82; 2.30, 2.24 and 2.55; 5.97 and 7.35;
+    11.78.
+  - Dark pins its own, computed above: 4.63, 9.02 and 10.88; 3.02, 3.08 and 3.37; 5.75 and
+    8.38; 9.51.
+  - The refusal tests read `refusedCross`.
+- **`e2e/theme.spec.ts`, rewritten:**
+  1. With the system light, the page computes the light tokens: the ground, the advice text,
+     a cell, a line target and a control's surface.
+  2. With the system dark, the chrome computes the dark tokens and the cell its unchanged
+     light one.
+  3. In both, the advice text and the line target clear 4.5:1 on the ground as computed.
+  4. `light` stored under a dark system renders light; `dark` under a light system renders
+     dark.
+  5. A stored `sepia` follows the system.
+  6. **The first paint:** with every `/_next/static/` request aborted, so no app script runs,
+     the body's computed ground is already the stored theme's.
+  7. Two theme-color tags, one per scheme. With a stored theme, both carry its ground, with
+     the app's scripts blocked as well as loaded.
+- **A sentinel probe** (`e2e/themeTokens.spec.ts`, new), on the component sheet, which draws
+  every piece and every cell state statically:
+  - set each drawing token's custom property on `<html>` to its own sentinel colour;
+  - check that every drawing's computed `fill`, `stroke` or `background-color` follows its
+    token: both dominoes' faces, sides, outlines, pips and dividers; the rock's four tones and
+    outline; both checker tones; the cell states' marks; the cross.
+  - Until row 4 the board's tokens match across themes, so a theme switch can't expose a
+    literal left in a drawing; this probe can (codex).
+- **The baselines:** eight, with the light four byte-identical (rule 8).
+
+**Mutation probes (planned).** Each must fail at the assertion named.
+1. The renderer leaves out the media-query dark block → theme 2 and the byte-identical check.
+2. Drop `:not([data-theme="light"])` → theme 4's light-under-dark case.
+3. Remove the pre-paint script → theme 6.
+4. The script accepts any stored value → theme 5.
+5. The script leaves the theme-color tags alone → theme 7.
+6. Put one drawing back on a `PALETTE` literal (the rock's side) → the sentinel probe on that
+   tone, and the import audit.
+7. The cross reads `problem` again → the sentinel probe on the cross.
+8. Give one `BOARD_TOKENS` token a different dark value → the equality test.
+9. Dark `accent` at `#3CC3B4`, the final value, behind dark `ink` → the dark primary-text pin.
+10. A dark key missing → the key-parity test, and `tsc`.
+
+`suppressHydrationWarning` isn't observable in a production build, so it isn't probed.
+
+**The gate** before each commit, from cold, as AGENTS.md says.
 
 ## Campaign (future, for the mobile release)
 
