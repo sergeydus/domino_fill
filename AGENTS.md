@@ -22,7 +22,8 @@ builder" is whichever agent is doing the change and "the reviewer" is the other 
 - A daily domino puzzle: Next.js 16, React 19, MobX, Tailwind v4. Unit tests are Vitest;
   browser tests are Playwright, Chromium only.
 - `SPEC.md` is the original spec, with "Amended" notes where later work changed it.
-  `GRAPHICS-SPEC.md` covers the visual design. `NEXT-STEPS.md` holds the decision log,
+  `GRAPHICS-SPEC.md` covers the visual design as built through 2026-10; `UI-SPEC.md` is the
+  modern redesign that supersedes its art direction. `NEXT-STEPS.md` holds the decision log,
   the open ideas with their decisions, and every implementation contract, with "As built"
   notes under each.
 - Code: `app/stores/` (game state: `PuzzleSession`, `BoardsStore`, saved progress),
