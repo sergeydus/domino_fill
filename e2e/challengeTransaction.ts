@@ -8,7 +8,7 @@ import { expect, type Page } from '@playwright/test'
 
 export type TransactionProbe = {
     armed: 'attempts' | 'meta' | null, active: boolean, release: boolean, abort: boolean,
-    created: number, writes: unknown[], completed: boolean,
+    created: number, settled: number, writes: unknown[], completed: boolean,
 }
 declare global {
     interface Window { challengeTransaction: TransactionProbe }
@@ -18,7 +18,7 @@ declare global {
 export const instrument = () => {
     const probe: TransactionProbe = {
         armed: null, active: false, release: false, abort: false,
-        created: 0, writes: [], completed: false,
+        created: 0, settled: 0, writes: [], completed: false,
     }
     window.challengeTransaction = probe
     const transaction = IDBDatabase.prototype.transaction
@@ -26,6 +26,9 @@ export const instrument = () => {
         const tx = transaction.apply(this, args)
         if (this.name !== 'dominoFill.challenge' || tx.mode !== 'readwrite') return tx
         probe.created++
+        // Lifetime totals include unarmed/no-op saves; the flags below describe only a hold.
+        tx.addEventListener('complete', () => { probe.settled++ })
+        tx.addEventListener('abort', () => { probe.settled++ })
         const target = probe.armed
         if (!target || !tx.objectStoreNames.contains(target)) return tx
         const store = tx.objectStore(target)
