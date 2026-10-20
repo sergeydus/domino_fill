@@ -4348,8 +4348,9 @@ challenge-session timeouts (codex's, next).
 ### Challenge-session timeouts: investigation contract
 
 **Status (2026-10-19):** Claude accepted `54aa8e3` with no corrections; both measurement
-batches are complete, with no reproduction. The diagnostic amendment below is proposed,
-not accepted or built. Builder: codex; reviewer: Claude, in the user's 2026-10-18 order. Start
+batches are complete, with no reproduction. Claude accepted the diagnostic amendment at
+`44ab91e`; it is implemented below, awaiting code review. Builder: codex; reviewer: Claude,
+in the user's 2026-10-18 order. Start
 from `master` at `66bda6e93357124524e69af9c5d75866849e05e1` on
 `investigate/challenge-session-timeouts`. This first stage gathers evidence; it does not
 presume a fix, a shared cause, or a need to raise a timeout.
@@ -4539,7 +4540,8 @@ worker defaults, CI, visual baselines, AGENTS.md rules, product decisions, a PR 
 
 **Proposed amendment: make the next failure show both pages.**
 
-**Status:** revised after Claude's review of `7f3e715`; awaiting acceptance before code.
+**Status:** Claude accepted `44ab91e` with no corrections before code. Implemented below,
+awaiting Claude's code review.
 The measurement record is accepted, with no extra batches authorized. This is a failure
 diagnostic, not a fix or a new repetition campaign. The old competing-Starts record lacks
 B's state; all 80 new executions passed. Rule 7 therefore calls for useful evidence from
@@ -4669,10 +4671,9 @@ Every exit checked separately; no failed gate or refused invocation. Both histor
 phone cases passed in this verification run too; it is not another comparative batch.
 Gate logs and exit metadata are `record-gate1*` in the same report directory.
 
-Only NEXT-STEPS changes in this commit. The diagnostic remains proposed; no runtime code
-or runtime mutation tests have run in this stage. Its tests/probes above are future work,
-not a claimed validation tally. No additional measurement campaign or fix is authorized
-by these clean repeats.
+At `7f3e715`, only NEXT-STEPS changed and the diagnostic was proposed, without runtime
+code or mutation tests. The tests/probes above were then future work, not a claimed
+validation tally. The clean repeats authorize no additional measurement campaign or fix.
 
 **Diagnostic-amendment revision gate (2026-10-19).** Cold gate **run 1**, initial
 TIME_WAIT **54**. Repository root, four gate caches, their `node_modules` parent and
@@ -4683,9 +4684,121 @@ checked separately; no failed gate or refused invocation. Logs/metadata are reta
 `diagnostic-revision-gate1*` in the same report directory. The 80-execution measurement
 record is unchanged; no extra comparative batches ran.
 
-Only NEXT-STEPS changes in this revision; no counter, hook, runtime tests or mutation
-probes have been built/run. The widened instrumentation and its planned tests remain
-proposed until Claude accepts this revision.
+At `44ab91e`, only NEXT-STEPS changed; no counter, hook, runtime tests or mutation
+probes had been built/run. The widened instrumentation and its planned tests awaited
+Claude's acceptance, given before the implementation below.
+
+**Second diagnostic review, Claude (2026-10-19).** Accepted `44ab91e`, no corrections.
+Claude read the diff, instrument consumers, public `busy` and existing dependency, and
+checked CI. Claude did not rerun our gate. Both build notes adopted: the instrument unit
+file is new, and it installs the fake database class as the global that the real
+instrument patches, then restores that prototype method and both globals after each test.
+
+**As built (2026-10-19–20).**
+- New `e2e/challengeFailure.ts`: the file-wide afterEach caller returns immediately for
+  results other than unexpected failed/timedOut. Eligible captures freeze identity,
+  identify A by object identity and B/extra pages separately, and perform one read per
+  page. Missing A, inaccessible context, evaluation failure, malformed/missing state or
+  counters are explicit unavailable data. The fixture path is whitelisted; raw write
+  values and exception text are not copied. The attachment and prefixed line share one
+  serialized payload, so late reads cannot change either.
+- The capture has one 1000-ms browser-read deadline. Timely page data survives a blocked
+  page, late rejections are consumed, and the timer is cleared. Log and attachment errors
+  are contained independently. No storage reads, private queue access, focus changes,
+  refreshes or listeners are added by the capture. It samples after failure, not before
+  Start; the Check candidate and natural timeout causes remain unproved.
+- `e2e/challengeTransaction.ts`: new lifetime `settled` counts complete/abort before the
+  armed-store check. `created` and `settled` survive `arm`, and database-wide outstanding
+  is derived only as their difference. Armed flags stay separate and unchanged. These
+  passive terminal listeners do run on healthy instrumented transactions; no claim of
+  zero overhead. No new IDB request or alteration of hold/release/abort semantics.
+- `challengeSession.spec.ts`: one file-wide afterEach hook; all original steps and
+  assertions remain. `challengeUi.spec.ts`, fixture, app, worker counts, retries and
+  timeouts are unchanged. No existing test expectation was rewritten or removed.
+- **New unit files:** `tests/challengeFailure.test.ts` (**26** tests) and
+  `tests/challengeTransaction.test.ts` (**8**). The former executes the actual browser-read
+  callback against per-page fake globals, not prebuilt diagnostic payloads. The latter
+  uses real fake-indexeddb transactions, patches its exported database class globally,
+  releases/aborts pending work even after an assertion fails, and checks prototype/global
+  restoration before and after every test. New total **34** unit tests.
+
+**Measured checks (separate from the commit gate).**
+- Targeted unit run 1: **34/34**, exit **0**, stderr **0 bytes**. After adding clearer
+  assertion labels for probe attribution, run 2: **34/34**, exit **0**, stderr **0 bytes**.
+  Targeted `tsc --noEmit` and lint both **0**.
+- Original browser suites, desktop and phone-360, no retries: **62/62 passed**, exit **0**,
+  initial TIME_WAIT **73**, **0 socket errors**, **0 challenge diagnostic lines**. Both
+  shared-instrument consumers ran. No natural timeout was reproduced.
+- Temporary Chromium diagnostic validation, desktop and phone: deliberately failed the
+  competing-Starts test after A's held write and a genuine unarmed B readwrite was
+  created. Browser exit **1**, **2 intentionally failed tests**, with the original
+  labelled deliberate assertion retained. The positive payload checker **passed 2/2**:
+  A was starting/held with `created=11, settled=10, outstanding=1`; unarmed B had
+  `created=10, settled=9, outstanding=1`, despite `active=false`, in both projects.
+  It also checked project/title identity and exact line/attachment equality.
+- The removed-hook mutation also produced **2 deliberately failed browser tests**, exit
+  **1**. The same positive payload checker then **failed 2/2 at its intended assertion**,
+  `challenge failure attachment is present` (actual 0, expected 1). This is one caught
+  mutation, not another natural flake or a failed gate. Both spec edits restored byte for
+  byte, SHA-256 checked. No deliberate failure or temporary extra transaction is committed.
+- One artifact-summary PowerShell command initially had a foreach/pipe parse error and
+  executed nothing. Corrected and rerun; no source or test result was affected/replaced.
+
+**Mutations: 27 of 27 caught at the intended assertion.** The first unit sweep caught
+25/25; the additional old-title-filter probe caught the file-wide policy, and the
+Chromium removed-hook probe above caught the real integration. No surviving mutant or
+weakened test. All mutated files restored byte for byte; retained hashes checked again.
+
+| Probe | Intended check |
+| --- | --- |
+| Omit unarmed complete increment | unarmed completion settles |
+| Omit abort increment | unarmed abort settles |
+| Move settlement listeners after armed-store return | unarmed completion settles |
+| Reset settled on arm | lifetime totals survive arm |
+| Count readonly transactions | only challenge readwrites count |
+| Count another database | only challenge readwrites count |
+| Capture healthy results | no page enumeration for passed |
+| Capture expected failures | no page enumeration for expected failed |
+| Skip unexpected timedOut | unexpected failure emits a record |
+| Capture only main page | each existing page keeps its identity |
+| Swap A/B labels | each existing page keeps its identity |
+| Omit transaction totals | unarmed B has outstanding work |
+| Derive outstanding from active | unarmed B has outstanding work |
+| Remove capture deadline | entire capture has a one-second deadline |
+| Leave capture timer running | no timer remains after fast reads |
+| Alias the identity title array | identity copied before await |
+| Let evaluation error escape | the task resolves despite read failure |
+| Let logging error escape | the task resolves despite log failure |
+| Let attachment error escape | the task resolves despite attachment failure |
+| Logging failure skips attachment | attachment survives a logging failure |
+| Leak raw write values | payload carries counts, not raw writes |
+| Invent missing created | counter stays unavailable |
+| Invent missing settled | counter stays unavailable |
+| Omit absent A | missing A is explicit |
+| Treat an array as fixture state | malformed fixture state is explicit |
+| Restore the old two-title filter | Hint-twin unexpected failure emits a record |
+| Remove the actual hook | native payload attachment is present, both projects |
+
+Artifacts are under `playwright-report/challenge-session-diagnostic-20261019/`: both
+unit runs, type/lint logs, `unit-probes-v1/` and `file-wide-probe/`, the retained probe
+scripts (`*.txt`), both `browser-probe-*` directories (native reports, failure traces,
+checks and logs), `browser-payload-assertions.json`, implementation hashes, and the
+`normal-suites/` report. All probe failures above are expected validation failures;
+none reproduces or fixes a historical timeout. No third comparative batch was run.
+
+**Implementation commit gate, run 1 (started 2026-10-19; completion confirmed 2026-10-20):**
+initial TIME_WAIT **47**; tsc **0**, lint **0**, unit **0** (**1774/1774**, 75 files,
+stderr **0 bytes**), build **0**, browser **0** (**753 passed, 1 skipped**). No failed
+implementation gate. One phone archive load hit `ERR_NO_BUFFER_SPACE` and recovered by
+the existing single reload. The socket diagnostic settled successfully in **213.21 ms**:
+all TCP **2859**, total TIME_WAIT **2577**, test-port TIME_WAIT **2535**. This is an
+observed error-time sample, not evidence of the cause; no socket-policy change here.
+No challenge failure diagnostic was emitted by the passing suite. The five checked exits,
+durations and logs are retained as `implementation-gate1.json` and
+`implementation-gate1-*.log` in the artifact directory above.
+
+The code awaits Claude's review. The two natural timeout causes stay open until a real
+failure supplies evidence.
 
 ### Would need a server (rejected)
 
@@ -5364,7 +5477,7 @@ Two limits:
 | U8 | Reduce Windows browser-test socket pressure | Full runs have reported `ERR_NO_BUFFER_SPACE`, including runs started below 100 TIME_WAIT sockets. The provisional 8/2 screen missed its duration rule. The four observer-off 8/4 runs missed the 25% end-level reduction, met the 2x duration limit and reproduced no socket errors. | Complete: measurements | Claude accepted the four-run record `132dfd1`; no cap proposed or built. The native helper is deferred. User chose error-focused follow-up U9, codex building and Claude reviewing (2026-10-18). |
 | U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd` and implementation `5073f46`; merged as PR #14 at `ff7bcab` (user, 2026-10-19), with CI passed on master. Implementation and validation below. No retry-rule or worker-count change. |
 | U10 | A challenge solve can delay the completion card | On a busy machine (8 test workers), solving a challenge board dropped a frame of the card's arrival in 14 of 100 tries, mostly one frame (33 ms); a casual board never did, and neither did on an idle machine (measured, desktop; see "The completion card's motion, measured where nothing competes for its frames"). Inferred: the solve's own work (saving the finish, results and streak) shares the main thread with the card's first frames; which part isn't measured. No claim about real devices. The motion test now measures a casual board. | Profile first | |
-| U11 | Diagnose the challenge-session phone timeouts | Two failures in one gate: competing Starts did not create another transaction, and the Check case stalled during its initial Start. Cause unestablished; original artifacts retained. | Investigation | Yes: codex builds, Claude reviews, after the motion fix (user, 2026-10-18). Claude accepted `54aa8e3`; both batches passed, 80/80, without reproduction. Cause remains unknown; failure-only per-page diagnostic amendment awaits review. See the investigation contract. |
+| U11 | Diagnose the challenge-session phone timeouts | Two failures in one gate: competing Starts did not create another transaction, and the Check case stalled during its initial Start. Cause unestablished; original artifacts retained. | Investigation | Yes: codex builds, Claude reviews, after the motion fix (user, 2026-10-18). Claude accepted the measurement record and diagnostic plan `44ab91e`; both batches passed, 80/80, without reproduction. Failure-only per-page diagnostic and passive settlement counter built, awaiting code review. Cause remains unknown; see the investigation contract. |
 
 ### Windows browser-test socket pressure: investigation contract
 

@@ -5,8 +5,13 @@ import { ARCHIVE_DAY } from './openBoard'
 import type { Attempt } from '../app/challenge/attempt'
 import { drag } from './play'
 import { arm, heldWrite, instrument, probe, release } from './challengeTransaction'
+import { captureChallengeFailure } from './challengeFailure'
 
 test.use({ baseURL: VISUAL_URL })
+
+test.afterEach(async ({ context, page }, info) => {
+    await captureChallengeFailure(context, page, info)
+})
 
 type State = {
     status: string, ready: boolean, covered: boolean, canStart: boolean, canMutate: boolean,
