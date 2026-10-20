@@ -1,7 +1,8 @@
 # UI modernization spec: soft tactile
 
-**Status (2026-10-20):** proposed, for codex's review before any code. Written by Claude.
-The decisions behind it are the user's (NEXT-STEPS decision log, 2026-10-20, and idea L1):
+**Status (2026-10-20):** proposed, revised after codex's first review, for re-review before
+any code. Written by Claude. The decisions behind it are the user's (NEXT-STEPS decision log,
+2026-10-20, and idea L1):
 
 - the game is going to the Play Store, and its UI is to be **modern and slick, designed for a
   phone first**;
@@ -19,10 +20,42 @@ here, and where the mockup and the spec differ, the spec wins.
 **How it relates to the other specs.** `SPEC.md` still wins on what the game promises: the
 38px cell floor, an 8×8 board at 360px, the accessibility tree and the layout budget.
 `GRAPHICS-SPEC.md` is superseded where this spec says so: its art direction (§2.1, "an
-evolution, not a redesign"), its "no dark palette" (§3), and its four-baseline decision if the
-user accepts §11's proposal. Its invariants (§4) stand, with every contrast number re-proved
+evolution, not a redesign"), its "no dark palette" (§3), its four-baseline decision (§11), and
+P1-1's extrusion bound (§4.3). Its invariants (§4) stand, with every contrast number re-proved
 in both themes. Each row in §12 still gets its own implementation contract in NEXT-STEPS before
 code, and is reviewed and mutation-tested like any other change (AGENTS.md).
+
+**Codex's first review (2026-10-20, through `7484191`): held for five corrections and two
+notes, all taken.** Each correction is made where it belongs, and summarised here:
+
+1. **The phone budget didn't add up** (§3.3, §5).
+   - Across: 16px gutters leave 328px at a 360px width, where an 8×8 board needs 338px at
+     38px cells (`gutter + 8 cells + GRID_BORDER_PX`). The board's row now keeps today's 8px
+     page margin.
+   - Down: the separate rows came to about 662px before gaps. §5 now gives a measured budget,
+     with the date and the clock sharing one row, and states the heights at which the page
+     doesn't scroll.
+   - Targets: the chooser and the archive's days now meet, or explicitly except, the 48px
+     rule.
+2. **Every tone at a piece's edge must pass, not just the face** (§3.1, §4.3, §4.4).
+   - Dark `rockSide` measured 2.15 and 2.34:1 on the wells and 2.61:1 on the tray, and the
+     light `tileSide` (found while correcting) 1.72, 1.58 and 1.36:1.
+   - Both pieces now draw a continuous rim round the whole silhouette, in a tone that passes.
+     The side and the facets sit inside it.
+3. **Escape is removed** (§6.1). AGENTS.md allows no keyboard shortcuts beyond the board's,
+   and Results deliberately has none.
+4. **The themes must reach the SVG drawings, and every intermediate row keeps every
+   guarantee** (§3.1).
+   - 27 lines of `.tsx` in `app/` pass a literal palette value to an SVG `fill` or `stroke`
+     today, which CSS alone can't switch. Row 1 moves them to theme-responsive references.
+   - The board's and pieces' tokens stay at today's values in both themes until the row that
+     redraws them.
+5. **P1-1's extrusion bound is amended,** from 10–18 units to 3–6, and the intended test
+   change is listed (§4.3).
+
+Notes: the shared sheet adds focus containment and restoration to Archive, which lacks them,
+and its history contract now covers Settings opening the tutorial, Results opening by itself,
+Results closing when its day expires, and back and forward (§6.1).
 
 ---
 
@@ -123,22 +156,32 @@ value that fails there is changed, never the rule.
 | `wellLight`, `wellDark` (the checker) | `#F3E6D2`, `#EDDCC2` | `#3A3029`, `#342A23` | 1.09:1 apart in both themes (§4.1) |
 | `boardLabel` (a line target with nothing to report) | `#5E4E44` | `#CDBFB1` | 4.5:1 on ground: 7.21 / 10.43 |
 | `tileFace` | `#FFF9EF` | `#EFE5D5` | |
-| `tileSide` (a piece's raised edge) | `#C9AE88` | `#A8957A` | |
-| `tileEdge` (light only; also the divider) | `#8A6844` | | 3:1 on both wells and the tray: 4.12, 3.77, 3.25. As the divider, on the face: 4.84 |
+| `tileSide` (a domino's raised side) | `#C9AE88` | `#A8957A` | Light: **inside the rim only**, since it fails at the edge (1.72, 1.58 on the wells, 1.36 on the tray). Dark: exposed, and passes (4.43, 4.83, 5.39) |
+| `tileEdge` (the light domino's rim, and its divider) | `#8A6844` | | The rim, round the whole silhouette, face and side: 3:1 on both wells and the tray, 4.12, 3.77, 3.25. As the divider, on the face: 4.84 |
 | `divider` (dark) | | `#857158` | 3:1 on the face: 3.74 |
-| `rock` (the obstacle's face) | `#77685E` | `#8B7C70` | 3:1 on both wells, the tray and the tile face. Light: 4.35, 3.98, 3.43, 5.11. Dark: 3.19, 3.47, 3.88, 3.23 |
-| `rockSide` | `#5A4D45` | `#6E6156` | |
+| `rock` (the obstacle's face, and its rim in both themes) | `#77685E` | `#8B7C70` | As the rim: 3:1 on both wells, the tray and the tile face. Light: 4.35, 3.98, 3.43, 5.11. Dark: 3.19, 3.47, 3.88, 3.23 |
+| `rockSide`, and the facet tones | `#5A4D45` | `#6E6156` | **Inside the rim only.** The dark side fails at the edge (2.15, 2.34 on the wells, 2.61 on the tray: codex, recomputed here). The light side would pass (6.61, 6.05, 5.22) but stays inside the rim too, so one rule covers both themes |
 | `pip` | `#3A2E28` | `#2A211C` | 3:1 on the face: 12.52 / 12.63 |
 | `hint` (the cell a hint points at) | the accent | the accent | 3:1 on both wells: 4.45, 4.07 / 5.91, 6.43 |
 
 What the table changes about the board's contrast model:
 
-- **P1-3's chain is replaced.** It required the tile face to stand 3:1 over both checker tones,
-  which is what forced today's mid-brown board. The new rule is that **every piece's boundary
-  stands 3:1 against everything it touches**: the wells, the tray, and the other kind of piece.
-  In light, the face alone does not do that (1.18:1 on the light well), so light draws
-  `tileEdge`, a soft brown edge at about a third of today's outline weight. It is the one edge
-  this direction keeps. In dark, the face does it on its own (10.30:1 on the lighter well).
+- **P1-3's chain is replaced.** It required the tile face to stand 3:1 over both checker
+  tones, which is what forced today's mid-brown board. The new rule: **every tone exposed at a
+  piece's silhouette stands 3:1 against everything that silhouette can touch**. That means the
+  wells and the tray, since pieces sit inside their cells' margins and never touch each other.
+  The rock's rim also clears the tile face, as a margin.
+- **Where a tone fails at the edge, a continuous rim encloses the whole silhouette,** and that
+  tone sits inside it:
+  - the light domino's rim is `tileEdge`, 2 units wide, about a fifth of today's 9-unit black
+    outline; it encloses the face and the side, because neither passes (the face is 1.18:1 on
+    the light well);
+  - the rock's rim, in both themes, is its face tone, 2 units wide, enclosing the side and the
+    facets;
+  - the dark domino needs no rim: its face (10.30:1) and its side pass on their own.
+- **The test** checks the tones the rendered silhouette actually exposes, not the table's
+  intentions. Each piece is drawn as today, side then face then rim, and the rim is found the
+  way today's outline is (`data-outline`).
 - **The dark rock sits in a narrow band.** It must clear 3:1 below the face and above the
   wells, and the values above clear it by little (3.19 at the closest). Keep that in mind
   before nudging any of the three.
@@ -147,6 +190,42 @@ What the table changes about the board's contrast model:
 
 The remaining tokens (the cell states, the archive's marks, the scrim, the drag wash) are
 redefined by the rows that restyle them, each with its ratio rule in both themes.
+
+**How the themes reach the drawings.** Generated CSS alone can't switch the board.
+- **The literals:** 27 lines of `.tsx` under `app/` pass a literal palette value to an SVG
+  `fill` or `stroke` today (`fill={PALETTE.rockSide}` and the like, found by grep). These
+  include the pieces, the rock and the Pick a piece drawings.
+- **Row 1 moves every one of them** to a theme-responsive reference to its token's custom
+  property, through a class or `style`. The builder chooses which. The source audit then
+  forbids a literal palette value in a browser drawing.
+- **The icon generator keeps literal values,** from the light set, because it draws pixels in
+  Node.
+- **The test** reads the computed `fill` and `stroke` of the actual drawings after switching
+  the system scheme, and after each override. A drawing that still holds a literal shows up as
+  the wrong theme's colour.
+
+**Every row keeps every guarantee on its way in.** An intermediate palette is fine; a commit
+that drops a guarantee is not.
+- **Row 1** gives the chrome and text tokens their final values in both themes, since their
+  guarantees hold from the start (§3.1's table). It keeps every board, piece and cell-state
+  token at today's value in both themes. In dark, the board is today's lit object on a dark
+  ground, so P1-3's chain, the cell states' ratios and every other board guarantee hold
+  unchanged, now proved in both themes.
+- **The board-and-pieces row (row 4)** moves the board and piece tokens to their final values
+  in the same commit that draws the rims and the wells, and swaps P1-3's chain for the
+  silhouette rule. Neither half can land alone:
+  - the new dark wells under today's pieces would expose their black outline at 1.63 and
+    1.50:1;
+  - the new brown rims on today's checker would stand at 1.52 and 1.26:1.
+
+  In light, the new wells under today's pieces would pass (the black outline clears them),
+  but the dark theme rules that order out.
+- **The cell states hold through row 4,** which changes the wells under them. Its contract
+  proves every state on the new wells in both themes, and moves any token that falls short in
+  the same commit. In light, today's dark marks should gain contrast on lighter wells
+  (inferred). In dark, they will need lighter values on the new dark wells: the anchor's
+  `#16295e`, for one, is a dark mark on a dark well. **Row 5** then restyles the states'
+  shapes and look; it doesn't rescue them.
 
 `viewport.themeColor` becomes two entries, one per scheme, so the phone's status bar matches
 the top bar in both themes. When the player has chosen a theme, the same pre-paint script, and
@@ -184,11 +263,23 @@ Nothing is set smaller than 13px.
   - Disabled, it loses the edge and drops to 45% opacity.
   - Pieces have a side 4 units deep.
   - There is one soft ambient shadow, under pieces and sheets. Controls have none.
-- **Space:** a 4px grid, a 16px page gutter plus the safe areas, 8px between controls, and
-  12–16px between groups.
+- **Space:** a 4px grid, 8px between controls, and 12–16px between groups.
+- **Side margins:**
+  - Chrome rows and sheets have a 16px gutter, plus the safe areas.
+  - **The board's row keeps today's 8px page margin** (`PAGE_MARGIN_PX`), plus the safe areas.
+    At a 360px width, that leaves 344px. An 8×8 board at the 38px floor needs 338px
+    (`GUTTER_FRACTION` × 38 for the labels, 8 × 38 for the cells, `GRID_BORDER_PX` for the
+    edge), so the floor holds with 6px to spare. A 16px gutter would leave 328px and force
+    36px cells (codex's correction).
+  - The tray's rim lives inside `GRID_BORDER_PX`, 4px a side, as today's frame does, so it adds
+    no width.
 - **Touch targets:** at least 48×48 CSS px for every control at phone sizes, Android's own
-  guidance. Board cells are the exception, held by `SPEC.md`'s 38px floor and its tap and drag
-  model.
+  guidance. Two exceptions, each stated where it applies:
+  - **board cells**, held by `SPEC.md`'s 38px floor and its tap and drag model;
+  - **the archive's days**: seven across must fit the sheet, so each is a seventh of its width
+    (about 46px at a 360px width) by 48px (§6.5).
+
+  Pick a piece's chooser chips are 48px tall (§4.6).
 
 ### 3.4 Icons
 
@@ -234,23 +325,32 @@ them:
 
 ### 4.3 The domino
 
-- **Body:** the face is `tileFace` and the side is `tileSide`, 4 units deep, with radius 12. In
-  light, the edge is `tileEdge` at 2 units.
+- **Body:** the face is `tileFace` and the side is `tileSide`, 4 units deep, with radius 12.
+- **Rim, light only:** `tileEdge`, 2 units, round the whole silhouette, face and side together
+  (§3.1). The dark domino has no rim.
 - **Pips:** `pip`, 22 units across, with a slight inset look.
 - **Divider:** a groove 3 units wide, in `tileEdge` in light and `divider` in dark.
-- **Proportions:** P1-1's bounds stay and are re-measured by `tests/proportions.test.tsx`:
+- **Proportions:** `tests/proportions.test.tsx` re-measures these bounds. Three of P1-1's stay,
+  and one is amended:
   - pip diameter 18–30 units;
   - pips clear of the divider and the edge by at least 6;
-  - the divider spans at least 55% of the tile.
+  - the divider spans at least 55% of the tile;
+  - **amended: extrusion 3–6 units, from P1-1's 10–18.** The soft tactile direction is a
+    shallower toy. This is an intended test change: the test's "extrusion depth is 0.10 to
+    0.18 of the cell" becomes 0.03 to 0.06, and the old outline's own checks become the light
+    rim's (2 units, round the silhouette).
 
 ### 4.4 The obstacle, today's rock
 
-- **A smooth faceted stone,** in three tones (face, lit facet, side), with no outline.
+- **A smooth faceted stone,** in three tones (face, lit facet, side), with no black outline. Its
+  silhouette is a continuous 2-unit rim in the face tone, `rock`. The side and the facets sit
+  inside it, since the dark side fails at the edge (§3.1).
 - **One `Obstacle` component** draws it, taking a `skin`. This spec has one skin, `rock`; the
   component is the seam for L2's seasonal skins.
 - **What any skin must meet:**
   - it is drawn inside the cell's box;
-  - its boundary clears 3:1 against both wells, the tray and the tile face, in both themes;
+  - every tone its rendered silhouette exposes clears 3:1 against both wells, the tray and the
+    tile face, in both themes; a rim is the usual way to meet that;
   - it never reads as a domino (`tests/rock.test.tsx`'s checks apply to every skin).
 - **Not here:** choosing a skin by date, and every skin other than the rock (L2).
 
@@ -264,12 +364,13 @@ them:
 
 ### 4.6 The legend
 
-- **One compact line under the board,** 32px tall: the two pieces drawn small, each with its
-  values ("1 top · 0 bottom", "0 left · 2 right").
+- **One compact line under the board,** 48px tall in both modes, so switching Pick a piece on
+  or off never moves the board: the two pieces drawn small, each with its values ("1 top · 0
+  bottom", "0 left · 2 right").
 - **Same place and rules:** it stays with the board, for `GRAPHICS-SPEC.md` §2.3's reason, and
   is inert under the cover, as today.
 - **In Pick a piece mode, this line is the chooser:** the same two pieces as choice chips
-  (`role="radio"`, as today). Pick a piece therefore needs no row of its own.
+  (`role="radio"`, as today), each 48px tall. Pick a piece therefore needs no row of its own.
 
 ---
 
@@ -277,48 +378,54 @@ them:
 
 ```
 +-------------------------------------+
-| [settings]   Domino Fill   [cal][3] |  top bar
-|          Tuesday, 29 September      |
-| [ Easy   ] [ Medium ] [ Hard   ]    |  difficulty cards
-| [ 1 of 3 ] [ 0 of 3 ] [ 0 of 3 ]    |
-|        <   Puzzle 1 of 3   >        |  puzzle pager
-|            ( clock 1:24 )           |  status chip
+| [settings]   Domino Fill  [cal] [3] |  top bar                 48
+| [ Easy ... ] [Medium ...] [Hard ...]|  difficulty cards        48
+| [<]       1:24            [>]       |  puzzle row              48
+|        Puzzle 1 of 3                |
 |                                     |
-|            the board                |  everything left over
+|            the board                |  the shell: whatever is left
 |                                     |
-|      [1 top, 0 bottom] [0 left, 2]  |  legend, or the chooser
-|        ( advice, when any )         |  reserved advice slot
-| (undo) (hint) (reset) [  Check   ]  |  action bar, over the safe area
+|   [1 top, 0 bottom] [0 left, 2 right]|  legend, or the chooser  48
+|        ( advice, when any )         |  advice slot             44
+| (undo) (hint) (reset) [   Check   ] |  action bar              84
+|  Undo   Hint   Reset                |    + the bottom safe area
 +-------------------------------------+
 ```
 
-1. **Top bar.**
-   - On the left, Settings. In the centre, the name, and the date being played under it. On
-     the right, Archive, and the streak pill.
+1. **Top bar, 48px.**
+   - On the left, Settings. In the centre, the name. On the right, Archive, and the streak pill.
    - The streak pill appears only once the player has played the challenge, as today
-     (NEXT-STEPS D9).
-     It opens Results, and its accessible name says both ("Results, 3-day streak").
+     (NEXT-STEPS D9). It opens Results, and its accessible name says both ("Results, 3-day
+     streak").
    - Results exists only where the challenge does, as today.
-2. **Difficulty cards.** Three cards, each with its size's name and how many of its three
-   puzzles are solved for the day being played ("1 of 3"). The chosen size is the filled card.
+2. **Difficulty cards, 48px.** Three cards, each with its size's name over three small dots,
+   one per puzzle:
+   - a filled dot is solved; a ringed dot is the puzzle being played;
+   - shape, not colour, carries both;
+   - the card's accessible name says it in words ("Easy, puzzle 1 of 3, 1 solved");
+   - the chosen size is the filled card.
+
    This replaces `DifficultySlider`.
-3. **Puzzle pager.** "Puzzle 1 of 3", between two 48px chevrons, replaces `LevelSelector`'s
-   drawn arrows. A disabled chevron stays in place at 45% opacity.
-4. **Status chip:**
-   - on a challenge board, the clock (`role="timer"`, as today), in the `clock` role;
-   - on an archive day, a chip with the date and "Back to today", which replaces
-     `DayBanner`'s strip;
-   - otherwise, nothing.
-5. **The board** takes what's left, as today. `useAvailableBoardBox` subtracts every
-   `data-chrome` row, and the top bar and the action bar are in that budget. The rows above
-   assume there is room for them on a 393×852 phone, which row 7 must measure. With an 8×8
-   board, cells may not fall below 38px.
-6. **The advice slot.** The advice strip becomes a pill in a fixed slot just above the action
-   bar, reserved whether or not it shows, so advice never moves the board. Its
-   live-region structure is unchanged (`AdviceStrip.tsx`).
-7. **The action bar,** fixed to the bottom inside the safe area:
-   - Undo, Hint and Reset as 56px round raised buttons, each with a `meta` label beneath it;
-   - Check as the primary pill, filling the rest of the bar.
+3. **Puzzle row, 48px.** Two 48px chevrons for the previous and next puzzle replace
+   `LevelSelector`'s drawn arrows; a disabled chevron stays in place at 45% opacity. Between
+   them, two lines:
+   - on a challenge board: the clock (`role="timer"`, as today, in the `clock` role) over
+     "Puzzle 1 of 3";
+   - on an archive day: one 48px control, the date over "Back to today", replacing
+     `DayBanner`'s strip. Its accessible name is "Back to today, playing Sunday 20 September";
+   - otherwise, "Puzzle 1 of 3" alone.
+4. **The board** takes what's left, as today: `useAvailableBoardBox` subtracts every
+   `data-chrome` row, and the top bar and the action bar are in that budget. Cells never fall
+   below 38px.
+5. **Legend or chooser, 48px** (§4.6).
+6. **The advice slot, 44px:** two lines of `body`, reserved whether or not anything shows, so
+   advice never moves the board. Its live-region structure is unchanged (`AdviceStrip.tsx`).
+   Advice longer than two lines at 360px wide is shortened, in `adviceText.ts`, in the row that
+   builds this slot.
+7. **The action bar, 84px plus the bottom safe area,** fixed to the bottom:
+   - Undo, Hint and Reset as 48px round raised buttons, each with a `meta` label beneath it;
+   - Check as the primary pill, filling the rest of the bar;
+   - 8px of padding above and below.
 
    Enabling and disabling work as today (`GameControls.tsx`), and Reset keeps its caution: its
    icon and label are in `problem`. The labels are a deliberate change from the mockup, which
@@ -332,10 +439,35 @@ them:
 
    The switches replace today's `aria-pressed` buttons, so `controlStates.ts`, `sound.spec.ts`
    and the Pick a piece tests change with them.
-9. **No page scroll in portrait, at 360×640 and up.** In portrait, the page doesn't scroll at
-   these sizes, only the inside of a sheet. The layout suite's guarantees still hold: 8×8 at
-   360px, 50–200% zoom, 800×400 landscape. Where they need it, the page may scroll as it does
-   today.
+
+**The height budget** (computed from the heights above; rows 6 and 7 measure it, and a row
+that changes a height restates it):
+
+| | px |
+| --- | --- |
+| page margin above the top bar (`PAGE_MARGIN_PX`) | 8 |
+| top bar, difficulty cards, puzzle row | 3 × 48 |
+| gaps: below each of those three, and below the board | 4 × 8 |
+| legend or chooser | 48 |
+| gaps either side of the advice slot | 2 × 4 |
+| advice slot | 44 |
+| action bar | 84 |
+| **chrome in all** | **368** |
+
+At the 38px floor the board's shell is `0.7 × 38 + n × 38 + 8`: about 263px for 6×6, 301px
+for 7×7 and 338px for 8×8. So **the page doesn't scroll in portrait when the viewport, less its
+safe areas, is at least 631px tall for 6×6, 669px for 7×7, and 706px for 8×8.**
+
+- At 360×640, 6×6 fits, and 7×7 and 8×8 scroll vertically, as the floor allows today
+  (`cellFloor.ts`).
+- At 360×720 and up, all three fit.
+- At 393×852, the 8×8 board is width-bound at 42px cells, and about 110px is left over.
+
+The action bar stays fixed while the page scrolls, and the page's bottom padding keeps
+anything from hiding behind it.
+
+The layout suite's guarantees still hold: 8×8 at 360px, 50–200% zoom, and 800×400 landscape.
+In landscape the page may scroll, as it does today.
 
 ---
 
@@ -350,11 +482,26 @@ them:
   - a `display` title, and a 48px Close button;
   - its content scrolls inside it, up to 90% of the small viewport height;
   - the scrim behind it is at 40%.
-- **How it behaves:**
-  - It traps focus while open and returns it on closing, as Archive and Results do today.
-  - Escape closes it, and so does a tap on the scrim.
-  - **Android's back gesture closes it.** Opening a sheet pushes a history entry; going back
-    closes the sheet, and closing it by its button pops the entry.
+- **Focus:** it traps focus while open and returns it on closing, as Results does today.
+  **Archive gains this:** today it neither contains focus nor restores it.
+- **Closing:** the Close button, a tap on the scrim, or Android's back gesture. **There is no
+  Escape:** AGENTS.md allows no keyboard shortcuts beyond the board's, and Results deliberately
+  has none (`ResultsDialog.tsx`).
+- **History.** One sheet is open at a time, and each open sheet owns one history entry:
+  - **Opening** pushes an entry marked with the sheet's name.
+  - **Back, while a sheet is open,** closes it. The entry is already gone, so nothing else
+    happens.
+  - **Closing by the button or the scrim** goes back one entry, which closes the sheet through
+    the same path. A sheet never closes twice.
+  - **Closing by the app itself** also goes back one entry. That covers Results closing when
+    its day leaves the window (`ResultsDialog.tsx`).
+  - **Settings opening the tutorial** replaces Settings' entry with the tutorial's, so back from
+    the tutorial returns to the game, not to Settings.
+  - **Results opening by itself,** after the solve that finishes a size, pushes its entry like
+    any other opening, and back closes it.
+  - **Forward,** onto an entry whose sheet is no longer open, doesn't reopen it: the app
+    replaces that entry with a plain one and stays on the game.
+  - **The board** never pushes history, so back with no sheet open leaves the game, as today.
 - **On wide screens** the same component is a centred dialog, 480px wide at most.
 - **Not here:** swipe-down to close.
 
@@ -390,8 +537,10 @@ them:
 ### 6.5 Archive
 
 - **Header:** the month in words ("September 2026"), with 48px chevrons, and a weekday row.
-- **Days:** 44–48px circles. How far a day was played is a ring: none, a third, two thirds, or
-  full, for none, started, partial and complete. That is shape, not colour.
+- **Days:** each day's target fills its grid cell, a seventh of the sheet's width (about 46px
+  at a 360px width) by 48px: the one width exception to §3.3's targets. Inside it, a 40px
+  circle shows how far the day was played as a ring: none, a third, two thirds, or full, for
+  none, started, partial and complete. That is shape, not colour.
 - **Today and the viewed day:** today has an accent ring, and the day being played is filled.
 
 ### 6.6 The tutorial
@@ -418,7 +567,7 @@ in the new vocabulary.
   spans the page, the board is on the left, and the rail on the right holds the difficulty
   cards, the pager, the status chip and the actions as a vertical group.
 - **Sheets** are centred dialogs.
-- **Sizes:** `RAIL_WIDTH_PX` and `WIDE_BOARD_CAP_PX` keep their values unless row 15 measures a
+- **Sizes:** `RAIL_WIDTH_PX` and `WIDE_BOARD_CAP_PX` keep their values unless row 14 measures a
   reason to change them.
 
 ---
@@ -437,7 +586,7 @@ in the new vocabulary.
 - **No layout shift as the font loads:** `next/font`'s fallback metrics, checked by
   `e2e/fonts.spec.ts`.
 - **The app icon and the maskable icon are redrawn** in the new piece style. `scripts/icon.ts`
-  draws from `PIECE` and the light palette, so they follow rows 1 and 5. The maskable safe
+  draws from `PIECE` and the light palette, so they follow rows 1 and 4. The maskable safe
   radius is unchanged.
 - **Haptics stay as they are** (`feedback.ts`); none are added here.
 - **Not here:** the Capacitor wrapper, the native splash screen, status-bar plugins and
@@ -486,14 +635,31 @@ Every row keeps these, and stops and says so rather than retune one:
   targets meet their ratios as the browser computes them. That keeps the point of the 1.05:1
   regression it was written for.
 - **The control tests:** `e2e/controlVariants.spec.ts` against the new variant table, and a
-  touch-target audit: every control at least 48×48 at phone sizes, board cells excepted.
+  touch-target audit: every control at least 48×48 at phone sizes, except the board's cells
+  and the archive's days, which have their own bounds (§3.3).
+- **The drawings follow the theme:** the computed `fill` and `stroke` of the pieces, the rock
+  and the chooser, read after a system-scheme change and after each override (§3.1). The source
+  audit forbids a literal palette value in a browser drawing.
+- **Silhouettes:** for each piece in each theme, every tone its rendered silhouette exposes
+  clears 3:1 against both wells and the tray; the rock's also clears the tile face (§3.1).
+- **`tests/proportions.test.tsx`:** the extrusion bound changes from 0.10–0.18 to 0.03–0.06 of
+  the cell, and the outline's checks become the light rim's. Both are intended test changes
+  (§4.3).
 - **The type tests:** `tests/typography.test.ts`, `e2e/typography.spec.ts` and
   `e2e/fonts.spec.ts`, for the new roles and Nunito.
-- **The layout suite:** all its guarantees stay, and it adds two checks:
-  - no page scroll in portrait at 393×852 and 360×640, covered, playing and solved;
-  - the board's cell size doesn't change between playing and solved.
-- **Sheets:** focus trapped and returned, Escape, a scrim tap, and back closing the sheet
-  through history.
+- **The layout suite:** all its guarantees stay, and it adds these checks:
+  - no page scroll in portrait at 360×720, 393×852 and 412×915 for every size, and at
+    360×640 for 6×6, each covered, playing and solved (§5's budget);
+  - at 360×640, 7×7 and 8×8 scroll with 38px cells and nothing hidden behind the action bar;
+  - the board's cell size doesn't change between playing and solved, or when Pick a piece is
+    switched;
+  - the 8×8 board keeps 38px cells at a 360px width (§3.3).
+- **Sheets:**
+  - focus trapped and returned, including Archive's, which is new;
+  - closing by the button, by the scrim, and by back;
+  - Escape does nothing;
+  - each history case in §6.1: Settings opening the tutorial, Results opening by itself,
+    Results closing on expiry, and forward not reopening a sheet.
 - **The theme choice:** System follows `emulateMedia` in both directions; Light and Dark each
   win over the opposite system setting; the choice survives a reload; and the first paint is
   already in the chosen theme. That last one means reading the ground's computed colour
@@ -515,22 +681,21 @@ then the regenerated baselines. Each row gets its implementation contract in NEX
 | 1 | Two themes: the palette's shape, the generated CSS with its `data-theme` override and the pre-paint script, `color-scheme`, theme colours, §3.1's values in both themes with the contrast tests, and the eight baselines | yes |
 | 2 | Type: Nunito and the new roles | yes |
 | 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, and `app/icons.tsx` | yes |
-| 4 | The board: the tray, the wells, and the line targets' states | yes |
-| 5 | The pieces: the domino redrawn, the `Obstacle` component with its rock skin, and the icon generator | yes |
-| 6 | Cell states in both themes | yes |
-| 7 | The top of the screen: the top bar, the difficulty cards, the puzzle pager and the status chip | yes |
-| 8 | The bottom of the screen: the action bar, the advice slot, the legend line and Pick a piece's chooser in it | yes |
-| 9 | `BottomSheet`, the back gesture, and the Settings sheet with the theme choice and its switches | yes |
-| 10 | Solved: the completion card over the action bar, so the board no longer shrinks | yes |
-| 11 | The challenge cover | yes |
-| 12 | Results | yes |
-| 13 | Archive | yes |
-| 14 | The tutorial in three steps | yes |
-| 15 | Wide screens: the rail restyled | yes |
-| 16 | Android polish (§8) and the regenerated icons | yes |
+| 4 | The board and the pieces, together (§3.1 says why they can't be split): the tray, the wells and the line targets' states; the domino redrawn with its rim; the `Obstacle` component with its rock skin; their tokens at final values; the silhouette rule in place of P1-3's chain; the amended proportions; and the icon generator | yes |
+| 5 | Cell states in both themes | yes |
+| 6 | The top of the screen: the top bar, the difficulty cards and the puzzle row | yes |
+| 7 | The bottom of the screen: the action bar, the advice slot, the legend line and Pick a piece's chooser in it | yes |
+| 8 | `BottomSheet` and its history, and the Settings sheet with the theme choice and its switches | yes |
+| 9 | Solved: the completion card over the action bar, so the board no longer shrinks | yes |
+| 10 | The challenge cover | yes |
+| 11 | Results | yes |
+| 12 | Archive | yes |
+| 13 | The tutorial in three steps | yes |
+| 14 | Wide screens: the rail restyled | yes |
+| 15 | Android polish (§8) and the regenerated icons | yes |
 
-Rows 1–3 are the foundation, and every later row is built from them. Rows 7–9 change the
-composition, and each one re-measures the board's budget.
+Rows 1–3 are the foundation, and every later row is built from them. Rows 6–8 change the
+composition, and each one re-measures the board's budget against §5's table.
 
 ---
 
@@ -562,3 +727,12 @@ composition, and each one re-measures the board's budget.
     **0 bytes**); browser **753 passed, 1 skipped**; 0 socket errors.
   - The commit wasn't rewritten, because its content would be identical. Both runs' logs are
     kept outside the repository.
+- **`6f96044`** (the user's answers), gate from cold, first run: TIME_WAIT **40**, every step
+  **0**, unit **1777** (stderr **0 bytes**), browser **753 passed, 1 skipped**. Two
+  `ERR_NO_BUFFER_SPACE` page loads recovered by the single reload, each with its socket
+  snapshot logged.
+- **`7484191`** (the shared canvas), gate from cold, first run: TIME_WAIT **45**, every step
+  **0**, unit **1777** (stderr **0 bytes**), browser **753 passed, 1 skipped**. One
+  `ERR_NO_BUFFER_SPACE` page load recovered by the reload.
+- **The revision after codex's first review:** its gate is reported with its commit, and
+  recorded here in the next one.
