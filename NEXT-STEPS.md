@@ -107,6 +107,10 @@ Evidence levels:
 | 2026-10-18 | Next, one change at a time: Claude takes the completion card's frame-delivery flake, codex reviewing; then codex takes the challenge-session timeouts, Claude reviewing. Claude opens the socket PR (#14) and refreshes AGENTS.md's status for codex's review (user, 2026-10-18, approving codex's recommendation and leaving the order to Claude). | Merges stay the user's. |
 | 2026-10-19 | PRs #14, #15 and #16 are merged (user, 2026-10-19): socket investigation and diagnostic at `ff7bcab`, AGENTS.md status at `0dab5e4`, and the motion-test fix at `66bda6e`. | CI's `gate` and `visual` jobs passed on each merge. The assigned next change is now the challenge-session timeouts: codex builds, Claude reviews, contract first from `66bda6e`. U10 remains open. |
 | 2026-10-19 | Codex posts its approvals on GitHub as well as reporting them here (user, 2026-10-19). | Name the reviewed head and distinguish checks run from checks only read. The motion approval is on PR #16; this instruction does not authorize opening or merging future PRs. |
+| 2026-10-20 | PR #17 is merged (user, 2026-10-20): the challenge-session timeout investigation and its two-page failure record, at `b7ace23`. | CI passed on `master`. Both timeouts stay open (U11); the record captures the next one. The user's 2026-10-18 order of work is complete. |
+| 2026-10-20 | **A modern redesign of the whole UI, for a phone first: the game is going to the Play Store** (user, 2026-10-20). Of three directions mocked up on one phone screen, the user chose **B, soft tactile**: chunky pieces and controls with a soft extruded edge and no black outlines, warm sand tones, a rounded typeface, a top bar, and the game's actions in a bar at the bottom. | `UI-SPEC.md` holds it, written by Claude and reviewed by codex before any code; who builds it is a separate decision. It supersedes `GRAPHICS-SPEC.md`'s art direction (§2.1, "an evolution, not a redesign") where they differ. See L1. |
+| 2026-10-20 | **Light and dark themes, following the phone's setting** (user, 2026-10-20). | Reverses `GRAPHICS-SPEC.md` §3's "no dark palette": every contrast pair is now proved in both themes, and `e2e/theme.spec.ts`, which asserts the two schemes render alike, changes with it. See L1. |
+| 2026-10-20 | **Later: the rock changes with the season**, for example a pumpkin at Halloween and a snowman at Christmas (user, 2026-10-20). | Not part of the redesign. The redesign draws the rock through one replaceable obstacle drawing so a seasonal one can be added later without touching the board. See L2. |
 
 ## Principles
 
@@ -5507,6 +5511,17 @@ So the estimates below wait on M0.
 | M4 | Progress in native storage | iOS can clear a web view's local storage when space runs low. All three storage users must move, and the synchronous startup load must either become asynchronous or read from a copy restored before the game starts. M0 decides which. | After M0; not small | |
 | M5 | App feel | Haptics on placing and refusing, an optional daily notification, splash screen and status bar colours, no rubber-band scrolling, re-checking the date on resume. These make the app better, but **Apple's guideline 4.2 promises nothing** about what makes a wrapped web app acceptable (codex). Review is a risk until it's passed. | Medium | |
 | M6 | iOS app | Needs a Mac, or GitHub Actions' macOS runners, which are virtual machines, not Docker. The Apple developer account is $99 a year; Google Play's is $25 once. | Medium | |
+
+## Look and feel
+
+The game is going to the Play Store, and the user wants it to look and feel like a modern
+phone game (2026-10-20). The redesign is specified in `UI-SPEC.md`; each of its rows still
+gets its own implementation contract here before code.
+
+| # | Idea | Why, and the boundary | Effort | Decision |
+| --- | --- | --- | --- | --- |
+| L1 | The soft tactile redesign | Today's screens are a column of mismatched controls under a brown board with black-outlined pieces (measured on a 393x852 phone, `UI-SPEC.md` §1). The redesign gives the phone a top bar, a bottom action bar and bottom sheets, redraws the board and pieces without outlines, and adds a dark theme. It keeps every accessibility and layout guarantee. Gameplay and the challenge don't change. | Large: about 16 rows | Yes: direction B, light and dark following the phone (user, 2026-10-20). Spec by Claude, review by codex; the builder is not chosen yet. |
+| L2 | Seasonal obstacles | The rock becomes a pumpkin around Halloween, a snowman around Christmas, and so on. Each one must still read as an obstacle and never as a domino, keep the rock's footprint and contrast, and be chosen by the device's own date, with no server. | Small to medium, after L1 | Later (user, 2026-10-20). L1 prepares for it: the rock is drawn through one replaceable obstacle drawing. |
 
 ## Campaign (future, for the mobile release)
 
