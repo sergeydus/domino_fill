@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Page } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
     captureChallengeFailure, CHALLENGE_CAPTURE_MS, CHALLENGE_FAILURE_PREFIX,
 } from '@/e2e/challengeFailure'
 
+vi.mock('node:fs/promises', () => ({ writeFile: vi.fn() }))
+let outputDirectory: string
 type Info = Parameters<typeof captureChallengeFailure>[2]
 const info = (status: Info['status'] = 'failed', expectedStatus: Info['expectedStatus'] = 'passed'): Info => ({
     status, expectedStatus, project: { name: 'phone-360' },
     titlePath: ['challengeSession.spec.ts', 'Hint remains unpublished after request success and abort'],
     workerIndex: 2, retry: 0, attach: vi.fn().mockResolvedValue(undefined),
+    outputPath: vi.fn((name: string) => join(outputDirectory, name)),
 } as unknown as Info)
 const probe = (created = 8, settled = 7) => ({
     created, settled, armed: null, active: false, completed: false,
@@ -38,8 +45,15 @@ let warning: ReturnType<typeof vi.spyOn>
 const payload = () => JSON.parse(String(warning.mock.calls[0][0]).slice(CHALLENGE_FAILURE_PREFIX.length))
 const valueFor = (role: string) => payload().pages.find((entry: { role: string }) => entry.role === role).sample.value
 
-beforeEach(() => { warning = vi.spyOn(console, 'warn').mockImplementation(() => {}) })
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+beforeEach(() => {
+    warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    outputDirectory = mkdtempSync(join(tmpdir(), 'challenge-failure-'))
+    vi.mocked(writeFile).mockReset().mockResolvedValue(undefined)
+})
+afterEach(() => {
+    vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals()
+    rmSync(outputDirectory, { recursive: true, force: true })
+})
 
 describe('challenge failure capture', () => {
     it.each([
@@ -55,6 +69,8 @@ describe('challenge failure capture', () => {
         expect(context.pages, 'no page enumeration on a non-target result').not.toHaveBeenCalled()
         expect(main.evaluate).not.toHaveBeenCalled()
         expect(warning).not.toHaveBeenCalled()
+        expect(current.outputPath).not.toHaveBeenCalled()
+        expect(writeFile).not.toHaveBeenCalled()
         expect(current.attach).not.toHaveBeenCalled()
     })
 
@@ -86,8 +102,12 @@ describe('challenge failure capture', () => {
         const [name, attachment] = vi.mocked(current.attach).mock.calls[0]
         expect(name).toBe('challenge-session-failure')
         expect(attachment?.contentType).toBe('application/json')
-        expect(String(attachment?.body), 'line and attachment carry the same frozen payload')
-            .toBe(String(warning.mock.calls[0][0]).slice(CHALLENGE_FAILURE_PREFIX.length))
+        expect(attachment?.path, 'the attachment refers to the retained file')
+            .toBe(join(outputDirectory, 'challenge-session-failure.json'))
+        expect(attachment).not.toHaveProperty('body')
+        expect(writeFile, 'line and file carry the same frozen payload').toHaveBeenCalledWith(
+            attachment?.path, String(warning.mock.calls[0][0]).slice(CHALLENGE_FAILURE_PREFIX.length), 'utf8',
+        )
     })
 
     it('labels armed-only flags and write count separately from lifetime totals', async () => {
@@ -223,5 +243,43 @@ describe('challenge failure capture', () => {
         vi.mocked(current.attach).mockRejectedValue(new Error('output closed'))
         await expect(captureChallengeFailure({ pages: () => [main] }, main, current)).resolves.toBeUndefined()
         expect(warning).toHaveBeenCalledTimes(1)
+    })
+
+    it('retains identical JSON on disk even when the attachment fails', async () => {
+        const realFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+        vi.mocked(writeFile).mockImplementationOnce(realFs.writeFile)
+        const main = page()
+        const current = info()
+        vi.mocked(current.attach).mockRejectedValue(new Error('reporter unavailable'))
+        await expect(captureChallengeFailure({ pages: () => [main] }, main, current)).resolves.toBeUndefined()
+        const path = join(outputDirectory, 'challenge-session-failure.json')
+        expect(current.outputPath).toHaveBeenCalledWith('challenge-session-failure.json')
+        expect(existsSync(path), 'the diagnostic file exists independently of its attachment').toBe(true)
+        expect(readFileSync(path, 'utf8'), 'the output file retains the exact logged JSON')
+            .toBe(String(warning.mock.calls[0][0]).slice(CHALLENGE_FAILURE_PREFIX.length))
+        expect(current.attach).toHaveBeenCalledWith('challenge-session-failure', {
+            path, contentType: 'application/json',
+        })
+    })
+
+    it('contains a file write failure and keeps the log without attaching a missing file', async () => {
+        vi.mocked(writeFile).mockRejectedValue(new Error('disk unavailable'))
+        const main = page()
+        const current = info()
+        await expect(captureChallengeFailure({ pages: () => [main] }, main, current),
+            'a write failure cannot replace the test failure').resolves.toBeUndefined()
+        expect(warning).toHaveBeenCalledTimes(1)
+        expect(current.attach, 'a missing file is not attached').not.toHaveBeenCalled()
+    })
+
+    it('contains an output path failure and keeps the original log', async () => {
+        const main = page()
+        const current = info()
+        vi.mocked(current.outputPath).mockImplementation(() => { throw new Error('output closed') })
+        await expect(captureChallengeFailure({ pages: () => [main] }, main, current),
+            'a path failure cannot replace the test failure').resolves.toBeUndefined()
+        expect(warning).toHaveBeenCalledTimes(1)
+        expect(writeFile).not.toHaveBeenCalled()
+        expect(current.attach).not.toHaveBeenCalled()
     })
 })

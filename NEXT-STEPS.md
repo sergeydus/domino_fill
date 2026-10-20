@@ -4619,13 +4619,14 @@ new test step.
    page's data. Clear the timer and contain late rejections. This runs after failure,
    not during the original assertion; it is not a reconstruction of B's earlier state
    and cannot by itself prove what was queued before Start. No cross-page timestamps.
-6. Emit one prefixed JSON line, `[e2e challenge failure]`, and attach the same payload
-   with `testInfo.attach('challenge-session-failure', ...)` as `application/json`.
-   The payload contains identity, original status and explicitly labelled per-page
-   samples. Browser reads and both sinks are best effort: failures must not replace the
-   original assertion/error or reject the hook. A killed worker can still lose output.
-   Attachments land in the existing test output, retained by CI on failure
-   (`.github/workflows/ci.yml:72-81`); stdout is retained with the ordinary gate logs.
+6. Emit one prefixed JSON line, `[e2e challenge failure]`, write the same serialized body
+   to `testInfo.outputPath('challenge-session-failure.json')`, and attach that file by
+   `path` as `application/json`. The payload contains identity, original status and
+   explicitly labelled per-page samples. Browser reads, logging and file/attachment
+   output are best effort: failures must not replace the original assertion/error or
+   reject the hook. A killed worker can still lose output. The explicit file lands in
+   the existing test output retained by CI on failure (`.github/workflows/ci.yml:72-81`),
+   independently of reporter attachment support; stdout remains in ordinary gate logs.
 7. Limit implementation to the diagnostic helper and unit tests, the one spec hook,
    `challengeTransaction.ts`'s passive counter, `tests/challengeTransaction.test.ts`, and
    NEXT-STEPS. Leave test steps, assertions, five-second polls, hold/release behaviour,
@@ -4800,6 +4801,83 @@ durations and logs are retained as `implementation-gate1.json` and
 The code awaits Claude's review. The two natural timeout causes stay open until a real
 failure supplies evidence.
 
+**Code review correction, Claude (2026-10-20), to `2cd5582`.** Hold for durable file
+output; the rest accepted. Claude measured 34/34 unit tests (stderr 0), a forced desktop
+failure with correctly labelled A/B and original error, and CI success. Claude did not
+rerun our mutation sweep, 62-test run or gate. The body attachment was only in reporter
+memory: list/line reporters left no diagnostic file. Our earlier JSON-reporter check
+proved payload content, not default-reporter disk retention. Rule 6's original retention
+claim and the As built attachment claim were incomplete; the prefixed log did survive.
+
+Adopt Claude's requested option (a) before code: write the frozen body to the test's
+`outputPath`, then attach that path. Contain path/write failures, preserve the log and
+original failure, and keep a written file if attaching fails. Add real-file unit coverage,
+write/path failure cases, no-output checks for healthy tests, and mutations for omitted
+write, divergent file content, body attachment, and escaping output failures. Verify a
+forced failure with `--reporter=line` retains identical log/file JSON under its `--output`
+directory. No app, reporter, CI, test-step or retry changes.
+
+Claude's one-run observation: healthy B had created=9, settled=9 before Start; the
+historical failure's baseline was 8. Our injected extra transaction also implies 9 before
+that injection. This is consistent with wake-dependent work but does not establish a cause.
+
+**Correction As built (2026-10-20).** `challengeFailure.ts` now writes the serialized
+body with `writeFile(..., 'utf8')` to `outputPath('challenge-session-failure.json')`, then
+attaches that path. The log is independent. A failed path/write/attach cannot reject the
+hook, and an attachment failure leaves the written file available. This follows Claude's
+explicit correction to rule 6; no further product decision or scope change.
+
+`challengeFailure.test.ts` adds three tests (26 → 29), including a real temporary-file
+write/read and attachment failure; the other new cases cover write and output-path
+failure. The two existing payload checks now assert file path, absence of a body
+attachment, and exact logged bytes passed to the writer. All six non-target status cases
+also assert no outputPath/write call. Temporary directories are removed after each test.
+Initial targeted run: **37/37** across both diagnostic/instrument files, exit **0**,
+stderr **0 bytes**. Targeted tsc and lint: **0** each.
+
+**Correction mutations: 7/7 caught at the intended checks**, source restored byte for byte:
+
+| Probe | Intended check |
+| --- | --- |
+| Omit file write | real diagnostic file exists independently of attachment |
+| Write different JSON | file bytes equal the logged JSON |
+| Revert to body attachment | attachment refers to the retained file |
+| Swallow write error then attach | missing file is not attached |
+| Let write error escape | write-error test resolves, not disk-unavailable rejection |
+| Resolve outputPath outside try | path-error test resolves, not output-closed rejection |
+| Skip output after log error | attachment survives logging failure |
+
+The first sweep stopped after probe 5: that probe failed at the intended resolution check,
+but the runner expected custom wording Vitest omits for a rejected `.resolves`. Corrected
+the runner to match the actual rejection at that same named test; full rerun **7/7**.
+No surviving mutant or test weakened. The original build's 27 probes are historical, not
+claimed rerun in this correction.
+
+The first browser invocation was refused at TIME_WAIT **115**, before edits or launch.
+The next launch failed before tests: shell quoting made the quoted output path literal
+and Playwright reported no tests / mkdir ENOENT. Restored the spec exactly and switched
+the scratch launcher to the Node Playwright CLI with direct arguments. Both attempts
+are retained; neither is a natural timeout or a gate run.
+
+Artifacts: `playwright-report/challenge-session-file-20261020/`, including the first
+probe logs and `probes-v2/results.json`, retained scripts, targeted logs and browser runs.
+**Browser retention, measured:** `--reporter=line`, desktop and phone-360, retries 0,
+initial TIME_WAIT **79**. A temporary labelled failure after A's held write produced
+**2 intentional failures**, exit **1**. The original error remained; both per-test output
+directories contained `challenge-session-failure.json`. Validation **2/2 passed**: file
+bytes exactly equal their prefixed log payload, correct project identity, both A/B labels,
+and A still starting. No JSON/HTML reporter was enabled. Spec restored byte for byte.
+This proves default-CI-reporter disk retention in the uploaded output tree; the CI upload
+itself is read from the workflow, not tested by intentionally breaking remote CI.
+
+**Correction commit gate, run 1 (2026-10-20):** initial TIME_WAIT **60**. All five
+exits **0**: tsc, lint, unit (**1777/1777**, 75 files, stderr **0 bytes**), build,
+browser (**753 passed, 1 skipped**). **0 socket errors**, **0 socket snapshot lines**,
+**0 challenge failure lines**. No failed correction gate. Checked code hashes still
+match the mutation/browser-validated files. Exact exits/durations and stdout/stderr are
+retained as `correction-gate1.json` and `correction-gate1-*.log` beside the probe artifacts.
+The original head's CI success was also checked before this push. Correction awaits
+Claude's review; no PR opened, and the natural timeout causes remain unestablished.
 ### Would need a server (rejected)
 
 **No** by decision: there are no servers. They're recorded so the reason is clear if the

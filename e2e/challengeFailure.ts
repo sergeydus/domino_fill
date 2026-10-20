@@ -1,4 +1,5 @@
 import type { BrowserContext, Page, TestInfo } from '@playwright/test'
+import { writeFile } from 'node:fs/promises'
 import type { TransactionProbe } from './challengeTransaction'
 
 export const CHALLENGE_FAILURE_PREFIX = '[e2e challenge failure] '
@@ -42,7 +43,7 @@ const readPage = () => {
 }
 
 type FailureInfo = Pick<TestInfo,
-    'status' | 'expectedStatus' | 'project' | 'titlePath' | 'workerIndex' | 'retry' | 'attach'>
+    'status' | 'expectedStatus' | 'project' | 'titlePath' | 'workerIndex' | 'retry' | 'outputPath' | 'attach'>
 type Sample = { role: string, sample: unknown }
 
 /** After failure only: reads no storage, changes no page, and never replaces the test error. */
@@ -80,13 +81,15 @@ export const captureChallengeFailure = async (
             new Promise<void>(resolve => { timer = setTimeout(resolve, CHALLENGE_CAPTURE_MS) }),
         ])
     } finally { clearTimeout(timer) }
-    // Serialize once: late reads cannot change either the line or the matching attachment.
+    // Serialize once: late reads cannot change the line or the retained file.
     const body = JSON.stringify({ identity, originalStatus: status, enumeration, pages: samples })
     try { console.warn(CHALLENGE_FAILURE_PREFIX + body) }
     catch { /* The attachment remains useful if stderr is unavailable. */ }
     try {
+        const path = info.outputPath('challenge-session-failure.json')
+        await writeFile(path, body, 'utf8')
         await info.attach('challenge-session-failure', {
-            body: Buffer.from(body), contentType: 'application/json',
+            path, contentType: 'application/json',
         })
     } catch { /* The original test error and the log remain unchanged. */ }
 }
