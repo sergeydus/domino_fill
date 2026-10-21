@@ -1,6 +1,6 @@
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
-import { PALETTE } from "@/app/palette";
+import { cssVar } from "@/app/palette";
 import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
 
 const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
@@ -30,11 +30,11 @@ const DominoPieceOne: React.FC<PieceProps> = (props) => {
     return (
         // One cell (U) wide and two tall, in drawing units; `pieceBox` is where pixels enter.
         <svg {...pieceBox(1, 2, size)} viewBox={viewBox(1, 2)}>
-            <rect x={I} y={I + E} width={U - 2 * I} height={2 * U - 2 * I} fill={PALETTE.tileSide} rx={R} ry={R} />
-            <rect x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I} fill={PALETTE.tileFace} rx={R} ry={R} />
-            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
-            <line x1={PIECE.dividerInset} y1={U} x2={U - PIECE.dividerInset} y2={U} stroke={PALETTE.divider} strokeWidth={PIECE.dividerWidth} />
-            <circle cx={U / 2} cy={U / 2} fill={PALETTE.pip} r={PIECE.pipRadius} />
+            <rect x={I} y={I + E} width={U - 2 * I} height={2 * U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileSide') }} />
+            <rect x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileFace') }} />
+            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I + E} fill="none" strokeWidth={O} rx={R} ry={R} style={{ stroke: cssVar('pieceOutline') }} />
+            <line x1={PIECE.dividerInset} y1={U} x2={U - PIECE.dividerInset} y2={U} strokeWidth={PIECE.dividerWidth} style={{ stroke: cssVar('divider') }} />
+            <circle cx={U / 2} cy={U / 2} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
         </svg>
     );
 };

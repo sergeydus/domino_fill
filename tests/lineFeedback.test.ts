@@ -5,7 +5,7 @@ import { PuzzleSession } from '@/app/stores/PuzzleSession'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 import { lineState, columnComplete, rowComplete } from '@/app/stores/boardRules'
 import { labelPresentation, labelDescription, LABEL_COLORS } from '@/app/dominoFill/lineLabel'
-import { PALETTE } from '@/app/palette'
+import { PALETTE, THEMES, cssVar, type Theme, type Token } from '@/app/palette'
 import { contrast } from './colour'
 
 /**
@@ -144,13 +144,28 @@ describe('the palette meets WCAG 1.4.3 on the board background', () => {
     // The ground by token (graphics row 5), so this re-checks itself when P1-3 moves it.
     const BACKGROUND = PALETTE.ground
 
-    it('every label colour clears 4.5:1', () => {
-        // Measured, and worse than the spec first recorded: the old neutral was 1.86:1 and
-        // the old green -- the state colour, the thing meant to be read -- was 1.66:1.
-        for (const [state, color] of Object.entries(LABEL_COLORS)) {
-            expect(contrast(color, BACKGROUND), `${state} (${color})`).toBeGreaterThanOrEqual(4.5)
-        }
-    })
+    /*
+     * The token each label paints. The labels hold references (`var(--success)`) since UI
+     * row 1, so the label follows the theme; the token is read back from the reference, so
+     * this checks what the label really paints, in each theme's values.
+     */
+    const tokenOf = (reference: string): Token => {
+        const token = (Object.keys(PALETTE) as Token[]).find(t => cssVar(t) === reference)
+        expect(token, reference).toBeDefined()
+        return token!
+    }
+
+    for (const theme of Object.keys(THEMES) as Theme[]) {
+        it(`every label colour clears 4.5:1 on the ${theme} ground`, () => {
+            // Measured, and worse than the spec first recorded: the old neutral was 1.86:1 and
+            // the old green -- the state colour, the thing meant to be read -- was 1.66:1.
+            const values = THEMES[theme]
+            for (const [state, reference] of Object.entries(LABEL_COLORS)) {
+                const token = tokenOf(reference)
+                expect(contrast(values[token], values.ground), `${state} (${token})`).toBeGreaterThanOrEqual(4.5)
+            }
+        })
+    }
 
     it('the old palette would fail this test, which is the point of having it', () => {
         for (const old of ['#ababab', '#4bce4b', '#ff0000']) {

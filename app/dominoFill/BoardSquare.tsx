@@ -3,7 +3,7 @@ import React, { CSSProperties, useEffect, useMemo, useRef } from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "../stores/PuzzleSession";
 import { cellDescription } from "./cellLabel";
-import { PALETTE } from "../palette";
+import { cssVar } from "../palette";
 import { HintMark } from "./cellStates";
 
 type Props = {
@@ -35,7 +35,7 @@ const BoardSquare: React.FC<Props2> = observer((
     const size = boardsStore.board.length
     // Named for what it tests: it was `isDark`, and it picks the lighter tone.
     const isEven = (i + j) % 2 === 0;
-    const color = isEven ? PALETTE.checkerLight : PALETTE.checkerDark
+    const color = isEven ? cssVar('checkerLight') : cssVar('checkerDark')
     const squareStyle: CSSProperties = useMemo(() => {
         return {
             aspectRatio: 1,

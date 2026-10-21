@@ -4,7 +4,7 @@ import DominoPieceTwo from "./DominoPieceTwo";
 import { observer } from 'mobx-react';
 import { PuzzleSession } from '@/app/stores/PuzzleSession';
 import { control } from '@/app/controls';
-import { PALETTE } from '@/app/palette';
+import { cssVar } from '@/app/palette';
 import type { Piece } from '@/app/stores/placement';
 import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { WIDE_LAYOUT_QUERY } from '../composition';
@@ -46,9 +46,9 @@ const PIECES = {
  */
 const CheckMark: React.FC = () => (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true" data-check-mark>
-        <circle cx="9" cy="9" r="8" fill={PALETTE.accent} stroke={PALETTE.accentEdge} strokeWidth="1.5" />
-        <path d="M5.2 9.4 L7.8 11.9 L12.6 6.6" fill="none" stroke={PALETTE.ink} strokeWidth="2"
-            strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="9" cy="9" r="8" strokeWidth="1.5" style={{ fill: cssVar('accent'), stroke: cssVar('accentEdge') }} />
+        <path d="M5.2 9.4 L7.8 11.9 L12.6 6.6" fill="none" strokeWidth="2"
+            strokeLinecap="round" strokeLinejoin="round" style={{ stroke: cssVar('ink') }} />
     </svg>
 )
 

@@ -134,14 +134,16 @@ export const stripComments = (file: string, source: string): string => {
 
 /**
  * Whether comment-free `code` reads `token`, in any of the ways a consumer can:
- * `PALETTE.token` or `rgbBytes('token')` in TypeScript, a Tailwind utility on the generated
- * colour, `bg-(--token)`, or `var(--token)`. Whole names only: `PALETTE.accent` is not a
- * read of `accentEdge`, and a `data-hint` attribute is not a read of `hint`.
+ * `PALETTE.token`, `rgbBytes('token')` or `cssVar('token')` in TypeScript, a Tailwind utility
+ * on the generated colour, `bg-(--token)`, or `var(--token)`. Whole names only:
+ * `PALETTE.accent` is not a read of `accentEdge`, and a `data-hint` attribute is not a read of
+ * `hint`.
  */
 export const isRead = (token: string, code: string): boolean => {
     const name = token.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
     return new RegExp(`PALETTE\\.${token}(?!\\w)`).test(code)
         || code.includes(`rgbBytes('${token}')`)
+        || code.includes(`cssVar('${token}')`)
         || code.includes(`var(--${name})`)
         || code.includes(`(--${name})`)
         || new RegExp(`(?<![\\w-])(?:[\\w-]+:)*${COLOUR_UTILITY}-${name}(?:/\\d+)?(?![\\w-])`).test(code)

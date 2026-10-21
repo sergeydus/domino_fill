@@ -9,7 +9,7 @@
  * *served* page, which is the only place drift would actually hurt.
  */
 
-import { PALETTE } from './palette'
+import { PALETTE, PALETTE_DARK } from './palette'
 
 /**
  * Where the game is deployed, and what an absolute URL in a meta tag has to point at.
@@ -75,6 +75,13 @@ export const SHORT_DESCRIPTION =
  * so a change to the ground reaches both without anyone remembering to look.
  */
 export const GROUND: string = PALETTE.ground
+
+/**
+ * The dark theme's ground (UI row 1): the browser chrome's colour on a phone set to dark,
+ * and the pre-paint script's for a player who chose dark. The manifest and the icon stay
+ * light: an installed app's splash screen is drawn before the page can say which theme it is.
+ */
+export const GROUND_DARK: string = PALETTE_DARK.ground
 
 /** The icon the manifest, the splash screen and the link preview all use. */
 export const ICON_512 = '/icon-512.png'

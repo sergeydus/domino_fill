@@ -30,6 +30,7 @@
   --cell-focus: #093346;
   --cell-focus-halo: #ffffff;
   --refused-halo: #ffffff;
+  --refused-cross: #a10000;
   --drag-wash: #ffffff;
   --scrim: #000000;
   --panel: #ffffff;
@@ -39,6 +40,88 @@
   --mark-partial: oklch(82.8% 0.189 84.429);
   --mark-complete: oklch(76.5% 0.177 163.223);
   --banner-surface: oklch(96.2% 0.059 95.617);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #16110e;
+    --ink: #f3ebe1;
+    --checker-light: #9c8a72;
+    --checker-dark: #8e7c66;
+    --board-frame: #4d3f33;
+    --tile-face: #fff3d6;
+    --tile-side: #8d8778;
+    --rock-face: #2c2925;
+    --rock-lit: #37332e;
+    --rock-shade: #221f1c;
+    --rock-side: #171513;
+    --piece-outline: #000000;
+    --pip: #000000;
+    --divider: #000000;
+    --line-neutral: #cdbfb1;
+    --success: #5bd69a;
+    --problem: #ff8f6b;
+    --hint: #0b3b10;
+    --accent: #0f766e;
+    --accent-edge: #6fd6cb;
+    --control-surface: #3a3029;
+    --anchor: #16295e;
+    --candidate-edge: #16295e;
+    --candidate-wash: oklch(88.2% 0.059 254.128);
+    --cell-focus: #093346;
+    --cell-focus-halo: #ffffff;
+    --refused-halo: #ffffff;
+    --refused-cross: #a10000;
+    --drag-wash: #ffffff;
+    --scrim: #000000;
+    --panel: #251e19;
+    --panel-ink: #f3ebe1;
+    --mark-none: #2a221c;
+    --mark-started: #4a3d16;
+    --mark-partial: #6a4d0c;
+    --mark-complete: #0f5a44;
+    --banner-surface: #3a3016;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground: #16110e;
+  --ink: #f3ebe1;
+  --checker-light: #9c8a72;
+  --checker-dark: #8e7c66;
+  --board-frame: #4d3f33;
+  --tile-face: #fff3d6;
+  --tile-side: #8d8778;
+  --rock-face: #2c2925;
+  --rock-lit: #37332e;
+  --rock-shade: #221f1c;
+  --rock-side: #171513;
+  --piece-outline: #000000;
+  --pip: #000000;
+  --divider: #000000;
+  --line-neutral: #cdbfb1;
+  --success: #5bd69a;
+  --problem: #ff8f6b;
+  --hint: #0b3b10;
+  --accent: #0f766e;
+  --accent-edge: #6fd6cb;
+  --control-surface: #3a3029;
+  --anchor: #16295e;
+  --candidate-edge: #16295e;
+  --candidate-wash: oklch(88.2% 0.059 254.128);
+  --cell-focus: #093346;
+  --cell-focus-halo: #ffffff;
+  --refused-halo: #ffffff;
+  --refused-cross: #a10000;
+  --drag-wash: #ffffff;
+  --scrim: #000000;
+  --panel: #251e19;
+  --panel-ink: #f3ebe1;
+  --mark-none: #2a221c;
+  --mark-started: #4a3d16;
+  --mark-partial: #6a4d0c;
+  --mark-complete: #0f5a44;
+  --banner-surface: #3a3016;
 }
 
 @theme inline {
@@ -69,6 +152,7 @@
   --color-cell-focus: var(--cell-focus);
   --color-cell-focus-halo: var(--cell-focus-halo);
   --color-refused-halo: var(--refused-halo);
+  --color-refused-cross: var(--refused-cross);
   --color-drag-wash: var(--drag-wash);
   --color-scrim: var(--scrim);
   --color-panel: var(--panel);

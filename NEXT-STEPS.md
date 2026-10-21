@@ -5752,6 +5752,101 @@ values in row 3, the board in row 4, and the cell states in row 5.
 
 **The gate** before each commit, from cold, as AGENTS.md says.
 
+**As built (2026-10-21).** Built against the accepted contract (`df563fc`). Six deviations,
+each found while building, and recorded here for codex's review:
+
+1. **The theme-color tags are switched by `media`, not `content`.** Rule 6 had the script point
+   both tags at the chosen ground by rewriting their content. Measured: React 19 matches a
+   `<meta>` it hydrates by its `content`, so once the dark tag's content was the light ground,
+   React found no tag for the dark ground and inserted a third, `media="(prefers-color-scheme:
+   dark)" content="#16110e"`, which a dark phone then reads. The script now leaves the content
+   as served and sets the chosen theme's tag to `media="all"` and the other to `"not all"`
+   (`app/themeScript.ts`). It holds no colour at all now; the grounds are the tags', from
+   `siteMetadata.ts`.
+   - **Theme test 7 changes with it.** It checked that both tags' content was the chosen
+     ground. It now checks what the browser takes, the first tag whose `media` matches, under
+     both system schemes, with the app's scripts blocked and after hydration; and that both
+     tags are still exactly the two served, in order. That is the check the duplicate tag
+     failed, so a return to rewriting `content` fails it.
+2. **The script is in `<head>`, but not first.** Measured in the served HTML: Next hoists the
+   charset, the viewport, the stylesheet, its async scripts and all the metadata above it,
+   the theme-color tags among them. It still runs before `<body>` is parsed, so before
+   anything is drawn (read from the parsing rules; theme test 6 measures the result with the
+   app's scripts blocked). Being after the tags means they exist when it runs; it switches
+   them again on `DOMContentLoaded` in case a later Next moves them below it.
+3. **`tests/geometryRule.test.ts` changes; the contract didn't list it.** It refused any
+   `style` inside a piece's drawing, because a style can carry a pixel length (P0-6), and
+   rule 5 puts every paint in `style`. It now allows one form only: an object of `fill` and
+   `stroke`, each a `cssVar('token')` with a string argument. Anything else in a drawing's
+   `style` is still a breach, with seven new cases (a stroke width, a translate, a literal, an
+   identifier, a spread, a bare reference, an empty object).
+4. **The import audit is stricter than rule 5 said:** it refuses `THEMES` and `rgbBytes` in
+   `app/` as well as `PALETTE` and `PALETTE_DARK`, since each carries values, and any namespace
+   import of the palette. `siteMetadata.ts` is the one importer; `palette.ts` itself is the
+   module. Its own cases cover a rename, a namespace import and type-only imports.
+5. **`e2e/boardChrome.spec.ts:137` changes; the contract didn't list it either.** Its label
+   ties compared each tick's colour with `LABEL_COLORS`' hex values, which are now references,
+   so the expected colour was `rgb(10, NaN, NaN)`: the first gate run failed there, in four
+   cases (below). It now reads each state's token back from the reference and takes its
+   light value, as the sheet is light. Probed: every state painted neutral fails it, at the
+   satisfied tick (`rgb(95, 95, 95)` for `rgb(21, 102, 26)`). A changed `LABEL_COLORS` entry
+   doesn't, as the expectation reads the same table; `tests/palette.test.ts`'s label test
+   fails on that one (probed).
+6. **The contrast tables' history is light's only.** Every table runs in both themes with each
+   theme's pins, as the contract says; the three assertions about what a pair *was* before a
+   row changed it (white on the accent, 3.05:1; the disabled primary that kept the accent,
+   1.71; the tutorial's button before P2-2, 2.02) are registered for light only, as there was
+   no dark theme then.
+
+Choices inside the contract:
+- `PALETTE_DARK`'s board tokens are read from `PALETTE` (`tileFace: PALETTE.tileFace`) rather
+  than copied, so row 4 changes them by replacing a reference with a value. `THEMES` and
+  `Theme` are exported for the renderer and the tests.
+- `cssVar` is called with a literal token at every site (the Ring takes the reference, the
+  checker calls `cssVar` in each branch), because the dead-token audit reads `cssVar('token')`.
+- **The sentinel probe covers more than the contract listed:** the level arrows, the picker's
+  check mark and the three line labels, as well as the pieces, the rock, both checker tones,
+  the marks and the cross: 33 paints. It also checks the sentinels collide with no value in
+  either theme.
+- **The labels' animation was measured, not assumed.** `motion` animates a label's colour to
+  `LABEL_COLORS`' reference. If it resolved the reference to a value, a label would keep its
+  old theme's colour until its next change. Measured on the sheet with motion on: after the
+  animation the label's style is `color: var(--success)`, and setting `--success` moves its
+  computed colour. Theme test 8 and the sentinel probe hold this.
+- Theme test 1 also checks `color-scheme` is `light dark` with nothing stored, and test 4 that
+  it is the chosen one with a choice. The page parser is strict: anything but an opaque `rgb()`
+  is an error quoting the raw value (AGENTS.md's known-flake note on the old parser).
+
+**Tests.** Unit 1850, up from 1777: the palette's theme blocks, key parity, board equality,
+the import audit and its cases, the `cssVar` audit cases (`tests/palette.test.ts`, 23); every
+contrast table in both themes (`tests/contrast.test.ts`, 135); the geometry rule's paint
+cases. Browser 776 listed, up from 754: `e2e/theme.spec.ts` rewritten (16 cases) and
+`e2e/themeTokens.spec.ts` new (2), each in the desktop and phone-360 projects. Visual: 8
+listed.
+
+**The gate.** Run 1 (TIME_WAIT 59): tsc, lint, unit (1850, stderr 0 bytes) and build 0;
+browser 1, with 771 passed, 4 failed, 1 skipped and 0 socket errors. The four failures were
+deviation 5's test, at 38 and 53px in the desktop and phone-360 projects; nothing was
+committed. Fixed in the test, and the whole gate run again from cold before the commit;
+run 2 is reported with it, as the notes are part of what it gates.
+
+**Mutation probes: 10 of 10 caught,** each at the assertion the contract named; every file
+restored byte for byte and checked by hash (`probes.py` in the builder's scratchpad).
+1. The renderer drops the media-query dark block. Not regenerated: the byte-identical check
+   (and the block check). Regenerated: theme 2, the block check, and themes 5 (dark) and 8.
+2. `:not([data-theme="light"])` dropped, regenerated: theme 4's light-under-dark case, and
+   theme 6's.
+3. The pre-paint script removed: theme 6 in both directions, and themes 4 and 7.
+4. The script accepts any stored value: theme 5, in both schemes, at the attribute.
+5. The script leaves the theme-color tags alone: theme 7's four stored cases.
+6. The rock's side on `PALETTE.rockSide`: the import audit, and the sentinel probe at
+   `polygon:nth-of-type(1) fill`, which read the literal `rgb(23, 21, 19)`.
+7. The cross on `cssVar('problem')`: the sentinel probe at `[data-cross] stroke`, which read
+   `problem`'s sentinel.
+8. Dark `tileFace` at `#fff3d7`: the board-equality test.
+9. Dark `accent` at `#3cc3b4`: the dark primary-text pin and its 4.5:1 bar.
+10. Dark `bannerSurface` missing: `tsc` (TS2741), and the key-parity test.
+
 ## Campaign (future, for the mobile release)
 
 A campaign is a long numbered path of levels, like the mobile puzzle games with thousands of

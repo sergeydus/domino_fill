@@ -19,6 +19,10 @@
  * `npm run tokens`; and `siteMetadata.ts` hands `ground` to the browser chrome and the
  * install manifest.
  *
+ * **Two themes since UI row 1.** `PALETTE` is the light one, and what every Node consumer
+ * reads; `PALETTE_DARK`, below, has the same keys. The browser picks between them in CSS, so
+ * components read a token through `cssVar`, never as a value.
+ *
  * **The values did not move in this row.** Every token is the value its use site held, and
  * the ones that came from Tailwind's palette carry Tailwind's own `oklch()` definition, so
  * the rendered page is unchanged -- measured, not assumed; see the spec's P0-5 amendment.
@@ -81,9 +85,10 @@ export const PALETTE = {
     success: '#15661a',
     /**
      * Something is wrong: an overshot line, the advice strip when it is reporting a problem
-     * (7.35:1), the archive's error message, which had a red of its own until P1-4, and the
-     * cross on a refused move (P1-6). And the edge of `Reset`, the caution variant (P2-2):
-     * not something wrong, but something that cannot be taken back.
+     * (7.35:1), and the archive's error message, which had a red of its own until P1-4. And
+     * the edge of `Reset`, the caution variant (P2-2): not something wrong, but something
+     * that cannot be taken back. It drew the refused cross too until UI row 1, which gave
+     * the board its own `refusedCross`: this is chrome, and moves with the theme.
      */
     problem: '#a10000',
     /**
@@ -144,11 +149,16 @@ export const PALETTE = {
      */
     cellFocusHalo: '#ffffff',
     /**
-     * The halo round a refused move's cross (P1-6), whose own colour is `problem`. The halo
-     * is what clears 3:1 on both checker tones and every rock tone; the red, on the tile's
-     * face, where the halo does not.
+     * The halo round a refused move's cross (P1-6). The halo is what clears 3:1 on both
+     * checker tones and every rock tone; the red, on the tile's face, where the halo does not.
      */
     refusedHalo: '#ffffff',
+    /**
+     * The refused move's cross itself (P1-6): `problem`'s red, and `problem` until UI row 1,
+     * which split the two because the cross is drawn on the board and `problem` on the chrome,
+     * and the two sides change theme at different rows.
+     */
+    refusedCross: '#a10000',
     /** The wash over the squares a drag would cover, drawn at 70%. */
     dragWash: '#ffffff',
 
@@ -185,11 +195,104 @@ export const CHECKER_RATIO = 1.2
 export type Token = keyof typeof PALETTE
 
 /**
+ * The tokens drawn on the board: its squares, the pieces, and the cell states. Equal in both
+ * themes until UI row 4 gives the board its dark values (UI-SPEC §3.1's rollout), and held
+ * equal by `tests/palette.test.ts`, so the dark theme changes the chrome round the board and
+ * nothing on it.
+ */
+export const BOARD_TOKENS = [
+    'checkerLight', 'checkerDark', 'boardFrame',
+    'tileFace', 'tileSide', 'rockFace', 'rockLit', 'rockShade', 'rockSide',
+    'pieceOutline', 'pip', 'divider',
+    'hint', 'anchor', 'candidateEdge', 'candidateWash', 'cellFocus', 'cellFocusHalo',
+    'refusedHalo', 'refusedCross', 'dragWash',
+] as const satisfies readonly Token[]
+
+/**
+ * The dark theme (UI row 1), with exactly `PALETTE`'s keys: a token missing or extra is a
+ * type error, and `tests/palette.test.ts` says so again at run time.
+ *
+ * **Interim, on purpose.** The board's tokens are the light ones, read from `PALETTE` rather
+ * than copied, until row 4. The chrome's are chosen so every pair today's components draw
+ * holds in the dark too -- `ink` on `accent` is the primary control's text, so the accent is
+ * a dark teal here, not UI-SPEC's final bright one, which needs white text (row 3). Each
+ * pair is computed in `tests/contrast.test.ts`; the ratios are in the row's contract.
+ */
+export const PALETTE_DARK: Readonly<Record<Token, string>> = {
+    // ---- the page
+    ground: '#16110e',
+    ink: '#f3ebe1',
+
+    // ---- the board, unchanged until row 4
+    checkerLight: PALETTE.checkerLight,
+    checkerDark: PALETTE.checkerDark,
+    boardFrame: PALETTE.boardFrame,
+    tileFace: PALETTE.tileFace,
+    tileSide: PALETTE.tileSide,
+    rockFace: PALETTE.rockFace,
+    rockLit: PALETTE.rockLit,
+    rockShade: PALETTE.rockShade,
+    rockSide: PALETTE.rockSide,
+    pieceOutline: PALETTE.pieceOutline,
+    pip: PALETTE.pip,
+    divider: PALETTE.divider,
+
+    // ---- meaning: 10.43, 10.29 and 8.38:1 on the ground
+    lineNeutral: '#cdbfb1',
+    success: '#5bd69a',
+    problem: '#ff8f6b',
+    hint: PALETTE.hint,
+
+    // ---- interactive chrome: ink on the accent is 4.63:1
+    accent: '#0f766e',
+    accentEdge: '#6fd6cb',
+    controlSurface: '#3a3029',
+
+    // ---- the cell states, unchanged until row 5
+    anchor: PALETTE.anchor,
+    candidateEdge: PALETTE.candidateEdge,
+    candidateWash: PALETTE.candidateWash,
+    cellFocus: PALETTE.cellFocus,
+    cellFocusHalo: PALETTE.cellFocusHalo,
+    refusedHalo: PALETTE.refusedHalo,
+    refusedCross: PALETTE.refusedCross,
+    dragWash: PALETTE.dragWash,
+
+    // ---- dialogs and surfaces
+    scrim: '#000000',
+    panel: '#251e19',
+    panelInk: '#f3ebe1',
+
+    // ---- the archive's day marks: ink on each clears 6.6:1
+    markNone: '#2a221c',
+    markStarted: '#4a3d16',
+    markPartial: '#6a4d0c',
+    markComplete: '#0f5a44',
+
+    // ---- the day banner
+    bannerSurface: '#3a3016',
+}
+
+/** Each theme's values, by name, for the stylesheet renderer and the contrast tests. */
+export const THEMES = { light: PALETTE, dark: PALETTE_DARK } as const
+
+export type Theme = keyof typeof THEMES
+
+/**
  * A token's CSS custom property, and the Tailwind utility suffix it generates:
  * `tileFace` is `--tile-face` and `bg-tile-face`.
  */
 export const cssName = (token: Token): string =>
     token.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)
+
+/**
+ * A token as the browser should paint it: `var(--tile-face)`, which follows the theme
+ * (UI row 1). Every drawing in the app reads its colour this way, as a `style` property
+ * rather than an SVG presentation attribute, so nothing depends on how a browser resolves
+ * `var()` inside one. Only the build-time consumers -- the icon, the manifest, the browser
+ * chrome's colour -- read `PALETTE` itself.
+ */
+export const cssVar = (token: Token): string => `var(--${cssName(token)})`
 
 /** A `#rrggbb` token as bytes, for the icon renderer, which paints pixels, not CSS. */
 export const rgbBytes = (token: Token): [number, number, number] => {

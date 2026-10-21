@@ -1,7 +1,7 @@
 import React from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
-import { PALETTE } from "@/app/palette";
+import { cssVar } from "@/app/palette";
 import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
 
 const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
@@ -31,13 +31,13 @@ const DominoPieceTwo: React.FC<PieceProps> = (props) => {
     return (
         // Two cells (U each) wide and one tall, in drawing units; `pieceBox` is where pixels enter.
         <svg {...pieceBox(2, 1, size)} viewBox={viewBox(2, 1)}>
-            <rect x={I} y={I + E} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileSide} rx={R} ry={R} />
-            <rect x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I} fill={PALETTE.tileFace} rx={R} ry={R} />
-            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} stroke={PALETTE.pieceOutline} fill="none" strokeWidth={O} rx={R} ry={R} />
+            <rect x={I} y={I + E} width={2 * U - 2 * I} height={U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileSide') }} />
+            <rect x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileFace') }} />
+            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} fill="none" strokeWidth={O} rx={R} ry={R} style={{ stroke: cssVar('pieceOutline') }} />
 
-            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} stroke={PALETTE.divider} strokeWidth={PIECE.dividerWidth} />
-            <circle cx={U + U / 3} cy={U / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
-            <circle cx={U + U * 2 / 3} cy={U * 2 / 3} fill={PALETTE.pip} r={PIECE.pipRadius} />
+            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} strokeWidth={PIECE.dividerWidth} style={{ stroke: cssVar('divider') }} />
+            <circle cx={U + U / 3} cy={U / 3} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
+            <circle cx={U + U * 2 / 3} cy={U * 2 / 3} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
         </svg>
     );
 };

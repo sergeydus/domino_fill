@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 import { BASE_URL } from './e2e/server'
 
 /**
- * The four visual baselines (graphics spec P0-4, row 4).
+ * The visual baselines: four screens, in each theme (graphics spec P0-4, row 4; UI row 1).
  *
  * A separate config because pixels are a property of the machine as much as of the code:
  * these compare only on the environment the baselines were taken on, a GitHub-hosted
@@ -74,6 +74,7 @@ export default defineConfig({
         baseURL: BASE_URL,
         deviceScaleFactor: 1,
         reducedMotion: 'reduce',
+        // The default; `baselines.spec.ts` takes each shot in both schemes (UI row 1).
         colorScheme: 'light',
         locale: 'en-US',
         // The calendar is shifted to a fixed instant in UTC; the page reads it in UTC too,
