@@ -5752,7 +5752,7 @@ values in row 3, the board in row 4, and the cell states in row 5.
 
 **The gate** before each commit, from cold, as AGENTS.md says.
 
-**As built (2026-10-21).** Built against the accepted contract (`df563fc`). Six deviations,
+**As built (2026-10-21).** Built against the accepted contract (`df563fc`). Seven deviations,
 each found while building, and recorded here for codex's review:
 
 1. **The theme-color tags are switched by `media`, not `content`.** Rule 6 had the script point
@@ -5798,6 +5798,29 @@ each found while building, and recorded here for codex's review:
    1.71; the tutorial's button before P2-2, 2.02) are registered for light only, as there was
    no dark theme then.
 
+7. **The candidate wash is declared in two parts, so light stays byte-identical.** The first
+   `[visual update]` run (`13b7028`, run 39586727217) regenerated `sheet-53.png` with two
+   pixels one level of red off, `(157, 155, 151)` for `(158, 155, 151)`, at the dashed edge of
+   the anchor specimen's candidate squares; the other three light baselines were identical,
+   and no baseline was committed. The cause, measured:
+   - not the runner image: `master`'s code matched the committed sheet on the same image,
+     `20261012.334.1`, on 2026-10-19 (run 39241759933);
+   - reproduced on the development host, the same two pixels at the same values;
+   - not `style` against an attribute: the wash as a literal renders identically either way;
+     read through `var(--candidate-wash)`, it moves the two pixels;
+   - the build: it rewrote the property's `oklch()` into `#bedbff` and a rounded
+     `lab(86.15% -4.04379 -21.0797)` (read in `.next`). The attribute had never been rewritten.
+     As `#bedbff` through the property, 78 pixels moved.
+
+   The fix is codex's proposal (relayed by the user): `scripts/palette-css.ts` declares the
+   wash as its channels, `--candidate-wash-oklch: 88.2% 0.059 254.128`, and the colour as
+   `oklch(var(--candidate-wash-oklch))`, which the build cannot read and so leaves alone. The
+   drawing still reads `--candidate-wash`. Measured on the host: 0 pixels differ from the
+   pre-row sheet at 53px, and the page computes `oklch(0.882 0.059 254.128)`. Only the wash
+   (`EXACT_OKLCH`): the day marks and the banner have been drawn through their rounded
+   properties since graphics row 5, so declaring them exact would move them. A new palette
+   test pins the declarations; probed, an empty `EXACT_OKLCH` fails it.
+
 Choices inside the contract:
 - `PALETTE_DARK`'s board tokens are read from `PALETTE` (`tileFace: PALETTE.tileFace`) rather
   than copied, so row 4 changes them by replacing a reference with a value. `THEMES` and
@@ -5817,18 +5840,19 @@ Choices inside the contract:
   it is the chosen one with a choice. The page parser is strict: anything but an opaque `rgb()`
   is an error quoting the raw value (AGENTS.md's known-flake note on the old parser).
 
-**Tests.** Unit 1850, up from 1777: the palette's theme blocks, key parity, board equality,
-the import audit and its cases, the `cssVar` audit cases (`tests/palette.test.ts`, 23); every
-contrast table in both themes (`tests/contrast.test.ts`, 135); the geometry rule's paint
-cases. Browser 776 listed, up from 754: `e2e/theme.spec.ts` rewritten (16 cases) and
+**Tests.** Unit 1851, up from 1777: the palette's theme blocks, key parity, board equality,
+the import audit and its cases, the `cssVar` audit cases and the exact wash
+(`tests/palette.test.ts`, 24); every contrast table in both themes (`tests/contrast.test.ts`,
+135); the geometry rule's paint cases. Browser 776 listed, up from 754: `e2e/theme.spec.ts` rewritten (16 cases) and
 `e2e/themeTokens.spec.ts` new (2), each in the desktop and phone-360 projects. Visual: 8
 listed.
 
 **The gate.** Run 1 (TIME_WAIT 59): tsc, lint, unit (1850, stderr 0 bytes) and build 0;
 browser 1, with 771 passed, 4 failed, 1 skipped and 0 socket errors. The four failures were
 deviation 5's test, at 38 and 53px in the desktop and phone-360 projects; nothing was
-committed. Fixed in the test, and the whole gate run again from cold before the commit;
-run 2 is reported with it, as the notes are part of what it gates.
+committed. Fixed in the test; run 2 from cold passed every step (TIME_WAIT 42; unit 1850,
+stderr 0 bytes; browser 775 passed, 1 skipped, 0 socket errors), and `13b7028` was committed.
+Deviation 7 is its own commit, gated from cold again and reported with it.
 
 **Mutation probes: 10 of 10 caught,** each at the assertion the contract named; every file
 restored byte for byte and checked by hash (`probes.py` in the builder's scratchpad).

@@ -4,7 +4,7 @@ import path from 'node:path'
 import ts from 'typescript'
 import { isRead, scanCss, scanText, scanTs, stripComments } from './colourAudit'
 import { BOARD_TOKENS, PALETTE, PALETTE_DARK, THEMES, cssName, cssVar, rgbBytes, type Token } from '@/app/palette'
-import { PALETTE_CSS_PATH, renderPaletteCss } from '@/scripts/palette-css'
+import { EXACT_OKLCH, PALETTE_CSS_PATH, declarations, renderPaletteCss } from '@/scripts/palette-css'
 import { GROUND, GROUND_DARK } from '@/app/siteMetadata'
 import { LABEL_COLORS } from '@/app/dominoFill/lineLabel'
 
@@ -27,9 +27,21 @@ describe('the generated stylesheet is the palette', () => {
     it('declares every token, as a property and as a Tailwind colour', () => {
         const css = renderPaletteCss()
         for (const token of Object.keys(PALETTE) as Token[]) {
-            expect(css).toContain(`  --${cssName(token)}: ${PALETTE[token]};`)
+            for (const d of declarations(token, PALETTE[token])) expect(css).toContain(`  ${d}`)
             expect(css).toContain(`  --color-${cssName(token)}: var(--${cssName(token)});`)
         }
+    })
+
+    it('declares the wash exactly, in channels the build cannot round (UI row 1)', () => {
+        // The build rewrites a readable `oklch()` to a rounded `lab()`; a colour built from
+        // a variable in the browser it cannot read, so the wash reaches it as written.
+        expect(EXACT_OKLCH).toEqual(['candidateWash'])
+        expect(declarations('candidateWash', 'oklch(88.2% 0.059 254.128)')).toEqual([
+            '--candidate-wash-oklch: 88.2% 0.059 254.128;',
+            '--candidate-wash: oklch(var(--candidate-wash-oklch));',
+        ])
+        expect(declarations('tileFace', '#fff3d6')).toEqual(['--tile-face: #fff3d6;'])
+        expect(() => declarations('candidateWash', '#bedbff')).toThrow(/not an OKLCh colour/)
     })
 
     it('declares every token in each theme\'s block (UI row 1)', () => {
@@ -51,8 +63,8 @@ describe('the generated stylesheet is the palette', () => {
             [':root[data-theme="dark"] {', PALETTE_DARK],
         ]
         for (const [opening, values] of blocks) {
-            const declared = [...block(opening).matchAll(/--([a-z-]+): ([^;]+);/g)].map(m => [m[1], m[2]])
-            expect(declared, opening).toEqual((Object.keys(PALETTE) as Token[]).map(t => [cssName(t), values[t]]))
+            const declared = [...block(opening).matchAll(/--[a-z-]+: [^;]+;/g)].map(m => m[0])
+            expect(declared, opening).toEqual((Object.keys(PALETTE) as Token[]).flatMap(t => declarations(t, values[t])))
         }
     })
 

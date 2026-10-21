@@ -26,7 +26,8 @@
   --control-surface: #e2d9ca;
   --anchor: #16295e;
   --candidate-edge: #16295e;
-  --candidate-wash: oklch(88.2% 0.059 254.128);
+  --candidate-wash-oklch: 88.2% 0.059 254.128;
+  --candidate-wash: oklch(var(--candidate-wash-oklch));
   --cell-focus: #093346;
   --cell-focus-halo: #ffffff;
   --refused-halo: #ffffff;
@@ -67,7 +68,8 @@
     --control-surface: #3a3029;
     --anchor: #16295e;
     --candidate-edge: #16295e;
-    --candidate-wash: oklch(88.2% 0.059 254.128);
+    --candidate-wash-oklch: 88.2% 0.059 254.128;
+    --candidate-wash: oklch(var(--candidate-wash-oklch));
     --cell-focus: #093346;
     --cell-focus-halo: #ffffff;
     --refused-halo: #ffffff;
@@ -108,7 +110,8 @@
   --control-surface: #3a3029;
   --anchor: #16295e;
   --candidate-edge: #16295e;
-  --candidate-wash: oklch(88.2% 0.059 254.128);
+  --candidate-wash-oklch: 88.2% 0.059 254.128;
+  --candidate-wash: oklch(var(--candidate-wash-oklch));
   --cell-focus: #093346;
   --cell-focus-halo: #ffffff;
   --refused-halo: #ffffff;
