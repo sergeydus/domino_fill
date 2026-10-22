@@ -523,7 +523,8 @@ test.describe('difficulty', () => {
         // in the UI where state was carried by colour alone.
         const selected = page.locator('[data-difficulty][data-selected]')
         await expect(selected).toHaveCount(1)
-        await expect(selected).toHaveCSS('font-weight', '700')
+        // 900 over the others' 800 since UI row 2 (it was 700 over 400 in Geist).
+        await expect(selected).toHaveCSS('font-weight', '900')
     })
 })
 

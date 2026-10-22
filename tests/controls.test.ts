@@ -41,7 +41,8 @@ describe('the table is the spec\'s', () => {
     })
 
     it('primary: the accent\'s surface, the strongest weight', () => {
-        expect(CONTROL.primary).toMatchObject({ surface: 'accent', weight: 700 })
+        // 900 over everyone else's 800 since UI row 2, in Nunito (700 over 400 in Geist).
+        expect(CONTROL.primary).toMatchObject({ surface: 'accent', weight: 900 })
         const weights = Object.values(CONTROL).map(c => c.weight)
         expect(CONTROL.primary.weight).toBe(Math.max(...weights))
     })
@@ -283,7 +284,7 @@ describe('every button is one variant, and says nothing else about its look', ()
          * own. `e2e/controlVariants.spec.ts` holds the same in the browser.
          */
         expect(PRESSED.split(/\s+/).sort()).toEqual([
-            'aria-pressed:bg-accent', 'aria-pressed:font-bold', 'aria-pressed:ring-2', 'aria-pressed:ring-accent-edge',
+            'aria-pressed:bg-accent', 'aria-pressed:font-black', 'aria-pressed:ring-2', 'aria-pressed:ring-accent-edge',
         ])
     })
 })

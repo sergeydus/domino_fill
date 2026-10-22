@@ -3,10 +3,10 @@
  *
  * A toggle -- a control pressed *into* a state, not merely pressed -- says which state it is
  * in twice for sight: by colour, the accent's fill, and without colour, a ring and a bolder
- * weight. One treatment for every toggle, so "pressed" means one thing on screen; the
+ * weight: 900 over the 800 at rest since UI row 2 (700 over 400 in Geist until then). One treatment for every toggle, so "pressed" means one thing on screen; the
  * difficulty selector had it alone until this row, and `Sound` had only its words.
  *
  * Keyed on the attribute itself, so the picture cannot disagree with what a screen reader is
  * told.
  */
-export const PRESSED = 'aria-pressed:bg-accent aria-pressed:font-bold aria-pressed:ring-2 aria-pressed:ring-accent-edge'
+export const PRESSED = 'aria-pressed:bg-accent aria-pressed:font-black aria-pressed:ring-2 aria-pressed:ring-accent-edge'

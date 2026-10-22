@@ -6,12 +6,20 @@
   --text-*: initial;
   --text-board-label: var(--label-font);
   --text-board-label--line-height: 1;
-  --text-card-title: 24px;
-  --text-card-title--line-height: 1.25;
+  --text-board-label--font-weight: 900;
+  --text-display: 28px;
+  --text-display--line-height: 1.15;
+  --text-display--font-weight: 900;
+  --text-clock: 20px;
+  --text-clock--line-height: 1;
+  --text-clock--font-weight: 900;
   --text-control: 16px;
   --text-control--line-height: 1.25;
-  --text-body: 14px;
-  --text-body--line-height: 1.5;
-  --text-meta: 12px;
-  --text-meta--line-height: 1.5;
+  --text-control--font-weight: 800;
+  --text-body: 15px;
+  --text-body--line-height: 1.45;
+  --text-body--font-weight: 600;
+  --text-meta: 13px;
+  --text-meta--line-height: 1.4;
+  --text-meta--font-weight: 700;
 }

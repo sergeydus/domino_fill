@@ -53,7 +53,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                         key={`refusal-${rejectionTick}`}
                         data-refusal-reason={refusal.reason.kind}
                         aria-hidden='true'
-                        className='font-semibold text-problem'
+                        className='font-extrabold text-problem'
                     >
                         {refusalMessage(refusal.reason)}
                     </span>
@@ -62,7 +62,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                         key={adviceTick}
                         data-advice-kind={advice.kind}
                         aria-hidden={said === 'advice' || undefined}
-                        className={adviceIsProblem(advice) ? 'font-semibold text-problem' : ''}
+                        className={adviceIsProblem(advice) ? 'font-extrabold text-problem' : ''}
                     >
                         {adviceMessage(advice)}
                     </span>
@@ -70,7 +70,7 @@ const AdviceStrip: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) 
                     <span data-key-guide aria-hidden='true'>
                         {KEY_GUIDE[controlMode].map((part, n) => typeof part === 'string'
                             ? part
-                            : <strong key={n} className='font-semibold'>{part.key}</strong>)}
+                            : <strong key={n} className='font-extrabold'>{part.key}</strong>)}
                     </span>
                 )}
             </div>

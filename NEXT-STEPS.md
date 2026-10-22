@@ -5939,8 +5939,8 @@ departure, see the review above):
   - 360×640 scrolls by 96–172px, as it does today by 97–173px.
 - **The suites:** 27 browser failures and 3 unit failures. 26 of the browser failures and all 3
   unit failures are in the tests listed below. The 27th was a startup timeout
-  (`challengeUi.spec.ts:284`, phone-360), which passed 10 of 10 when rerun: the known startup
-  flake, not this row.
+  (`challengeUi.spec.ts:284`, phone-360), which passed 10 of 10 when rerun. Its cause is
+  unestablished: ten passes don't show it was unrelated (codex, at acceptance).
 - **The font's name:** Chromium reports the face that draws the text as "Nunito ExtraLight", the
   default-instance name of Google's variable Nunito. Every glyph is still from the self-hosted
   font (`isCustomFont: true`).
@@ -6068,6 +6068,77 @@ departure, see the review above):
     weight check, which expects 800.
 
 **The gate** before each commit, from cold, as AGENTS.md says.
+
+**As built (2026-10-22).** Built against the accepted contract (`d2af291`), with codex's three
+acceptance notes taken and one deviation.
+
+The deviation:
+- **The archive's days are 700, not 800.** Rule 3 typed `CONTROL`'s `weight` as `800 | 900`.
+  A day in the archive is a control whose text is the `meta` role (`Archive.tsx:181`), and
+  `text-meta` now carries meta's 700, which overrides the variant's weight. Before this row
+  the two agreed only because neither set a weight. `controlVariants.spec.ts` found it: the
+  day computed to no variant. The `day` variant is now 700, to match its text's role, and
+  `weight` is typed `700 | 800 | 900`. No other control takes another role's text (searched).
+
+Codex's acceptance notes:
+- **The probe phrase is calibrated.** Measured in the page, in Nunito at 13, 15, 16, 19, 20
+  and 28px:
+  - "6" has the same width at all four weights, for example 9px at 15px;
+  - "Check" widens at every step, by at least 0.56px between neighbouring weights at 13px.
+
+  So the visible-weight check draws "Check" in the element's family and size, and requires
+  0.25px or more between two weights that must differ. Its first test asserts that "Check"
+  separates every pair of neighbouring loaded weights, at every size a role sets, before it
+  checks `document.fonts`. Probe 9 fails at that width assertion first.
+- **The font name is the one measured.** Chromium's font report names the face that draws
+  every glyph "Nunito ExtraLight", and nothing else, so the pattern is `/^Nunito ExtraLight$/`.
+  `document.fonts` lists five faces per weight (one per unicode range), one of each loaded.
+- **The prototype timeout's cause is unestablished,** as the measured notes above now say.
+
+Choices inside the contract:
+- **The game page's typography test shows the advice strip in the order it gives way:** the
+  key guide first, then a refusal, then a Check answer. A Check answer holds the row until
+  the board next acts, and the key guide shows only while nothing does. The first run, with
+  Check first, never showed the guide.
+- **Every weight on each surface is checked, not only the named ones:**
+  - each text's computed weight is one the page loads, and at or above its role's;
+  - where it is above (emphasis, a pressed or primary control), it draws visibly apart;
+  - each role other than body draws visibly apart from body's 600.
+- **Tailwind's `--text-<role>--font-weight`** carries each role's weight, so the generated
+  CSS gains one line per role and `text-<role>` sets all three.
+
+**Tests.**
+- **Unit:** 1855, up from 1851. `tests/typography.test.ts` has 13: the table, the loaded
+  weights and the 13px floor, the weight lines, the unloaded-weight audit and its cases, and
+  the family. `tests/controls.test.ts` has two changed lines.
+- **Browser:** 778 listed, up from 776. `e2e/typography.spec.ts` has 7 cases per project, with
+  the calibration new. Run in full before the gate: 777 passed, 1 skipped.
+
+**Mutation probes: 10 of 10 caught;** every file restored byte for byte and checked by hash.
+1. Geist kept: the unit family check, the fonts spec, and the typography spec's family check.
+2. Body at 14 / 1.5: **the unit table test only.** The browser typography spec passes,
+   because it reads `TYPE` from the table it checks against, so a changed table moves its
+   expectations too. The contract named it as a second catch; it isn't one, and the table test
+   is the pin.
+3. No weight lines, regenerated: the unit weight-line test, and the browser weight check on
+   six surfaces (each text under its role's weight).
+4. A `font-medium` in `CompletionCard.tsx`: the unloaded-weight audit.
+5. The clock on `text-body`: the clock's role check.
+6. Secondary controls at 900: **caught at the completion card's pinned action weight**
+   (`completionCard.spec.ts:54`, expecting 800). That assertion runs before the ladder the
+   contract named, so the ladder never runs.
+7. `aria-pressed` on `font-bold`: `controlVariants.spec.ts:182` (pressed is 900), twice, and
+   `accessibility.spec.ts:527`.
+8. Body on `--font-geist-sans`: the typography spec's family check on six surfaces, the fonts
+   spec on both pages, and the calibration (the fallback face doesn't widen).
+9. Only 600 and 900 loaded: the calibration's width assertion first, then the weight check on
+   six surfaces (800 and 700 draw like their neighbours).
+10. A bare tutorial `<strong>`: the tutorial's emphasis check (900, expected 800).
+
+The first probe run crashed during probe 2: printing a test title with a non-ASCII character
+raised a cp1252 encoding error. Its restore runs in a `finally`, and was verified (body back at
+15px; the typography tests pass). Probe 4 had run on its own before; probes 2, 3 and 5–10 then
+ran with UTF-8 output.
 
 ## Campaign (future, for the mobile release)
 

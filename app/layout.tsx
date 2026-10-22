@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist } from "next/font/google";
+import { Nunito } from "next/font/google";
 import "./globals.css";
 import { StoreWrapper } from "./provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -8,8 +8,14 @@ import {
 } from "./siteMetadata";
 import { themeScript } from "./themeScript";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+/**
+ * The one face (UI row 2): Nunito, self-hosted by `next/font`, in the four weights UI-SPEC §3.2
+ * chose. Nunito itself runs 200-1000; nothing in `app/` asks for a weight outside these, and
+ * `tests/typography.test.ts` holds that, so no text draws at a weight the page doesn't load.
+ */
+const nunito = Nunito({
+  weight: ["600", "700", "800", "900"],
+  variable: "--font-nunito",
   subsets: ["latin"],
 });
 
@@ -98,7 +104,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body
-        className={`${geistSans.variable} antialiased`}
+        className={`${nunito.variable} antialiased`}
       >
         {/* Inside <body>, not wrapping <html>: the provider is a client component, and
             handing it the document element pulls the whole store graph into every route's

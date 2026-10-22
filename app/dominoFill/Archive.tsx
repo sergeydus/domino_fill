@@ -141,7 +141,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     >
                         ‹
                     </button>
-                    <h2 data-archive-month className='text-body font-semibold'>{month}</h2>
+                    <h2 data-archive-month className='text-body font-extrabold'>{month}</h2>
                     <button
                         type='button'
                         data-archive-next

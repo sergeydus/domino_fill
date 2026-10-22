@@ -182,7 +182,7 @@ const DominoClient: React.FC = () => {
   if (!currentBoard) {
     return (
       <div className='m-auto p-4 text-center' role='alert'>
-        <p className='text-body font-semibold'>Today&apos;s puzzles could not be loaded.</p>
+        <p className='text-body font-extrabold'>Today&apos;s puzzles could not be loaded.</p>
         <p className='text-meta opacity-70'>
           {failed ? 'Check your connection and reload the page.' : 'No board'}
         </p>
