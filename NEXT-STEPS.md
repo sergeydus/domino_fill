@@ -6274,6 +6274,11 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
    - Unchanged here: the board's, the pieces' and the cell states' tokens (rows 4 and 5),
      `hint` and `lineNeutral` (row 4), the archive's marks (row 12), the banner (row 6) and
      the scrim (row 8). The ones drawn on a chrome colour are re-proved against it.
+   - **The four app icons are regenerated** (`npm run icons`): `scripts/icon.ts:35` paints
+     their background in `ground`, and `tests/icons.test.ts:20` holds each committed file to
+     the generator's bytes. Only the background changes; the drawing's redesign stays in row 4
+     (codex). The files are `public/icon-192.png`, `public/icon-512.png`,
+     `public/icon-512-maskable.png` and `app/apple-icon.png`.
 2. **The variants:**
    - `primary`: `accent`, with `onAccent` text, and a 4px `accentEdge` edge;
    - `raised`: `surface`, with `ink` text, and a 3px `raisedEdge` edge. It replaces
@@ -6288,16 +6293,19 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
    The edge sits beneath the box and adds nothing to its layout.
 3. **The press** (§3.3, §3.5): while a pointer or Space is held, a raised, primary or chip
    control moves down by its edge's depth and its edge disappears, over 80ms.
-   - Under reduced motion it doesn't move; the edge still goes, instantly.
+   - Under reduced motion this transient press doesn't move; the edge still goes, instantly.
+     A *selected* toggle's depth (rule 5) is a state, not a motion: it shows under reduced
+     motion too, with no transition into it (codex).
    - Disabled, there's no press.
    - `icon` and `day` keep today's press, a pixel and 90%, until their rows.
 4. **Disabled:** no edge, and 45% opacity. A disabled `primary` also gives up the accent for
    `surface` and `ink`, as today, so it doesn't look like the thing to press.
 5. **A pressed toggle is held down:** sunk by its edge's depth with no edge, on the accent with
    `onAccent` text. The sunk shape is the channel that isn't colour, so **weight stops being
-   one:** every control is 800, the role's weight, the primary and pressed toggles included.
-   This ends §3.2's amendment ("until row 3"). Rows 6 and 8 replace the toggles with cards and
-   switches.
+   one:** every text control is 800, the role's weight, the primary and pressed toggles
+   included. The archive's days stay 700: their text is the `meta` role, and that is its
+   weight (codex). This ends §3.2's amendment ("until row 3"). Rows 6 and 8 replace the
+   toggles with cards and switches.
 6. **Focus** stays a 3px outline 2px out, in `accentEdge`, which must clear 3:1 against
    `ground` and `surface` in both themes.
 7. **Hover,** under a fine pointer only, as today: a raised control's or a chip's edge turns
@@ -6305,6 +6313,9 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
 8. **Targets:** every control is at least 48×48 CSS px at phone sizes, except the board's
    cells and the archive's days (§3.3). That includes the level arrows, the archive's arrows
    and Close, the chips, Skip, and the completion card's and Results' actions.
+   - **The archive's days are excused in width only** (codex): a seventh of the sheet, but
+     48px tall, which §6.5 also requires. They're about 28px today (codex, measured). They
+     keep today's look until row 12, in a 48px-tall box.
 9. **Muted text is `inkMuted`,** not opacity, at the four places above. The covered clock's
    60% is a disabled state, not muted text, but `inkMuted` says it the same way and keeps 4.5:1.
 10. **The invariants hold** (§10): the 38px floor, and an 8×8 board at 360px with no sideways
@@ -6336,11 +6347,38 @@ composition: the top bar, the action bar, the legend's chooser (rows 6, 7); shee
   the new table, computed from it. Pressed is held down and 800 (`:182`, from 900).
 - **New, `e2e/targets.spec.ts`:** every visible button at least 48×48, on the game page, the
   cover, the completion card, Results, the archive and the tutorial, in the phone-360 project.
-  Only `[data-cell]` and the archive's days are excused, by name.
+  `[data-cell]` is excused by name. The archive's days are excused in width only, and must be
+  48px tall.
 - **New, the press:** a held pointer on a raised control and on the primary moves it down by its
   edge and removes the edge; under reduced motion it doesn't move; a disabled control doesn't.
-- **Changed values:** `e2e/accessibility.spec.ts:527` (pressed, 800); `e2e/completionCard.spec.ts`'s
-  actions; `tests/controls.test.ts`'s primary weight; any test pinning today's colours.
+  A selected toggle is held down under reduced motion as well.
+- **New, the muted-text check** (`tests/typography.test.ts`, as a source audit): no
+  `opacity-*` utility on an element in `app/` that holds text, and each of the four places
+  carries `text-ink-muted`. An opacity on a drawing is allowed by name (`Hover.tsx`'s
+  preview).
+- **Tests that hold today's values, and what each keeps** (codex named the ones I'd missed):
+  - `e2e/controlStates.spec.ts:184-216`: the press was `translate 0 1px` and
+    `brightness(0.9)`. It becomes the edge's depth with the edge gone, for raised, primary and
+    chip controls; `icon` and `day` keep the old press. Kept: Space held shows it, release
+    clears it, Enter has no held state, a disabled control doesn't move, and focus is shown in
+    `accentEdge`, read from the token.
+  - `e2e/colourRoles.spec.ts`: `SURFACES` is `{ accent: 'ink', controlSurface: 'ink' }`, and
+    becomes `{ accent: 'onAccent', surface: 'ink' }`. Kept: one accent for interactive
+    chrome, each role only where it's allowed, and every text on a named surface in its
+    promised colour at 4.5:1 as the browser computes it.
+  - `e2e/theme.spec.ts:95`: Undo's background is `controlSurface`, and becomes `surface`.
+    Kept: each scheme renders its own tokens, and the advice and a line's target clear 4.5:1
+    on the ground.
+  - `e2e/typography.spec.ts:245-250`: a control at rest and a pressed one, 800 and 900, drawn
+    apart. Both become 800. The pressed one's difference is its depth, held by the variant
+    spec. Kept: every text is a role, at a loaded weight, at least its role's.
+  - `tests/palette.test.ts`: `:154` pins the ground's bytes, `f4f0e8`, which become
+    `fbf3e8`; `:160` and `:254` use `controlSurface` as an example, which becomes `surface`.
+    Kept: the audit, the parity and the generated CSS.
+  - `e2e/accessibility.spec.ts:527` (pressed, 800), `e2e/controlVariants.spec.ts:182` (the
+    same), `e2e/completionCard.spec.ts`'s actions, and `tests/controls.test.ts`'s primary
+    weight.
+  - `tests/icons.test.ts`: unchanged; the regenerated icons must pass it.
 - **The layout suite** must pass unchanged (rule 10).
 - **Visual:** all eight baselines change, regenerated by CI from the marked commit.
 
@@ -6350,15 +6388,30 @@ composition: the top bar, the action bar, the legend's chooser (rows 6, 7); shee
 3. The press moves under reduced motion: the press test's reduced-motion case.
 4. A pressed toggle on the accent but not held down: the variant spec's pressed check.
 5. `BOX`'s vertical padding at 12 (44px): the targets audit.
-6. The primary's text back on `ink`: the contrast test's `onAccent` pair, and the variant spec.
+6. The primary's text back on `ink`: the variant spec, which reads the computed text colour
+   of every primary, and `colourRoles.spec.ts`'s promised foreground on `accent`. Not the
+   contrast test, which reads the `onAccent` token, unchanged by this probe (codex).
 7. The light `accent` back at `#419dc8` with `onAccent` white: the `onAccent` pair.
 8. A `bg-panel` left in a component: the retired-utility audit.
-9. The load-failure note back on `opacity-70`: the muted-text check.
+9. The load-failure note back on `opacity-70`: the muted-text audit.
 10. Reset's text back on `ink`: the variant spec's caution.
 11. A disabled primary keeping the accent: the variant spec's disabled case.
+12. The palette changed, the icons not regenerated: `tests/icons.test.ts` (codex).
+13. The archive's days back to their old height: the targets audit's day height (codex).
+14. A selected toggle not held down under reduced motion: the press test's reduced-motion
+    case.
 
 **The gate** before each commit, from cold, as AGENTS.md says. The row is two commits: the
 change, with the visual-update marker, then the baselines CI regenerates.
+
+**Codex's review of `b531d1d`,** every correction made above (the amendments and the hover
+choice were accepted as they stood):
+1. **The app icons:** regenerated in this row, since they're drawn on `ground`; probe 12.
+2. **The tests that hold today's values,** each named with its change and what it keeps; the
+   muted-text check defined; probe 6 moved to the assertions that read the control.
+3. **The archive's days are excused in width only:** 48px tall now; probe 13.
+4. **Clarified:** the days keep `meta`'s 700, and a selected toggle's depth shows under
+   reduced motion, where a transient press doesn't move (probe 14).
 
 ## Campaign (future, for the mobile release)
 
