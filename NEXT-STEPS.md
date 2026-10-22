@@ -5878,6 +5878,22 @@ restored byte for byte and checked by hash (`probes.py` in the builder's scratch
 later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Branch
 `feature/ui-type`, from `master` at `bfa9507`.
 
+**Codex's review of `67223e4` (2026-10-22): two corrections and a process correction, all taken
+below.**
+1. **600–900 is the subset the spec chose, not Nunito's range.** Next's font metadata lists
+   Nunito at 200–1000, 500 included. So the missing 500 comes from §3.2's choice and this
+   row's mapping, not the font, and the amendments now say so.
+2. **Emphasis at 600 disappears as well as emphasis at 500.** `font-semibold` is 600, which
+   becomes body's own weight. The mapping already took it to 800, but the contract didn't name
+   every site that relies on it or test that the difference shows. It now lists them,
+   including the tutorial's bare `<strong>`s, which the contract had missed. It also tests the
+   difference visibly, not only as a computed number (Tests, "Visible weights").
+3. **The prototype was code before an accepted contract.** AGENTS.md says "no code until the
+   contract is accepted" and makes no exception for a prototype. The prototype was a local
+   scratch branch, measured, never pushed, and deleted, and its only output is the
+   measurements below. It's still the departure codex names, recorded here. No further code
+   until this contract is accepted.
+
 **How it works today (read).**
 - **The family:** Geist, loaded by `next/font/google` in `app/layout.tsx:11` as
   `--font-geist-sans` and set once, on `body` (`app/globals.css:207`).
@@ -5905,10 +5921,15 @@ later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Bran
 
     The completion card's levels are pinned by weight as well as size (outcome 700, detail
     500, actions 400: `e2e/completionCard.spec.ts:50–71`).
+  - **Bare emphasis:** the tutorial has eight `<strong>`s with no class (`Tutorial.tsx:59–78`).
+    Tailwind's preflight gives `b` and `strong` `font-weight: bolder`, which is 700 over
+    today's 400, and would be 900 over the new 600. Preflight also sets every heading's weight
+    to `inherit`, and each heading in `app/` already names its weight.
 - **The clock** is `text-body font-medium tabular-nums` (`ChallengeClock.tsx:55`).
 - **Tabular figures** are already on the clock, the line targets, the streak and the results.
 
-**Measured with a prototype, before this contract** (a local scratch branch, discarded):
+**Measured with a prototype, before this contract** (a local scratch branch, discarded; a
+departure, see the review above):
 - **The phone layout barely moves.** At 360×640, 390×844 and 393×852, at all three sizes, with
   the challenge started:
   - every chrome row's height is unchanged;
@@ -5933,10 +5954,18 @@ later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Bran
    and three tests hold that channel. Row 3 redraws every variant and its press, and decides
    then whether weight stays a channel. Until it does, the interim keeps the channel without
    inventing a weight the spec doesn't load.
-3. **Emphasis inside a role is one step heavier than today's, in Nunito's weights.** Nunito
-   loads 600–900 only, so today's `font-medium` (500) would draw at body's 600 and the
-   emphasis would vanish. So `font-medium` becomes 700 (`font-bold`), and `font-semibold`
-   becomes 800 (`font-extrabold`). The card titles' `font-bold` goes: the `display` role is 900.
+3. **Emphasis sits above its role's new weight, in the weights §3.2 loads.** §3.2 loads 600,
+   700, 800 and 900; Nunito has 200–1000, but the spec chose those four. Body moves to 600, so
+   both of today's emphasis weights would stop showing:
+   - `font-medium` (500) would draw at 600, the nearest loaded weight;
+   - `font-semibold` (600) would *be* 600.
+
+   So:
+   - `font-medium` becomes 700 (`font-bold`);
+   - `font-semibold` becomes 800 (`font-extrabold`);
+   - the tutorial's bare `<strong>`s become 800 as well, named rather than left to `bolder`,
+     so every emphasis in body text is one weight;
+   - the card titles' `font-bold` goes, because the `display` role is 900.
 
 **The rules.**
 1. **Nunito replaces Geist.** It's loaded by `next/font/google` with weights 600, 700, 800 and
@@ -5959,10 +5988,16 @@ later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Bran
 3. **Weights:**
    - Controls are 800, the primary is 900, and `aria-pressed` is `font-black` (900), per
      amendment 2. `CONTROL`'s `weight` is typed `800 | 900`.
-   - Emphasis follows amendment 3, at the ten sites listed above (seven `font-semibold`, three
-     `font-medium`).
+   - **Emphasis follows amendment 3,** at eighteen sites:
+     - seven `font-semibold`, to 800: the advice strip's problem text and refusal
+       (`AdviceStrip.tsx:56, 65`), the key guide's `<strong>` (`:73`), the archive's month
+       (`Archive.tsx:144`), the load error (`DominoClient.tsx:185`), and the results'
+       headings and milestone (`ResultsDialog.tsx:139, 166`);
+     - three `font-medium`, to 700: the completion card's detail (`CompletionCard.tsx:168`),
+       the results' total (`ResultsDialog.tsx:150`) and the cover's board (`ChallengeCover.tsx:86`);
+     - the tutorial's eight bare `<strong>`s, to 800 (`font-extrabold`).
    - The clock drops `font-medium`; its role is 900.
-   - No weight below 600 is used anywhere in `app/`, as Nunito loads none.
+   - No weight below 600 is used anywhere in `app/`, since the page loads none.
 4. **Tabular figures** stay where they are.
 
 **Not in it:**
@@ -5985,6 +6020,18 @@ later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Bran
     plus the clock as `clock`;
   - **new: each role's surfaces compute its weight:** a line target 900, an archive date 700,
     the advice text 600, a control at rest 800, the clock 900, the outcome 900.
+- **Visible weights** (`e2e/typography.spec.ts`, new; codex). A computed weight the page
+  doesn't load still reports its number, so numbers alone can't show a distinction is drawn.
+  For each pair that must differ, the test draws the same text twice in the element's own
+  family and size, once at each weight, and requires the two widths to differ. If both weights
+  resolve to one face, the widths are equal. The pairs:
+  - emphasis against its body text: the key guide's `<strong>`, the advice's problem text, a
+    tutorial `<strong>`, the archive's month, the completion card's detail;
+  - a control at rest (800) against pressed or primary (900);
+  - every role's weight against body's 600, for meta, display, clock and the board label.
+
+  Every weight measured is also checked as one the page loads: `document.fonts` has a loaded
+  Nunito face for it.
 - **`e2e/fonts.spec.ts`:** every glyph drawn by the self-hosted Nunito. The family pattern is
   `/^Nunito( \w+)?$/`, for the variable font's instance name (measured), and it still requires
   `isCustomFont`.
@@ -6014,6 +6061,11 @@ later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Bran
 8. `body` still reads `var(--font-geist-sans)` after Nunito is loaded as `--font-nunito`, so the
    text falls back to a system face → the fonts spec (a glyph not from a self-hosted font), and
    the typography spec's family check.
+
+9. Load only 600 and 900, dropping 700 and 800 → the visible-weight check: 800 draws with the
+   900 face, so a control at rest and a pressed one measure the same.
+10. A tutorial `<strong>` without its class (back to preflight's `bolder`, 900) → the emphasis
+    weight check, which expects 800.
 
 **The gate** before each commit, from cold, as AGENTS.md says.
 
