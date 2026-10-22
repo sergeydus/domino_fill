@@ -6071,7 +6071,8 @@ departure, see the review above):
 
 **As built (2026-10-22).** Built against the accepted contract (`d2af291`), with codex's three
 acceptance notes taken and two deviations. The first commit, `1328027`, failed CI's gate on
-Ubuntu; the second deviation is the fix.
+Ubuntu; the second deviation is the fix. Its first version, `9def74c`, failed there too, for
+another reason (below).
 
 The deviations:
 - **The archive's days are 700, not 800.** Rule 3 typed `CONTROL`'s `weight` as `800 | 900`.
@@ -6094,6 +6095,15 @@ The deviations:
     drawn with a neighbour's face gains 0%, measured by probe 9. The check requires 5%.
   - The baselines from run 39781269776 weren't committed. The fix commit regenerates them
     again.
+  - **The ink check loads and draws only the stack's first family, Nunito.** `9def74c` loaded
+    the body's whole stack, and failed 14 tests on CI's Ubuntu (run 39783951480, the gate job;
+    7 per project, every case that draws), each with `NetworkError` from
+    `document.fonts.load`. next/font's "Nunito Fallback" is `src: local(Arial)`, and the
+    runner has no Arial. Measured here: a stack holding a face whose `local()` font is
+    missing makes `document.fonts.load` reject with that error. With such a face added to the
+    body's stack for one run, the old check failed all 7 desktop cases with CI's error, and
+    the new one passed all 7. Probes 1, 5, 8, 9 and 10 were rerun against it: each is caught
+    where the list below says.
 
 Codex's acceptance notes:
 - **The probe phrase is calibrated.** Measured in the page, in Nunito at 13, 15, 16, 19, 20
@@ -6156,6 +6166,28 @@ The first probe run crashed during probe 2: printing a test title with a non-ASC
 raised a cp1252 encoding error. Its restore runs in a `finally`, and was verified (body back at
 15px; the typography tests pass). Probe 4 had run on its own before; probes 2, 3 and 5–10 then
 ran with UTF-8 output.
+
+**After `9def74c`** (codex accepted the ink measure, and asked that the spec's opening comment
+say ink, not width: `c02c48a`):
+- `2760863`, the first-family fix: gate passed (every step 0; unit 1855, stderr 0 bytes;
+  browser 777 passed, 1 skipped; no socket errors).
+- `b0e4c4a`, the eight baselines from run 39783951480 (looked at before committing;
+  `environment.json` differed only in line endings and stayed): **the first gate failed,**
+  browser 776 passed, 1 failed, 1 skipped, no socket errors. The rerun from cold passed, with
+  the same counts as above.
+- `c02c48a`, the comment: gate passed, same counts.
+
+**A new flake: `keyGuide.spec.ts:151`, "appearing moves nothing at 1280x800"** (phone-360),
+in `b0e4c4a`'s first gate. The settled reading before the guide showed was
+`[548, 1392.8, 0]` (the frame's width and height, the advice row's height), and with the guide
+`[530, 1347.4, 18]`: the row was 0px tall, then took 18px from the board. Repeated 30 times
+in desktop and phone-360 at both viewports afterwards: 120 passed, so it didn't reproduce.
+- **Not established:** its cause, and whether row 2 made it likelier. That commit changed
+  only PNGs, which no browser test reads; row 2's earlier changes aren't excluded.
+- **A lead, untested** (codex): the strip's text has `min-h-6` (`AdviceStrip.tsx:50`), yet
+  the empty row measured 0px, as if styles were missing or not yet applied.
+- **Its error context was lost:** the repeat run cleared `test-results/` first. From now on,
+  failing output is copied aside before any rerun (codex). It goes to its own change.
 
 ## Campaign (future, for the mobile release)
 
