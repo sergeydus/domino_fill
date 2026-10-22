@@ -62,7 +62,11 @@ const texts = (page: Page): Promise<Text[]> => page.evaluate(() => {
 const PROBE = 'Check'
 const PROBE_PX = 64
 
-/** How much more ink `PROBE` takes at `heavier` than at `lighter`, in `family`: 0.2 is 20%. */
+/**
+ * How much more ink `PROBE` takes at `heavier` than at `lighter`, in `family`'s first family:
+ * 0.2 is 20%. Only the first: next/font's "Nunito Fallback" is `src: local(Arial)`, and on a
+ * machine without Arial, CI's Ubuntu, loading the whole stack rejects with a NetworkError.
+ */
 const apart = (page: Page, family: string, lighter: number, heavier: number) =>
     page.evaluate(async ({ family, size, weights, text }) => {
         const ink: number[] = []
@@ -82,7 +86,7 @@ const apart = (page: Page, family: string, lighter: number, heavier: number) =>
             ink.push(sum)
         }
         return ink[1] / ink[0] - 1
-    }, { family, size: PROBE_PX, weights: [lighter, heavier], text: PROBE })
+    }, { family: family.split(',')[0].trim(), size: PROBE_PX, weights: [lighter, heavier], text: PROBE })
 
 /** The least gain in ink that counts as a face of its own: a quarter of the least measured. */
 const DRAWN_APART = 0.05
