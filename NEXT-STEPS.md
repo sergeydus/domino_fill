@@ -6189,6 +6189,23 @@ in desktop and phone-360 at both viewports afterwards: 120 passed, so it didn't 
 - **Its error context was lost:** the repeat run cleared `test-results/` first. From now on,
   failing output is copied aside before any rerun (codex). It goes to its own change.
 
+**CI on `244ded9`** (run 39792139400): both jobs passed. Visual compared twice against the
+committed baselines, 16 of 16; the gate job ran unit 1855 and browser 777 passed, 1 skipped,
+none flaky.
+
+**Socket snapshots (U9)** in row 2's passing gates, each an `ERR_NO_BUFFER_SPACE` on a page
+load that the harness's single reload recovered, its test passing. No change made (AGENTS.md).
+
+| Gate | Diagnosed (UTC) | Test | TIME_WAIT, all / the tests' | Tests' established |
+|---|---|---|---|---|
+| `9def74c` | 2026-10-22 13:05:58 | layout, `layout.spec.ts` › 1280x800 @ 50% › easy 6x6 › row labels | 4689 / 4647 | 0 |
+| `244ded9` | 2026-10-22 14:01:07 | phone-360, `undo.spec.ts` › undo removes the domino just placed | 4310 / 4271 | 84 |
+
+Both gates started under 50 TIME_WAIT. **Corrected:** `9def74c`'s was reported as the first
+snapshot logged. It isn't: the UI spec's docs gates on 2026-10-20 logged three
+`ERR_NO_BUFFER_SPACE` recoveries, reported then, each with a snapshot whose counts weren't
+read before the logs were overwritten. It's the first whose counts were read.
+
 ## Campaign (future, for the mobile release)
 
 A campaign is a long numbered path of levels, like the mobile puzzle games with thousands of
