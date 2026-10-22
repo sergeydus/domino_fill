@@ -277,6 +277,17 @@ one colour, so it keeps the light ground.
 
 Nothing is set smaller than 13px.
 
+*Amended 2026-10-22, in row 2's contract.* Three changes, each for a reason found while
+planning the row:
+- **`title` arrives with row 6,** with the top bar that is its only use. Until then it would be
+  a role with nothing set in it.
+- **Controls are 800 at rest and 900 when primary or pressed, until row 3.** A pressed toggle
+  and the primary are told apart partly by weight today, and the tests hold that channel. Row 3
+  redraws every variant and its press, and decides then whether weight stays a channel.
+- **Emphasis inside a role is one step heavier.** Nunito loads 600–900 only, so today's 500
+  would draw at body's 600 and disappear. `font-medium` becomes 700 and `font-semibold` 800;
+  the card titles' `font-bold` gives way to `display`, at 900.
+
 ### 3.3 Shape, depth and space
 
 - **Radii:** 8 for chips, 16 for buttons and cards, 22 for the board tray, 24 for a sheet's top

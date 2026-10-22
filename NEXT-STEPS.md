@@ -113,6 +113,7 @@ Evidence levels:
 | 2026-10-20 | **Later: the rock changes with the season**, for example a pumpkin at Halloween and a snowman at Christmas (user, 2026-10-20). | Not part of the redesign. The redesign draws the rock through one replaceable obstacle drawing so a seasonal one can be added later without touching the board. See L2. |
 | 2026-10-20 | **`UI-SPEC.md`'s three questions** (user, 2026-10-20): labels under Undo, Hint and Reset, yes; eight visual baselines, the four screens in each theme, yes; a theme choice in Settings (System, Light, Dark), yes. | The baselines replace `GRAPHICS-SPEC.md` §9's "four, final" and arrive with the spec's row 1. The theme choice defaults to System, so following the phone is still what a player gets untouched; it adds a `data-theme` override and a pre-paint script (`UI-SPEC.md` §3.1). |
 | 2026-10-20 | **PR #18, the UI spec, merged** (user, 2026-10-20, after codex's approval), at `95eb99d`; CI passed on `master`. **Claude builds the redesign, codex reviews** (user, 2026-10-20). | Each of `UI-SPEC.md`'s 15 rows gets its contract first. Row 1, the two themes, is below L2. |
+| 2026-10-22 | **PR #19, UI row 1 (two themes), merged** (user, 2026-10-22, after codex's acceptance of `9ba65c9`), at `bfa9507`; CI passed on `master`, comparing all eight baselines. | Row 2, type, is next, by the same decision: Claude builds, codex reviews. Its contract follows row 1's. |
 
 ## Principles
 
@@ -5870,6 +5871,151 @@ restored byte for byte and checked by hash (`probes.py` in the builder's scratch
 8. Dark `tileFace` at `#fff3d7`: the board-equality test.
 9. Dark `accent` at `#3cc3b4`: the dark primary-text pin and its 4.5:1 bar.
 10. Dark `bannerSurface` missing: `tsc` (TS2741), and the key-parity test.
+
+### UI row 2, type: implementation contract
+
+**Why.** `UI-SPEC.md` row 2: Nunito and the new type roles (§3.2), the face and the sizes every
+later row is drawn in. Builder: Claude, reviewer: codex (user, 2026-10-20). Branch
+`feature/ui-type`, from `master` at `bfa9507`.
+
+**How it works today (read).**
+- **The family:** Geist, loaded by `next/font/google` in `app/layout.tsx:11` as
+  `--font-geist-sans` and set once, on `body` (`app/globals.css:207`).
+  `tests/typography.test.ts:136` requires that single declaration; `e2e/typography.spec.ts:62`
+  requires every text to compute to it; `e2e/fonts.spec.ts:42` requires every glyph to be drawn
+  by a font family matching `/^Geist( Mono)?$/`.
+- **The roles** (`app/typography.ts`) are five, each a size and a line height, with no weight:
+  `boardLabel` (`--label-font` / 1), `cardTitle` (24 / 1.25), `control` (16 / 1.25), `body`
+  (14 / 1.5) and `meta` (12 / 1.5). `scripts/typography-css.ts` renders them into one
+  `@theme inline` block that first clears Tailwind's scale.
+- **Weights are set apart from the roles,** in two places:
+  - **Controls:** each variant in `app/controls.ts` has `weight: 400 | 700`. The primary is
+    700, "the strongest weight" (`tests/controls.test.ts:44`), and every other variant is 400.
+    A pressed toggle adds `aria-pressed:font-bold` (`app/dominoFill/controlStates.ts:12`).
+    Weight is a channel the tests hold: a pressed toggle differs from an unpressed one in
+    colour, weight and ring (`e2e/controlStates.spec.ts:241–279`), and the selected difficulty
+    is 700 (`e2e/accessibility.spec.ts:526`).
+  - **Text:** utilities on the element:
+    - `font-bold` on the three card titles (`CompletionCard.tsx:165`, `ResultsDialog.tsx:133`,
+      `Tutorial.tsx:48`);
+    - `font-semibold` on emphasis in body text (`AdviceStrip.tsx:56, 65, 73`,
+      `Archive.tsx:144`, `DominoClient.tsx:185`, `ResultsDialog.tsx:139, 166`);
+    - `font-medium` on four lines (`ChallengeClock.tsx:55`, `CompletionCard.tsx:168`,
+      `ResultsDialog.tsx:150`, `ChallengeCover.tsx:86`).
+
+    The completion card's levels are pinned by weight as well as size (outcome 700, detail
+    500, actions 400: `e2e/completionCard.spec.ts:50–71`).
+- **The clock** is `text-body font-medium tabular-nums` (`ChallengeClock.tsx:55`).
+- **Tabular figures** are already on the clock, the line targets, the streak and the results.
+
+**Measured with a prototype, before this contract** (a local scratch branch, discarded):
+- **The phone layout barely moves.** At 360×640, 390×844 and 393×852, at all three sizes, with
+  the challenge started:
+  - every chrome row's height is unchanged;
+  - cells change by at most 1px (53 → 54 and 46 → 47 at 390×844);
+  - the clock's row goes from 21px to 20px;
+  - the 38px floor holds where it held;
+  - 360×640 scrolls by 96–172px, as it does today by 97–173px.
+- **The suites:** 27 browser failures and 3 unit failures. 26 of the browser failures and all 3
+  unit failures are in the tests listed below. The 27th was a startup timeout
+  (`challengeUi.spec.ts:284`, phone-360), which passed 10 of 10 when rerun: the known startup
+  flake, not this row.
+- **The font's name:** Chromium reports the face that draws the text as "Nunito ExtraLight", the
+  default-instance name of Google's variable Nunito. Every glyph is still from the self-hosted
+  font (`isCustomFont: true`).
+
+**Three amendments to `UI-SPEC.md` §3.2, recorded there in this commit.**
+1. **`title` waits for row 6.** Its only use is the name in the top bar, which row 6 builds. A
+   role with nothing set in it is the dead token row 1's audit refuses, so it arrives with its
+   consumer.
+2. **Controls are 800 at rest, and 900 when primary or pressed, until row 3.** The spec gives
+   every control 800. Today a pressed toggle and the primary are told apart partly by weight,
+   and three tests hold that channel. Row 3 redraws every variant and its press, and decides
+   then whether weight stays a channel. Until it does, the interim keeps the channel without
+   inventing a weight the spec doesn't load.
+3. **Emphasis inside a role is one step heavier than today's, in Nunito's weights.** Nunito
+   loads 600–900 only, so today's `font-medium` (500) would draw at body's 600 and the
+   emphasis would vanish. So `font-medium` becomes 700 (`font-bold`), and `font-semibold`
+   becomes 800 (`font-extrabold`). The card titles' `font-bold` goes: the `display` role is 900.
+
+**The rules.**
+1. **Nunito replaces Geist.** It's loaded by `next/font/google` with weights 600, 700, 800 and
+   900, subset latin, as `--font-nunito`, set once on `body`. No new dependency.
+2. **The roles become the spec's, each with its weight:**
+
+   | Role | Size / line height / weight | Set on |
+   | --- | --- | --- |
+   | `display` | 28 / 1.15 / 900 | the completion card's outcome, the results' heading, the tutorial's title (today's `cardTitle`) |
+   | `control` | 16 / 1.25 / 800 | every button, as today |
+   | `body` | 15 / 1.45 / 600 | as today |
+   | `meta` | 13 / 1.4 / 700 | as today |
+   | `clock` | 20 / 1 / 900 | the challenge clock (new) |
+   | `boardLabel` | `--label-font` / 1 / 900 | the line targets, as today |
+
+   - **The generated CSS** emits each role's weight as `--text-<role>--font-weight`, which
+     Tailwind's `text-<role>` sets with the size and the line height.
+   - `TYPE` gains `weight`, typed `600 | 700 | 800 | 900`.
+   - Nothing is smaller than 13px. The board label at the 38px floor is 19px.
+3. **Weights:**
+   - Controls are 800, the primary is 900, and `aria-pressed` is `font-black` (900), per
+     amendment 2. `CONTROL`'s `weight` is typed `800 | 900`.
+   - Emphasis follows amendment 3, at the ten sites listed above (seven `font-semibold`, three
+     `font-medium`).
+   - The clock drops `font-medium`; its role is 900.
+   - No weight below 600 is used anywhere in `app/`, as Nunito loads none.
+4. **Tabular figures** stay where they are.
+
+**Not in it:**
+- the `title` role (row 6);
+- any control's shape, colour or press (row 3);
+- any layout change, and any colour;
+- the board label's fraction of the cell (`LABEL_FONT_FRACTION` stays 0.5).
+
+**Tests.**
+- **`tests/typography.test.ts`:**
+  - the table: six roles, each a size, a line height and a weight, at the values above;
+  - the generated CSS, byte-identical, with a weight line per role after the scale is cleared;
+  - the family once, on `body`, as Nunito, with Geist gone from `layout.tsx`;
+  - **new: no weight the page doesn't load.** No `font-thin`, `font-extralight`, `font-light`,
+    `font-normal` or `font-medium`; no `fontWeight` below 600; no numeric `font-weight` below
+    600 in CSS. Its own cases cover each form.
+- **`e2e/typography.spec.ts`:**
+  - every text on each surface is still a role, by size and line height, in Nunito;
+  - the named surfaces are checked against their roles (`display` where it said `cardTitle`),
+    plus the clock as `clock`;
+  - **new: each role's surfaces compute its weight:** a line target 900, an archive date 700,
+    the advice text 600, a control at rest 800, the clock 900, the outcome 900.
+- **`e2e/fonts.spec.ts`:** every glyph drawn by the self-hosted Nunito. The family pattern is
+  `/^Nunito( \w+)?$/`, for the variable font's instance name (measured), and it still requires
+  `isCustomFont`.
+- **Existing tests that change** (each in this commit, with why):
+  - `tests/controls.test.ts:44–46`: the primary is 900, still the strongest. `:286`: the
+    pressed look is `aria-pressed:font-black`.
+  - `e2e/controlVariants.spec.ts:181`: pressed is weight `'900'`.
+  - `e2e/accessibility.spec.ts:526`: the selected difficulty is `'900'`, still a channel that
+    isn't colour.
+  - `e2e/completionCard.spec.ts:50–52`: outcome 28/900, detail 15/700, actions 16/800. The
+    ladder below it is unchanged and still holds: every pair of levels differs in size and in
+    weight, and the outcome is the largest and heaviest.
+  - `e2e/controlStates.spec.ts`: no change. Its channels compare pressed against unpressed
+    (900 against 800), not fixed weights.
+- **The baselines:** all eight change, so `[visual update]`, then the eight regenerated files.
+
+**Mutation probes (planned).** Each must fail at the assertion named.
+1. Keep Geist in `layout.tsx` → the family check (unit), and the typography and fonts specs.
+2. Body back to 14 / 1.5 → the table test, and the browser role check on the advice text.
+3. Drop the weight lines from the generated CSS → the byte-identical check, and the role-weight
+   check (a line target at 400).
+4. Leave a `font-medium` in `CompletionCard.tsx` → the no-unloaded-weight audit.
+5. The clock back on `text-body` → the clock's role check.
+6. Secondary controls at 900 → the completion card's ladder (actions as heavy as the outcome).
+7. `aria-pressed` back to `font-bold` (700, lighter than at rest) → the pressed-weight checks in
+   `controlVariants.spec.ts` and `accessibility.spec.ts`.
+8. `body` still reads `var(--font-geist-sans)` after Nunito is loaded as `--font-nunito`, so the
+   text falls back to a system face → the fonts spec (a glyph not from a self-hosted font), and
+   the typography spec's family check.
+
+**The gate** before each commit, from cold, as AGENTS.md says.
 
 ## Campaign (future, for the mobile release)
 
