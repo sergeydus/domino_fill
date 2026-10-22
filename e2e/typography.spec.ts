@@ -48,30 +48,44 @@ const texts = (page: Page): Promise<Text[]> => page.evaluate(() => {
 })
 
 /**
- * The phrase the drawn weights are measured with. Calibrated, not any text: in Nunito some
- * glyphs keep their width across weights -- "6" is 9px at 15px in all four (measured) -- so a
- * label's own text could hide a missing face. "Check" widens at every step, by 0.56px or more
- * between neighbouring weights at 13px. The first test below holds that, on the page.
+ * How a weight is seen to be drawn: by its ink. The question is whether a weight resolves to a
+ * face of its own, which doesn't depend on the size, so the phrase is drawn on a canvas at one
+ * large size and its inked pixels counted.
+ *
+ * Not its width at the text's own size, which was the first build. On Windows' Chromium
+ * "Check" widens at every step (0.56px or more at 13px), but on the Ubuntu runner advances
+ * snap to whole pixels, and "Check" at 15px measured the same width at 600 and 700, and at
+ * 800 and 900 (CI run 39781269776). Some glyphs keep their width in any case: "6" is 9px at
+ * 15px in all four weights (codex). Ink has no such rounding: measured on this host, "Check" at
+ * 64px gains 14.5-20.3% at every step, against 0 for a weight drawn with a neighbour's face.
  */
 const PROBE = 'Check'
+const PROBE_PX = 64
 
-/** How much wider `PROBE` draws at `heavier` than at `lighter`, in `family` at `size` px. */
-const apart = (page: Page, family: string, size: number, lighter: number, heavier: number) =>
-    page.evaluate(({ family, size, weights, text }) => {
-        const [a, b] = weights.map(w => {
-            const span = document.createElement('span')
-            span.style.cssText = `position:absolute;visibility:hidden;white-space:pre;font-family:${family};font-size:${size}px;font-weight:${w}`
-            span.textContent = text
-            document.body.append(span)
-            const width = span.getBoundingClientRect().width
-            span.remove()
-            return width
-        })
-        return b - a
-    }, { family, size, weights: [lighter, heavier], text: PROBE })
+/** How much more ink `PROBE` takes at `heavier` than at `lighter`, in `family`: 0.2 is 20%. */
+const apart = (page: Page, family: string, lighter: number, heavier: number) =>
+    page.evaluate(async ({ family, size, weights, text }) => {
+        const ink: number[] = []
+        for (const w of weights) {
+            // Load the face first, or the first draw can be the fallback while it arrives.
+            await document.fonts.load(`${w} ${size}px ${family}`)
+            const canvas = document.createElement('canvas')
+            canvas.width = size * 6
+            canvas.height = size * 2
+            const ctx = canvas.getContext('2d')!
+            ctx.font = `${w} ${size}px ${family}`
+            ctx.textBaseline = 'top'
+            ctx.fillText(text, 4, 4)
+            const alpha = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+            let sum = 0
+            for (let i = 3; i < alpha.length; i += 4) sum += alpha[i]
+            ink.push(sum)
+        }
+        return ink[1] / ink[0] - 1
+    }, { family, size: PROBE_PX, weights: [lighter, heavier], text: PROBE })
 
-/** The least widening that counts as a different face: under half the smallest measured. */
-const DRAWN_APART = 0.25
+/** The least gain in ink that counts as a face of its own: a quarter of the least measured. */
+const DRAWN_APART = 0.05
 
 /**
  * Every text's weight, as a number and as drawn: one the page loads, its role's own, or above
@@ -87,15 +101,14 @@ const expectWeights = async (page: Page, where: string, found: Text[]) => {
         const own = TYPE[role].weight
         if (!WEIGHTS.includes(t.weight as Weight)) problems.push(`"${t.text}": ${t.weight}, a weight the page doesn't load`)
         else if (t.weight < own) problems.push(`"${t.text}": ${t.weight}, under ${role}'s ${own}`)
-        else if (t.weight > own && await apart(page, t.family, t.size, own, t.weight) < DRAWN_APART) {
+        else if (t.weight > own && await apart(page, t.family, own, t.weight) < DRAWN_APART) {
             problems.push(`"${t.text}": ${t.weight} draws like ${role}'s ${own}`)
         }
     }
     const family = found[0].family
     for (const role of roles) {
-        const { size, weight } = TYPE[role]
-        const px = typeof size === 'number' ? size : found.find(t => roleOf(t) === role)!.size
-        if (weight !== TYPE.body.weight && await apart(page, family, px, TYPE.body.weight, weight) < DRAWN_APART) {
+        const { weight } = TYPE[role]
+        if (weight !== TYPE.body.weight && await apart(page, family, TYPE.body.weight, weight) < DRAWN_APART) {
             problems.push(`${role}'s ${weight} draws like body's ${TYPE.body.weight}`)
         }
     }
@@ -156,21 +169,17 @@ const expectControls = async (scope: Locator, except?: string) => {
     expect(seen).toBeGreaterThan(0)
 }
 
-test('the probe phrase draws each loaded weight apart, at every size a role sets', async ({ page }) => {
+test('the probe phrase draws each loaded weight apart from its neighbours', async ({ page }) => {
     await openBoard(page)
     await page.evaluate(() => document.fonts.ready)
     const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
-    // The board label's sizes at the two baseline cells are 19 and 27; the rest are the table's.
-    const sizes = [...new Set([19, 27, ...Object.values(TYPE).map(r => r.size as number | string).filter((x): x is number => typeof x === 'number')])]
     const steps: string[] = []
-    for (const size of sizes) {
-        for (const [lighter, heavier] of WEIGHTS.slice(0, -1).map((w, i) => [w, WEIGHTS[i + 1]])) {
-            const d = await apart(page, family, size, lighter, heavier)
-            if (d < DRAWN_APART) steps.push(`${size}px: ${lighter} to ${heavier} widens ${d.toFixed(2)}px`)
-        }
+    for (const [lighter, heavier] of WEIGHTS.slice(0, -1).map((w, i) => [w, WEIGHTS[i + 1]])) {
+        const gain = await apart(page, family, lighter, heavier)
+        if (gain < DRAWN_APART) steps.push(`${lighter} to ${heavier} gains ${(gain * 100).toFixed(1)}% ink`)
     }
-    // Widths first: a face the page failed to load fails here, as a weight drawn like another.
-    expect(steps, 'every step between loaded weights draws wider').toEqual([])
+    // The drawing first: a face the page failed to load fails here, as a weight drawn like another.
+    expect(steps, 'every step between loaded weights draws heavier').toEqual([])
     // Then the inventory: a loaded Nunito face for each of the four.
     const loaded = await page.evaluate(() => [...document.fonts]
         .filter(f => f.family.replace(/["']/g, '') === 'Nunito' && f.status === 'loaded').map(f => Number(f.weight)))
@@ -234,7 +243,7 @@ test('the game page: labels, controls, the clock, and the advice strip with its 
     const atRest = page.locator('[data-difficulty][aria-pressed="false"]').first()
     expect([await weightOf(atRest), await weightOf(pressed)]).toEqual([800, 900])
     const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
-    expect(await apart(page, family, TYPE.control.size, 800, 900)).toBeGreaterThanOrEqual(DRAWN_APART)
+    expect(await apart(page, family, 800, 900)).toBeGreaterThanOrEqual(DRAWN_APART)
 })
 
 test('the archive: its dates are meta, its words body, its buttons controls', async ({ page }) => {

@@ -6070,9 +6070,10 @@ departure, see the review above):
 **The gate** before each commit, from cold, as AGENTS.md says.
 
 **As built (2026-10-22).** Built against the accepted contract (`d2af291`), with codex's three
-acceptance notes taken and one deviation.
+acceptance notes taken and two deviations. The first commit, `1328027`, failed CI's gate on
+Ubuntu; the second deviation is the fix.
 
-The deviation:
+The deviations:
 - **The archive's days are 700, not 800.** Rule 3 typed `CONTROL`'s `weight` as `800 | 900`.
   A day in the archive is a control whose text is the `meta` role (`Archive.tsx:181`), and
   `text-meta` now carries meta's 700, which overrides the variant's weight. Before this row
@@ -6080,16 +6081,31 @@ The deviation:
   day computed to no variant. The `day` variant is now 700, to match its text's role, and
   `weight` is typed `700 | 800 | 900`. No other control takes another role's text (searched).
 
+- **Weights are seen by their ink, not their width.** The contract measured a drawn weight
+  as a width: the probe phrase at the element's size, once at each weight.
+  - **Built that way, `1328027` passed every test on this host** and failed 8 on CI's Ubuntu
+    runner (run 39781269776, the gate job, each failure retried twice). CI measured "Check"
+    at 15px the same width at 600 and 700, and at 800 and 900, and at 27px at 700 and 800.
+    The completion card's detail (700) measured like body's 600. Advances there snap to whole
+    pixels; here they don't. The faces were all loaded; the measure couldn't see them.
+  - **Now:** the phrase is drawn on a canvas at 64px, at each weight, and its inked pixels
+    counted. A face is a face at any size, so one size answers whether a weight has its own.
+    Measured here at 48, 64 and 96px, "Check" gains 14.5–20.4% ink at every step. A weight
+    drawn with a neighbour's face gains 0%, measured by probe 9. The check requires 5%.
+  - The baselines from run 39781269776 weren't committed. The fix commit regenerates them
+    again.
+
 Codex's acceptance notes:
 - **The probe phrase is calibrated.** Measured in the page, in Nunito at 13, 15, 16, 19, 20
   and 28px:
   - "6" has the same width at all four weights, for example 9px at 15px;
-  - "Check" widens at every step, by at least 0.56px between neighbouring weights at 13px.
+  - "Check" widens at every step, by at least 0.56px between neighbouring weights at 13px,
+    but only on this host (above).
 
-  So the visible-weight check draws "Check" in the element's family and size, and requires
-  0.25px or more between two weights that must differ. Its first test asserts that "Check"
-  separates every pair of neighbouring loaded weights, at every size a role sets, before it
-  checks `document.fonts`. Probe 9 fails at that width assertion first.
+  "Check" stays the phrase, measured by ink. The first test asserts that it gains ink at
+  every step between neighbouring loaded weights before it checks `document.fonts`. Probe 9
+  fails at that ink assertion first: rerun against the ink check, 700 to 800 and 800 to 900
+  each gain 0.0%.
 - **The font name is the one measured.** Chromium's font report names the face that draws
   every glyph "Nunito ExtraLight", and nothing else, so the pattern is `/^Nunito ExtraLight$/`.
   `document.fonts` lists five faces per weight (one per unicode range), one of each loaded.
@@ -6130,9 +6146,10 @@ Choices inside the contract:
 7. `aria-pressed` on `font-bold`: `controlVariants.spec.ts:182` (pressed is 900), twice, and
    `accessibility.spec.ts:527`.
 8. Body on `--font-geist-sans`: the typography spec's family check on six surfaces, the fonts
-   spec on both pages, and the calibration (the fallback face doesn't widen).
-9. Only 600 and 900 loaded: the calibration's width assertion first, then the weight check on
-   six surfaces (800 and 700 draw like their neighbours).
+   spec on both pages, and the calibration (the fallback face doesn't gain ink at every step).
+9. Only 600 and 900 loaded: the calibration's drawing assertion first, then the weight check on
+   six surfaces. Run against the width check and again against the ink check; under ink, 700
+   to 800 and 800 to 900 gain 0.0%, and every pressed or primary control draws like 800.
 10. A bare tutorial `<strong>`: the tutorial's emphasis check (900, expected 800).
 
 The first probe run crashed during probe 2: printing a test title with a non-ASCII character
