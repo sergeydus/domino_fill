@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { StoreWrapper } from "./provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
@@ -12,11 +12,32 @@ import { themeScript } from "./themeScript";
  * The one face (UI row 2): Nunito, self-hosted by `next/font`, in the four weights UI-SPEC §3.2
  * chose. Nunito itself runs 200-1000; nothing in `app/` asks for a weight outside these, and
  * `tests/typography.test.ts` holds that, so no text draws at a weight the page doesn't load.
+ *
+ * From the repository since U12 (NEXT-STEPS): `next/font/google` fetched it at every build, and
+ * a Google response once failed one. The file is the Latin one Google serves for these four
+ * weights, byte for byte (`fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofINeaBTMnFcQ.woff2`,
+ * SHA-256 20fc9b6f...4798), with its licence beside it. It's the variable font, so the four
+ * faces are one file at four weights, as Google's CSS declared them. The other four subsets
+ * Google lists draw no character the app has.
+ *
+ * The binding's name is the family: Turbopack names a local font's stack after it, so this is
+ * `Nunito`, and the stack `'Nunito', 'Nunito Fallback'`, as before (codex). The range is the
+ * Latin subset's, from Google's CSS: the file holds a few code points outside it (codex), and
+ * the range keeps this face to the characters it drew before.
  */
-const nunito = Nunito({
-  weight: ["600", "700", "800", "900"],
+const Nunito = localFont({
+  // Literals, one per weight: next/font reads its arguments at build time, not by running them.
+  src: [
+    { path: "./fonts/nunito-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/nunito-latin.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/nunito-latin.woff2", weight: "800", style: "normal" },
+    { path: "./fonts/nunito-latin.woff2", weight: "900", style: "normal" },
+  ],
   variable: "--font-nunito",
-  subsets: ["latin"],
+  declarations: [{
+    prop: "unicode-range",
+    value: "U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD",
+  }],
 });
 
 /**
@@ -104,7 +125,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body
-        className={`${nunito.variable} antialiased`}
+        className={`${Nunito.variable} antialiased`}
       >
         {/* Inside <body>, not wrapping <html>: the provider is a client component, and
             handing it the document element pulls the whole store graph into every route's

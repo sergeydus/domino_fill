@@ -114,6 +114,8 @@ Evidence levels:
 | 2026-10-20 | **`UI-SPEC.md`'s three questions** (user, 2026-10-20): labels under Undo, Hint and Reset, yes; eight visual baselines, the four screens in each theme, yes; a theme choice in Settings (System, Light, Dark), yes. | The baselines replace `GRAPHICS-SPEC.md` §9's "four, final" and arrive with the spec's row 1. The theme choice defaults to System, so following the phone is still what a player gets untouched; it adds a `data-theme` override and a pre-paint script (`UI-SPEC.md` §3.1). |
 | 2026-10-20 | **PR #18, the UI spec, merged** (user, 2026-10-20, after codex's approval), at `95eb99d`; CI passed on `master`. **Claude builds the redesign, codex reviews** (user, 2026-10-20). | Each of `UI-SPEC.md`'s 15 rows gets its contract first. Row 1, the two themes, is below L2. |
 | 2026-10-22 | **PR #19, UI row 1 (two themes), merged** (user, 2026-10-22, after codex's acceptance of `9ba65c9`), at `bfa9507`; CI passed on `master`, comparing all eight baselines. | Row 2, type, is next, by the same decision: Claude builds, codex reviews. Its contract follows row 1's. |
+| 2026-10-22 | **PR #20, UI row 2 (type), merged** (user, 2026-10-22, after codex's acceptance of `4fb6420`), at `bc98e43`. CI on `master` (run 39804051554): the gate job passed; **the visual job failed on its first attempt** and passed when rerun alone, comparing all eight baselines (16 of 16). | The failure was the build, not a comparison: `next/font/google` got Nunito's files at `fonts.gstatic.com/l/font?kit=…&skey=…&v=v32` URLs, and Next 16.0.10's loader refused each ("next/font/google queries have exactly one entry"), a documented upstream bug (codex: [vercel/next.js#99114](https://github.com/vercel/next.js/issues/99114), and the loader's source). The rerun was codex's recommendation; it fixes nothing. See U12. |
+| 2026-10-22 | **Serve Nunito from the repository** (user, 2026-10-22): Claude builds, codex reviews, before UI row 3. | Builds stop fetching the font from Google, so Google's response can't fail a build or change the face. Contract under U12. |
 
 ## Principles
 
@@ -6254,6 +6256,8 @@ Two limits:
 | U9 | Make the next socket error report connection counts | The harness already diagnoses an eligible bootstrap `ERR_NO_BUFFER_SPACE` and reloads once. Start one aggregate Windows TCP capture with its own five-second limit, never awaited by the retry, and log timing and original test identity when it settles. No polling or commands on healthy starts. | Diagnostic only | Yes: codex builds, Claude reviews (user, 2026-10-18). Claude accepted `d9896cd` and implementation `5073f46`; merged as PR #14 at `ff7bcab` (user, 2026-10-19), with CI passed on master. Implementation and validation below. No retry-rule or worker-count change. |
 | U10 | A challenge solve can delay the completion card | On a busy machine (8 test workers), solving a challenge board dropped a frame of the card's arrival in 14 of 100 tries, mostly one frame (33 ms); a casual board never did, and neither did on an idle machine (measured, desktop; see "The completion card's motion, measured where nothing competes for its frames"). Inferred: the solve's own work (saving the finish, results and streak) shares the main thread with the card's first frames; which part isn't measured. No claim about real devices. The motion test now measures a casual board. | Profile first | |
 | U11 | Diagnose the challenge-session phone timeouts | Two failures in one gate: competing Starts did not create another transaction, and the Check case stalled during its initial Start. Cause unestablished; original artifacts retained. | Investigation | Yes: codex builds, Claude reviews, after the motion fix (user, 2026-10-18). Claude accepted the measurement record and diagnostic plan `44ab91e`; both batches passed, 80/80, without reproduction. Failure-only per-page diagnostic and passive settlement counter built, awaiting code review. Cause remains unknown; see the investigation contract. |
+| U12 | Serve Nunito from the repository | `next/font/google` fetches the font at every build, and Google's response once failed `master`'s CI (PR #20's merge; upstream bug). It can also change the face with no commit here. Commit the file the build uses today, with its licence. | Small | Yes: Claude builds, codex reviews, before UI row 3 (user, 2026-10-22). Contract below. |
+| U13 | The key guide's size check, once | `keyGuide.spec.ts:151` failed once in a gate (row 2's As built): the advice row read 0px before the guide, then 18px. 120 repeats passed. Cause unestablished; codex's untested lead is `min-h-6` unapplied (`AdviceStrip.tsx:50`). | Investigation | |
 
 ### Windows browser-test socket pressure: investigation contract
 
@@ -7299,6 +7303,207 @@ The full cold gate follows, separate from the manual smoke and targeted runs.
   1 skipped**, **0 socket-error lines**). All five exits passed; no refused start or
   failed full gate. No real exhaustion was reproduced, so no natural-error snapshot
   is claimed: the native smoke and mocked orchestration supply the evidence so far.
+
+### U12, Nunito from the repository: implementation contract
+
+**Why.** `next/font/google` fetches Nunito from Google at every build. On PR #20's merge, Google
+answered with font URLs Next 16.0.10 can't parse, and `master`'s visual job failed to build
+(decision log, 2026-10-22). It passed when rerun, so the cause is still there. A build that
+fetches the font can also get a different font: Google serves its current version (`v32` in
+those URLs), and the baselines would follow it with no commit here. The user decided to serve
+the font from the repository, before UI row 3 (2026-10-22).
+
+**How it works today.**
+- **The call** (read): `app/layout.tsx:2` imports `Nunito` from `next/font/google`, and
+  `:16-20` asks for weights 600, 700, 800 and 900, subset `latin`, as `--font-nunito`, set on
+  `<body>` (`:107`).
+- **The build** (read, in Next 16.0.10's loader): it requests
+  `https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap` with a
+  fixed Chrome 104 user agent (`fetch-resource.js:24`, `get-google-fonts-url.js:46`), downloads
+  every file the CSS names, and serves them from `/_next/static/media`. So the page already
+  serves the font itself; only the build depends on Google.
+- **What it produced** (measured, the last local build):
+  - 5 files, one per subset Google lists (Cyrillic-ext, Cyrillic, Vietnamese, Latin-ext,
+    Latin), 137,344 bytes in all;
+  - 20 `@font-face` rules, the 5 subsets at each of the 4 weights, each rule with its subset's
+    `unicode-range`. All four weights point at the same file per subset: the variable font;
+  - only the Latin file preloaded;
+  - the fallback face `'Nunito Fallback'`: `local(Arial)`, `ascent-override: 99.71%`,
+    `descent-override: 34.82%`, `line-gap-override: 0.0%`, `size-adjust: 101.39%`. Those
+    come from a table shipped with `next/font/google` (read:
+    `get-fallback-font-override-metrics.js`).
+- **The characters** (measured, a scan of every source file in `app/`): each non-ASCII
+  character is in the Latin range, or in none of Nunito's subsets (the emoji, `→`, `❄`, drawn
+  by system fonts today). None is in the other four. Nothing in `app/` formats by locale
+  (searched: `toLocale*String`, `Intl.*`), and the corpus is digits. So **the other four files
+  never draw.**
+- **The tests that name the loader** (read): `tests/typography.test.ts:38` (the weight array)
+  and `:190` (the import). The browser specs check what it produces, not how:
+  - the family, `/^Nunito, /` (`e2e/typography.spec.ts:142`);
+  - a loaded face per weight, by family `Nunito` (`:189`);
+  - the face that draws every glyph, `Nunito ExtraLight` (`e2e/fonts.spec.ts:52`).
+
+**The rules.**
+1. **One file, the Latin one,** at `app/fonts/nunito-latin.woff2`: the bytes Google serves today
+   for the Latin subset of the request above, fetched with the same URL and user agent. Its
+   URL and SHA-256 go in the As built notes and the layout's comment. `.gitattributes` marks
+   `*.woff2` binary, so git keeps the bytes as they are, as it does for the corpus.
+2. **Loaded by `next/font/local`** in `app/layout.tsx`, **bound as `const Nunito`**, and set on
+   `<body>` as `Nunito.variable`:
+   - four `src` entries, the same file at weights 600, 700, 800 and 900, style normal, as
+     today's four faces;
+   - `variable: "--font-nunito"`, as today;
+   - the binding's name is the family. Turbopack, which builds this app, makes a local font's
+     stack from the JavaScript binding name (codex, reading Next 16.0.10's
+     [options](https://github.com/vercel/next.js/blob/v16.0.10/crates/next-core/src/next_font/local/options.rs#L40)
+     and [stack construction](https://github.com/vercel/next.js/blob/v16.0.10/crates/next-core/src/next_font/local/util.rs#L13)),
+     so `Nunito` keeps the stack `'Nunito', 'Nunito Fallback'`, and a lowercase `nunito`
+     would make it lowercase. No `font-family` declaration: it would change only the
+     `@font-face` rule, not the stack;
+   - `declarations`: today's Latin `unicode-range`, copied from Google's CSS, so the browser
+     uses this face for exactly the characters it does today. The file's own character map
+     isn't equivalent: it holds seven code points outside that range (codex, measured);
+   - `display: swap` and preloading are next/font's defaults, as today.
+3. **The licence:** `app/fonts/OFL.txt`, the SIL Open Font License as the Nunito project ships
+   it (google/fonts, `ofl/nunito/OFL.txt`), with its copyright line. The OFL allows the font
+   to be redistributed, subset included, with the licence.
+4. **No build fetches a font:** no `next/font/google` import in anything the build compiles.
+5. **The same pixels.** No visual-update marker in any commit. CI's comparison against the
+   eight committed baselines must pass unchanged. If it doesn't: stop, report what differs,
+   and don't regenerate in this change. A failure doesn't by itself say why (codex).
+6. **The fallback face** stays next/font's (`adjustFontFallback`'s default, Arial). It is now
+   computed from the file by `next/font/local` instead of read from the table, so its four
+   values may change; they are measured and reported against today's, and not pinned. They
+   shape text before Nunito arrives, and for good if it never does: a font that fails to
+   load leaves the page in the fallback, now as before. On CI's Ubuntu, which has no Arial,
+   the fallback face itself never loads (row 2's As built), and the next family in the stack
+   draws.
+7. **UI-SPEC §3.2 is amended** to match, in this contract's commit.
+
+**What's not in it.** Other weights or subsets; making or hinting a font file of our own; a Next
+upgrade; building offline in CI (rule 4's audit stands in for it); README.md's paragraph on
+Geist (`README.md:23`, stale since row 2), which is its own small change.
+
+**The tests.**
+- **Unit, `tests/typography.test.ts`:**
+  - the weights (`:38`): the layout's four `src` entries, at 600, 700, 800 and 900, replacing
+    the weight-array match;
+  - the family (`:184-195`): `next/font/local`, bound as `Nunito` and set on `<body>` as
+    `Nunito.variable`, the one file, `--font-nunito`, and the recorded `unicode-range`;
+  - new: no `next/font/google` import in what the build compiles: `app/` and the Next config.
+    (Tests and specs may name it in prose, as this one must);
+  - new: the file's SHA-256 is the recorded one;
+  - new: `OFL.txt` is there, names the SIL Open Font License, and carries Nunito's copyright.
+- **Browser:** unchanged. The family, the four loaded weights, the ink check and the face's
+  name are what prove the face is today's, so they must pass as they are.
+- **Browser, new: the page with the font blocked** (codex's recommendation). The font file's
+  request is aborted before the game page loads, at 360x640 and 1280x800, the day pinned:
+  - first, the block is real: Chromium reports no glyph drawn by `Nunito ExtraLight` (the
+    reader `e2e/fonts.spec.ts` uses), and some text drawn;
+  - then the page is usable: the board loads, a domino can be placed from the keyboard, and
+    the page doesn't scroll sideways.
+
+  It measures the fallback, so it states what this host and CI's Ubuntu each draw with; it
+  pins no metric (rule 6).
+- **Visual:** unchanged baselines, compared by CI (rule 5).
+
+**Mutation probes** (planned), each to fail at the assertion named:
+1. The import back to `next/font/google`: the no-Google audit, and the loader test.
+2. The binding lowercase, `nunito`: the browser family check (`/^Nunito, /`), and the loader
+   test.
+3. The 700 entry dropped: the unit weights test, and the browser ink calibration.
+4. The file swapped for Google's Latin-ext file: the hash test.
+5. The `unicode-range` declaration dropped: the loader test.
+6. `OFL.txt` deleted: the licence test.
+7. The blocked-font test's route made to match nothing: its own first assertion, that no glyph
+   is drawn by Nunito.
+
+**The gate** before each commit, from cold, as AGENTS.md says. The As built notes record the
+file's URL, its hash and size, whether it matches the file the last `next/font/google` build
+downloaded, and the fallback face's new values.
+
+**Codex's review of `05a6029`,** every correction made above:
+- **Rule 2 named the family the wrong way.** It cited `loader.js` and `postcss-next-font.js`,
+  which are webpack's path; this app builds with Turbopack ("Next.js 16.0.10 (Turbopack)" in
+  every build log), which names the stack after the binding. The binding is now `Nunito`, the
+  `font-family` declaration is gone, and probe 2 lowercases the binding instead.
+- **The three questions:** Latin only, agreed (codex's own scan found no app character in the
+  other four subsets); keep `unicode-range`, because the file holds seven code points outside
+  it; the fallback unpinned, acceptable, reported, with the page's state when the font never
+  loads acknowledged in rule 6 and checked by the new blocked-font test.
+- **Rule 5's wording:** a failed comparison is stopped and reported without naming a cause.
+
+Codex accepted the contract at `7e4edc0`, with no further corrections.
+
+**As built (2026-10-22),** in `bf3b1a0`, against the accepted contract, with no deviations.
+
+**The file** (measured):
+- Google's CSS for the request, fetched with next/font's user agent, has the same 20 faces.
+  All four Latin faces name one file:
+  `https://fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofINeaBTMnFcQ.woff2`.
+- **It's the file the last `next/font/google` build served,** byte for byte: 39,152 bytes,
+  SHA-256 `20fc9b6fc618e7c3c68d3ac750a2a5dfbceb8521675458d2cea580b5693e4798`, equal to that
+  build's `07454f8ad8aaac57-s.p…woff2`. Git stores it with that hash, as binary.
+- `OFL.txt` is google/fonts' `ofl/nunito/OFL.txt`, read in full before committing: the SIL
+  Open Font License 1.1, Nunito's copyright line, and no Reserved Font Name, so a subset may
+  keep the name.
+
+**What the build makes of it** (measured, in the built CSS):
+- one font file, preloaded, as before;
+- four faces, family `Nunito`, at 600, 700, 800 and 900, each with the Latin range;
+- the stack `"Nunito","Nunito Fallback"`, as before;
+- **the fallback face's values,** now computed from the file (rule 6):
+
+  | | Before (table) | Now (file) |
+  |---|---|---|
+  | `ascent-override` | 99.71% | 103.02% |
+  | `descent-override` | 34.82% | 35.97% |
+  | `line-gap-override` | 0.0% | 0.0% |
+  | `size-adjust` | 101.39% | 98.13% |
+
+**Choices inside the contract:**
+- **The four `src` entries are written out,** one per weight. next/font reads its arguments
+  at build time and takes only literals, so a mapped array isn't allowed.
+- **The blocked-font tests live in `e2e/fonts.spec.ts`,** beside the reader they share. That
+  spec runs in the desktop project only (`playwright.config.ts:46`); each test sets its own
+  viewport, 360x640 or 1280x800, and gets its own browser, so the domino placed in one can't
+  block the other.
+- **Probe 5 renames the declaration's `prop`** rather than deleting the block, which drops
+  the range the same way and keeps the file compiling.
+
+**Tests.**
+- **Unit:** 1858, up from 1855. `tests/typography.test.ts` has 16: the weights now read the
+  four `src` entries, the loader test checks `next/font/local`, the `Nunito` binding and the
+  range, and three are new (no `next/font/google` in `app/` or `next.config.ts`; the file's
+  hash, size and binary attribute; the licence).
+- **Browser:** 780 listed, up from 778: the two blocked-font tests. Both pass on this host.
+
+**Mutation probes: 7 of 7 caught,** each at the assertion named; every file restored byte for
+byte and checked by hash (`probes3.py` in the builder's scratchpad).
+1. The import back to `next/font/google`: the no-Google audit and the loader test.
+2. The binding lowercase: the family check, `/^Nunito, /`, on six surfaces, and the loader
+   test. The calibration also failed, at its inventory (`Nunito` loaded nowhere).
+3. The 700 entry dropped: the unit weights test, and the calibration's ink step
+   (`typography.spec.ts:186`).
+4. Google's Latin-ext file in its place: the hash test.
+5. The range dropped: the loader test.
+6. `OFL.txt` deleted: the licence test.
+7. The blocked-font route matching nothing: the test's first assertion, that no text is drawn
+   by Nunito, at both sizes.
+
+**The gate** for `bf3b1a0`, from cold: every step 0 (TIME_WAIT 39; unit 1858, stderr 0 bytes;
+browser 779 passed, 1 skipped; no socket errors).
+
+**After `749931a`, the As built notes:**
+- **Its gate** passed every step, with the same counts. It logged one `ERR_NO_BUFFER_SPACE`,
+  recovered by the single reload with the test passing; its U9 snapshot, at
+  2026-10-22 17:25:47 UTC: layout, `layout.spec.ts` › 1280x800 @ 200% › hard 8x8 › the whole
+  shell fits; TIME_WAIT 4721, the tests' 4664; the tests' established 0. It started at 48.
+  No change made (AGENTS.md).
+- **CI on `749931a`** (run 39822645252) passed both jobs. **Visual compared the eight
+  unchanged baselines twice, 16 of 16:** rule 5 holds, with the font from the repository.
+  The gate job ran unit 1858 and browser 779 passed, so the blocked-font tests pass on
+  Ubuntu too, where the fallback isn't Arial.
 
 ## Open questions
 

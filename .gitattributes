@@ -16,3 +16,7 @@ public/puzzles/** -text
 app/palette.css -text
 app/typography.css -text
 app/controls.css -text
+
+# The font is pinned by its SHA-256 (U12, `tests/typography.test.ts`), so git must never touch
+# its bytes. Git would detect it as binary anyway; this says so rather than relying on that.
+*.woff2 binary
