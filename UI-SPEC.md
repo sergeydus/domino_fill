@@ -222,11 +222,20 @@ redefined by the rows that restyle them, each with its ratio rule in both themes
 
 **Every row keeps every guarantee on its way in.** An intermediate palette is fine; a commit
 that drops a guarantee is not.
-- **Row 1** gives the chrome and text tokens their final values in both themes, since their
-  guarantees hold from the start (§3.1's table). It keeps every board, piece and cell-state
-  token at today's value in both themes. In dark, the board is today's lit object on a dark
-  ground, so P1-3's chain, the cell states' ratios and every other board guarantee hold
-  unchanged, now proved in both themes.
+- **Row 1** changes no light value: the light theme stays pixel-identical. Its dark set is an
+  interim one:
+  - the chrome tokens get dark values chosen to keep every pairing today's components draw;
+  - every board, piece and cell-state token keeps today's value in both themes. In dark, the
+    board is today's lit object on a dark ground, so P1-3's chain, the cell states' ratios and
+    every other board guarantee hold unchanged, now proved in both themes.
+
+  *Amended 2026-10-20, in row 1's contract.* This said row 1 gave the chrome and text tokens
+  their final values. It can't: today's primary control draws `ink` on `accent`, the final
+  accent needs `onAccent` (a control change), and the new roles have no consumer before
+  row 3.
+- **Row 3** gives the chrome and text tokens their final values in both themes, with the new
+  roles (`surface`, `raisedEdge`, `inkMuted`, `onAccent`, `onSuccess`, `onProblem`), in the
+  same commit that moves the controls onto them.
 - **The board-and-pieces row (row 4)** moves the board and piece tokens to their final values
   in the same commit that draws the rims and the wells, and swaps P1-3's chain for the
   silhouette rule. Neither half can land alone:
@@ -700,9 +709,9 @@ then the regenerated baselines. Each row gets its implementation contract in NEX
 
 | # | Row | Changes pixels |
 | --- | --- | --- |
-| 1 | Two themes: the palette's shape, the generated CSS with its `data-theme` override and the pre-paint script, `color-scheme`, theme colours, §3.1's values in both themes with the contrast tests, and the eight baselines | yes |
+| 1 | Two themes: the palette's shape, the generated CSS with its `data-theme` override and the pre-paint script, `color-scheme`, theme colours, every browser drawing reading its token through CSS, an interim dark set with light unchanged (amended, §3.1), the contrast tests in both themes, and the eight baselines | dark only |
 | 2 | Type: Nunito and the new roles | yes |
-| 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, and `app/icons.tsx` | yes |
+| 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, `app/icons.tsx`, and the chrome's final colours with the new roles, in both themes (§3.1) | yes |
 | 4 | The board and the pieces, together (§3.1 says why they can't be split): the tray, the wells and the line targets' states; the domino redrawn with its rim; the `Obstacle` component with its rock skin; their tokens at final values; the silhouette rule in place of P1-3's chain; the amended proportions; and the icon generator | yes |
 | 5 | Cell states in both themes | yes |
 | 6 | The top of the screen: the top bar, the difficulty cards and the puzzle row | yes |

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { renderToString } from 'react-dom/server'
 import { AnchorMark, CandidateMark, FocusMark, HintMark, RefusedMark, STATE } from '@/app/dominoFill/cellStates'
-import { PALETTE } from '@/app/palette'
+import { cssVar, type Token } from '@/app/palette'
 import { runInAction } from 'mobx'
 import Selection from '@/app/dominoFill/Selection'
 import { PuzzleSession } from '@/app/stores/PuzzleSession'
@@ -25,6 +25,18 @@ const markup = (el: React.ReactElement) => {
     return host.querySelector('svg')!
 }
 
+/**
+ * What a mark paints `property` in: the token reference in its `style`, and no presentation
+ * attribute beside it (UI row 1). A reference, not a value, so it follows the theme; and in
+ * `style`, so nothing depends on a browser resolving `var()` inside an SVG attribute.
+ */
+const paints = (el: Element, property: 'fill' | 'stroke', token: Token) => {
+    const declared = Object.fromEntries((el.getAttribute('style') ?? '').split(';')
+        .filter(d => d.includes(':')).map(d => d.split(':').map(x => x.trim())))
+    expect(declared[property], `${property} in style="${el.getAttribute('style')}"`).toBe(cssVar(token))
+    expect(el.getAttribute(property), `no ${property} attribute`).toBeNull()
+}
+
 const MARKS = { anchor: <AnchorMark />, candidate: <CandidateMark />, focus: <FocusMark />, hint: <HintMark />, refused: <RefusedMark /> }
 
 describe('P1-5: each state carries a channel besides colour', () => {
@@ -32,7 +44,7 @@ describe('P1-5: each state carries a channel besides colour', () => {
         const ring = markup(MARKS.anchor).querySelector('[data-ring]')!
         expect(ring.getAttribute('stroke-dasharray')).toBeNull()
         expect(ring.getAttribute('fill')).toBe('none')
-        expect(ring.getAttribute('stroke')).toBe(PALETTE.anchor)
+        paints(ring, 'stroke', 'anchor')
     })
 
     it('a candidate is the same ring, dashed, over a wash', () => {
@@ -43,7 +55,8 @@ describe('P1-5: each state carries a channel besides colour', () => {
             expect(ring.getAttribute(a), a).toBe(anchor.getAttribute(a))
         }
         expect(ring.getAttribute('stroke-dasharray')).toBe(`${STATE.dash.on} ${STATE.dash.off}`)
-        expect(svg.querySelector('[data-wash]')!.getAttribute('fill')).toBe(PALETTE.candidateWash)
+        paints(ring, 'stroke', 'candidateEdge')
+        paints(svg.querySelector('[data-wash]')!, 'fill', 'candidateWash')
     })
 
     it('the focus is four corner brackets, bent round, outside the ring', () => {
@@ -54,7 +67,7 @@ describe('P1-5: each state carries a channel besides colour', () => {
         expect(d.match(/M/g)).toHaveLength(4)
         expect(d.match(/A (\S+) (\S+) 0 0 1/g)).toEqual(Array(4).fill(`A ${STATE.focus.bend} ${STATE.focus.bend} 0 0 1`))
         expect(path.getAttribute('fill')).toBe('none')
-        expect(path.getAttribute('stroke')).toBe(PALETTE.cellFocus)
+        paints(path, 'stroke', 'cellFocus')
         // Its halo's inner edge clears the ring's outer edge.
         expect(STATE.focus.inset + STATE.focus.stroke / 2 + STATE.focus.halo)
             .toBeLessThanOrEqual(STATE.ring.inset - STATE.ring.stroke / 2)
@@ -64,7 +77,7 @@ describe('P1-5: each state carries a channel besides colour', () => {
         const svg = markup(MARKS.focus)
         const [halo, brackets] = [svg.querySelector('[data-halo]')!, svg.querySelector('[data-brackets]')!]
         expect(halo.getAttribute('d')).toBe(brackets.getAttribute('d'))
-        expect(halo.getAttribute('stroke')).toBe(PALETTE.cellFocusHalo)
+        paints(halo, 'stroke', 'cellFocusHalo')
         expect(Number(brackets.getAttribute('stroke-width'))).toBe(STATE.focus.stroke)
         expect(Number(halo.getAttribute('stroke-width'))).toBe(STATE.focus.stroke + 2 * STATE.focus.halo)
         expect(halo.compareDocumentPosition(brackets) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -76,7 +89,7 @@ describe('P1-5: each state carries a channel besides colour', () => {
         const diamond = markup(MARKS.hint).querySelector('[data-diamond]')!
         const points = diamond.getAttribute('points')!.split(' ').map(p => p.split(',').map(Number))
         expect(points).toEqual([[50, 50 - STATE.hint.reach], [50 + STATE.hint.reach, 50], [50, 50 + STATE.hint.reach], [50 - STATE.hint.reach, 50]])
-        expect(diamond.getAttribute('fill')).toBe(PALETTE.hint)
+        paints(diamond, 'fill', 'hint')
     })
 })
 
@@ -88,8 +101,9 @@ describe('P1-6: a refused move is a cross, red on a white halo', () => {
         const { reach: r, stroke, halo: h } = STATE.refused
         const d = `M ${50 - r} ${50 - r} L ${50 + r} ${50 + r} M ${50 + r} ${50 - r} L ${50 - r} ${50 + r}`
         expect([halo.getAttribute('d'), cross.getAttribute('d')]).toEqual([d, d])
-        expect(cross.getAttribute('stroke')).toBe(PALETTE.problem)
-        expect(halo.getAttribute('stroke')).toBe(PALETTE.refusedHalo)
+        // The board's own red since UI row 1, not the chrome's `problem`, which the theme moves.
+        paints(cross, 'stroke', 'refusedCross')
+        paints(halo, 'stroke', 'refusedHalo')
         expect(Number(cross.getAttribute('stroke-width'))).toBe(stroke)
         expect(Number(halo.getAttribute('stroke-width'))).toBe(stroke + 2 * h)
         // Drawn in that order, so the red is on top.

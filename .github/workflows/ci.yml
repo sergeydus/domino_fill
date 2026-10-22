@@ -81,7 +81,7 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # The four visual baselines (graphics spec P0-4, row 4).
+  # The visual baselines: four screens, in each theme (graphics spec P0-4, row 4; UI row 1).
   #
   # Pixels depend on the machine, so the baselines are taken on this runner and compared on
   # this runner, and nowhere else. A plain GitHub-hosted runner, not a container: this project

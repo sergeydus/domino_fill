@@ -6,12 +6,16 @@ import { waitForRest } from '../e2e/rest'
 import { VISUAL_URL } from '../e2e/server'
 
 /**
- * The four baselines, and only four (graphics spec P0-4, row 4).
+ * The four baselines, in each theme (graphics spec P0-4, row 4; UI row 1).
  *
  *   1-2. The component sheet at 38 and 53px: every piece, cell, label, selection state and
  *        control, from fixtures, so nothing about them depends on the day.
  *   3-4. The ordinary game at 360x640 and 1280x800, mid-play -- two dominoes down, not a
  *        board mid-celebration. These do depend on the day, so the day is fixed.
+ *
+ * Each is taken twice since UI row 1: with the system light, under the name it always had,
+ * and with the system dark, under that name with `-dark`. So the light four are the same
+ * files, and a row that moves a light pixel has to move one of them.
  *
  * Geometry, tokens, accessibility state and motion each have their own assertions
  * elsewhere; a screenshot is never the only thing standing behind a row. What these catch is
@@ -36,29 +40,38 @@ const midPlay = async (page: Page) => {
     await page.mouse.move(0, 0)
 }
 
-for (const cell of [38, 53]) {
-    test(`the component sheet at ${cell}px`, async ({ page }) => {
-        await page.setViewportSize({ width: 1280, height: 800 })
-        await page.goto(`${VISUAL_URL}/visual?cell=${cell}`)
-        await expect(page.locator('main[data-sheet]')).toBeVisible()
-        await waitForRest(page, 'main')
-        await expect(page).toHaveScreenshot(`sheet-${cell}.png`, { fullPage: true })
-    })
-}
+/** The light shots keep their names; the dark ones add `-dark`. */
+const SCHEMES = [['light', ''], ['dark', '-dark']] as const
 
-for (const [name, viewport] of [
-    ['phone', { width: 360, height: 640 }],
-    ['desktop', { width: 1280, height: 800 }],
-] as const) {
-    test(`the game on a ${name}, mid-play`, async ({ page }) => {
-        await page.setViewportSize(viewport)
-        await page.addInitScript(onDate, Date.parse(DAY))
-        await openBoard(page)
-        // The shift took: the page believes it is that day, and so serves that puzzle.
-        expect(await page.evaluate(() => new Date().toISOString().slice(0, 10))).toBe(DAY.slice(0, 10))
+for (const [scheme, suffix] of SCHEMES) {
+    test.describe(`with the system ${scheme}`, () => {
+        test.use({ colorScheme: scheme })
 
-        await midPlay(page)
-        await waitForRest(page)
-        await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true })
+        for (const cell of [38, 53]) {
+            test(`the component sheet at ${cell}px`, async ({ page }) => {
+                await page.setViewportSize({ width: 1280, height: 800 })
+                await page.goto(`${VISUAL_URL}/visual?cell=${cell}`)
+                await expect(page.locator('main[data-sheet]')).toBeVisible()
+                await waitForRest(page, 'main')
+                await expect(page).toHaveScreenshot(`sheet-${cell}${suffix}.png`, { fullPage: true })
+            })
+        }
+
+        for (const [name, viewport] of [
+            ['phone', { width: 360, height: 640 }],
+            ['desktop', { width: 1280, height: 800 }],
+        ] as const) {
+            test(`the game on a ${name}, mid-play`, async ({ page }) => {
+                await page.setViewportSize(viewport)
+                await page.addInitScript(onDate, Date.parse(DAY))
+                await openBoard(page)
+                // The shift took: the page believes it is that day, and so serves that puzzle.
+                expect(await page.evaluate(() => new Date().toISOString().slice(0, 10))).toBe(DAY.slice(0, 10))
+
+                await midPlay(page)
+                await waitForRest(page)
+                await expect(page).toHaveScreenshot(`${name}${suffix}.png`, { fullPage: true })
+            })
+        }
     })
 }

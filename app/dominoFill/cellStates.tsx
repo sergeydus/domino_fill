@@ -1,4 +1,4 @@
-import { PALETTE } from "../palette"
+import { cssVar } from "../palette"
 
 /**
  * The four persistent cell states, drawn (graphics spec P1-5, row 11), and a fifth that
@@ -59,14 +59,14 @@ const Ring: React.FC<{ stroke: string, dashed: boolean }> = ({ stroke, dashed })
         <rect
             data-ring
             x={inset} y={inset} width={U - 2 * inset} height={U - 2 * inset} rx={radius} ry={radius}
-            fill="none" stroke={stroke} strokeWidth={width}
+            fill="none" strokeWidth={width} style={{ stroke }}
             strokeDasharray={dashed ? `${STATE.dash.on} ${STATE.dash.off}` : undefined}
         />
     )
 }
 
 export const AnchorMark: React.FC = () => (
-    <svg {...box} aria-hidden="true" data-mark="anchor"><Ring stroke={PALETTE.anchor} dashed={false} /></svg>
+    <svg {...box} aria-hidden="true" data-mark="anchor"><Ring stroke={cssVar('anchor')} dashed={false} /></svg>
 )
 
 export const CandidateMark: React.FC = () => {
@@ -74,8 +74,8 @@ export const CandidateMark: React.FC = () => {
     return (
         <svg {...box} aria-hidden="true" data-mark="candidate">
             <rect data-wash x={inset} y={inset} width={U - 2 * inset} height={U - 2 * inset} rx={radius} ry={radius}
-                fill={PALETTE.candidateWash} fillOpacity={0.4} />
-            <Ring stroke={PALETTE.candidateEdge} dashed />
+                fillOpacity={0.4} style={{ fill: cssVar('candidateWash') }} />
+            <Ring stroke={cssVar('candidateEdge')} dashed />
         </svg>
     )
 }
@@ -95,9 +95,9 @@ export const FocusMark: React.FC = () => {
     const d = corners.join(' ')
     return (
         <svg {...box} aria-hidden="true" data-mark="focus">
-            <path data-halo d={d} fill="none" stroke={PALETTE.cellFocusHalo}
+            <path data-halo d={d} fill="none" style={{ stroke: cssVar('cellFocusHalo') }}
                 strokeWidth={stroke + 2 * halo} strokeLinecap="round" strokeLinejoin="round" />
-            <path data-brackets d={d} fill="none" stroke={PALETTE.cellFocus}
+            <path data-brackets d={d} fill="none" style={{ stroke: cssVar('cellFocus') }}
                 strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     )
@@ -110,7 +110,8 @@ export const FocusMark: React.FC = () => {
  * is the one shape here that says "no", and because it is not the diamond: the two are the
  * states drawn at the centre. Red on a white halo, because a refusal lands anywhere -- on
  * either checker tone, a domino's face, a rock -- and no one colour clears 3:1 on all of
- * them: the halo carries it on the checker and the rock, the red on the tile's face.
+ * them: the halo carries it on the checker and the rock, the red on the tile's face. The red
+ * is `refusedCross`, the board's own, since UI row 1 (it was the chrome's `problem`).
  */
 export const RefusedMark: React.FC = () => {
     const c = U / 2
@@ -118,9 +119,9 @@ export const RefusedMark: React.FC = () => {
     const d = `M ${c - r} ${c - r} L ${c + r} ${c + r} M ${c + r} ${c - r} L ${c - r} ${c + r}`
     return (
         <svg {...box} aria-hidden="true" data-mark="refused">
-            <path data-halo d={d} fill="none" stroke={PALETTE.refusedHalo}
+            <path data-halo d={d} fill="none" style={{ stroke: cssVar('refusedHalo') }}
                 strokeWidth={stroke + 2 * halo} strokeLinecap="round" />
-            <path data-cross d={d} fill="none" stroke={PALETTE.problem}
+            <path data-cross d={d} fill="none" style={{ stroke: cssVar('refusedCross') }}
                 strokeWidth={stroke} strokeLinecap="round" />
         </svg>
     )
@@ -131,7 +132,7 @@ export const HintMark: React.FC = () => {
     const r = STATE.hint.reach
     return (
         <svg {...box} aria-hidden="true" data-mark="hint">
-            <polygon data-diamond points={`${c},${c - r} ${c + r},${c} ${c},${c + r} ${c - r},${c}`} fill={PALETTE.hint} />
+            <polygon data-diamond points={`${c},${c - r} ${c + r},${c} ${c},${c + r} ${c - r},${c}`} style={{ fill: cssVar('hint') }} />
         </svg>
     )
 }

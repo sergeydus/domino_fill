@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { GROUND } from '../app/siteMetadata'
 
 /**
  * What the served page actually says it is (spec P2-2, row 20b).
@@ -126,8 +127,11 @@ test('the manifest and the page agree about what this is', async ({ page, reques
     expect(parsed.description).toBe(await meta('meta[property="og:description"]'))
 
     // The splash screen and the browser chrome are the same colour as the board's ground,
-    // or the installed app flashes a white band before the game appears on it.
-    const themeColor = await meta('meta[name="theme-color"]')
+    // or the installed app flashes a white band before the game appears on it. One tag per
+    // scheme since UI row 1; the manifest is the light one's, as the splash screen is drawn
+    // before the page can say which theme it is in.
+    const themeColor = await meta('meta[name="theme-color"][media="(prefers-color-scheme: light)"]')
+    expect(themeColor).toBe(GROUND)
     expect(parsed.theme_color).toBe(themeColor)
     expect(parsed.background_color).toBe(themeColor)
 })

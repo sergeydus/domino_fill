@@ -4,8 +4,9 @@ import "./globals.css";
 import { StoreWrapper } from "./provider";
 import { SpeedInsights } from "@vercel/speed-insights/next"
 import {
-  DESCRIPTION, GROUND, ICON_512, NAME, SHORT_DESCRIPTION, TITLE, resolveSiteUrl,
+  DESCRIPTION, GROUND, GROUND_DARK, ICON_512, NAME, SHORT_DESCRIPTION, TITLE, resolveSiteUrl,
 } from "./siteMetadata";
+import { themeScript } from "./themeScript";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -67,12 +68,19 @@ export const metadata: Metadata = {
  * people who need it most.
  *
  * `themeColor` matches the board's ground so the browser's own chrome does not sit as a
- * bright white band above a grey page on a phone.
+ * bright white band above a grey page on a phone: one tag per scheme since UI row 1, each
+ * that theme's ground. A player's own choice points both at its ground (`themeScript.ts`).
  */
 export const viewport: Viewport = {
   viewportFit: 'cover',
-  themeColor: GROUND,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: GROUND },
+    { media: '(prefers-color-scheme: dark)', color: GROUND_DARK },
+  ],
 };
+
+/** The theme a player chose, applied before the first paint (UI row 1; `themeScript.ts`). */
+const THEME_SCRIPT = themeScript();
 
 export default function RootLayout({
   children,
@@ -80,7 +88,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // `suppressHydrationWarning`: the theme script adds `data-theme` to this element before
+    // React hydrates it, on purpose. It covers this element's own attributes only.
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* In <head>, so the theme is set before <body> is parsed and anything is drawn.
+            Next hoists its own tags above this one: the charset, viewport, stylesheet,
+            scripts and metadata, the theme-color tags among them (measured, UI row 1). */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body
         className={`${geistSans.variable} antialiased`}
       >

@@ -3,9 +3,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
 import { isRead, scanCss, scanText, scanTs, stripComments } from './colourAudit'
-import { PALETTE, cssName, rgbBytes, type Token } from '@/app/palette'
-import { PALETTE_CSS_PATH, renderPaletteCss } from '@/scripts/palette-css'
-import { GROUND } from '@/app/siteMetadata'
+import { BOARD_TOKENS, PALETTE, PALETTE_DARK, THEMES, cssName, cssVar, rgbBytes, type Token } from '@/app/palette'
+import { EXACT_OKLCH, PALETTE_CSS_PATH, declarations, renderPaletteCss } from '@/scripts/palette-css'
+import { GROUND, GROUND_DARK } from '@/app/siteMetadata'
 import { LABEL_COLORS } from '@/app/dominoFill/lineLabel'
 
 /**
@@ -27,8 +27,44 @@ describe('the generated stylesheet is the palette', () => {
     it('declares every token, as a property and as a Tailwind colour', () => {
         const css = renderPaletteCss()
         for (const token of Object.keys(PALETTE) as Token[]) {
-            expect(css).toContain(`  --${cssName(token)}: ${PALETTE[token]};`)
+            for (const d of declarations(token, PALETTE[token])) expect(css).toContain(`  ${d}`)
             expect(css).toContain(`  --color-${cssName(token)}: var(--${cssName(token)});`)
+        }
+    })
+
+    it('declares the wash exactly, in channels the build cannot round (UI row 1)', () => {
+        // The build rewrites a readable `oklch()` to a rounded `lab()`; a colour built from
+        // a variable in the browser it cannot read, so the wash reaches it as written.
+        expect(EXACT_OKLCH).toEqual(['candidateWash'])
+        expect(declarations('candidateWash', 'oklch(88.2% 0.059 254.128)')).toEqual([
+            '--candidate-wash-oklch: 88.2% 0.059 254.128;',
+            '--candidate-wash: oklch(var(--candidate-wash-oklch));',
+        ])
+        expect(declarations('tileFace', '#fff3d6')).toEqual(['--tile-face: #fff3d6;'])
+        expect(() => declarations('candidateWash', '#bedbff')).toThrow(/not an OKLCh colour/)
+    })
+
+    it('declares every token in each theme\'s block (UI row 1)', () => {
+        /*
+         * Three blocks of values: light on `:root`; dark for a phone set to dark, unless the
+         * player chose light; and dark for a player who chose it. Each declares every token,
+         * so no dark block can fall back to a light value for a token it forgot. Read block by
+         * block, so a token declared in the wrong one is not counted for the right one.
+         */
+        const css = renderPaletteCss()
+        const block = (opening: string) => {
+            const from = css.indexOf(opening)
+            expect(from, opening).toBeGreaterThanOrEqual(0)
+            return css.slice(from, css.indexOf('}', from))
+        }
+        const blocks: [string, Readonly<Record<Token, string>>][] = [
+            [':root {', PALETTE],
+            ['@media (prefers-color-scheme: dark) {\n  :root:not([data-theme="light"]) {', PALETTE_DARK],
+            [':root[data-theme="dark"] {', PALETTE_DARK],
+        ]
+        for (const [opening, values] of blocks) {
+            const declared = [...block(opening).matchAll(/--[a-z-]+: [^;]+;/g)].map(m => m[0])
+            expect(declared, opening).toEqual((Object.keys(PALETTE) as Token[]).flatMap(t => declarations(t, values[t])))
         }
     })
 
@@ -37,17 +73,71 @@ describe('the generated stylesheet is the palette', () => {
     })
 })
 
+describe('two themes, the same tokens (UI row 1)', () => {
+    it('the dark theme has exactly the light theme\'s keys', () => {
+        // `tsc` refuses a missing or extra key already; this says so in the suite too.
+        expect(Object.keys(PALETTE_DARK).sort()).toEqual(Object.keys(PALETTE).sort())
+        expect(Object.keys(THEMES)).toEqual(['light', 'dark'])
+        expect([THEMES.light, THEMES.dark]).toEqual([PALETTE, PALETTE_DARK])
+    })
+
+    it('the board\'s tokens are equal in both themes, until row 4 gives the board its own', () => {
+        expect(BOARD_TOKENS.filter(t => PALETTE_DARK[t] !== PALETTE[t])).toEqual([])
+    })
+
+    it('and every other token is the chrome\'s, which the dark theme does change', () => {
+        // The positive control for the test above: equal values everywhere would pass it.
+        // The scrim is black in both, drawn at 40% over either ground.
+        const board = new Set<Token>(BOARD_TOKENS)
+        const chrome = (Object.keys(PALETTE) as Token[]).filter(t => !board.has(t))
+        expect(chrome.filter(t => PALETTE_DARK[t] === PALETTE[t])).toEqual(['scrim'])
+    })
+})
+
 describe('every kind of consumer reads the token rather than a copy', () => {
-    it('the browser chrome and the manifest: siteMetadata.GROUND', () => {
+    it('the browser chrome and the manifest: siteMetadata.GROUND, and GROUND_DARK', () => {
         expect(GROUND).toBe(PALETTE.ground)
+        expect(GROUND_DARK).toBe(PALETTE_DARK.ground)
     })
 
     it('the line labels, whose meanings are the palette\'s semantic tokens', () => {
+        // As references since UI row 1, so a label follows the theme.
         expect(LABEL_COLORS).toEqual({
-            neutral: PALETTE.lineNeutral,
-            satisfied: PALETTE.success,
-            over: PALETTE.problem,
+            neutral: cssVar('lineNeutral'),
+            satisfied: cssVar('success'),
+            over: cssVar('problem'),
         })
+    })
+
+    it('cssVar is the token\'s custom property, as the browser reads it', () => {
+        expect(cssVar('tileFace')).toBe('var(--tile-face)')
+        expect(cssVar('refusedCross')).toBe('var(--refused-cross)')
+    })
+
+    it('in the app, only siteMetadata imports a theme\'s values', () => {
+        /*
+         * A component that imports a value, rather than a `cssVar` reference to it, paints the
+         * light theme in both (UI row 1). Read from each file's imports: the exports that carry
+         * values, under any local name, and a namespace import, which carries them all.
+         * `controls.ts` imports the `Token` type, which carries none, and the layout takes its
+         * grounds from siteMetadata.
+         */
+        const VALUES = new Set(['PALETTE', 'PALETTE_DARK', 'THEMES', 'rgbBytes'])
+        const importers = walk('app').filter(f => /\.tsx?$/.test(f)).map(f => f.split(path.sep).join('/'))
+            .filter(file => importsValues(file, readFileSync(file, 'utf8'), VALUES))
+        expect(importers).toEqual(['app/siteMetadata.ts'])
+    })
+
+    it('and the check sees every way of importing one', () => {
+        const VALUES = new Set(['PALETTE', 'PALETTE_DARK'])
+        const sees = (source: string) => importsValues('a.tsx', source, VALUES)
+        expect(sees("import { PALETTE } from '../palette'")).toBe(true)
+        expect(sees("import { PALETTE_DARK } from '@/app/palette'")).toBe(true)
+        expect(sees("import { PALETTE as P } from './palette'")).toBe(true)
+        expect(sees("import * as palette from './palette'")).toBe(true)
+        expect(sees("import { cssVar, type Token } from './palette'")).toBe(false)
+        expect(sees("import type { Token } from './palette'")).toBe(false)
+        expect(sees("import { PALETTE } from './paletteNotes'")).toBe(false)
     })
 
     it('the palette itself depends on nothing, because Node imports it at build time', () => {
@@ -81,6 +171,23 @@ describe('every kind of consumer reads the token rather than a copy', () => {
  */
 const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e =>
     e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)])
+/**
+ * Whether a file imports any of `values` from the palette module: by name, renamed, or as a
+ * namespace. Type-only imports carry no value and do not count.
+ */
+const importsValues = (file: string, text: string, values: ReadonlySet<string>) => {
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    return source.statements.filter(ts.isImportDeclaration)
+        .filter(i => /(^|\/)palette$/.test((i.moduleSpecifier as ts.StringLiteral).text))
+        .some(i => {
+            if (i.importClause === undefined || i.importClause.isTypeOnly) return false
+            const bindings = i.importClause.namedBindings
+            if (bindings === undefined) return false
+            if (ts.isNamespaceImport(bindings)) return true
+            return bindings.elements.some(e => !e.isTypeOnly && values.has((e.propertyName ?? e.name).text))
+        })
+}
+
 const SCOPE = [
     ...walk('app').filter(f => /\.(tsx?|css)$/.test(f)),
     'scripts/icon.ts',
@@ -203,6 +310,9 @@ describe('no token is dead', () => {
         expect(readIn('a.tsx', 'const a = <div className="p-2 bg-ghost/40" />')).toBe(true)
         expect(readIn('a.ts', "const b = rgbBytes('ghost')")).toBe(true)
         expect(readIn('a.css', 'body { color: var(--ghost) }')).toBe(true)
+        expect(readIn('a.tsx', "const a = <rect style={{ fill: cssVar('ghost') }} />")).toBe(true)
+        expect(readIn('a.tsx', "// cssVar('ghost')\nconst x = 1")).toBe(false)
+        expect(readIn('a.tsx', "/* style={{ fill: cssVar('ghost') }} */\nconst x = 1")).toBe(false)
         // Copy with a `//` in it is not a comment, and does not hide the code after it.
         expect(readIn('a.tsx', 'const a = <p>and // or</p>; const y = PALETTE.ghost')).toBe(true)
         expect(readIn('a.tsx', 'const a = <p>// or</p>; const y = PALETTE.ghost')).toBe(true)
@@ -213,5 +323,7 @@ describe('no token is dead', () => {
         expect(isRead('hint', '<div data-hint />')).toBe(false)
         expect(isRead('accent', 'className="ring-accent-edge"')).toBe(false)
         expect(isRead('accentEdge', 'className="ring-accent-edge"')).toBe(true)
+        expect(isRead('accent', "cssVar('accentEdge')")).toBe(false)
+        expect(isRead('accentEdge', "cssVar('accentEdge')")).toBe(true)
     })
 })

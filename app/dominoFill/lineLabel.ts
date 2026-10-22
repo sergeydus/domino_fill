@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react"
 import type { LineState } from "../stores/boardRules"
-import { PALETTE } from "../palette"
+import { cssVar } from "../palette"
 
 /**
  * How a target label presents its state (spec P1-5, D10-g).
@@ -39,12 +39,13 @@ export type LabelPresentation = {
  * Measured against the ground; see the note above before changing any of these. The values
  * live in the palette (graphics spec P0-5): a finished line is `success` and an overshot one
  * is `problem`, the same tokens the rest of the game uses for those meanings, and
- * `tests/contrast.test.ts` recomputes every ratio from the tokens.
+ * `tests/contrast.test.ts` recomputes every ratio from the tokens. As references to them
+ * (`var(--success)`) since UI row 1, so a label follows the theme.
  */
 export const LABEL_COLORS: Record<LineState, string> = {
-    neutral: PALETTE.lineNeutral,
-    satisfied: PALETTE.success,
-    over: PALETTE.problem,
+    neutral: cssVar('lineNeutral'),
+    satisfied: cssVar('success'),
+    over: cssVar('problem'),
 }
 
 /**

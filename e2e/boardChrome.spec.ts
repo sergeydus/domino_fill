@@ -5,6 +5,7 @@ import { VISUAL_URL } from './server'
 import { BOARD_CORNER_PX } from '../app/dominoFill/ClientBoard'
 import { LABEL_COLORS, LABEL_TIE } from '../app/dominoFill/lineLabel'
 import type { LineState } from '../app/stores/boardRules'
+import { PALETTE, cssVar, type Token } from '../app/palette'
 
 /**
  * The board's chrome, as P1-3 (graphics row 9) requires it: the frame's inner radius and the
@@ -73,6 +74,17 @@ const ties = (page: Page) => page.evaluate(() =>
 type Tie = Awaited<ReturnType<typeof ties>>[number]
 
 const rgb = (hex: string) => `rgb(${[1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(', ')})`
+
+/**
+ * The light value a label paints in a state. `LABEL_COLORS` holds references to tokens since
+ * UI row 1 (`var(--success)`), so the token is read back from the reference; the sheet runs
+ * in the light scheme, so it is the light value the page computes.
+ */
+const labelColour = (state: LineState) => {
+    const token = (Object.keys(PALETTE) as Token[]).find(t => cssVar(t) === LABEL_COLORS[state])
+    if (token === undefined) throw new Error(`${LABEL_COLORS[state]} names no token`)
+    return rgb(PALETTE[token])
+}
 
 /** The tie, held to what `LABEL_TIE` says it is. */
 const expectTied = (all: Tie[]) => {
@@ -143,6 +155,6 @@ for (const cell of [38, 53]) {
         // All three states are here, each tick in the colour the state is defined by.
         const seen = new Set(all.map(l => l.state))
         expect([...seen].sort()).toEqual(['neutral', 'over', 'satisfied'])
-        for (const l of all) expect(l.tick, l.name).toBe(rgb(LABEL_COLORS[l.state as LineState]))
+        for (const l of all) expect(l.tick, l.name).toBe(labelColour(l.state as LineState))
     })
 }

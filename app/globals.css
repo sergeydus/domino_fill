@@ -7,7 +7,7 @@
 @import "./controls.css";
 
 /*
- * One light palette, stated once (spec P2-3, row 20c).
+ * One palette per theme, stated once (spec P2-3, row 20c; two themes since UI row 1).
  *
  * The page is drawn on the board's own ground rather than white, because that is the
  * colour the game is actually drawn on: `page.tsx` used to hardcode `bg-[#e8e7e7]` next to a
@@ -15,12 +15,14 @@
  * seen. Since graphics row 5 the ground is `--ground`, from `app/palette.ts`, and this file
  * holds no colour of its own.
  *
- * `color-scheme: light` is a declaration, not a preference. It tells the browser this page
- * is light, so scrollbars, form controls and any UA-supplied surface match the page instead
- * of being auto-darkened over it.
+ * `color-scheme` is a declaration, not a preference. It tells the browser which theme the
+ * page is drawn in, so scrollbars, form controls and any UA-supplied surface match the page
+ * instead of being auto-darkened over it -- or left light under a dark page. `light dark`
+ * follows the phone, as `palette.css` does; a player's own choice (`data-theme`, set before
+ * the first paint by `themeScript.ts`) names one, as `palette.css` does too.
  */
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
   /*
    * Safe-area insets, as plain variables (spec P0-3).
@@ -37,8 +39,21 @@
   --safe-left: env(safe-area-inset-left, 0px);
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 /*
- * There is no dark block any more, and that is the whole of P2-3.
+ * The dark theme, and why P2-3 removed the first one.
+ *
+ * UI row 1 brought a dark theme back, the way the paragraphs below asked: a whole second
+ * palette (`PALETTE_DARK`, in `palette.css`), every pair the components draw recomputed in
+ * `tests/contrast.test.ts`, and the board's own colours left alone until a row re-measures
+ * them. What P2-3 removed, and recorded:
  *
  * The spec offered "implement a real dark palette or drop it; the current half-state is
  * worse than either", and the half-state was measurably harmful rather than merely untidy.

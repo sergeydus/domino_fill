@@ -15,6 +15,10 @@ import ts from 'typescript'
  *   - **a CSS length on the piece**: a `px` string, or a class such as the old
  *     `-translate-y-4`, which was a fixed 16px lift on a piece that is meant to scale.
  *
+ * One `style` is allowed inside the drawing since UI row 1: a paint, and nothing else -- an
+ * object of `fill` and `stroke` only, each a `cssVar('token')`, which is how a drawing follows
+ * the theme. It holds no length, and anything else in it is still a breach.
+ *
  * `tests/pieceGeometry.test.tsx` proves the result -- every attribute scales linearly --
  * and this proves the form, so a pixel length cannot be added in a way that happens to be
  * right at the sizes that test renders.
@@ -65,10 +69,24 @@ const breaches = (file: string, source: string): Breach[] => {
         if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /\d\s*px\b|translate-/.test(node.text)) {
             found.push(`${where(node)} a CSS length in the drawing ("${node.text}")`)
         }
-        if (ts.isJsxAttribute(node) && ['className', 'class', 'style'].includes(node.name.getText(sf))) {
+        if (ts.isJsxAttribute(node) && ['className', 'class', 'style'].includes(node.name.getText(sf))
+            && !isPaint(node)) {
             found.push(`${where(node)} ${node.name.getText(sf)} on an element of the drawing`)
         }
         ts.forEachChild(node, inspectDrawing)
+    }
+
+    /** `style={{ fill: cssVar('…'), stroke: cssVar('…') }}`, and only that (UI row 1). */
+    const isPaint = (attribute: ts.JsxAttribute) => {
+        if (attribute.name.getText(sf) !== 'style') return false
+        const value = attribute.initializer
+        if (value === undefined || !ts.isJsxExpression(value) || value.expression === undefined) return false
+        const style = value.expression
+        return ts.isObjectLiteralExpression(style) && style.properties.length > 0
+            && style.properties.every(p => ts.isPropertyAssignment(p)
+                && ['fill', 'stroke'].includes(p.name.getText(sf))
+                && ts.isCallExpression(p.initializer) && p.initializer.expression.getText(sf) === 'cssVar'
+                && p.initializer.arguments.length === 1 && ts.isStringLiteral(p.initializer.arguments[0]))
     }
 
     let svgs = 0
@@ -104,6 +122,20 @@ describe('no pixel length in the drawing', () => {
         expect(piece('<rect width="12px" />')).toEqual([expect.stringMatching(/a CSS length/)])
         expect(piece('<g className="-translate-y-4" />')).toHaveLength(2)
         expect(piece('<rect style={{ strokeWidth: 3 }} />')).toEqual([expect.stringMatching(/style on an element/)])
+
+        // A paint is the one style allowed (UI row 1), and only a paint.
+        expect(piece("<rect style={{ fill: cssVar('tileFace'), stroke: cssVar('pieceOutline') }} />")).toEqual([])
+        for (const style of [
+            "{{ fill: cssVar('tileFace'), strokeWidth: 3 }}",
+            "{{ fill: cssVar('tileFace'), translate: '0 4px' }}",
+            "{{ fill: '#fff3d6' }}",
+            '{{ fill: colour }}',
+            '{paint}',
+            '{{ ...paint }}',
+            '{{}}',
+        ]) {
+            expect(piece(`<rect style=${style} />`), style).toContainEqual(expect.stringMatching(/style on an element/))
+        }
 
         expect(piece('', 'width={size} height={size + 16} viewBox="0 0 53 69"'))
             .toEqual(expect.arrayContaining([expect.stringMatching(/does not take its box from pieceBox/),

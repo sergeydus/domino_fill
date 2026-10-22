@@ -1,6 +1,6 @@
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
-import { PALETTE } from "@/app/palette";
+import { cssVar } from "@/app/palette";
 import { PIECE, ROCK, pieceBox, points, viewBox } from "./geometry";
 
 /**
@@ -17,12 +17,12 @@ const Rock: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
     return (
         // One cell, in drawing units; `pieceBox` is where pixels enter.
         <svg {...pieceBox(1, 1, size)} viewBox={viewBox(1, 1)}>
-            <polygon points={points(ROCK.silhouette)} fill={PALETTE.rockSide} />
-            <polygon points={points(ROCK.face)} fill={PALETTE.rockFace} />
-            <polygon points={points(ROCK.lit)} fill={PALETTE.rockLit} />
-            <polygon points={points(ROCK.shade)} fill={PALETTE.rockShade} />
+            <polygon points={points(ROCK.silhouette)} style={{ fill: cssVar('rockSide') }} />
+            <polygon points={points(ROCK.face)} style={{ fill: cssVar('rockFace') }} />
+            <polygon points={points(ROCK.lit)} style={{ fill: cssVar('rockLit') }} />
+            <polygon points={points(ROCK.shade)} style={{ fill: cssVar('rockShade') }} />
             <polygon data-outline points={points(ROCK.silhouette)} fill="none" strokeWidth={PIECE.outline}
-                stroke={PALETTE.pieceOutline} strokeLinejoin="round" />
+                strokeLinejoin="round" style={{ stroke: cssVar('pieceOutline') }} />
         </svg>
     );
 };
