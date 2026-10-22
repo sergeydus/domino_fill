@@ -19,8 +19,8 @@ import { TYPE, WEIGHTS, type Role, type Weight } from '../app/typography'
  *
  * **Weights are checked twice** (UI row 2). The computed number, against the role's; and the
  * drawing: a weight the page doesn't load still reports its number while drawing in the
- * nearest loaded face, so a difference that must show is measured as a difference in width
- * (codex, at the row's review).
+ * nearest loaded face, so a difference that must show is measured as a difference in ink
+ * (codex, at the row's review; `apart` below).
  */
 
 type Text = { text: string, size: number, line: number, family: string, label: number | null, weight: number }
