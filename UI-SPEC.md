@@ -261,6 +261,12 @@ one colour, so it keeps the light ground.
 
 - **Nunito**, loaded through `next/font/google` as Geist is today (`app/layout.tsx`), so no new
   dependency. Weights 600, 700, 800 and 900 replace Geist.
+
+  *Amended 2026-10-22, in U12's contract (NEXT-STEPS).* Nunito is loaded through
+  `next/font/local` from a file in the repository, `app/fonts/nunito-latin.woff2`, with its
+  licence beside it: the Latin file Google serves for these four weights, byte for byte. A
+  Google response once failed a build (PR #20's merge), and could change the face with no
+  commit here. Still `next/font`, still no new dependency.
 - **Tabular figures** for every number that changes: the clock, the line targets and the
   results.
 - The roles in `app/typography.ts` become:
