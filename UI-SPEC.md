@@ -331,6 +331,11 @@ planning the row:
   joins, drawn in `currentColor`, and `aria-hidden`. The button carries the accessible name.
 - **The set:** settings, calendar, chart, flame, undo, reset, hint, check, close, chevron left
   and right, share, sound, a tap, and help.
+
+  *Amended 2026-10-22, in row 3's contract (NEXT-STEPS).* Each icon arrives with the control
+  that draws it, and the module with the first, in row 6. An icon nothing draws can't be
+  tested against its control. "No emoji in the interface" is met by the rows that replace
+  them: the streak's flame in row 6, Results' squares in row 11.
 - **No emoji in the interface.** The share text keeps its emoji grid, since that text is for
   chat apps, but the results screen draws its squares (§6.4).
 
@@ -730,7 +735,7 @@ then the regenerated baselines. Each row gets its implementation contract in NEX
 | --- | --- | --- |
 | 1 | Two themes: the palette's shape, the generated CSS with its `data-theme` override and the pre-paint script, `color-scheme`, theme colours, every browser drawing reading its token through CSS, an interim dark set with light unchanged (amended, §3.1), the contrast tests in both themes, and the eight baselines | dark only |
 | 2 | Type: Nunito and the new roles | yes |
-| 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, `app/icons.tsx`, and the chrome's final colours with the new roles, in both themes (§3.1) | yes |
+| 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, `app/icons.tsx`, and the chrome's final colours with the new roles, in both themes (§3.1). *Amended in row 3's contract:* `round`, `card`, `switch`, the icons, `onSuccess` and `onProblem` arrive with their first consumers (rows 6–8) | yes |
 | 4 | The board and the pieces, together (§3.1 says why they can't be split): the tray, the wells and the line targets' states; the domino redrawn with its rim; the `Obstacle` component with its rock skin; their tokens at final values; the silhouette rule in place of P1-3's chain; the amended proportions; and the icon generator | yes |
 | 5 | Cell states in both themes | yes |
 | 6 | The top of the screen: the top bar, the difficulty cards and the puzzle row | yes |
