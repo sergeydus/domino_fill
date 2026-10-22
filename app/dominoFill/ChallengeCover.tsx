@@ -83,7 +83,7 @@ const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
             className="flex flex-col items-center justify-center gap-3 rounded-lg border-board-frame bg-panel p-4 text-center text-panel-ink"
             style={{ width: session.shellWidth, height: session.shellHeight, borderWidth: 4 }}
         >
-            <p className="text-body font-medium" data-cover-board>
+            <p className="text-body font-bold" data-cover-board>
                 {boardName(levels.difficulty, session.definition.size, levels.level)}
             </p>
             <p className="text-meta" data-cover-day>

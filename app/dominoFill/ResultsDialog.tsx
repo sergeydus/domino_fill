@@ -130,13 +130,13 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
                 <div tabIndex={0} data-focus-guard='start'
                     onFocus={() => (fallbackRef.current ?? closeRef.current)?.focus()} />
                 <h2 id='results-heading' ref={headingRef} tabIndex={-1} data-results-heading
-                    className='mb-3 text-card-title font-bold'>
+                    className='mb-3 text-display'>
                     Results · {dayWords(day.date)}
                 </h2>
 
                 {results.sizes.map(row => (
                     <section key={row.difficulty} data-results-size={row.difficulty} className='mb-3'>
-                        <h3 className='text-body font-semibold'>
+                        <h3 className='text-body font-extrabold'>
                             {DIFFICULTY_NAME[row.difficulty]} · {row.size}×{row.size}
                         </h3>
                         <ul aria-label={`${DIFFICULTY_NAME[row.difficulty]} puzzles`} className='text-body'>
@@ -147,7 +147,7 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
                                 </li>
                             ))}
                         </ul>
-                        <p data-results-total className='text-body font-medium tabular-nums'>
+                        <p data-results-total className='text-body font-bold tabular-nums'>
                             {row.result.kind === 'total' ? 'Total ' : ''}{sizeWords(row.result)}
                         </p>
                     </section>
@@ -163,7 +163,7 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
                     </p>
                 )}
                 {milestone !== null && (
-                    <p data-results-milestone className='text-body font-semibold'>
+                    <p data-results-milestone className='text-body font-extrabold'>
                         <span aria-hidden='true'>🎉 </span>{milestone}-day streak!
                     </p>
                 )}

@@ -178,7 +178,8 @@ const expectVocabulary = async (page: Page, scope: Locator, least: number) => {
             const [on, off] = [await as('true'), await as('false')]
             await b.evaluate((el, v) => el.setAttribute('aria-pressed', v), was)
             expect(on, `${await b.getAttribute('aria-label') ?? await b.innerText()}: pressed changes its fill, weight and ring, and nothing else`)
-                .toEqual({ ...off, background: paint.accent, weight: '700', shadow: ringOf('accentEdge', paint) })
+                // 900 over the 800 at rest since UI row 2 (700 over 400 in Geist).
+                .toEqual({ ...off, background: paint.accent, weight: '900', shadow: ringOf('accentEdge', paint) })
         }
         /*
          * A choice, checked against unchecked: its variant's ring, and nothing else about the

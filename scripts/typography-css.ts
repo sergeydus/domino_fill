@@ -8,7 +8,8 @@ import { TYPE, roleName, type Role } from '../app/typography'
  *
  * One `@theme inline` block. `--text-*: initial` first, which drops Tailwind's whole default
  * size scale -- `text-xs` to `text-9xl` then generate nothing -- and then one `--text-<role>`
- * with its `--line-height` per role, which Tailwind turns into `text-<role>`, setting both.
+ * with its `--line-height` and, since UI row 2, its `--font-weight` per role, which Tailwind
+ * turns into `text-<role>`, setting all three.
  *
  * `inline` because of the board label. Its size is `var(--label-font)`, which each board sets
  * on its own shell; a theme variable declared on `:root` would resolve that reference *there*,
@@ -34,6 +35,7 @@ export const renderTypographyCss = (): string => {
         ...roles.flatMap(r => [
             `  --text-${roleName(r)}: ${size(r)};`,
             `  --text-${roleName(r)}--line-height: ${TYPE[r].lineHeight};`,
+            `  --text-${roleName(r)}--font-weight: ${TYPE[r].weight};`,
         ]),
         '}',
         '',

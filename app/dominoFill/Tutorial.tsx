@@ -45,7 +45,7 @@ const Tutorial = () => {
         // anchored to the viewport itself and cannot come apart from it.
         <div className="fixed inset-0 z-[999] backdrop-blur-sm flex items-center justify-center p-4 overflow-auto">
             <div className="bg-panel rounded-2xl text-panel-ink text-body w-[min(100%,42rem)] p-6 sm:p-8 flex items-center justify-center flex-col gap-3">
-                <h2 className="text-card-title font-bold mb-2">How to play</h2>
+                <h2 className="text-display mb-2">How to play</h2>
 
                 {/*
                   The rule, stated correctly. This previously read "the numbers indicate how
@@ -56,15 +56,15 @@ const Tutorial = () => {
                 */}
                 <p>Cover every empty square with dominoes. Grey rocks are already filled and cannot be covered.</p>
                 <p>
-                    An <strong>upright</strong> domino is worth <strong>1</strong> in its top square
-                    and <strong>0</strong> in its bottom one.
+                    An <strong className="font-extrabold">upright</strong> domino is worth <strong className="font-extrabold">1</strong> in its top square
+                    and <strong className="font-extrabold">0</strong> in its bottom one.
                 </p>
                 <p>
-                    A <strong>flat</strong> domino is worth <strong>0</strong> in its left square
-                    and <strong>2</strong> in its right one.
+                    A <strong className="font-extrabold">flat</strong> domino is worth <strong className="font-extrabold">0</strong> in its left square
+                    and <strong className="font-extrabold">2</strong> in its right one.
                 </p>
                 <p>
-                    Each number around the edge is the <strong>total of the values</strong> in that
+                    Each number around the edge is the <strong className="font-extrabold">total of the values</strong> in that
                     row or column — not a count of dominoes.
                 </p>
 
@@ -75,7 +75,7 @@ const Tutorial = () => {
                   exists, and a right-click that never worked on a phone at all.
                 */}
                 <p className="mt-2">
-                    <strong>Drag from a square toward the neighbour</strong> you want the domino to
+                    <strong className="font-extrabold">Drag from a square toward the neighbour</strong> you want the domino to
                     cover. The direction you drag decides its shape and which way round it scores.
                 </p>
                 <p className="text-meta opacity-80">

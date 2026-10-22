@@ -9,11 +9,15 @@ import { VISUAL_URL } from './server'
  * container image, and that runner's installed fonts change when GitHub updates it. A glyph
  * that fell back to a system font -- a missing weight, a character outside the subset, a
  * rule that escaped `font-sans` -- would make the baselines a function of the runner image.
- * `next/font` self-hosts Geist, so the claim is that nothing ever falls back; this makes it a
+ * `next/font` self-hosts the face, so the claim is that nothing ever falls back; this makes it a
  * measurement instead of an assumption, and it runs on any host, including this one.
  *
+ * The face is Nunito since UI row 2. Chromium names it by the font file's own name, which for
+ * Google's variable Nunito is its default instance, "Nunito ExtraLight", at every weight drawn
+ * (measured): so that exact name, which a "Nunito Sans" or a "Nunito Fallback" doesn't match.
+ *
  * Chromium reports the font that *actually* drew each node's text, through the DevTools
- * protocol. `next/font` also defines a "Geist Fallback" face built from a local system
+ * protocol. `next/font` also defines a "Nunito Fallback" face built from a local system
  * font; that is a system font for this purpose, and the family check rejects it.
  */
 
@@ -45,7 +49,7 @@ const fontsDrawn = async (page: Page): Promise<Drawn[]> => {
     return drawn
 }
 
-const SELF_HOSTED = /^Geist( Mono)?$/
+const SELF_HOSTED = /^Nunito ExtraLight$/
 
 const expectOnlySelfHosted = async (page: Page) => {
     /*

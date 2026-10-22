@@ -135,7 +135,7 @@
   /*
    * One family means the keys too (P2-1, row 13). Tailwind's preflight gives `kbd` a
    * monospace stack of system faces, so the tutorial's "Space" and "Esc" were the only text
-   * in the game not drawn in Geist -- and in a face the page does not ship. Inherited now,
+   * in the game not drawn in the page's face -- and in one it does not ship. Inherited now,
    * which declares no family of its own.
    */
   kbd {
@@ -190,11 +190,11 @@
 }
 
 /*
- * The one declaration of the family (graphics spec P2-1, row 13): Geist, self-hosted by
- * `next/font`, which sets `--font-geist-sans` on `<body>` (layout.tsx). This rule said
- * `Arial, Helvetica, sans-serif` until then, and every surface that was not inside a
- * `font-sans` class -- the page's wrapper and the sheet's each had one -- was drawn in Arial
- * wherever the device had it.
+ * The one declaration of the family (graphics spec P2-1, row 13): Nunito since UI row 2, Geist
+ * until then, self-hosted by `next/font`, which sets `--font-nunito` on `<body>` (layout.tsx).
+ * Before row 13 this rule said `Arial, Helvetica, sans-serif`, and every surface that was not
+ * inside a `font-sans` class -- the page's wrapper and the sheet's each had one -- was drawn in
+ * Arial wherever the device had it.
  *
  * The variable itself, not Tailwind's `--font-sans`: that was an `@theme inline` entry, which
  * Tailwind inlines into the `font-sans` utility and never emits as a property, so a plain
@@ -204,5 +204,5 @@
 body {
   background: var(--ground);
   color: var(--ink);
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-nunito);
 }

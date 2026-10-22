@@ -52,7 +52,7 @@ const ChallengeClock: React.FC<{ view: BoardView }> = ({ view }) => {
                 aria-label="Challenge time"
                 data-challenge-clock={view.kind}
                 data-running={shown.live || undefined}
-                className={`text-center text-body font-medium tabular-nums ${isCoveredView(view) ? 'opacity-60' : ''}`}
+                className={`text-center text-clock tabular-nums ${isCoveredView(view) ? 'opacity-60' : ''}`}
             >
                 {shown.text}
             </p>

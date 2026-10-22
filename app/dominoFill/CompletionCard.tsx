@@ -162,10 +162,10 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             transition={{ duration: MOTION.card.duration }}
         >
             <div className="flex flex-col items-center gap-1">
-                <p className="text-card-title font-bold text-success" data-completion-message>
+                <p className="text-display text-success" data-completion-message>
                     Solved!
                 </p>
-                <p className="text-body font-medium" data-completion-detail>
+                <p className="text-body font-bold" data-completion-detail>
                     {DIFFICULTY_NAME[levels.difficulty]} · puzzle {levels.level} of 3
                 </p>
                 {lines.map(line => (

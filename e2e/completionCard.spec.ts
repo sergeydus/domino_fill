@@ -47,9 +47,11 @@ const expectHierarchy = async (page: Page) => {
     expect(actions.length, 'the card has its actions').toBeGreaterThanOrEqual(1)
 
     // The levels, as the spec names them.
-    expect(outcome).toMatchObject({ text: 'Solved!', size: 24, weight: 700, colour: rgb(rgbBytes('success')) })
-    expect({ size: detail.size, weight: detail.weight }).toEqual({ size: 14, weight: 500 })
-    for (const a of actions) expect({ text: a.text, size: a.size, weight: a.weight }).toEqual({ text: a.text, size: 16, weight: 400 })
+    // In Nunito since UI row 2: display, body's emphasis, and a control at rest. They were
+    // 24/700, 14/500 and 16/400 in Geist; the ladder below holds for both.
+    expect(outcome).toMatchObject({ text: 'Solved!', size: 28, weight: 900, colour: rgb(rgbBytes('success')) })
+    expect({ size: detail.size, weight: detail.weight }).toEqual({ size: 15, weight: 700 })
+    for (const a of actions) expect({ text: a.text, size: a.size, weight: a.weight }).toEqual({ text: a.text, size: 16, weight: 800 })
 
     // Every pair of levels differs in size and in weight, not one or the other.
     const levels = [['outcome', outcome], ['detail', detail], ...actions.map(a => [`"${a.text}"`, a] as const)] as const

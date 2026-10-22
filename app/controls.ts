@@ -34,7 +34,13 @@ export type Variant = {
     edge: Edge | null
     /** The text's colour and weight; `null` for a control with no text of its own. */
     ink: Token | null
-    weight: 400 | 700
+    /**
+     * 800 at rest, the `control` role's, and 900 for the primary (UI row 2; 400 and 700 in Geist
+     * until then). Interim until row 3 redraws the variants (UI-SPEC §3.2, amended): weight is
+     * still one of the ways the primary and a pressed toggle are told apart. A day in the
+     * archive is 700: its text is the `meta` role, whose weight that is.
+     */
+    weight: 700 | 800 | 900
     /** Corner radius, px. */
     radius: number
     /** From the outside of the edge to the content, px: the box is the same with or without one. */
@@ -67,7 +73,7 @@ export const CONTROL = {
      * `tests/contrast.test.ts`).
      */
     primary: {
-        surface: 'accent', edge: null, ink: 'ink', weight: 700, ...BOX,
+        surface: 'accent', edge: null, ink: 'ink', weight: 900, ...BOX,
         hover: { ring: 'accentEdge' }, press: {}, focus: 'accentEdge',
         disabled: { surface: 'controlSurface', opacity: 0.4 },
     },
@@ -76,7 +82,7 @@ export const CONTROL = {
      * Close. The neutral surface, and the accent on focus and while pressed.
      */
     secondary: {
-        surface: 'controlSurface', edge: null, ink: 'ink', weight: 400, ...BOX,
+        surface: 'controlSurface', edge: null, ink: 'ink', weight: 800, ...BOX,
         hover: { surface: 'panel' }, press: { surface: 'accent' }, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
     },
@@ -87,7 +93,7 @@ export const CONTROL = {
      * `SPEC.md`'s open question, and this does not answer it.
      */
     caution: {
-        surface: 'controlSurface', edge: { width: 2, colour: 'problem' }, ink: 'ink', weight: 400, ...BOX,
+        surface: 'controlSurface', edge: { width: 2, colour: 'problem' }, ink: 'ink', weight: 800, ...BOX,
         hover: { surface: 'panel' }, press: { surface: 'accent' }, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
     },
@@ -96,7 +102,7 @@ export const CONTROL = {
      * surface until the pointer or a press gives it one.
      */
     quiet: {
-        surface: null, edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 400, ...BOX,
+        surface: null, edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 800, ...BOX,
         hover: { surface: 'controlSurface' }, press: { surface: 'accent' }, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
     },
@@ -106,7 +112,7 @@ export const CONTROL = {
      * it grows under the pointer, and a disabled one goes grey.
      */
     icon: {
-        surface: null, edge: null, ink: null, weight: 400, radius: 6, padding: { x: 0, y: 0 },
+        surface: null, edge: null, ink: null, weight: 800, radius: 6, padding: { x: 0, y: 0 },
         hover: { scale: 1.2 }, press: {}, focus: 'accentEdge',
         disabled: { filter: 'grayscale(1)' },
     },
@@ -121,7 +127,7 @@ export const CONTROL = {
      */
     day: {
         surface: { none: 'markNone', started: 'markStarted', partial: 'markPartial', complete: 'markComplete' },
-        edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 400, radius: 6, padding: { x: 5, y: 5 },
+        edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 700, radius: 6, padding: { x: 5, y: 5 },
         hover: {}, press: {}, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
         current: { ring: 'accentEdge' },
@@ -136,7 +142,7 @@ export const CONTROL = {
      * whole button blue; the user's word for it was "horrendous".
      */
     choice: {
-        surface: null, edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 400, radius: 6, padding: { x: 12, y: 5 },
+        surface: null, edge: { width: 1, colour: 'ink' }, ink: 'ink', weight: 800, radius: 6, padding: { x: 12, y: 5 },
         hover: { surface: 'controlSurface' }, press: {}, focus: 'accentEdge',
         disabled: { opacity: 0.4 },
         checked: { ring: 'accentEdge' },
