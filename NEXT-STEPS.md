@@ -7348,28 +7348,36 @@ the font from the repository, before UI row 3 (2026-10-22).
    for the Latin subset of the request above, fetched with the same URL and user agent. Its
    URL and SHA-256 go in the As built notes and the layout's comment. `.gitattributes` marks
    `*.woff2` binary, so git keeps the bytes as they are, as it does for the corpus.
-2. **Loaded by `next/font/local`** in `app/layout.tsx`:
+2. **Loaded by `next/font/local`** in `app/layout.tsx`, **bound as `const Nunito`**, and set on
+   `<body>` as `Nunito.variable`:
    - four `src` entries, the same file at weights 600, 700, 800 and 900, style normal, as
      today's four faces;
    - `variable: "--font-nunito"`, as today;
-   - `declarations`: `font-family: Nunito`, so the family stays `'Nunito', 'Nunito Fallback'`.
-     Without it, Next names a local family after the JS variable (read: `loader.js:39`); it no
-     longer hashes names (read: `postcss-next-font.js:40`);
-   - `declarations` also: today's Latin `unicode-range`, copied from Google's CSS, so the
-     browser uses this face for exactly the characters it does today;
+   - the binding's name is the family. Turbopack, which builds this app, makes a local font's
+     stack from the JavaScript binding name (codex, reading Next 16.0.10's
+     [options](https://github.com/vercel/next.js/blob/v16.0.10/crates/next-core/src/next_font/local/options.rs#L40)
+     and [stack construction](https://github.com/vercel/next.js/blob/v16.0.10/crates/next-core/src/next_font/local/util.rs#L13)),
+     so `Nunito` keeps the stack `'Nunito', 'Nunito Fallback'`, and a lowercase `nunito`
+     would make it lowercase. No `font-family` declaration: it would change only the
+     `@font-face` rule, not the stack;
+   - `declarations`: today's Latin `unicode-range`, copied from Google's CSS, so the browser
+     uses this face for exactly the characters it does today. The file's own character map
+     isn't equivalent: it holds seven code points outside that range (codex, measured);
    - `display: swap` and preloading are next/font's defaults, as today.
 3. **The licence:** `app/fonts/OFL.txt`, the SIL Open Font License as the Nunito project ships
    it (google/fonts, `ofl/nunito/OFL.txt`), with its copyright line. The OFL allows the font
    to be redistributed, subset included, with the licence.
 4. **No build fetches a font:** no `next/font/google` import in anything the build compiles.
 5. **The same pixels.** No visual-update marker in any commit. CI's comparison against the
-   eight committed baselines must pass unchanged. If it doesn't, the file isn't the one the
-   baselines were drawn with: stop, report, and don't regenerate in this change.
+   eight committed baselines must pass unchanged. If it doesn't: stop, report what differs,
+   and don't regenerate in this change. A failure doesn't by itself say why (codex).
 6. **The fallback face** stays next/font's (`adjustFontFallback`'s default, Arial). It is now
    computed from the file by `next/font/local` instead of read from the table, so its four
    values may change; they are measured and reported against today's, and not pinned. They
-   shape text only before Nunito arrives, and on CI's Ubuntu, which has no Arial, the face
-   never loads (row 2's As built).
+   shape text before Nunito arrives, and for good if it never does: a font that fails to
+   load leaves the page in the fallback, now as before. On CI's Ubuntu, which has no Arial,
+   the fallback face itself never loads (row 2's As built), and the next family in the stack
+   draws.
 7. **UI-SPEC §3.2 is amended** to match, in this contract's commit.
 
 **What's not in it.** Other weights or subsets; making or hinting a font file of our own; a Next
@@ -7380,28 +7388,50 @@ Geist (`README.md:23`, stale since row 2), which is its own small change.
 - **Unit, `tests/typography.test.ts`:**
   - the weights (`:38`): the layout's four `src` entries, at 600, 700, 800 and 900, replacing
     the weight-array match;
-  - the family (`:184-195`): `next/font/local`, the one file, `--font-nunito`, the
-    `font-family: Nunito` declaration, and the recorded `unicode-range`;
+  - the family (`:184-195`): `next/font/local`, bound as `Nunito` and set on `<body>` as
+    `Nunito.variable`, the one file, `--font-nunito`, and the recorded `unicode-range`;
   - new: no `next/font/google` import in what the build compiles: `app/` and the Next config.
     (Tests and specs may name it in prose, as this one must);
   - new: the file's SHA-256 is the recorded one;
   - new: `OFL.txt` is there, names the SIL Open Font License, and carries Nunito's copyright.
 - **Browser:** unchanged. The family, the four loaded weights, the ink check and the face's
   name are what prove the face is today's, so they must pass as they are.
+- **Browser, new: the page with the font blocked** (codex's recommendation). The font file's
+  request is aborted before the game page loads, at 360x640 and 1280x800, the day pinned:
+  - first, the block is real: Chromium reports no glyph drawn by `Nunito ExtraLight` (the
+    reader `e2e/fonts.spec.ts` uses), and some text drawn;
+  - then the page is usable: the board loads, a domino can be placed from the keyboard, and
+    the page doesn't scroll sideways.
+
+  It measures the fallback, so it states what this host and CI's Ubuntu each draw with; it
+  pins no metric (rule 6).
 - **Visual:** unchanged baselines, compared by CI (rule 5).
 
 **Mutation probes** (planned), each to fail at the assertion named:
 1. The import back to `next/font/google`: the no-Google audit, and the loader test.
-2. The `font-family` declaration dropped: the browser family check (`/^Nunito, /`), and the
-   loader test.
+2. The binding lowercase, `nunito`: the browser family check (`/^Nunito, /`), and the loader
+   test.
 3. The 700 entry dropped: the unit weights test, and the browser ink calibration.
 4. The file swapped for Google's Latin-ext file: the hash test.
 5. The `unicode-range` declaration dropped: the loader test.
 6. `OFL.txt` deleted: the licence test.
+7. The blocked-font test's route made to match nothing: its own first assertion, that no glyph
+   is drawn by Nunito.
 
 **The gate** before each commit, from cold, as AGENTS.md says. The As built notes record the
 file's URL, its hash and size, whether it matches the file the last `next/font/google` build
 downloaded, and the fallback face's new values.
+
+**Codex's review of `05a6029`,** every correction made above:
+- **Rule 2 named the family the wrong way.** It cited `loader.js` and `postcss-next-font.js`,
+  which are webpack's path; this app builds with Turbopack ("Next.js 16.0.10 (Turbopack)" in
+  every build log), which names the stack after the binding. The binding is now `Nunito`, the
+  `font-family` declaration is gone, and probe 2 lowercases the binding instead.
+- **The three questions:** Latin only, agreed (codex's own scan found no app character in the
+  other four subsets); keep `unicode-range`, because the file holds seven code points outside
+  it; the fallback unpinned, acceptable, reported, with the page's state when the font never
+  loads acknowledged in rule 6 and checked by the new blocked-font test.
+- **Rule 5's wording:** a failed comparison is stopped and reported without naming a cause.
 
 ## Open questions
 
