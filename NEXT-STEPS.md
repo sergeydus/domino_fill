@@ -6314,7 +6314,8 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
    cells and the archive's days (§3.3). That includes the level arrows, the archive's arrows
    and Close, the chips, Skip, and the completion card's and Results' actions.
    - **The archive's days are excused in width only** (codex): a seventh of the sheet, but
-     48px tall, which §6.5 also requires. They're about 28px today (codex, measured). They
+     48px tall, which §6.5 also requires. They're about 28px today (codex, computed from their
+     type and padding, not measured). They
      keep today's look until row 12, in a 48px-tall box.
 9. **Muted text is `inkMuted`,** not opacity, at the four places above. The covered clock's
    60% is a disabled state, not muted text, but `inkMuted` says it the same way and keeps 4.5:1.
@@ -6362,10 +6363,22 @@ composition: the top bar, the action bar, the legend's chooser (rows 6, 7); shee
     chip controls; `icon` and `day` keep the old press. Kept: Space held shows it, release
     clears it, Enter has no held state, a disabled control doesn't move, and focus is shown in
     `accentEdge`, read from the token.
-  - `e2e/colourRoles.spec.ts`: `SURFACES` is `{ accent: 'ink', controlSurface: 'ink' }`, and
-    becomes `{ accent: 'onAccent', surface: 'ink' }`. Kept: one accent for interactive
-    chrome, each role only where it's allowed, and every text on a named surface in its
-    promised colour at 4.5:1 as the browser computes it.
+  - `e2e/colourRoles.spec.ts`: `SURFACES` is `{ accent: 'ink', controlSurface: 'ink' }`, one
+    foreground per background. On `surface` that can't hold: Reset is `problem`, "Solved!" is
+    `success`, the tutorial's note is `inkMuted`, the archive's warning is `problem` (codex).
+    **The expected foreground is chosen by role as well as background:**
+    - the element's own text-colour utility names it (`text-success`, `text-problem`,
+      `text-ink-muted`);
+    - else its variant's ink does (`control-caution` is `problem`, `control-primary`
+      `onAccent`);
+    - else the background's default (`surface` is `ink`, `accent` is `onAccent`).
+
+    The allowed set per background is closed: on `surface`, `ink`, `inkMuted`, `success` and
+    `problem`; on `accent`, `onAccent` only. Each text must be **exactly** its expected token,
+    at 4.5:1 as the browser computes it. Contrast alone never passes a text.
+    **Positive cases:** Reset, "Solved!" and the tutorial's note must each be among the texts
+    checked, and pass, so the check can't pass by finding nothing. Kept: one accent for
+    interactive chrome, each role only where it's allowed.
   - `e2e/theme.spec.ts:95`: Undo's background is `controlSurface`, and becomes `surface`.
     Kept: each scheme renders its own tokens, and the advice and a line's target clear 4.5:1
     on the ground.
@@ -6394,7 +6407,9 @@ composition: the top bar, the action bar, the legend's chooser (rows 6, 7); shee
 7. The light `accent` back at `#419dc8` with `onAccent` white: the `onAccent` pair.
 8. A `bg-panel` left in a component: the retired-utility audit.
 9. The load-failure note back on `opacity-70`: the muted-text audit.
-10. Reset's text back on `ink`: the variant spec's caution.
+10. Reset's text back on `ink`: the variant spec's caution, and `colourRoles.spec.ts`'s
+    foreground check, which expects `problem` for `control-caution`. `ink` clears 4.5:1 on
+    `surface`, so this is the case where contrast alone must not pass (codex).
 11. A disabled primary keeping the accent: the variant spec's disabled case.
 12. The palette changed, the icons not regenerated: `tests/icons.test.ts` (codex).
 13. The archive's days back to their old height: the targets audit's day height (codex).
@@ -6412,6 +6427,11 @@ choice were accepted as they stood):
 3. **The archive's days are excused in width only:** 48px tall now; probe 13.
 4. **Clarified:** the days keep `meta`'s 700, and a selected toggle's depth shows under
    reduced motion, where a transient press doesn't move (probe 14).
+
+**Codex's review of `82d5b8c`:** one correction, made above. `colourRoles.spec.ts` chose a
+text's expected colour by its background alone, which would have rejected Reset, "Solved!" and
+the tutorial's note on `surface`. It now chooses by role as well, keeps exact tokens and 4.5:1,
+has positive cases, and probe 10 names it. And the days' 28px was computed, not measured.
 
 ## Campaign (future, for the mobile release)
 
