@@ -1,6 +1,8 @@
 import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { VISUAL_URL } from './server'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
+import { freeRuns, rockSquares } from './play'
 
 /**
  * Every glyph on the baseline pages is drawn by a self-hosted web font (graphics spec P0-4).
@@ -87,3 +89,41 @@ test('so does the component sheet', async ({ page }) => {
     await expect(page.locator('main[data-sheet]')).toBeVisible()
     await expectOnlySelfHosted(page)
 })
+
+/*
+ * A font that never arrives leaves the page in its fallback for good (U12, rule 6; codex's
+ * recommendation). The fallback's metrics aren't pinned, and differ by host: this one has
+ * Arial for "Nunito Fallback", CI's Ubuntu hasn't, and draws with the next family. So this
+ * asks only that the page still works in whatever it draws with.
+ */
+for (const viewport of [{ width: 360, height: 640 }, { width: 1280, height: 800 }]) {
+    test(`with the font blocked, the game page still works at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+        let blocked = 0
+        await page.route('**/_next/static/media/*.woff2', route => { blocked++; return route.abort() })
+        await pinDay(page, LATE_IN_A_MONTH)
+        await page.setViewportSize(viewport)
+        await openBoard(page)
+
+        // The block is real: text is drawn, and none of it by Nunito.
+        const drawn = await fontsDrawn(page)
+        expect(drawn.reduce((n, f) => n + f.glyphs, 0), 'no text was measured at all').toBeGreaterThan(20)
+        expect(drawn.filter(f => SELF_HOSTED.test(f.family)), 'text drawn by Nunito, which was blocked').toEqual([])
+        expect(blocked, 'the font was never requested').toBeGreaterThan(0)
+
+        // A domino goes down from the keyboard, as on any day.
+        const { upright: [i, j] } = await freeRuns(page, await rockSquares(page))
+        await page.locator('.board-grid').focus()
+        await page.keyboard.press('ArrowDown')
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', '0,0')
+        for (let k = 0; k < i; k++) await page.keyboard.press('ArrowDown')
+        for (let k = 0; k < j; k++) await page.keyboard.press('ArrowRight')
+        await expect(page.locator('[data-focus]')).toHaveAttribute('data-focus', `${i},${j}`)
+        await page.keyboard.press(' ')
+        await page.keyboard.press('ArrowDown')
+        await expect(page.locator(`[data-piece="one"][data-at="${i},${j}"]`)).toBeVisible()
+
+        // And nothing pushes the page sideways.
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+            'the page scrolls sideways').toBeLessThanOrEqual(0)
+    })
+}

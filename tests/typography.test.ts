@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { TYPE, WEIGHTS, roleName } from '@/app/typography'
@@ -33,9 +34,10 @@ describe('the table is the spec\'s', () => {
             expect(WEIGHTS, role).toContain(weight)
             if (typeof size === 'number') expect(size, role).toBeGreaterThanOrEqual(13)
         }
-        // The layout loads exactly those, by the same numbers.
+        // The layout loads exactly those, by the same numbers: one `src` entry each (U12).
         const layout = readFileSync('app/layout.tsx', 'utf8')
-        expect(layout).toMatch(/weight: \["600", "700", "800", "900"\]/)
+        const loaded = [...layout.matchAll(/\{ path: "\.\/fonts\/nunito-latin\.woff2", weight: "(\d+)", style: "normal" \}/g)]
+        expect(loaded.map(m => Number(m[1]))).toEqual([...WEIGHTS])
     })
 })
 
@@ -187,10 +189,45 @@ describe('no size, line height or family is declared outside the table', () => {
         // theme entry, never emitted, and `var()` of it fell back to the system face.
         expect(found).toEqual([`${join('app', 'globals.css')}: font-family: var(--font-nunito);`])
         const layout = readFileSync('app/layout.tsx', 'utf8')
-        expect(layout).toMatch(/import \{ Nunito \} from "next\/font\/google";/)
+        // From the repository since U12. The binding is `Nunito` because Turbopack names the
+        // stack after it: `nunito` would make the family lowercase (codex).
+        expect(layout).toMatch(/import localFont from "next\/font\/local";/)
+        expect(layout).toMatch(/^const Nunito = localFont\(\{$/m)
         expect(layout).toMatch(/variable: "--font-nunito"/)
-        expect(layout).toMatch(/className=\{`\$\{nunito\.variable\} antialiased`\}/)
+        expect(layout).toMatch(/className=\{`\$\{Nunito\.variable\} antialiased`\}/)
+        // Only the Latin subset's characters, as Google's CSS declared them.
+        expect(layout.match(/prop: "unicode-range",\s+value: "([^"]*)"/)?.[1]).toBe(LATIN)
         // Geist is gone, both faces (UI row 2).
         expect(layout).not.toMatch(/Geist/)
+    })
+})
+
+/** The Latin subset's range, from Google's CSS for Nunito 600-900 (U12). */
+const LATIN = 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, ' +
+    'U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD'
+
+describe('the font is the repository\'s (U12)', () => {
+    it('no build fetches it: nothing the build compiles imports `next/font/google`', () => {
+        const GOOGLE = /["']next\/font\/google["']/
+        const compiled = [...sources(), ['next.config.ts', readFileSync('next.config.ts', 'utf8')] as [string, string]]
+        expect(compiled.flatMap(([path, code]) => hits(GOOGLE, path, code))).toEqual([])
+        expect(GOOGLE.test('import { Nunito } from "next/font/google";')).toBe(true)
+    })
+
+    it('the file is the one Google served, byte for byte', () => {
+        // fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofINeaBTMnFcQ.woff2, the Latin file for
+        // `css2?family=Nunito:wght@600;700;800;900`, and what `next/font/google` last built with.
+        const bytes = readFileSync('app/fonts/nunito-latin.woff2')
+        expect(bytes.length).toBe(39152)
+        expect(createHash('sha256').update(bytes).digest('hex'))
+            .toBe('20fc9b6fc618e7c3c68d3ac750a2a5dfbceb8521675458d2cea580b5693e4798')
+        expect(readFileSync('.gitattributes', 'utf8')).toMatch(/^\*\.woff2 binary$/m)
+    })
+
+    it('with its licence beside it', () => {
+        const licence = readFileSync('app/fonts/OFL.txt', 'utf8')
+        expect(licence).toMatch(/^Copyright 2014 The Nunito Project Authors \(https:\/\/github\.com\/googlefonts\/nunito\)/)
+        expect(licence).toContain('This Font Software is licensed under the SIL Open Font License, Version 1.1.')
+        expect(licence).toContain('SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007')
     })
 })
