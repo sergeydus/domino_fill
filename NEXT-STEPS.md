@@ -7433,6 +7433,67 @@ downloaded, and the fallback face's new values.
   loads acknowledged in rule 6 and checked by the new blocked-font test.
 - **Rule 5's wording:** a failed comparison is stopped and reported without naming a cause.
 
+Codex accepted the contract at `7e4edc0`, with no further corrections.
+
+**As built (2026-10-22),** in `bf3b1a0`, against the accepted contract, with no deviations.
+
+**The file** (measured):
+- Google's CSS for the request, fetched with next/font's user agent, has the same 20 faces.
+  All four Latin faces name one file:
+  `https://fonts.gstatic.com/s/nunito/v32/XRXV3I6Li01BKofINeaBTMnFcQ.woff2`.
+- **It's the file the last `next/font/google` build served,** byte for byte: 39,152 bytes,
+  SHA-256 `20fc9b6fc618e7c3c68d3ac750a2a5dfbceb8521675458d2cea580b5693e4798`, equal to that
+  build's `07454f8ad8aaac57-s.p…woff2`. Git stores it with that hash, as binary.
+- `OFL.txt` is google/fonts' `ofl/nunito/OFL.txt`, read in full before committing: the SIL
+  Open Font License 1.1, Nunito's copyright line, and no Reserved Font Name, so a subset may
+  keep the name.
+
+**What the build makes of it** (measured, in the built CSS):
+- one font file, preloaded, as before;
+- four faces, family `Nunito`, at 600, 700, 800 and 900, each with the Latin range;
+- the stack `"Nunito","Nunito Fallback"`, as before;
+- **the fallback face's values,** now computed from the file (rule 6):
+
+  | | Before (table) | Now (file) |
+  |---|---|---|
+  | `ascent-override` | 99.71% | 103.02% |
+  | `descent-override` | 34.82% | 35.97% |
+  | `line-gap-override` | 0.0% | 0.0% |
+  | `size-adjust` | 101.39% | 98.13% |
+
+**Choices inside the contract:**
+- **The four `src` entries are written out,** one per weight. next/font reads its arguments
+  at build time and takes only literals, so a mapped array isn't allowed.
+- **The blocked-font tests live in `e2e/fonts.spec.ts`,** beside the reader they share. That
+  spec runs in the desktop project only (`playwright.config.ts:46`); each test sets its own
+  viewport, 360x640 or 1280x800, and gets its own browser, so the domino placed in one can't
+  block the other.
+- **Probe 5 renames the declaration's `prop`** rather than deleting the block, which drops
+  the range the same way and keeps the file compiling.
+
+**Tests.**
+- **Unit:** 1858, up from 1855. `tests/typography.test.ts` has 16: the weights now read the
+  four `src` entries, the loader test checks `next/font/local`, the `Nunito` binding and the
+  range, and three are new (no `next/font/google` in `app/` or `next.config.ts`; the file's
+  hash, size and binary attribute; the licence).
+- **Browser:** 780 listed, up from 778: the two blocked-font tests. Both pass on this host.
+
+**Mutation probes: 7 of 7 caught,** each at the assertion named; every file restored byte for
+byte and checked by hash (`probes3.py` in the builder's scratchpad).
+1. The import back to `next/font/google`: the no-Google audit and the loader test.
+2. The binding lowercase: the family check, `/^Nunito, /`, on six surfaces, and the loader
+   test. The calibration also failed, at its inventory (`Nunito` loaded nowhere).
+3. The 700 entry dropped: the unit weights test, and the calibration's ink step
+   (`typography.spec.ts:186`).
+4. Google's Latin-ext file in its place: the hash test.
+5. The range dropped: the loader test.
+6. `OFL.txt` deleted: the licence test.
+7. The blocked-font route matching nothing: the test's first assertion, that no text is drawn
+   by Nunito, at both sizes.
+
+**The gate** for `bf3b1a0`, from cold: every step 0 (TIME_WAIT 39; unit 1858, stderr 0 bytes;
+browser 779 passed, 1 skipped; no socket errors).
+
 ## Open questions
 
 Answered:
