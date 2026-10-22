@@ -7494,6 +7494,17 @@ byte and checked by hash (`probes3.py` in the builder's scratchpad).
 **The gate** for `bf3b1a0`, from cold: every step 0 (TIME_WAIT 39; unit 1858, stderr 0 bytes;
 browser 779 passed, 1 skipped; no socket errors).
 
+**After `749931a`, the As built notes:**
+- **Its gate** passed every step, with the same counts. It logged one `ERR_NO_BUFFER_SPACE`,
+  recovered by the single reload with the test passing; its U9 snapshot, at
+  2026-10-22 17:25:47 UTC: layout, `layout.spec.ts` › 1280x800 @ 200% › hard 8x8 › the whole
+  shell fits; TIME_WAIT 4721, the tests' 4664; the tests' established 0. It started at 48.
+  No change made (AGENTS.md).
+- **CI on `749931a`** (run 39822645252) passed both jobs. **Visual compared the eight
+  unchanged baselines twice, 16 of 16:** rule 5 holds, with the font from the repository.
+  The gate job ran unit 1858 and browser 779 passed, so the blocked-font tests pass on
+  Ubuntu too, where the fallback isn't Arial.
+
 ## Open questions
 
 Answered:
