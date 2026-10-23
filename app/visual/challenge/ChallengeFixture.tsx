@@ -55,9 +55,9 @@ const View = observer(({ root }: { root: RootStore }) => {
     }
     return <main className='mx-auto flex max-w-md flex-col items-center gap-3 p-3'>
         <h1>{CHALLENGE_SENTINEL}</h1>
-        <button className={control('secondary')} onClick={() => { void root.start() }}>Initialize</button>
-        <button className={control('secondary')} onClick={() => { void coordinator.retry() }}>Retry saves</button>
-        <button className={control('quiet')} onClick={() => root.boardsStore.setLevel(1)}>Board one</button>
+        <button className={control('raised')} onClick={() => { void root.start() }}>Initialize</button>
+        <button className={control('raised')} onClick={() => { void coordinator.retry() }}>Retry saves</button>
+        <button className={control('raised')} onClick={() => root.boardsStore.setLevel(1)}>Board one</button>
         <button className={control('primary')} onClick={() => { void session.startChallenge() }}>Start fixture</button>
         <p data-cover-model>{state.covered ? 'Covered' : 'Revealed'}</p>
         <ClientBoard boardsStore={session} />

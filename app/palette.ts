@@ -32,12 +32,31 @@
 export const PALETTE = {
     // ---- the page ------------------------------------------------------------------------
     /**
-     * The board's ground: the page, the browser chrome, the splash screen, the icon. A
-     * subtly warm off-white since P1-3; it was the neutral `#e8e7e7`.
+     * The board's ground: the page, the browser chrome, the splash screen, the icon. UI-SPEC
+     * §3.1's warm cream since UI row 3; `#f4f0e8` from P1-3, the neutral `#e8e7e7` before.
      */
-    ground: '#f4f0e8',
-    /** Body text on the ground; the advice strip's 15.77:1 (spec §4). */
-    ink: '#171717',
+    ground: '#fbf3e8',
+    /**
+     * Text, on the ground and on `surface`: a warm brown-black since UI row 3, where it was
+     * `#171717`. 11.92:1 on the ground, 13.11:1 on the surface (UI-SPEC §3.1).
+     */
+    ink: '#3a2e28',
+    /**
+     * Secondary text: a note under a heading, a clock not yet running (UI row 3). It replaced
+     * opacity on those, so it keeps 4.5:1 wherever it's drawn: 5.97 on the ground, 6.57 on the
+     * surface.
+     */
+    inkMuted: '#6b5a4e',
+    /**
+     * Cards, sheets and raised controls (UI row 3). It replaced `panel` (the cards' white) and
+     * `controlSurface` (the controls' warm grey), which were two surfaces for one role.
+     */
+    surface: '#ffffff',
+    /**
+     * The solid edge beneath a raised control (UI-SPEC §3.3). Decorative: a control is known by
+     * its label, and the edge only says it can be pressed.
+     */
+    raisedEdge: '#eadcc9',
 
     // ---- the board -----------------------------------------------------------------------
     /*
@@ -78,19 +97,18 @@ export const PALETTE = {
     /** A line label with nothing to report (5.62:1 on the ground, spec §4). */
     lineNeutral: '#5f5f5f',
     /**
-     * Finished: a finished line (6.27:1 on the ground), and a finished puzzle -- the
-     * completion card's "Solved!" (P2-3; 7.13:1 on the panel). Nothing else. It was the
-     * card's whole surface from P1-4, with `onSuccess` white text on it, until P2-3.
+     * Finished: a finished line, and a finished puzzle -- the completion card's "Solved!"
+     * (P2-3). Nothing else. UI-SPEC §3.1's green since UI row 3; it was `#15661a`.
      */
-    success: '#15661a',
+    success: '#1e7a4f',
     /**
-     * Something is wrong: an overshot line, the advice strip when it is reporting a problem
-     * (7.35:1), and the archive's error message, which had a red of its own until P1-4. And
-     * the edge of `Reset`, the caution variant (P2-2): not something wrong, but something
-     * that cannot be taken back. It drew the refused cross too until UI row 1, which gave
-     * the board its own `refusedCross`: this is chrome, and moves with the theme.
+     * Something is wrong: an overshot line, the advice strip when it is reporting a problem,
+     * and the archive's error message. And `Reset`'s text, the caution variant: not
+     * something wrong, but something that can't be taken back (P2-2's edge until UI row 3,
+     * whose raised controls have none). It drew the refused cross too until UI row 1, which
+     * gave the board its own `refusedCross`. UI-SPEC §3.1's red since row 3; it was `#a10000`.
      */
-    problem: '#a10000',
+    problem: '#b83a14',
     /**
      * The cell a hint is pointing at. It shared `success`'s value until P1-3, whose darker
      * checker it no longer cleared 3:1 against; now a green dark enough to.
@@ -104,21 +122,18 @@ export const PALETTE = {
      * there were five blues -- this, Material's two for
      * the arrows, Tailwind's `blue-500` and `blue-600` for the tutorial and the board's
      * focus ring, `sky-600` for the archive's current day -- and an amber for "Go to
-     * today". Text on the accent is `ink` (5.87:1); white was 3.05:1.
+     * today". UI-SPEC §3.1's teal since UI row 3, with `onAccent` text on it; it was the pale
+     * blue `#419dc8`, with `ink` on it.
      */
-    accent: '#419dc8',
+    accent: '#0f766e',
+    /** Text on the accent (UI row 3): 5.47:1. */
+    onAccent: '#ffffff',
     /**
-     * The accent's edge: rings and strokes -- a toggle's ring, the primary's hover, the
-     * arrows' outline, the archive's current day, the board's focus ring, and every
-     * control's (P2-2; black until then), 8.42:1 or better on every light surface.
+     * The accent's edge: the primary's raised edge (UI row 3), and rings and strokes -- the
+     * focus ring every control draws, the primary's hover, the arrows' outline, the archive's
+     * current day, the board's focus ring. It was `#0b3c52` until row 3.
      */
-    accentEdge: '#0b3c52',
-    /**
-     * The secondary and caution controls, a disabled primary, a quiet control under the
-     * pointer, and the domino legend's tray. A light warm neutral since P1-4, so the
-     * controls sit back on the warm ground; it was `#ababab`.
-     */
-    controlSurface: '#e2d9ca',
+    accentEdge: '#0a5a54',
 
     // ---- the cell states (P1-5 owns these) -------------------------------------------------
     /**
@@ -165,12 +180,6 @@ export const PALETTE = {
     // ---- dialogs and surfaces ------------------------------------------------------------
     /** Behind a modal, drawn at 40%. */
     scrim: '#000000',
-    /**
-     * The archive's and the tutorial's card, and a secondary control under the pointer.
-     */
-    panel: '#ffffff',
-    /** Text on a panel: the tutorial's, and the completion card's (P2-3). */
-    panelInk: '#000000',
 
     // ---- the archive's day marks ---------------------------------------------------------
     markNone: '#ffffff',
@@ -212,16 +221,18 @@ export const BOARD_TOKENS = [
  * The dark theme (UI row 1), with exactly `PALETTE`'s keys: a token missing or extra is a
  * type error, and `tests/palette.test.ts` says so again at run time.
  *
- * **Interim, on purpose.** The board's tokens are the light ones, read from `PALETTE` rather
- * than copied, until row 4. The chrome's are chosen so every pair today's components draw
- * holds in the dark too -- `ink` on `accent` is the primary control's text, so the accent is
- * a dark teal here, not UI-SPEC's final bright one, which needs white text (row 3). Each
- * pair is computed in `tests/contrast.test.ts`; the ratios are in the row's contract.
+ * **The board is interim, on purpose.** Its tokens are the light ones, read from `PALETTE`
+ * rather than copied, until row 4. The chrome's are UI-SPEC §3.1's final values since row 3,
+ * which gave the accent its bright teal with `onAccent` dark text; row 1's interim dark teal
+ * carried `ink`. Each pair is computed in `tests/contrast.test.ts`.
  */
 export const PALETTE_DARK: Readonly<Record<Token, string>> = {
-    // ---- the page
+    // ---- the page: ink 15.87 and inkMuted 8.29:1 on the ground; on the surface 13.91, 7.26
     ground: '#16110e',
     ink: '#f3ebe1',
+    inkMuted: '#b9aa9b',
+    surface: '#251e19',
+    raisedEdge: '#0d0a08',
 
     // ---- the board, unchanged until row 4
     checkerLight: PALETTE.checkerLight,
@@ -243,10 +254,10 @@ export const PALETTE_DARK: Readonly<Record<Token, string>> = {
     problem: '#ff8f6b',
     hint: PALETTE.hint,
 
-    // ---- interactive chrome: ink on the accent is 4.63:1
-    accent: '#0f766e',
-    accentEdge: '#6fd6cb',
-    controlSurface: '#3a3029',
+    // ---- interactive chrome: onAccent on the accent is 7.86:1
+    accent: '#3cc3b4',
+    onAccent: '#0b1f1d',
+    accentEdge: '#2a8f84',
 
     // ---- the cell states, unchanged until row 5
     anchor: PALETTE.anchor,
@@ -258,10 +269,8 @@ export const PALETTE_DARK: Readonly<Record<Token, string>> = {
     refusedCross: PALETTE.refusedCross,
     dragWash: PALETTE.dragWash,
 
-    // ---- dialogs and surfaces
+    // ---- dialogs
     scrim: '#000000',
-    panel: '#251e19',
-    panelInk: '#f3ebe1',
 
     // ---- the archive's day marks: ink on each clears 6.6:1
     markNone: '#2a221c',

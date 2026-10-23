@@ -80,7 +80,7 @@ const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
         <section
             data-challenge-cover={view.kind}
             aria-label="Challenge board, covered"
-            className="flex flex-col items-center justify-center gap-3 rounded-lg border-board-frame bg-panel p-4 text-center text-panel-ink"
+            className="flex flex-col items-center justify-center gap-3 rounded-lg border-board-frame bg-surface p-4 text-center text-ink"
             style={{ width: session.shellWidth, height: session.shellHeight, borderWidth: 4 }}
         >
             <p className="text-body font-bold" data-cover-board>
@@ -108,7 +108,7 @@ const ChallengeCover: React.FC<Props> = ({ session, levels, view }) => {
                 <button
                     type="button"
                     data-challenge-retry
-                    className={control('secondary')}
+                    className={control('raised')}
                     onClick={() => { void challenge?.retry() }}
                 >
                     Try again

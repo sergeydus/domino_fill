@@ -3,7 +3,6 @@ import { observer } from 'mobx-react'
 import { LevelStore } from '../stores/BoardsStore'
 import { SoundStore } from '../stores/SoundStore'
 import type { ControlStore } from '../stores/ControlStore'
-import { PRESSED } from './controlStates'
 import { control } from '../controls'
 
 /*
@@ -14,15 +13,15 @@ import { control } from '../controls'
  * passing while the shipped ones changed. Extracted unchanged -- same element, same
  * attributes, same classes -- so the page renders exactly what it rendered before.
  *
- * Both are the quiet variant (graphics spec P2-2, row 14): page-level, not part of the game,
- * so bordered and unfilled until the pointer or a press fills them.
+ * Both are raised controls (UI row 3): they were row 14's quiet variant, bordered and
+ * unfilled, which UI-SPEC's six variants have no place for.
  */
 
 export const ArchiveButton = observer(({ levels }: { levels: LevelStore }) => (
   <button
     type='button'
     data-open-archive
-    className={control('quiet')}
+    className={control('raised')}
     onClick={() => levels.setArchiveOpen(true)}
   >
     Archive
@@ -38,7 +37,7 @@ export const ResultsButton = observer(({ levels }: { levels: LevelStore }) =>
     <button
       type='button'
       data-open-results
-      className={control('quiet')}
+      className={control('raised')}
       onClick={() => levels.openResults()}
     >
       Results
@@ -72,7 +71,7 @@ export const StreakCount = observer(({ levels }: { levels: LevelStore }) => {
  * **Pressed is sound on** (graphics spec P1-6, row 12). It was pressed when *muted*, so a
  * screen reader announced "Sound, toggle button, pressed" exactly when there was none: the
  * name is the thing, and pressed means the thing is on. It went unnoticed while nothing on
- * screen showed the pressed state; P1-6 draws every toggle's pressed state (`PRESSED`), and
+ * screen showed the pressed state; P1-6 draws every toggle's pressed state (held down since UI row 3), and
  * drawing it on "Sound off" would have made the inversion visible to everyone.
  */
 /*
@@ -90,7 +89,7 @@ export const ControlModeButton = observer(({ controls }: { controls: ControlStor
     type='button'
     data-controls-mode
     aria-pressed={controls.mode === 'pick'}
-    className={`${control('quiet')} ${PRESSED}`}
+    className={control('raised')}
     onClick={e => {
       const onPicker = document.activeElement?.closest('[data-piece-picker]') != null
       controls.toggleMode()
@@ -107,7 +106,7 @@ export const SoundButton = observer(({ sound }: { sound: SoundStore }) => (
     data-mute
     aria-pressed={!sound.muted}
     aria-label='Sound'
-    className={`${control('quiet')} ${PRESSED}`}
+    className={control('raised')}
     onClick={() => sound.toggle()}
   >
     {sound.muted ? 'Sound off' : 'Sound on'}

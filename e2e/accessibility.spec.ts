@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
 import { drag } from './play'
 import { frames, movement, track } from './frames'
+import { CONTROL } from '../app/controls'
 
 /**
  * What assistive technology actually receives (spec P1-8, row 19).
@@ -523,8 +524,15 @@ test.describe('difficulty', () => {
         // in the UI where state was carried by colour alone.
         const selected = page.locator('[data-difficulty][data-selected]')
         await expect(selected).toHaveCount(1)
-        // 900 over the others' 800 since UI row 2 (it was 700 over 400 in Geist).
-        await expect(selected).toHaveCSS('font-weight', '900')
+        // Held down, with no edge, where the others stand on theirs (UI row 3). It was the
+        // weight until then: 900 over 800 in Nunito, 700 over 400 in Geist.
+        await expect(selected).toHaveCSS('translate', `0px ${CONTROL.raised.edge.depth}px`)
+        await expect(selected).toHaveCSS('box-shadow', 'none')
+        const others = page.locator('[data-difficulty]:not([data-selected])')
+        for (const other of await others.all()) {
+            await expect(other).toHaveCSS('translate', 'none')
+            await expect(other).not.toHaveCSS('box-shadow', 'none')
+        }
     })
 })
 

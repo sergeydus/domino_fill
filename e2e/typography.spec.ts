@@ -242,12 +242,12 @@ test('the game page: labels, controls, the clock, and the advice strip with its 
     await expectControls(page.locator('body'))
     expect(await roleIn(page.locator('[data-advice]'))).toBe('body')
 
-    // A control at rest, and one pressed: 800 and 900, drawn apart (UI-SPEC §3.2, amended).
+    // A control at rest, and one pressed: both the `control` role's 800 since UI row 3, which
+    // tells a pressed toggle by its depth (`e2e/controlVariants.spec.ts`); 800 and 900, drawn
+    // apart, until then (UI-SPEC §3.2, amended).
     const pressed = page.locator('[data-difficulty][aria-pressed="true"]')
     const atRest = page.locator('[data-difficulty][aria-pressed="false"]').first()
-    expect([await weightOf(atRest), await weightOf(pressed)]).toEqual([800, 900])
-    const family = await page.evaluate(() => getComputedStyle(document.body).fontFamily)
-    expect(await apart(page, family, 800, 900)).toBeGreaterThanOrEqual(DRAWN_APART)
+    expect([await weightOf(atRest), await weightOf(pressed)]).toEqual([800, 800])
 })
 
 test('the archive: its dates are meta, its words body, its buttons controls', async ({ page }) => {

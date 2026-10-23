@@ -5,6 +5,7 @@ import { VISUAL_URL } from './server'
 import { drag } from './play'
 import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { PALETTE } from '../app/palette'
+import { CONTROL, type Variant, type VariantName } from '../app/controls'
 
 /**
  * The states every control owes (graphics spec P1-6, row 12).
@@ -167,13 +168,28 @@ const look = (b: Locator) => b.evaluate(el => {
     }
 })
 
+/** The variant a button names. */
+const variantOf = async (b: Locator): Promise<Variant> => CONTROL[await b.evaluate(el =>
+    Array.from(el.classList).find(c => c.startsWith('control-'))!.slice('control-'.length)) as VariantName]
+
+/** How a toggle that is on rests: held down by its edge's depth (UI row 3), or not at all. */
+const restingDepth = async (b: Locator, c: Variant) =>
+    await b.getAttribute('aria-pressed') === 'true' && c.edge ? `0px ${c.edge.depth}px` : 'none'
+
 test.describe('pressed, disabled, and toggled', () => {
     test('every control answers a press before its result arrives', async ({ page }) => {
+        /*
+         * Under the reduced motion this file runs in. A raised control's answer is its edge
+         * going (UI row 3), and it doesn't move, which reduced motion forbids; the sink itself
+         * is the next test's. The level arrows keep P1-6's pixel and 90% until row 6.
+         */
         await openBoard(page)
         const found = await buttons(page.locator('body'))
         expect(found.length).toBeGreaterThanOrEqual(9)
         for (const b of found) {
             const label = await name(b)
+            const c = await variantOf(b)
+            const resting = await restingDepth(b, c)
             await b.hover()
             const up = await look(b)
             await page.mouse.down()
@@ -181,10 +197,50 @@ test.describe('pressed, disabled, and toggled', () => {
             // Off the control before letting go, so the press is not a click.
             await page.mouse.move(0, 0)
             await page.mouse.up()
-            expect({ translate: down.translate, filter: down.filter }, label)
-                .toEqual({ translate: '0px 1px', filter: 'brightness(0.9)' })
-            expect({ translate: up.translate, filter: up.filter }, label).toEqual({ translate: 'none', filter: 'none' })
+            if (c.press === 'sink') {
+                expect({ translate: down.translate, filter: down.filter, shadow: down.shadow }, label)
+                    .toEqual({ translate: resting, filter: 'none', shadow: 'none' })
+                // At rest it had an edge to lose -- unless it's a toggle that is on, already down.
+                if (resting === 'none') expect(up.shadow, `${label}: an edge to lose`).not.toBe('none')
+            } else {
+                expect({ translate: down.translate, filter: down.filter }, label)
+                    .toEqual({ translate: '0px 1px', filter: 'brightness(0.9)' })
+            }
+            expect({ translate: up.translate, filter: up.filter }, label).toEqual({ translate: resting, filter: 'none' })
         }
+    })
+
+    test('with motion allowed, a raised control sinks into its edge while held', async ({ page }) => {
+        // UI-SPEC §3.3: down by the edge's depth, the edge gone, over 80ms -- waited out here.
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await openBoard(page)
+        const settled = (b: Locator) => expect.poll(() => b.evaluate(el => el.getAnimations().length)).toBe(0)
+        for (const selector of ['[data-check]', '[data-hint]']) {
+            const b = page.locator(selector)
+            await expect(b).toBeEnabled()
+            const c = await variantOf(b)
+            await b.hover()
+            await settled(b)
+            const up = await look(b)
+            await page.mouse.down()
+            await settled(b)
+            const down = await look(b)
+            await page.mouse.move(0, 0)
+            await page.mouse.up()
+            expect(up.translate, selector).toBe('none')
+            expect(up.shadow, `${selector}: its edge, at rest`).toContain(`0px ${c.edge!.depth}px 0px 0px`)
+            expect({ translate: down.translate, shadow: down.shadow }, `${selector}, held`)
+                .toEqual({ translate: `0px ${c.edge!.depth}px`, shadow: 'none' })
+        }
+        // And a disabled one doesn't, motion or not.
+        const undo = page.locator('[data-undo]')
+        await expect(undo).toBeDisabled()
+        const at = await look(undo)
+        const box = (await undo.boundingBox())!
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+        await page.mouse.down()
+        expect(await look(undo), 'disabled, held').toEqual(at)
+        await page.mouse.up()
     })
 
     test('from the keyboard: Space is held like a press, and Enter has nothing to hold', async ({ page }) => {
@@ -198,22 +254,29 @@ test.describe('pressed, disabled, and toggled', () => {
          * the browser does.
          */
         await openBoard(page)
-        const [medium, hard] = [page.locator('[data-difficulty="normal"]'), page.locator('[data-difficulty="hard"]')]
+        const medium = page.locator('[data-difficulty="normal"]')
         await expect(medium).toHaveAttribute('aria-pressed', 'false')
 
         await page.keyboard.press('Shift')
         await medium.focus()
+        const atRest = await look(medium)
+        expect(atRest.shadow, 'its edge, at rest').not.toBe('none')
         await page.keyboard.down(' ')
-        expect(await look(medium), 'Space held').toMatchObject({ translate: '0px 1px', filter: 'brightness(0.9)' })
+        // Under reduced motion the answer is the edge going, without the move (UI row 3).
+        expect(await look(medium), 'Space held').toMatchObject({ translate: 'none', filter: 'none', shadow: 'none' })
         await expect(medium, 'and nothing has happened yet').toHaveAttribute('aria-pressed', 'false')
         await page.keyboard.up(' ')
         await expect(medium).toHaveAttribute('aria-pressed', 'true')
-        expect(await look(medium), 'released').toMatchObject({ translate: 'none', filter: 'none' })
+        // On now, so held down by its state: a toggle's depth shows under reduced motion too.
+        expect(await look(medium), 'released, and on').toMatchObject({ translate: `0px ${CONTROL.raised.edge.depth}px`, shadow: 'none' })
 
-        await hard.focus()
+        // Enter on a control that isn't a toggle, so its state can't stand in for a press:
+        // Archive, whose result -- the archive open -- is plain to see.
+        const archive = page.locator('[data-open-archive]')
+        await archive.focus()
         await page.keyboard.down('Enter')
-        await expect(hard, 'Enter has already acted, with the key still down').toHaveAttribute('aria-pressed', 'true')
-        expect(await look(hard), 'so there is no held state to show').toMatchObject({ translate: 'none', filter: 'none' })
+        await expect(page.locator('[data-archive]'), 'Enter has already acted, with the key still down').toBeVisible()
+        expect(await look(archive), 'so there is no held state to show').toMatchObject({ translate: 'none', filter: 'none' })
         await page.keyboard.up('Enter')
     })
 
@@ -222,10 +285,12 @@ test.describe('pressed, disabled, and toggled', () => {
         const undo = page.locator('[data-undo]')
         await expect(undo, 'Undo is disabled on arrival').toBeDisabled()
         const at = await look(undo)
-        // The treatment the pinned 2.30:1 in tests/contrast.test.ts is computed from.
-        expect(at.opacity).toBe('0.4')
+        // The treatment `tests/contrast.test.ts`'s pinned disabled ratio is computed from: 45%,
+        // and no edge (UI row 3; 40% on the control surface until then).
+        expect(at.opacity).toBe('0.45')
+        expect(at.shadow).toBe('none')
         expect(await undo.evaluate(el => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color]))
-            .toEqual([rgb(PALETTE.controlSurface), rgb(PALETTE.ink)])
+            .toEqual([rgb(PALETTE.surface), rgb(PALETTE.ink)])
 
         const box = (await undo.boundingBox())!
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -238,16 +303,20 @@ test.describe('pressed, disabled, and toggled', () => {
     test('a toggle shows its state by colour and without it', async ({ page }) => {
         /*
          * `aria-pressed` on screen: the accent's fill, and -- for anyone who cannot use that
-         * -- a ring and a bolder weight. Every toggle on the page, compared pressed against
-         * not pressed.
+         * -- held down, by its edge's depth with the edge gone (UI row 3; a ring and a bolder
+         * weight until then). The weight is the same both ways now. Every toggle on the page,
+         * compared pressed against not pressed, under this file's reduced motion: the depth is
+         * a state, and shows there.
          */
         await openBoard(page)
         await page.mouse.move(0, 0)
         const channels = (on: Awaited<ReturnType<typeof look>>, off: Awaited<ReturnType<typeof look>>) => ({
             colour: on.background !== off.background,
             weight: on.weight !== off.weight,
-            ring: on.shadow !== 'none' && off.shadow === 'none',
+            depth: on.translate !== off.translate,
+            edge: on.shadow === 'none' && off.shadow !== 'none',
         })
+        const SHOWN = { colour: true, weight: false, depth: true, edge: true }
 
         // Difficulty: the pressed one against each of the others.
         const pressed = page.locator('[data-difficulty][aria-pressed="true"]')
@@ -255,7 +324,7 @@ test.describe('pressed, disabled, and toggled', () => {
         const on = await look(pressed)
         expect(on.background).toBe(rgb(PALETTE.accent))
         for (const other of await page.locator('[data-difficulty][aria-pressed="false"]').all()) {
-            expect(channels(on, await look(other))).toEqual({ colour: true, weight: true, ring: true })
+            expect(channels(on, await look(other))).toEqual(SHOWN)
         }
 
         // Sound: the same control, both ways. Pressed is sound on.
@@ -267,7 +336,7 @@ test.describe('pressed, disabled, and toggled', () => {
         await page.mouse.move(0, 0)
         await expect(sound).toHaveAttribute('aria-pressed', 'false')
         const soundOff = await look(sound)
-        expect(channels(soundOn, soundOff)).toEqual({ colour: true, weight: true, ring: true })
+        expect(channels(soundOn, soundOff)).toEqual(SHOWN)
 
         // Pick a piece: the same control, both ways. Pressed is the mode on.
         const pick = page.locator('[data-controls-mode]')
@@ -276,7 +345,7 @@ test.describe('pressed, disabled, and toggled', () => {
         await pick.click()
         await page.mouse.move(0, 0)
         await expect(pick).toHaveAttribute('aria-pressed', 'true')
-        expect(channels(await look(pick), pickOff)).toEqual({ colour: true, weight: true, ring: true })
+        expect(channels(await look(pick), pickOff)).toEqual(SHOWN)
 
         // Every toggle on the page was one of those: three difficulties, Sound and the mode.
         // The picker the mode shows is not a toggle but a choice, below.
@@ -286,7 +355,7 @@ test.describe('pressed, disabled, and toggled', () => {
     test('a choice shows which is chosen by a ring and a check mark, not a fill', async ({ page }) => {
         /*
          * The picker's two pieces are radios: exactly one is always held. Chosen is the
-         * `choice` variant's ring and a check mark drawn inside the chip -- a shape, so it
+         * `chip` variant's ring and a check mark drawn inside the chip -- a shape, so it
          * survives without colour -- and never the accent's fill, which is a toggle's. The
          * first picker was two toggles, and the held one's whole button went solid blue.
          */
@@ -299,9 +368,11 @@ test.describe('pressed, disabled, and toggled', () => {
         await expect(other).toHaveCount(1)
         const [on, off] = [await look(chosen), await look(other)]
 
-        expect(on.shadow).not.toBe('none')
-        expect(off.shadow).toBe('none')
-        expect([on.background, on.weight]).toEqual([off.background, off.weight])
+        // The ring over the edge both chips stand on (UI row 3): the ring is the difference.
+        expect(on.shadow).toContain('0px 0px 0px 2px')
+        expect(off.shadow).not.toContain('0px 0px 0px 2px')
+        expect(off.shadow).not.toBe('none')
+        expect([on.background, on.weight, on.translate]).toEqual([off.background, off.weight, off.translate])
         expect(on.background).not.toBe(rgb(PALETTE.accent))
 
         // The check mark: shown on the chosen chip only, and inside its border on every side.

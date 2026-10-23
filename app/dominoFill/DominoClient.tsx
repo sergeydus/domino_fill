@@ -183,7 +183,7 @@ const DominoClient: React.FC = () => {
     return (
       <div className='m-auto p-4 text-center' role='alert'>
         <p className='text-body font-extrabold'>Today&apos;s puzzles could not be loaded.</p>
-        <p className='text-meta opacity-70'>
+        <p className='text-meta text-ink-muted'>
           {failed ? 'Check your connection and reload the page.' : 'No board'}
         </p>
       </div>
@@ -358,7 +358,7 @@ const DominoClient: React.FC = () => {
           */}
         <div
           ref={setColumn}
-          className='flex flex-col gap-4 items-center justify-center'
+          className='flex flex-col gap-3 items-center justify-center'
         >
           {/* No wrapper: the banner is usually absent, and an empty `data-chrome` row still
               costs the column's gap -- which comes straight out of the board's height

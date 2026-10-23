@@ -3,8 +3,11 @@
  * there and regenerate. `tests/palette.test.ts` fails when the two disagree.
  */
 :root {
-  --ground: #f4f0e8;
-  --ink: #171717;
+  --ground: #fbf3e8;
+  --ink: #3a2e28;
+  --ink-muted: #6b5a4e;
+  --surface: #ffffff;
+  --raised-edge: #eadcc9;
   --checker-light: #9c8a72;
   --checker-dark: #8e7c66;
   --board-frame: #4d3f33;
@@ -18,12 +21,12 @@
   --pip: #000000;
   --divider: #000000;
   --line-neutral: #5f5f5f;
-  --success: #15661a;
-  --problem: #a10000;
+  --success: #1e7a4f;
+  --problem: #b83a14;
   --hint: #0b3b10;
-  --accent: #419dc8;
-  --accent-edge: #0b3c52;
-  --control-surface: #e2d9ca;
+  --accent: #0f766e;
+  --on-accent: #ffffff;
+  --accent-edge: #0a5a54;
   --anchor: #16295e;
   --candidate-edge: #16295e;
   --candidate-wash-oklch: 88.2% 0.059 254.128;
@@ -34,8 +37,6 @@
   --refused-cross: #a10000;
   --drag-wash: #ffffff;
   --scrim: #000000;
-  --panel: #ffffff;
-  --panel-ink: #000000;
   --mark-none: #ffffff;
   --mark-started: oklch(92.4% 0.12 95.746);
   --mark-partial: oklch(82.8% 0.189 84.429);
@@ -47,6 +48,9 @@
   :root:not([data-theme="light"]) {
     --ground: #16110e;
     --ink: #f3ebe1;
+    --ink-muted: #b9aa9b;
+    --surface: #251e19;
+    --raised-edge: #0d0a08;
     --checker-light: #9c8a72;
     --checker-dark: #8e7c66;
     --board-frame: #4d3f33;
@@ -63,9 +67,9 @@
     --success: #5bd69a;
     --problem: #ff8f6b;
     --hint: #0b3b10;
-    --accent: #0f766e;
-    --accent-edge: #6fd6cb;
-    --control-surface: #3a3029;
+    --accent: #3cc3b4;
+    --on-accent: #0b1f1d;
+    --accent-edge: #2a8f84;
     --anchor: #16295e;
     --candidate-edge: #16295e;
     --candidate-wash-oklch: 88.2% 0.059 254.128;
@@ -76,8 +80,6 @@
     --refused-cross: #a10000;
     --drag-wash: #ffffff;
     --scrim: #000000;
-    --panel: #251e19;
-    --panel-ink: #f3ebe1;
     --mark-none: #2a221c;
     --mark-started: #4a3d16;
     --mark-partial: #6a4d0c;
@@ -89,6 +91,9 @@
 :root[data-theme="dark"] {
   --ground: #16110e;
   --ink: #f3ebe1;
+  --ink-muted: #b9aa9b;
+  --surface: #251e19;
+  --raised-edge: #0d0a08;
   --checker-light: #9c8a72;
   --checker-dark: #8e7c66;
   --board-frame: #4d3f33;
@@ -105,9 +110,9 @@
   --success: #5bd69a;
   --problem: #ff8f6b;
   --hint: #0b3b10;
-  --accent: #0f766e;
-  --accent-edge: #6fd6cb;
-  --control-surface: #3a3029;
+  --accent: #3cc3b4;
+  --on-accent: #0b1f1d;
+  --accent-edge: #2a8f84;
   --anchor: #16295e;
   --candidate-edge: #16295e;
   --candidate-wash-oklch: 88.2% 0.059 254.128;
@@ -118,8 +123,6 @@
   --refused-cross: #a10000;
   --drag-wash: #ffffff;
   --scrim: #000000;
-  --panel: #251e19;
-  --panel-ink: #f3ebe1;
   --mark-none: #2a221c;
   --mark-started: #4a3d16;
   --mark-partial: #6a4d0c;
@@ -130,6 +133,9 @@
 @theme inline {
   --color-ground: var(--ground);
   --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-surface: var(--surface);
+  --color-raised-edge: var(--raised-edge);
   --color-checker-light: var(--checker-light);
   --color-checker-dark: var(--checker-dark);
   --color-board-frame: var(--board-frame);
@@ -147,8 +153,8 @@
   --color-problem: var(--problem);
   --color-hint: var(--hint);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
   --color-accent-edge: var(--accent-edge);
-  --color-control-surface: var(--control-surface);
   --color-anchor: var(--anchor);
   --color-candidate-edge: var(--candidate-edge);
   --color-candidate-wash: var(--candidate-wash);
@@ -158,8 +164,6 @@
   --color-refused-cross: var(--refused-cross);
   --color-drag-wash: var(--drag-wash);
   --color-scrim: var(--scrim);
-  --color-panel: var(--panel);
-  --color-panel-ink: var(--panel-ink);
   --color-mark-none: var(--mark-none);
   --color-mark-started: var(--mark-started);
   --color-mark-partial: var(--mark-partial);

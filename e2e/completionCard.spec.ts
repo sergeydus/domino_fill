@@ -85,8 +85,9 @@ const expectHierarchy = async (page: Page) => {
     expect(order.outcome.bottom).toBeLessThanOrEqual(order.detail.top)
     for (const a of order.actions) expect(order.detail.bottom, `"${a.text}" is beneath the detail`).toBeLessThanOrEqual(a.top)
 
-    // The card is the panel, not a `success` surface; "Solved!" is the green on it.
-    await expect(card).toHaveCSS('background-color', rgb(rgbBytes('panel')))
+    // The card is the surface (the panel until UI row 3), not a `success` one; "Solved!" is the
+    // green on it.
+    await expect(card).toHaveCSS('background-color', rgb(rgbBytes('surface')))
     return detail.text
 }
 

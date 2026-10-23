@@ -125,7 +125,7 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
             aria-labelledby='results-heading'
             className='fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 p-4'
         >
-            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-panel p-4 text-panel-ink'>
+            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-surface p-4 text-ink'>
                 {/* To the last control there is: the text box once Share has shown it (codex). */}
                 <div tabIndex={0} data-focus-guard='start'
                     onFocus={() => (fallbackRef.current ?? closeRef.current)?.focus()} />
@@ -181,7 +181,7 @@ const ResultsDialog: React.FC<Props> = ({ levels }) => {
                     <button type='button' ref={shareRef} data-results-share className={control('primary')} onClick={share}>
                         Share
                     </button>
-                    <button type='button' ref={closeRef} data-results-close className={control('secondary')}
+                    <button type='button' ref={closeRef} data-results-close className={control('raised')}
                         onClick={() => levels.closeResults()}>
                         Close
                     </button>

@@ -36,9 +36,9 @@ import { isChallengeView } from "./challengeCard"
  * **Three levels, loudest first (graphics spec P2-3, row 15).** The outcome, "Solved!", in the
  * card-title role, bold, in `success`: the one thing on the card that is the solved state. Then
  * which puzzle it was, in the body role at a medium weight: the line this row added, so the
- * card says what was solved and not only that something was. Then the actions, secondary
+ * card says what was solved and not only that something was. Then the actions, raised
  * controls. Each differs from the others in size *and* weight, so the order holds without
- * colour. The card is the panel's white, lifted by its shadow; it was a green slab, whose
+ * colour. The card is the `surface`, lifted by its shadow; it was a green slab, whose
  * white "Solved!" was no louder than the card around it.
  */
 
@@ -152,7 +152,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
             data-completion-card
             role="status"
             aria-live="polite"
-            className="flex flex-col items-center gap-3 rounded-2xl bg-panel text-panel-ink px-6 py-4 shadow-lg"
+            className="flex flex-col items-center gap-3 rounded-2xl bg-surface text-ink px-6 py-4 shadow-lg"
             // Inside P1-6's limits (`motion.ts`), as P2-3 asks: a tenth of a cell up, where it
             // was 8px and a 90% scale -- a squash measured in card widths, not cells -- over
             // 250ms. The card is on screen and announced immediately either way; the
@@ -181,7 +181,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                         type="button"
                         ref={nextRef}
                         data-next-level
-                        className={control('secondary')}
+                        className={control('raised')}
                         onClick={onNext}
                     >
                         {challenge ? 'Next board' : 'Next level'}
@@ -192,7 +192,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                         type="button"
                         ref={retryRef}
                         data-finish-retry
-                        className={control('secondary')}
+                        className={control('raised')}
                         onClick={() => { void session.rootStore.challenge?.retry() }}
                     >
                         Try again
@@ -203,7 +203,7 @@ const CompletionCard: React.FC<Props> = ({ session, levels }) => {
                         type="button"
                         ref={replayRef}
                         data-replay
-                        className={control('secondary')}
+                        className={control('raised')}
                         // Inside the window a replay is timed Practice (D5, rule 11); on a board
                         // with nothing to clear it starts one directly (rule 16).
                         onClick={() => challenge ? session.beginPractice() : session.reset()}
