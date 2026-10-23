@@ -48,11 +48,25 @@ const rules = (name: VariantName): string[] => {
         c.edge ? shadow(edge) : null,
         // The press's 80ms (UI-SPEC §3.5), over the base layer's 120 for every button.
         c.press === 'sink' ? 'transition-duration: 80ms;' : null,
+        // For the `::after` below, which reaches back to where the control rested.
+        'position: relative;',
     ]
     const block = (selector: string, lines: (string | null)[], indent = '  ') => {
         const body = lines.filter((l): l is string => l !== null)
         return body.length === 0 ? [] : [`${indent}${selector} {`, ...body.map(l => `${indent}  ${l}`), `${indent}}`]
     }
+    /*
+     * How far a press moves the control: a sink by its edge's depth, a nudge by the base
+     * layer's pixel. A press near the top would otherwise end above the control it began on,
+     * and a click whose press and release land on different elements goes to neither (codex,
+     * at UI row 3's review: Archive pressed 2px below its top stayed closed). So while held,
+     * an empty `::after` reaches up by that much, plus the top border it sits inside, and the
+     * control's resting box stays its own.
+     */
+    const travel = c.press === 'sink' ? c.edge!.depth : 1
+    const reach = block(`${at}:not(:disabled):active::after`, [
+        "content: '';", 'position: absolute;', `inset: -${travel + border}px 0 0 0;`,
+    ])
     const marks = c.surface !== null && typeof c.surface === 'object'
         ? Object.entries(c.surface).flatMap(([mark, token]) =>
             block(`${at}[data-mark="${mark}"]`, [`background-color: ${v(token)};`]))
@@ -94,10 +108,15 @@ const rules = (name: VariantName): string[] => {
         ...(c.press === 'sink' ? [
             ...block(`${at}:not(:disabled):active`, [...sunk, shadow(null)]),
             ...(c.checked ? block(`${at}[aria-checked="true"]:not(:disabled):active`, [shadow(null, c.checked.ring)]) : []),
-            // Reduced motion: a press doesn't move; its edge still goes. A toggle that is on
-            // stays down -- that's its state, not a motion (row 3's contract, codex).
+        ] : []),
+        ...reach,
+        // Reduced motion: a sink doesn't move; its edge still goes. A toggle that is on
+        // stays down -- that's its state, not a motion (row 3's contract, codex). Nothing
+        // moved, so nothing to reach back to. A nudge keeps its pixel, and its reach.
+        ...(c.press === 'sink' ? [
             '  @media (prefers-reduced-motion: reduce) {',
             ...block(`${at}:not(:disabled):not([aria-pressed="true"]):active`, ['translate: none;'], '    '),
+            ...block(`${at}:not(:disabled):not([aria-pressed="true"]):active::after`, ['top: 0;'], '    '),
             '  }',
         ] : []),
     ]

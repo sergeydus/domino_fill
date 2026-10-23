@@ -243,6 +243,43 @@ test.describe('pressed, disabled, and toggled', () => {
         await page.mouse.up()
     })
 
+    test('a press near a control\'s top edge, held and released in place, still acts', async ({ page }) => {
+        /*
+         * Codex, at UI row 3's review: pressed 2px below its top, held and released without
+         * moving, Archive stayed closed. It had sunk 3px, the pointer was above it by the
+         * release, and a click whose press and release land on different elements goes to
+         * neither. The tests above press the centre, or release elsewhere, so none could see it.
+         * Each control is pressed halfway into the band its sink uncovers. A nudge's pixel
+         * leaves no band a pointer can reliably find, measured: Chromium still hit the level
+         * arrow half a pixel above its nudged top.
+         */
+        await page.emulateMedia({ reducedMotion: 'no-preference' })
+        await openBoard(page)
+        const pressAtTop = async (b: Locator) => {
+            const c = await variantOf(b)
+            expect(c.press, `${await name(b)} sinks`).toBe('sink')
+            // The pointer presses where it's told; below a phone's fold, that's nothing.
+            await b.scrollIntoViewIfNeeded()
+            const box = (await b.boundingBox())!
+            await page.mouse.move(box.x + box.width / 2, box.y + c.edge!.depth / 2)
+            await page.mouse.down()
+            await expect.poll(() => b.evaluate(el => el.getAnimations().length)).toBe(0)
+            expect((await look(b)).translate, `${await name(b)}: moved from under the pointer`).not.toBe('none')
+            await page.mouse.up()
+        }
+        await pressAtTop(page.locator('[data-check]'))
+        await expect(page.locator('[data-advice-kind]'), 'Check, the primary')
+            .toHaveAttribute('data-advice-kind', 'on-track')
+
+        const medium = page.locator('[data-difficulty="normal"]')
+        await expect(medium).toHaveAttribute('aria-pressed', 'false')
+        await pressAtTop(medium)
+        await expect(medium, 'a raised toggle').toHaveAttribute('aria-pressed', 'true')
+
+        await pressAtTop(page.locator('[data-open-archive]'))
+        await expect(page.locator('[data-archive]'), 'Archive, a raised control').toBeVisible()
+    })
+
     test('from the keyboard: Space is held like a press, and Enter has nothing to hold', async ({ page }) => {
         /*
          * Codex, at review: holding Enter on a button left it at rest. That is the browser's

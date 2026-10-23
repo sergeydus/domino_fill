@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { CONTROL, type VariantName } from '@/app/controls'
+import { CONTROL, type Variant, type VariantName } from '@/app/controls'
 import { CONTROLS_CSS_PATH, renderControlsCss } from '@/scripts/controls-css'
 import { TYPE } from '@/app/typography'
 import { CHIP_CELL_PX } from '@/app/dominoFill/Pieces/DominoPieces'
@@ -138,10 +138,29 @@ describe('the generated stylesheet is the table', () => {
     it('under reduced motion a press doesn\'t move, but a toggle that is on stays down (UI row 3)', () => {
         const css = renderControlsCss()
         for (const v of ['primary', 'raised', 'caution', 'chip'] as const) {
-            const block = `  @media (prefers-reduced-motion: reduce) {\n    .control-${v}:not(:disabled):not([aria-pressed="true"]):active {\n      translate: none;\n    }\n  }`
+            const at = `.control-${v}:not(:disabled):not([aria-pressed="true"]):active`
+            const block = `  @media (prefers-reduced-motion: reduce) {\n    ${at} {\n      translate: none;\n    }\n    ${at}::after {\n      top: 0;\n    }\n  }`
             expect(css, v).toContain(block)
         }
         expect(css).toContain('  .control-raised[aria-pressed="true"] {\n    background-color: var(--accent);\n    color: var(--on-accent);\n    translate: 0 3px;')
+    })
+
+    it('a pressed control reaches back to where it rested, so a press near its top still clicks it', () => {
+        /*
+         * Codex, at UI row 3's review: Archive, pressed 2px below its top and released in
+         * place, stayed closed -- it had sunk from under the pointer. While held, every control
+         * reaches up by exactly its press's move: a sink by its edge's depth, a nudge by the
+         * base layer's pixel, each through its top border. `e2e/controlStates.spec.ts` presses
+         * the sinks at their top; a nudge's pixel is too fine for a pointer to find reliably.
+         */
+        const css = renderControlsCss()
+        for (const [v, c] of Object.entries(CONTROL) as [VariantName, Variant][]) {
+            const travel = c.press === 'sink' ? c.edge!.depth : 1
+            expect(css, v).toContain(`  .control-${v}:not(:disabled):active::after {\n    content: '';\n    position: absolute;\n    inset: -${travel + (c.border?.width ?? 0)}px 0 0 0;\n  }`)
+            expect(css.slice(css.indexOf(`  .control-${v} {`)).split('\n  }')[0], v).toContain('position: relative;')
+        }
+        expect(css).toContain('inset: -4px 0 0 0;')
+        expect(css).toContain('inset: -2px 0 0 0;')
     })
 })
 
