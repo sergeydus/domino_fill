@@ -399,3 +399,110 @@ test.describe('safe-area insets, vertical', () => {
         expect(withInset).toBe(shorterWindow)
     })
 })
+
+test.describe('the difficulty\'s options wrap whole, never a word and never sideways', () => {
+    /*
+     * UI row 3, rule 12. Row 3's 48px controls left the row 244.91px at its narrowest, labels
+     * broken onto two lines, and wide safe-area insets give it 246 on a 390px phone: CI's wider
+     * text scrolled sideways (its run on `9fccd31`). The row wraps now, each option based at
+     * its `min-content` and growing to share what's left. Plain wrapping would break the row
+     * at the options' one-line widths, 342.73px here and more on CI's text, where a 360px
+     * phone gives 344.
+     */
+    const setInsets = (page: Page, side: number) => page.evaluate((px) => {
+        document.documentElement.style.setProperty('--safe-left', `${px}px`)
+        document.documentElement.style.setProperty('--safe-right', `${px}px`)
+    }, side)
+
+    const settle = (page: Page) => page.evaluate(() => new Promise(resolve =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))))
+
+    /**
+     * The row and each option as laid out, with every word of each label: a `Range` over the
+     * word's characters gives one client rect per line the word is on, so a word broken across
+     * lines -- which containment alone would pass (codex) -- has rects at two tops. An option's
+     * line is its `offsetTop`, which a transform doesn't move: the chosen option is held down
+     * by its edge's depth, and its painted box sits 3px below its neighbours'.
+     */
+    const difficulty = (page: Page) => page.locator('[role="group"][aria-label="Difficulty"]').evaluate(row => {
+        const r = row.getBoundingClientRect()
+        return {
+            width: r.width,
+            gap: parseFloat(getComputedStyle(row).columnGap),
+            options: (Array.from(row.querySelectorAll('button')) as HTMLElement[]).map(b => {
+                const box = b.getBoundingClientRect()
+                const words: { word: string, tops: number[] }[] = []
+                const walker = document.createTreeWalker(b, NodeFilter.SHOW_TEXT)
+                for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+                    for (const m of (node.textContent ?? '').matchAll(/\S+/g)) {
+                        const range = document.createRange()
+                        range.setStart(node, m.index!)
+                        range.setEnd(node, m.index! + m[0].length)
+                        words.push({ word: m[0], tops: Array.from(range.getClientRects(), rect => rect.top) })
+                    }
+                }
+                return {
+                    label: (b.textContent ?? '').trim(), words,
+                    top: b.offsetTop, left: b.offsetLeft, width: box.width, height: box.height,
+                    scrollWidth: b.scrollWidth, clientWidth: b.clientWidth,
+                }
+            }),
+        }
+    })
+
+    const LABELS = ['Easy 6x6', 'Medium 7x7', 'Hard 8x8']
+    const rows = (tops: number[]) => new Set(tops).size
+
+    for (const [width, height] of [[360, 640], [390, 844]]) {
+        test(`on an ordinary ${width}px phone the three share one row, and span it`, async ({ page }) => {
+            await page.setViewportSize({ width, height })
+            await openBoard(page)
+            const { width: room, gap, options } = await difficulty(page)
+            expect(options.map(o => o.label)).toEqual(LABELS)
+            expect(rows(options.map(o => o.top)), 'one row').toBe(1)
+            const spanned = options.reduce((sum, o) => sum + o.width, 0) + gap * (options.length - 1)
+            expect(Math.abs(spanned - room), 'the options span the row').toBeLessThanOrEqual(1)
+        })
+    }
+
+    test('where the labels must break, the three still share one row', async ({ page }) => {
+        // 312px of room: between the row's 244.91 at its narrowest and 342.73 on one line.
+        await page.setViewportSize({ width: 360, height: 640 })
+        await openBoard(page)
+        await setInsets(page, 16)
+        await settle(page)
+        const { options } = await difficulty(page)
+        expect(options.map(o => o.label)).toEqual(LABELS)
+        expect(rows(options.map(o => o.top)), 'one row').toBe(1)
+    })
+
+    test('where even broken labels cannot fit, a whole option moves down', async ({ page }) => {
+        // 230px of room, under the row's 244.91 at its narrowest. The checks run in rule 12's
+        // order, so each of its probes fails at its own.
+        await page.setViewportSize({ width: 390, height: 844 })
+        await openBoard(page)
+        await setInsets(page, 72)
+        await settle(page)
+        const { options } = await difficulty(page)
+        expect(options.map(o => o.label)).toEqual(LABELS)
+        for (const o of options) {
+            expect(o.scrollWidth, `${o.label}: its text is contained`).toBeLessThanOrEqual(o.clientWidth)
+        }
+        for (const o of options) {
+            expect(o.words.map(w => w.word), `${o.label}: every word read`).toEqual(o.label.split(' '))
+            for (const w of o.words) {
+                expect(w.tops.length, `${o.label}: "${w.word}" is laid out`).toBeGreaterThan(0)
+                expect(Math.max(...w.tops) - Math.min(...w.tops), `${o.label}: "${w.word}" is whole, on one line`)
+                    .toBeLessThanOrEqual(1)
+            }
+        }
+        await expect.poll(() => horizontalOverflow(page), 'no sideways scroll').toBeLessThanOrEqual(1)
+        expect(rows(options.map(o => o.top)), 'the row on two lines').toBe(2)
+        for (const o of options) {
+            expect(Math.round(o.width), `${o.label}: 48 wide`).toBeGreaterThanOrEqual(48)
+            expect(Math.round(o.height), `${o.label}: 48 tall`).toBeGreaterThanOrEqual(48)
+        }
+        const read = [...options].sort((a, b) => a.top - b.top || a.left - b.left)
+        expect(read.map(o => o.label), 'in reading order').toEqual(LABELS)
+    })
+})

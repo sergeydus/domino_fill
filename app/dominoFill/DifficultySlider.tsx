@@ -34,6 +34,14 @@ import { DIFFICULTY_NAME } from "./difficultyName"
  * 16px of padding paid for most of the options' own. In the 260px rail the options are
  * narrower than their labels and wrap them to two lines, as the CI runner's wider text
  * already did before this row; see `RAIL_WIDTH_PX`.
+ *
+ * **The row wraps whole options, from their narrowest readable width (UI row 3, rule 12).**
+ * Each option's basis is its `min-content` -- its label broken onto two lines -- and the
+ * three grow to share what's left, so they stay on one row, breaking a label where they must.
+ * Only where even that can't fit does a whole option move down. Row 3's 48px controls made
+ * the row 244.91px at its narrowest, and with wide safe-area insets a 390px phone gives it
+ * 246: CI's wider text scrolled sideways. Plain wrapping breaks at the one-line widths
+ * instead, which CI's 360px phone doesn't have.
  */
 
 /** Re-exported for the readers that have always found the names here. */
@@ -50,7 +58,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row gap-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row flex-wrap gap-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
@@ -60,7 +68,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={control('raised')}
+                        className={`${control('raised')} grow basis-[min-content]`}
                         onClick={onClick(key)}
                     >
                         {label}
