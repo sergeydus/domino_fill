@@ -6330,6 +6330,24 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
     rail and the sheets keep theirs. If 12px doesn't clear slice 3a's rule 14 at every viewport
     and size, the row stops again, and deferring the game page's three rows to 48px in rows 6-7
     is the fallback (option C below).
+12. **The difficulty's options wrap whole, from their narrowest readable width.** Added after the
+    build stopped at rule 10 a second time, on CI (below). The row (`DifficultySlider.tsx:53`,
+    `flex flex-row gap-2`) wraps. Each option's flex basis is its `min-content` width, the
+    label broken onto two lines, and the options grow to share what's left (codex's design).
+    - At ordinary phone widths the three stay on one row, a label breaking onto two lines
+      where it must, as at 360px on CI today.
+    - Only where even two-line labels can't fit does a whole option move to the next line.
+      The safe-area case is one: 246px of room after the insets and the page's margins
+      (codex), against 244.91 for the row at `min-content` here (measured), and about 2 more on
+      CI's text (inferred from its 2px overflow).
+    - The targets stay at least 48×48, no word is broken, and the keyboard order is the
+      reading order.
+
+    Plain `flex-wrap` isn't it: it breaks a line at the options' one-line widths, 342.73px
+    for the row here (measured), and more on CI's text, where 360px gives 344. So CI's phone
+    would get a second row and this machine's wouldn't. Nor is a fixed `min-content` width,
+    which would leave the options narrower than the row (codex). Unknown until measured: with
+    the growth shared equally, a label that fits on one line at 360 today may break.
 
 **What's not in it.** `round`, `card`, `switch` and the icons (amendment 1); `onSuccess` and
 `onProblem` (amendment 2); the board, the pieces and the cell states (rows 4, 5); the
@@ -6469,6 +6487,54 @@ them. I recommended C, to avoid tuning a layout rows 6-7 replace. Codex recommen
 allows 12px; the sizing already reads the gap; C would add temporary exceptions to the targets
 rule and remove them later), and I agreed after checking both claims in the code. **The user
 chose B (2026-10-23): rule 11 above.** Codex reviews this amendment before it's built.
+
+Codex accepted the amendment at `8ad3e04`, asking for both layout suites unchanged, the table
+measured again, and a probe that rolls rule 11 back. All three were done: with the 12px gap the
+layout project passed 148 of 148, 390x844's 8×8 overflow went back to 0, and putting 16px back
+fails both rule-14 checks at 390x844. Their record goes in the As built notes, once the row is
+done.
+
+**Stopped at rule 10 again, on CI (2026-10-23).** The row was committed as `9fccd31` after a
+gate from cold here with every step 0 (unit 1868, 0 bytes of stderr; browser 791 passed, 1
+skipped). CI's run 39928188750 on it: the visual job passed, and the gate job failed one test,
+three times out of three (two retries), with 1 skipped and 790 passed:
+`layout.spec.ts:322`, "a narrow screen with wide insets wraps the chrome rather than scrolling
+sideways". At 390x844 with 64px insets each side the page scrolls sideways by **2px**, where
+the test allows 1. It passes here.
+- **The cause,** measured here: the difficulty row is the one chrome row that can't wrap. With
+  the insets it has 246px. Its options have already broken their labels onto two lines (each
+  68px tall), and the row's `min-content` is 244.91px: 1.09px to spare. CI's text is wider:
+  the test's own comment records the same gap from row 13, at 3px. Row 3's 16px padding,
+  where it was 12, added 24px to the row.
+- **What CI's 360px phone shows** (its regenerated baseline, read): the row on one line, every
+  label broken onto two.
+- **Four ways on were put to the user:** A, rule 12 above; B, plain `flex-wrap`; C, the
+  difficulty's options at 12px padding until row 6; D, the row's gap at 4px. C and D retune
+  what rule 10 says isn't retuned. I recommended A. Codex recommended A, pending measurement,
+  and corrected the room to 246px (I'd said 262, before the page's margins).
+  **The user chose A (2026-10-23): rule 12 above.** Codex reviews this amendment before it's
+  built.
+
+**Rule 12's tests,** new in `e2e/layout.spec.ts`, which CI runs too, so they hold on both
+machines' text:
+- **Ordinary phones:** at 360x640 and 390x844 with no inset, the three options share one row
+  and span it (their widths and gaps add up to the row's, within 1px).
+- **Where the labels must break:** at 360 wide with 16px insets each side (312px of room,
+  between the row's 244.91 and 342.73 here), the three still share one row.
+- **Where even broken labels can't fit:** at 390 wide with 72px insets each side (230px), no
+  sideways scroll, the row on two lines, every option at least 48×48, no word broken (each
+  option's `scrollWidth` within its `clientWidth`), and Easy, Medium, Hard in reading order.
+- **`layout.spec.ts:322`** unchanged, and slice 3a's rule 14 at every viewport and size.
+
+**Its probes,** each to fail at the assertion named:
+16. The row back to `nowrap`: the 72px case's sideways scroll.
+17. Plain `flex-wrap`: the 16px case's one row.
+18. A `min-content` basis that doesn't grow: the ordinary phones' span.
+19. A basis of 0 that may shrink below `min-content`: the 72px case's whole words.
+
+**Then,** if they pass: the cell sizes measured again at the ten viewports, each option's
+line count at 360 and 390 reported, the As built notes, and the gate. The fix is its own commit,
+marked for a visual update, since CI's phone baseline may change, followed by the baselines.
 
 ## Campaign (future, for the mobile release)
 
