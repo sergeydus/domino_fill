@@ -7016,12 +7016,28 @@ the puzzle generator (P7).
     `hint` is the sentinel, `themeTokens.spec.ts:56`: each token is given a colour of its own,
     and the diamond must take `hint`'s. It stays, unchanged.
 - **The labels' shapes, as drawn, new in `e2e/labelBounds.spec.ts`** (rule 7 and rule 13,
-  codex). The layout suite stays unchanged. On the sheet at 38px, the floor, new specimens
-  show the widest label the game produces, `13` (`layout.spec.ts:126`), in each of the four
-  states, on a column label and a row label alike. The specimens are sized to what the sums
-  need: a reached 13 needs three cells of pips and an open fourth. Their pieces go in the As
-  built notes. For every such label:
-  - **fixed:** its box's size, and its offset from its line's first cell, equal the neutral
+  codex). The layout suite stays unchanged. A board can't hold every state at `13` (a cell
+  holds at most 2 pips, `DominoPieceTwo`), so the labels come from **presentation fixtures
+  on the production renderer** (codex):
+  - **the renderer, split from the session.** Today each strip renders its labels inline and
+    reads its targets and states from the session (`HorizontalNumbers.tsx:11-46`,
+    `VerticalNumbers.tsx:22-56`). Each becomes a pure strip, `ColumnLabels` and `RowLabels`,
+    taking the targets, the states, the cell size and the gutter as props. Its observer
+    wrapper only reads those from the session and passes them through. The board renders
+    the strips through the wrappers; the fixtures render them directly. There's one
+    renderer, and no second copy of the markup;
+  - **the fixtures,** on the sheet at 38px, the floor: a column strip and a row strip, each
+    showing the widest label the game produces, `13` (`layout.spec.ts:126`), in all four
+    states. They sit inside the same board shell and custom properties (`--cell`,
+    `--grid-border`) that a board specimen sets;
+  - **tied to the board:** a fixture label's computed font, padding and box size equal a
+    real board label's on the same axis at 38px (the `target-reached` specimen's), so a
+    fixture that drifts from the board fails;
+  - **the transitions stay on real sessions:** `lineFeedback.test.ts` and
+    `feedback.spec.ts`, above. The fixtures prove only what each state draws.
+
+  For every fixture label:
+  - **fixed:** its box's size, and its offset within its slot in the strip, equal the neutral
     label's on the same axis, to 0.5px;
   - **readable:** a `Range` over its number reads `13` and lies inside the label's box, with
     no scroll overflow on the label or the pill;
@@ -7031,11 +7047,11 @@ the puzzle generator (P7).
     reached bar's box.
 
   The sheet's targets are kept neutral outside the specimens that exist to show a state
-  (`Sheet.tsx:62-69`). The new specimens join that list, and every count of non-neutral
-  labels is scoped to its specimen.
+  (`Sheet.tsx:62-69`). The fixtures join that list, and every count of non-neutral labels is
+  scoped to its specimen.
 - **The component sheet** (`app/visual/Sheet.tsx`) gains a `target-reached` specimen (columns
   `1,2`, rows `3,2`, a flat domino at the origin: column 2 reaches 2 with a cell open), and the
-  two-digit label specimens above.
+  two label fixtures above.
 - **Tests that hold today's values, and what each keeps:**
   - `tests/proportions.test.tsx:84-91`: the outline's weight bound and the 0.10–0.18 extrusion
     become the rim's 2 units and 0.03–0.06 (§4.3). Kept: every other bound.
@@ -7099,6 +7115,8 @@ the puzzle generator (P7).
 24. The satisfied pill 120% of the label's width: the label-bounds check's pill extent.
 25. The corner rounding left on the cell's box at 18px, not moved to the well: `art.spec.ts`'s
     hit probe 5px inside the corner.
+26. A fixture strip that drifts from the board's, with the label's font size set on the
+    session wrapper only: the fixture-to-board tie.
 
 **The gate** before each commit, from cold. The row is three commits: the change, marked for a
 visual update; the baselines CI regenerates; the As built notes.
@@ -7118,6 +7136,12 @@ plan, the design and the four states otherwise accepted). Each is made above:
 
 And codex's non-blocking note: the corner rounding moves to the well, so the hit probes run
 unchanged (rule 3). Probe 25.
+
+**A second correction** (codex, of `edb502c`: the four corrections above accepted, and a hold
+for one fixture). The two-digit specimens were impossible: a cell holds at most 2 pips, so
+three cells give 6, not 13. The bounds test now uses presentation fixtures on the production
+renderer, split into pure strips with session wrappers, and tied to a real board label. The
+transitions stay on real sessions. Probe 26.
 
 ## Campaign (future, for the mobile release)
 
