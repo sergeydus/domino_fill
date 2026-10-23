@@ -2,15 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { CONTROL, type VariantName } from '@/app/controls'
+import { CONTROL, type Variant, type VariantName } from '@/app/controls'
 import { CONTROLS_CSS_PATH, renderControlsCss } from '@/scripts/controls-css'
-import { PRESSED } from '@/app/dominoFill/controlStates'
+import { TYPE } from '@/app/typography'
 import { CHIP_CELL_PX } from '@/app/dominoFill/Pieces/DominoPieces'
 import { WIDE_LAYOUT_QUERY } from '@/app/dominoFill/composition'
 import { pieceBox } from '@/app/dominoFill/Pieces/geometry'
 
 /**
- * One control vocabulary (graphics spec P2-2, row 14).
+ * One control vocabulary (graphics spec P2-2, row 14; raised in UI row 3).
  *
  * `e2e/controlVariants.spec.ts` holds every button on screen to exactly one variant by
  * computed style. This pins where that comes from: one table, one generated stylesheet, and
@@ -18,18 +18,38 @@ import { pieceBox } from '@/app/dominoFill/Pieces/geometry'
  */
 
 describe('the table is the spec\'s', () => {
-    it('five variants, the archive\'s days, and the picker\'s choices', () => {
-        expect(Object.keys(CONTROL)).toEqual(['primary', 'secondary', 'caution', 'quiet', 'icon', 'day', 'choice'])
+    it('UI-SPEC §3.3\'s primary, raised and chip, the caution, and the arrows and days until their rows', () => {
+        // `round`, `card` and `switch` arrive with their controls (rows 6-8, §12 amended).
+        expect(Object.keys(CONTROL)).toEqual(['primary', 'raised', 'caution', 'chip', 'icon', 'day'])
     })
 
-    it('choice: a ring when checked, never a fill, and bordered like quiet', () => {
-        expect(CONTROL.choice).toMatchObject({ surface: null, edge: { width: 1, colour: 'ink' }, checked: { ring: 'accentEdge' } })
-        // Chosen is not pressed: nothing about a choice is the accent's surface.
-        expect(Object.values(CONTROL.choice.press)).not.toContain('accent')
-        // A chip is the upright piece's box, extruded side included, plus the padding, which
-        // includes the edge: 66px on a phone and 78px on the desktop composition. The first
-        // chips were 46px, and "tiny".
-        const chip = (cell: number) => Math.round(pieceBox(1, 2, cell).height + 2 * CONTROL.choice.padding.y)
+    it('primary: the accent, with `onAccent` text, on a 4px edge in the accent\'s edge', () => {
+        expect(CONTROL.primary).toMatchObject({
+            surface: 'accent', ink: 'onAccent', edge: { depth: 4, colour: 'accentEdge' }, border: null, press: 'sink',
+        })
+        // Disabled, it gives the accent up for the raised look, so it doesn't ask to be pressed.
+        expect(CONTROL.primary.disabled).toEqual({ surface: CONTROL.raised.surface, ink: CONTROL.raised.ink, opacity: 0.45 })
+    })
+
+    it('raised: the surface, on a 3px edge, and held down on the accent when a toggle is on', () => {
+        expect(CONTROL.raised).toMatchObject({
+            surface: 'surface', ink: 'ink', edge: { depth: 3, colour: 'raisedEdge' }, border: null, press: 'sink',
+            pressed: { surface: 'accent', ink: 'onAccent' }, disabled: { opacity: 0.45 },
+        })
+    })
+
+    it('caution: raised, with its text in `problem` -- the one property between them', () => {
+        expect(CONTROL.caution.ink).toBe('problem')
+        expect({ ...CONTROL.caution, ink: CONTROL.raised.ink }).toEqual(CONTROL.raised)
+    })
+
+    it('chip: raised at radius 8, a ring when chosen, never the accent\'s fill', () => {
+        expect(CONTROL.chip).toMatchObject({ surface: 'surface', radius: 8, checked: { ring: 'accentEdge' } })
+        // Chosen is not pressed: a chip is one of a radio group, never a toggle.
+        expect(CONTROL.chip.pressed).toBeUndefined()
+        // A chip is the upright piece's box, extruded side included, plus the padding: 66px on a
+        // phone and 78px on the desktop composition. The first chips were 46px, and "tiny".
+        const chip = (cell: number) => Math.round(pieceBox(1, 2, cell).height + 2 * CONTROL.chip.padding.y)
         expect([chip(CHIP_CELL_PX.narrow), chip(CHIP_CELL_PX.wide)]).toEqual([66, 78])
     })
 
@@ -40,37 +60,19 @@ describe('the table is the spec\'s', () => {
         expect(variant?.[1]).toBe(WIDE_LAYOUT_QUERY)
     })
 
-    it('primary: the accent\'s surface, the strongest weight', () => {
-        // 900 over everyone else's 800 since UI row 2, in Nunito (700 over 400 in Geist).
-        expect(CONTROL.primary).toMatchObject({ surface: 'accent', weight: 900 })
-        const weights = Object.values(CONTROL).map(c => c.weight)
-        expect(CONTROL.primary.weight).toBe(Math.max(...weights))
+    it('one weight: the `control` role\'s 800, and a day\'s `meta` 700', () => {
+        // The primary was 900 over everyone else's 800 until UI row 3, and a pressed toggle 900
+        // too; the toggle's depth tells it apart now (UI-SPEC §3.2, amended).
+        for (const [name, c] of Object.entries(CONTROL)) expect(c.weight, name).toBe(name === 'day' ? 700 : TYPE.control.weight)
     })
 
-    it('secondary: the neutral surface, and the accent on focus and while pressed', () => {
-        expect(CONTROL.secondary).toMatchObject({ surface: 'controlSurface', focus: 'accentEdge', press: { surface: 'accent' } })
+    it('icon: no surface and no padding, in a 48px box', () => {
+        expect(CONTROL.icon).toMatchObject({ surface: null, edge: null, ink: null, padding: { x: 0, y: 0 }, min: { width: 48, height: 48 } })
     })
 
-    it('caution: `problem` as an edge, not a fill -- on the secondary\'s surface, so the edge is the difference', () => {
-        expect(CONTROL.caution.edge).toEqual({ width: 2, colour: 'problem' })
-        expect(CONTROL.caution.surface).toBe(CONTROL.secondary.surface)
-        // Everything else is the secondary's: the edge is the one named property between them.
-        expect(CONTROL.secondary.edge).toBeNull()
-        expect({ ...CONTROL.caution, edge: null }).toEqual(CONTROL.secondary)
-    })
-
-    it('quiet: bordered, with no surface until the pointer or a press gives it one', () => {
-        expect(CONTROL.quiet).toMatchObject({ surface: null, edge: { width: 1 } })
-        expect(CONTROL.quiet.hover.surface).toBeDefined()
-        expect(CONTROL.quiet.press.surface).toBeDefined()
-    })
-
-    it('icon: no surface, no box of its own', () => {
-        expect(CONTROL.icon).toMatchObject({ surface: null, edge: null, ink: null, padding: { x: 0, y: 0 } })
-    })
-
-    it('day: its surface is its mark', () => {
+    it('day: its surface is its mark, bordered as it was, 48px tall', () => {
         expect(CONTROL.day.surface).toEqual({ none: 'markNone', started: 'markStarted', partial: 'markPartial', complete: 'markComplete' })
+        expect(CONTROL.day).toMatchObject({ border: { width: 1, colour: 'ink' }, edge: null, min: { height: 48 } })
     })
 
     it('and only a day can be current, ringed in the accent\'s edge', () => {
@@ -79,16 +81,26 @@ describe('the table is the spec\'s', () => {
         expect(CONTROL.day.current).toEqual({ ring: 'accentEdge' })
     })
 
-    it('the text variants share one box, so a row of them lines up', () => {
-        const boxes = (['primary', 'secondary', 'caution', 'quiet'] as const).map(v => ({ radius: CONTROL[v].radius, padding: CONTROL[v].padding }))
+    it('the text variants share one box, 48px tall from the `control` role, so a row of them lines up', () => {
+        const boxes = (['primary', 'raised', 'caution'] as const).map(v => ({ radius: CONTROL[v].radius, padding: CONTROL[v].padding }))
         expect(new Set(boxes.map(b => JSON.stringify(b))).size).toBe(1)
+        const { padding, radius } = CONTROL.raised
+        expect(radius).toBe(16)
+        expect(TYPE.control.size * TYPE.control.lineHeight + 2 * padding.y).toBe(48)
     })
 
-    it('every edge fits inside its padding', () => {
+    it('every control is at least 48px tall, and every one but a day 48px wide (UI-SPEC §3.3)', () => {
+        for (const [name, c] of Object.entries(CONTROL)) {
+            expect(c.min.height, name).toBeGreaterThanOrEqual(48)
+            if (name !== 'day') expect(c.min.width, name).toBeGreaterThanOrEqual(48)
+        }
+    })
+
+    it('every border fits inside its padding', () => {
         for (const c of Object.values(CONTROL)) {
-            const edge = c.edge?.width ?? 0
-            expect(c.padding.x - edge).toBeGreaterThanOrEqual(0)
-            expect(c.padding.y - edge).toBeGreaterThanOrEqual(0)
+            const border = c.border?.width ?? 0
+            expect(c.padding.x - border).toBeGreaterThanOrEqual(0)
+            expect(c.padding.y - border).toBeGreaterThanOrEqual(0)
         }
     })
 })
@@ -117,10 +129,38 @@ describe('the generated stylesheet is the table', () => {
     it('a press is written after the hover it ties with, so a pointer pressing shows the press', () => {
         const css = renderControlsCss()
         for (const v of Object.keys(CONTROL) as VariantName[]) {
-            const hover = css.indexOf(`.control-${v}:enabled:hover`)
+            const hover = css.indexOf(`.control-${v}:hover:where(:enabled:not([aria-pressed="true"]))`)
             const press = css.indexOf(`.control-${v}:not(:disabled):active`)
             if (hover >= 0 && press >= 0) expect(press, v).toBeGreaterThan(hover)
         }
+    })
+
+    it('under reduced motion a press doesn\'t move, but a toggle that is on stays down (UI row 3)', () => {
+        const css = renderControlsCss()
+        for (const v of ['primary', 'raised', 'caution', 'chip'] as const) {
+            const at = `.control-${v}:not(:disabled):not([aria-pressed="true"]):active`
+            const block = `  @media (prefers-reduced-motion: reduce) {\n    ${at} {\n      translate: none;\n    }\n    ${at}::after {\n      top: 0;\n    }\n  }`
+            expect(css, v).toContain(block)
+        }
+        expect(css).toContain('  .control-raised[aria-pressed="true"] {\n    background-color: var(--accent);\n    color: var(--on-accent);\n    translate: 0 3px;')
+    })
+
+    it('a pressed control reaches back to where it rested, so a press near its top still clicks it', () => {
+        /*
+         * Codex, at UI row 3's review: Archive, pressed 2px below its top and released in
+         * place, stayed closed -- it had sunk from under the pointer. While held, every control
+         * reaches up by exactly its press's move: a sink by its edge's depth, a nudge by the
+         * base layer's pixel, each through its top border. `e2e/controlStates.spec.ts` presses
+         * the sinks at their top; a nudge's pixel is too fine for a pointer to find reliably.
+         */
+        const css = renderControlsCss()
+        for (const [v, c] of Object.entries(CONTROL) as [VariantName, Variant][]) {
+            const travel = c.press === 'sink' ? c.edge!.depth : 1
+            expect(css, v).toContain(`  .control-${v}:not(:disabled):active::after {\n    content: '';\n    position: absolute;\n    inset: -${travel + (c.border?.width ?? 0)}px 0 0 0;\n  }`)
+            expect(css.slice(css.indexOf(`  .control-${v} {`)).split('\n  }')[0], v).toContain('position: relative;')
+        }
+        expect(css).toContain('inset: -4px 0 0 0;')
+        expect(css).toContain('inset: -2px 0 0 0;')
     })
 })
 
@@ -144,8 +184,8 @@ const buttonsIn = (dir = 'app'): Reading[] =>
  * 13 }}` was invisible to an audit of the class alone).
  *
  * - No `style` and no spread: either can carry a look, and neither is a class to read.
- * - A `className` the audit can read in full: literal text, `control('...')`, and `PRESSED`,
- *   joined by a template. Any other expression -- a variable, a condition -- could hold
+ * - A `className` the audit can read in full: literal text and `control('...')`, joined by a
+ *   template. Any other expression -- a variable, a condition -- could hold
  *   anything, so it is refused rather than guessed at.
  */
 const buttonsInSource = (path: string, source: string): Reading[] => {
@@ -164,7 +204,7 @@ const buttonsInSource = (path: string, source: string): Reading[] => {
             const piece = (e: ts.Expression) => {
                 const variant = variantOf(e)
                 if (variant !== null) reading.variants.push(variant)
-                else if (!(ts.isIdentifier(e) && e.text === 'PRESSED')) reading.refused.push(`className: ${e.getText(sf)}`)
+                else reading.refused.push(`className: ${e.getText(sf)}`)
             }
             let className = false
             for (const attribute of node.attributes.properties) {
@@ -197,7 +237,7 @@ const buttonsInSource = (path: string, source: string): Reading[] => {
  * radius, padding, a weight, a ring or shadow, or a state's look -- in a utility, an
  * arbitrary value (`px-[13px]`, codex at row 14's review) or an arbitrary property
  * (`[padding:13px]`). Layout (`mt-4`, `w-full`, `rotate-180`) and a text role (`text-meta`,
- * P2-1) stay with the button. `aria-pressed`'s look is `PRESSED`, audited on its own below.
+ * P2-1) stay with the button. `aria-pressed`'s look is the variant's own since UI row 3.
  */
 const OWN_LOOK = new RegExp('(?<![-\\w])(?:' + [
     'bg-', 'text-(?:ink|on-|panel|problem|success|accent|\\[)', 'border', 'rounded', 'p[xytrblse]?-',
@@ -230,7 +270,7 @@ describe('every button is one variant, and says nothing else about its look', ()
     it('recognises a button\'s own look, however it is written', () => {
         for (const bad of [
             'bg-accent', 'rounded-md', 'px-3', 'py-1', 'p-1', 'ps-3', 'pe-2', 'border', 'font-semibold',
-            'hover:bg-panel/60', 'disabled:opacity-40', 'cursor-pointer', 'enabled:hover:scale-120',
+            'hover:bg-surface/60', 'disabled:opacity-40', 'cursor-pointer', 'enabled:hover:scale-120',
             'text-on-strong', 'underline', 'ring-2', 'ring-accent-edge', 'shadow-sm', 'outline-2',
             'aria-pressed:bg-accent',
             // Arbitrary values and properties (codex, row 14 review).
@@ -250,18 +290,18 @@ describe('every button is one variant, and says nothing else about its look', ()
             return { variants: r.variants, own: OWN_LOOK.test(r.classes), refused: r.refused.map(x => x.split(':')[0]) }
         }
         // codex's two, each alone.
-        expect(read("<button className={control('quiet')} style={{ padding: 13 }}>a</button>"))
-            .toEqual({ variants: ['quiet'], own: false, refused: ['style'] })
-        expect(read("<button className={`${control('quiet')} px-[13px]`}>a</button>"))
-            .toEqual({ variants: ['quiet'], own: true, refused: [] })
-        expect(read("<button {...props} className={control('quiet')}>a</button>").refused).toEqual(['spread'])
+        expect(read("<button className={control('raised')} style={{ padding: 13 }}>a</button>"))
+            .toEqual({ variants: ['raised'], own: false, refused: ['style'] })
+        expect(read("<button className={`${control('raised')} px-[13px]`}>a</button>"))
+            .toEqual({ variants: ['raised'], own: true, refused: [] })
+        expect(read("<button {...props} className={control('raised')}>a</button>").refused).toEqual(['spread'])
         expect(read('<button className={cls}>a</button>').refused).toEqual(['className'])
         expect(read("<button className={`${control('day')} ${on ? 'ring-2' : ''}`}>a</button>").refused).toEqual(['className'])
         expect(read('<button className="rounded-md border px-3 py-1">a</button>')).toEqual({ variants: [], own: true, refused: [] })
         expect(read('<button>a</button>').refused).toEqual(['no className'])
-        expect(read("<button className={`${control('quiet')} ${control('primary')}`}>a</button>").variants).toEqual(['quiet', 'primary'])
-        expect(read("<button className={`${control('quiet')} ${PRESSED} mt-4`}>a</button>"))
-            .toEqual({ variants: ['quiet'], own: false, refused: [] })
+        expect(read("<button className={`${control('raised')} ${control('primary')}`}>a</button>").variants).toEqual(['raised', 'primary'])
+        // `PRESSED` was the one identifier allowed until UI row 3; it's gone, and refused like any.
+        expect(read("<button className={`${control('raised')} ${PRESSED} mt-4`}>a</button>").refused).toEqual(['className'])
     })
 
     it('each names exactly one variant that exists', () => {
@@ -276,15 +316,17 @@ describe('every button is one variant, and says nothing else about its look', ()
         expect(own).toEqual([])
     })
 
-    it('and `aria-pressed`\'s look, which every toggle shares, is exactly P1-6\'s toggle and no more', () => {
+    it('and `aria-pressed`\'s look is the variant\'s alone: no utility anywhere in `app/` draws it', () => {
         /*
-         * The accent's fill, and without colour a bolder weight and a ring (P1-6) -- nothing
-         * else. Not "anything prefixed `aria-pressed:`": codex, at row 14's review, appended
-         * `aria-pressed:p-8`, which passed that and gave every pressed toggle a box of its
-         * own. `e2e/controlVariants.spec.ts` holds the same in the browser.
+         * The accent's fill and, without colour, the toggle's depth (UI row 3); P1-6's ring and
+         * weight until then, in utilities. A button's own `aria-pressed:` utility is refused by
+         * the audit above; this covers every other element too, so a wrapper can't restyle one.
          */
-        expect(PRESSED.split(/\s+/).sort()).toEqual([
-            'aria-pressed:bg-accent', 'aria-pressed:font-black', 'aria-pressed:ring-2', 'aria-pressed:ring-accent-edge',
-        ])
+        const walk = (dir: string): string[] => readdirSync(dir).flatMap(name => {
+            const path = join(dir, name)
+            return statSync(path).isDirectory() ? walk(path) : /\.tsx?$/.test(name) ? [path] : []
+        })
+        const found = walk('app').filter(f => /aria-pressed:/.test(readFileSync(f, 'utf8')))
+        expect(found).toEqual([])
     })
 })

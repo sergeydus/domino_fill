@@ -129,12 +129,12 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
             aria-label='Puzzle archive'
             className='fixed inset-0 z-50 flex items-center justify-center bg-scrim/40 p-4'
         >
-            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-panel p-4'>
+            <div className='max-h-full w-full max-w-md overflow-y-auto rounded-xl bg-surface p-4'>
                 <div className='mb-3 flex items-center justify-between gap-2'>
                     <button
                         type='button'
                         data-archive-prev
-                        className={control('quiet')}
+                        className={control('raised')}
                         disabled={!canGoBack}
                         onClick={() => setMonth(current => addMonths(current, -1))}
                         aria-label='Previous month'
@@ -145,7 +145,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     <button
                         type='button'
                         data-archive-next
-                        className={control('quiet')}
+                        className={control('raised')}
                         disabled={!canGoForward}
                         onClick={() => setMonth(current => addMonths(current, 1))}
                         aria-label='Next month'
@@ -191,7 +191,7 @@ const Archive: React.FC<Props> = ({ boardsStore, corpus, onPick }) => {
                     type='button'
                     data-archive-close
                     // Secondary (graphics P2-2, row 14); it was a slate block, a design of its own.
-                    className={`${control('secondary')} mt-4 w-full`}
+                    className={`${control('raised')} mt-4 w-full`}
                     onClick={() => boardsStore.setArchiveOpen(false)}
                 >
                     Close

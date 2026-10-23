@@ -1,7 +1,6 @@
 "use client"
 import { observer } from "mobx-react"
 import { LevelStore } from "../stores/BoardsStore"
-import { PRESSED } from "./controlStates"
 import { control } from "../controls"
 import { DIFFICULTY_NAME } from "./difficultyName"
 
@@ -23,16 +22,26 @@ import { DIFFICULTY_NAME } from "./difficultyName"
  * The selected button also gets a ring and bold text, for the reason D10-g gave for the
  * line labels: colour is one channel and roughly one man in twelve cannot use this
  * particular one. `aria-pressed` reaches a screen reader; the ring reaches everyone else.
- * Since graphics P1-6 that is `PRESSED`, every toggle's treatment, read from the attribute;
- * the fill was a `motion` tween, and is a CSS transition now, which reduced motion zeroes.
+ * Since graphics P1-6 that is every toggle's treatment, read from the attribute; since UI
+ * row 3 it is the `raised` variant's own, and the ring and the weight gave way to depth: the
+ * chosen option is held down, on the accent (`app/controls.ts`). The fill was a `motion`
+ * tween, and is a CSS transition now, which reduced motion zeroes.
  *
  * **Secondary controls, and no tray (graphics spec P2-2, row 14).** The options sat on a
  * control-surface tray of their own, with no surface, 4px of padding and a white wash for
- * hover: a fourth design for a button. Each option is now a secondary control with its own
+ * hover: a fourth design for a button. Each option is now a raised control with its own
  * surface, so the tray would be the same colour behind the same colour, and it went; its
  * 16px of padding paid for most of the options' own. In the 260px rail the options are
  * narrower than their labels and wrap them to two lines, as the CI runner's wider text
  * already did before this row; see `RAIL_WIDTH_PX`.
+ *
+ * **The row wraps whole options, from their narrowest readable width (UI row 3, rule 12).**
+ * Each option's basis is its `min-content` -- its label broken onto two lines -- and the
+ * three grow to share what's left, so they stay on one row, breaking a label where they must.
+ * Only where even that can't fit does a whole option move down. Row 3's 48px controls made
+ * the row 244.91px at its narrowest, and with wide safe-area insets a 390px phone gives it
+ * 246: CI's wider text scrolled sideways. Plain wrapping breaks at the one-line widths
+ * instead, which CI's 360px phone doesn't have.
  */
 
 /** Re-exported for the readers that have always found the names here. */
@@ -49,7 +58,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
         return () => { boardsStore.setDifficulty(dif) }
     }
     return (
-        <div className="flex flex-row gap-2" role="group" aria-label="Difficulty">
+        <div className="flex flex-row flex-wrap gap-2" role="group" aria-label="Difficulty">
             {LEVELS.map(({ key, label }) => {
                 const selected = boardsStore.difficulty === key
                 return (
@@ -59,7 +68,7 @@ const DominoSlider: React.FC<{ boardsStore: LevelStore }> = ({ boardsStore }) =>
                         aria-pressed={selected}
                         data-difficulty={key}
                         data-selected={selected || undefined}
-                        className={`${control('secondary')} ${PRESSED}`}
+                        className={`${control('raised')} grow basis-[min-content]`}
                         onClick={onClick(key)}
                     >
                         {label}

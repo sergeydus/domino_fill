@@ -92,7 +92,7 @@ const painted = (c: Computed) => ({
 const expected = (theme: Theme) => ({
     ground: bytes(theme, 'ground'), body: bytes(theme, 'ground'), advice: bytes(theme, 'ink'),
     cell: bytes('light', 'checkerLight'), target: bytes(theme, 'lineNeutral'),
-    control: bytes(theme, 'controlSurface'),
+    control: bytes(theme, 'surface'),
 })
 
 /** The pinned day's board, in a scheme, with a stored choice or none. */

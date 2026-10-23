@@ -181,7 +181,7 @@ test('the picker: two equal chips, centred under the board, their contents centr
     const slot = pieceBox(1, 2, cellPx).height
     const drawing = (await held(page, 'upright').locator('svg').first().boundingBox())!
     expect(Math.abs(drawing.height - slot)).toBeLessThanOrEqual(0.5)
-    expect(Math.abs(a.height - (slot + 2 * CONTROL.choice.padding.y))).toBeLessThanOrEqual(0.5)
+    expect(Math.abs(a.height - (slot + 2 * CONTROL.chip.padding.y))).toBeLessThanOrEqual(0.5)
     // 144px wide on a phone, where the width is the limit, and 192px on desktop.
     expect(a.width).toBe(wide ? 192 : 144)
     // And the drawing is inside its chip, however it is lifted: at least 4px clear.

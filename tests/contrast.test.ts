@@ -30,20 +30,26 @@ type Pair = { a: Side, b: Side, min: number, owner: string, holds: boolean }
 
 /** The values a theme pins, in the order each table lists its pairs. */
 type Pins = {
-    invariants: string[], onChrome: string[], cardRing: string, disabled: string,
-    tutorial: string, quiet: string, reset: [string, string],
+    invariants: string[], onChrome: string[], focus: string[],
+    disabledOnGround: string, disabledOnSurface: string,
 }
 
 const PINS: Record<Theme, Pins> = {
-    // Measured from the tokens at rows 5 to 15; P1-3 moved the invariants to the warm ground.
+    // Computed from the tokens at UI row 3, which gave the chrome UI-SPEC §3.1's final values.
+    // The light chrome was P1-4's through row 2: the invariants were 5.62, 6.27, 7.35 and 15.77,
+    // and a disabled control 2.30:1.
     light: {
-        invariants: ['5.62', '6.27', '7.35', '15.77'], onChrome: ['5.87', '7.13', '12.82'],
-        cardRing: '11.78', disabled: '2.30', tutorial: '2.24', quiet: '2.55', reset: ['5.97', '7.35'],
+        invariants: ['5.80', '4.83', '5.22', '11.92'],
+        onChrome: ['13.11', '5.97', '6.57', '5.47', '5.31', '5.75', '11.78', '13.11', '10.52', '7.64', '6.78'],
+        focus: ['7.33', '8.07', '7.25'],
+        disabledOnGround: '2.61', disabledOnSurface: '2.56',
     },
-    // UI row 1's interim dark chrome, computed in its contract: every pair light draws, kept.
+    // Row 1 gave dark its ground, ink, success and problem; row 3 the rest of the chrome.
     dark: {
-        invariants: ['10.43', '10.29', '8.38', '15.87'], onChrome: ['4.63', '9.02', '10.88'],
-        cardRing: '9.51', disabled: '3.02', tutorial: '3.08', quiet: '3.37', reset: ['5.75', '8.38'],
+        invariants: ['10.43', '10.29', '8.38', '15.87'],
+        onChrome: ['13.91', '8.29', '7.26', '7.86', '9.02', '7.35', '11.02', '13.23', '9.02', '6.64', '6.93'],
+        focus: ['4.78', '4.19', '3.32'],
+        disabledOnGround: '3.80', disabledOnSurface: '3.90',
     },
 }
 
@@ -105,7 +111,8 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
             // Rounded to the two places §4 quotes them to. A palette row that moves one of
             // these has to move §4 with it.
             // P1-3 moved the ground to a warm off-white and every one of them with it; they
-            // were 5.17, 5.77, 6.76 and 14.53 on `#e8e7e7`.
+            // were 5.17, 5.77, 6.76 and 14.53 on `#e8e7e7`. UI row 3 moved the ground, `ink`,
+            // `success` and `problem` to UI-SPEC §3.1's; they were 5.62, 6.27, 7.35 and 15.77.
             expect(INVARIANTS.map(p => ratio(p).toFixed(2))).toEqual(pins.invariants)
         })
     })
@@ -123,33 +130,39 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
     })
 
     /**
-     * P1-4's text on chrome: each surface a control or the completion card can have, with the
-     * foreground it is given. Text, so 4.5:1. The spec quotes these ratios, so they are
-     * asserted at those values as well as at the bar -- and `e2e/colourRoles.spec.ts` checks
-     * that the page really draws each surface with this foreground and not another.
+     * Text on the chrome, UI-SPEC §3.1's pairs (UI row 3; P1-4's until then): every surface
+     * text is drawn on, with each foreground it's given there. Text, so 4.5:1, and pinned at
+     * the values the tokens give -- `e2e/colourRoles.spec.ts` checks that the page really draws
+     * each text in its expected token and not merely in one that clears the bar.
      */
     const ON_CHROME: Pair[] = [
-        { a: 'ink', b: 'accent', min: 4.5, owner: 'P1-4: the selected difficulty, the primary actions', holds: true },
-        // The completion card's outcome (P2-3), which until then was white on this green.
-        { a: 'success', b: 'panel', min: 4.5, owner: 'P2-3: the completion card\'s "Solved!"', holds: true },
-        { a: 'ink', b: 'controlSurface', min: 4.5, owner: 'P1-4: the quiet controls', holds: true },
+        { a: 'ink', b: 'surface', min: 4.5, owner: 'UI row 3: cards, sheets, raised controls', holds: true },
+        { a: 'inkMuted', b: 'ground', min: 4.5, owner: 'UI row 3: muted text on the page', holds: true },
+        { a: 'inkMuted', b: 'surface', min: 4.5, owner: 'UI row 3: muted text on a card', holds: true },
+        { a: 'onAccent', b: 'accent', min: 4.5, owner: 'UI row 3: the primary, a pressed toggle', holds: true },
+        // The completion card's outcome (P2-3), which until then was white on a green card.
+        { a: 'success', b: 'surface', min: 4.5, owner: 'P2-3: the completion card\'s "Solved!"', holds: true },
+        { a: 'problem', b: 'surface', min: 4.5, owner: 'UI row 3: Reset, the caution; the archive\'s warning', holds: true },
+        // Interim surfaces, under the final ink: the day banner's (row 6) and the archive's
+        // marks (row 12) keep their values until their rows, and must still carry its text.
+        { a: 'ink', b: 'bannerSurface', min: 4.5, owner: 'the day banner, until row 6', holds: true },
+        ...(['markNone', 'markStarted', 'markPartial', 'markComplete'] as const).map(b =>
+            ({ a: 'ink', b, min: 4.5, owner: 'an archive day, until row 12', holds: true }) as Pair),
     ]
 
-    describe('P1-4: text on the chrome\'s surfaces', () => {
+    describe('UI-SPEC §3.1: text on the chrome\'s surfaces', () => {
         for (const pair of ON_CHROME) {
             it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
                 expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
             })
         }
 
-        it('at the values the spec quotes', () => {
+        it('at the values the tokens give', () => {
             expect(ON_CHROME.map(p => ratio(p).toFixed(2))).toEqual(pins.onChrome)
         })
 
-        if (theme === 'light') it('and the white the accent carried until P1-4 does not, which is why it is ink now', () => {
-            // The mutation codex named at row 10's review: white on the accent is 3.05:1. History,
-            // so light's: the light panel is that white.
-            expect(ratio({ a: 'panel', b: 'accent', min: 4.5, owner: '', holds: false })).toBeLessThan(4.5)
+        if (theme === 'light') it('and `ink` on the final accent does not, which is why the primary has `onAccent`', () => {
+            expect(ratio({ a: 'ink', b: 'accent', min: 4.5, owner: '', holds: false })).toBeLessThan(4.5)
         })
     })
 
@@ -171,20 +184,9 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
     const REFUSAL_SURFACES = ['checkerLight', 'checkerDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
 
     const FOCUS_RINGS: Pair[] = [
-        ...(['ground', 'controlSurface', 'panel', 'bannerSurface'] as const).map(b =>
-            ({ a: 'accentEdge', b, min: 3, owner: 'P1-6, P2-2: a control on its surface', holds: true }) as Pair),
+        ...(['ground', 'surface', 'bannerSurface'] as const).map(b =>
+            ({ a: 'accentEdge', b, min: 3, owner: 'P1-6, UI row 3: a control on its surface', holds: true }) as Pair),
     ]
-
-    /**
-     * `Undo` on arrival, disabled: the button at 40% opacity over the ground, so its text is
-     * ink at 40% and its surface the control surface at 40%, both over the ground. P1-6 asks
-     * that the disabled treatment keep the contrast it has; this is that contrast, pinned.
-     */
-    const DISABLED_UNDO: Pair = {
-        a: { token: 'ink', alpha: 0.4, over: 'ground' },
-        b: { token: 'controlSurface', alpha: 0.4, over: 'ground' },
-        min: 0, owner: 'P1-6: disabled keeps its contrast', holds: true,
-    }
 
     describe('P1-6: a refused move, a control\'s focus, and a disabled control', () => {
         for (const surface of REFUSAL_SURFACES) {
@@ -227,78 +229,39 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
             })
         }
 
-        it(`and the completion card is one of them now: the panel, where its buttons' ring is ${pins.cardRing}:1`, () => {
-            // The card's ring was its own white until P2-3, because `accentEdge` on its green was
-            // under 3:1; the card is the panel now, and its buttons take the one ring.
-            expect(ratio({ a: 'accentEdge', b: 'success', min: 3, owner: '', holds: false })).toBeLessThan(3)
-            expect(ratio({ a: 'accentEdge', b: 'panel', min: 3, owner: '', holds: true }).toFixed(2)).toBe(pins.cardRing)
-        })
-
-        it('a disabled Undo keeps the contrast it had before P1-6', () => {
-            // 2.30:1 in light, measured from the tokens at row 12. Under 3:1, and WCAG exempts a
-            // disabled control; P1-6 and P2-2 both ask only that it not move, and a row that wants
-            // it to has to move this number, in the open. Dark's is its own, and higher.
-            expect(ratio(DISABLED_UNDO).toFixed(2)).toBe(pins.disabled)
+        it('at the values the tokens give', () => {
+            expect(FOCUS_RINGS.map(p => ratio(p).toFixed(2))).toEqual(pins.focus)
         })
     })
 
     /**
-     * P2-2's disabled controls (row 14): "disabled contrast is unchanged from today's
-     * measurement". Read from the variants in `app/controls.ts`, so a variant whose disabled
-     * look changes moves these numbers: a disabled control is its variant's disabled surface
-     * (or its own) at the variant's opacity, over what it sits on.
+     * Disabled controls (P1-6, P2-2; UI row 3). WCAG exempts them, and nothing here is a bar:
+     * these are the values, pinned, so a row that moves them does it in the open. Read from the
+     * variants in `app/controls.ts`: a disabled control is its variant's disabled surface and
+     * ink at the variant's opacity, over what it sits on. Row 3 moved them all: 45% where it was
+     * 40%, the edge gone, and one surface for every raised control and a disabled primary.
      */
-    describe('P2-2: disabled, in every variant that is ever disabled', () => {
-        const disabled = (variant: 'primary' | 'secondary' | 'quiet', on: Token): Pair => {
+    describe('disabled, in every variant that is ever disabled', () => {
+        const disabled = (variant: 'primary' | 'raised', on: Token): Pair => {
             const c: Variant = CONTROL[variant]
             const surface = c.disabled.surface ?? (typeof c.surface === 'string' ? c.surface : on)
+            const ink = c.disabled.ink ?? c.ink ?? 'ink'
             const alpha = c.disabled.opacity ?? 1
             return {
-                a: { token: 'ink', alpha, over: on }, b: { token: surface, alpha, over: on },
-                min: 0, owner: `P2-2: a disabled ${variant} control`, holds: true,
+                a: { token: ink, alpha, over: on }, b: { token: surface, alpha, over: on },
+                min: 0, owner: `a disabled ${variant} control`, holds: true,
             }
         }
-        const before = (surface: Token, alpha: number, on: Token): Pair => ({
-            a: { token: 'ink', alpha, over: on }, b: { token: surface, alpha, over: on },
-            min: 0, owner: 'before P2-2', holds: true,
+
+        it(`Undo, Hint and Check on the page: ${pins.disabledOnGround}:1`, () => {
+            expect(ratio(disabled('raised', 'ground')).toFixed(2)).toBe(pins.disabledOnGround)
+            // A disabled primary gives the accent up for the raised look, so it is the same.
+            expect(ratio(disabled('primary', 'ground')).toFixed(2)).toBe(pins.disabledOnGround)
         })
 
-        it('Undo and Hint, secondary, are the pinned 2.30:1', () => {
-            expect(ratio(disabled('secondary', 'ground')).toFixed(2)).toBe(ratio(DISABLED_UNDO).toFixed(2))
-        })
-
-        it(`a disabled Check, now primary, is ${pins.disabled}:1 too, as it was on the neutral surface`, () => {
-            expect(ratio(disabled('primary', 'ground')).toFixed(2)).toBe(ratio(DISABLED_UNDO).toFixed(2))
-        })
-
-        // What P2-2 changed, from what: history, so light's only.
-        if (theme === 'light') it('where a disabled primary that kept the accent would have taken it to 1.71', () => {
-            expect(ratio(before('accent', 0.4, 'ground')).toFixed(2)).toBe('1.71')
-        })
-
-        it(`the tutorial's "Got it!", disabled until its board is solved: ${pins.tutorial}:1`, () => {
-            // The one disabled control whose number moved at P2-2: it was the accent at 50% on
-            // the panel, 2.02:1, and a disabled primary is the neutral surface at 40%.
-            if (theme === 'light') expect(ratio(before('accent', 0.5, 'panel')).toFixed(2)).toBe('2.02')
-            expect(ratio(disabled('primary', 'panel')).toFixed(2)).toBe(pins.tutorial)
-        })
-
-        it(`the archive's month arrows, quiet, with no surface: ${pins.quiet}:1, as they were`, () => {
-            // 40% of ink on the panel before and after; only their box changed.
-            expect(ratio(before('panel', 0.4, 'panel')).toFixed(2)).toBe(pins.quiet)
-            expect(ratio(disabled('quiet', 'panel')).toFixed(2)).toBe(pins.quiet)
-        })
-    })
-
-    /**
-     * `Reset`'s edge (P2-2): `problem`, drawn between the control's own surface and whatever the
-     * control sits on, so it has to read against both -- 3:1, a boundary that carries meaning.
-     */
-    describe(`P2-2: the caution variant's edge`, () => {
-        it('reads against its surface and the ground', () => {
-            const { edge, surface } = CONTROL.caution
-            expect(contrast(P[edge.colour], P[surface]).toFixed(2)).toBe(pins.reset[0])
-            expect(contrast(P[edge.colour], P.ground).toFixed(2)).toBe(pins.reset[1])
+        it(`the tutorial's "Got it!" and the archive's arrows, on a card: ${pins.disabledOnSurface}:1`, () => {
+            expect(ratio(disabled('primary', 'surface')).toFixed(2)).toBe(pins.disabledOnSurface)
+            expect(ratio(disabled('raised', 'surface')).toFixed(2)).toBe(pins.disabledOnSurface)
         })
     })
 

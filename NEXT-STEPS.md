@@ -116,6 +116,7 @@ Evidence levels:
 | 2026-10-22 | **PR #19, UI row 1 (two themes), merged** (user, 2026-10-22, after codex's acceptance of `9ba65c9`), at `bfa9507`; CI passed on `master`, comparing all eight baselines. | Row 2, type, is next, by the same decision: Claude builds, codex reviews. Its contract follows row 1's. |
 | 2026-10-22 | **PR #20, UI row 2 (type), merged** (user, 2026-10-22, after codex's acceptance of `4fb6420`), at `bc98e43`. CI on `master` (run 39804051554): the gate job passed; **the visual job failed on its first attempt** and passed when rerun alone, comparing all eight baselines (16 of 16). | The failure was the build, not a comparison: `next/font/google` got Nunito's files at `fonts.gstatic.com/l/font?kit=…&skey=…&v=v32` URLs, and Next 16.0.10's loader refused each ("next/font/google queries have exactly one entry"), a documented upstream bug (codex: [vercel/next.js#99114](https://github.com/vercel/next.js/issues/99114), and the loader's source). The rerun was codex's recommendation; it fixes nothing. See U12. |
 | 2026-10-22 | **Serve Nunito from the repository** (user, 2026-10-22): Claude builds, codex reviews, before UI row 3. | Builds stop fetching the font from Google, so Google's response can't fail a build or change the face. Contract under U12. |
+| 2026-10-22 | **PR #21, U12 (Nunito from the repository), merged** (user, 2026-10-22, after codex's acceptance of `e3464b9`), at `2be5314`. CI on `master` (run 39836701601) passed both jobs on the first attempt, comparing all eight unchanged baselines (16 of 16). | Row 3, controls, is next, by the redesign's decision: Claude builds, codex reviews. One U9 snapshot from `e3464b9`'s gate is recorded here, as codex asked: desktop, `advice.spec.ts` › a position that cannot be finished › Check says so; TIME_WAIT **791**, the tests' 742, the tests' established 72; recovered by the single reload, the test passing. Every other snapshot read had 4310–4721. Measured, not explained; no change made. |
 
 ## Principles
 
@@ -6207,6 +6208,562 @@ Both gates started under 50 TIME_WAIT. **Corrected:** `9def74c`'s was reported a
 snapshot logged. It isn't: the UI spec's docs gates on 2026-10-20 logged three
 `ERR_NO_BUFFER_SPACE` recoveries, reported then, each with a snapshot whose counts weren't
 read before the logs were overwritten. It's the first whose counts were read.
+
+### UI row 3, controls: implementation contract
+
+**Why.** `UI-SPEC.md` row 3: the controls in the new style, the press, 48px targets, and the
+chrome's final colours in both themes (§3.1, §3.3). Every later row draws with these. Today's
+controls are row 14's flat, bordered set on interim colours: a pale blue accent, black text,
+36px tall.
+
+**How it works today** (read, unless marked):
+- **The table:** `app/controls.ts:65` holds seven variants, generated into `app/controls.css`
+  by `npm run tokens`:
+  - `primary` (`:75`): Check, "Got it!", "Play today", Start, Share;
+  - `secondary` (`:84`): Hint, Undo, the difficulty's three options, the completion card's
+    actions, the cover's Retry, Results' Close, the archive's Close;
+  - `caution` (`:95`): Reset, `secondary` with a 2px `problem` border;
+  - `quiet` (`:104`): Archive, Sound, Pick a piece, the streak, the archive's month arrows,
+    the tutorial's Skip; a 1px `ink` border and no surface;
+  - `icon` (`:114`): the level arrows, which are drawings;
+  - `day` (`:128`): the archive's days, whose surface is how far the day was played;
+  - `choice` (`:144`): Pick a piece's two chips, `role="radio"`, chosen by a ring and a check.
+
+  Every text variant shares `BOX` (`:63`): radius 6, padding 12×8. With the `control` role's
+  16px at 1.25, **a control is 36px tall** (computed from those numbers, not measured).
+- **The toggles:** the difficulty's options, Sound and Pick a piece are `aria-pressed`
+  (`DifficultySlider.tsx:59`, `PageButtons.tsx:92`, `:108`). Pressed is `PRESSED`
+  (`controlStates.ts`): the accent's fill, a 2px ring and weight 900, over 800 at rest.
+- **The shared states** (`app/globals.css:151-176`): focus is a 3px outline 2px out, in the
+  variant's colour; a press is a pixel lower at 90% brightness; transitions take 120ms, and
+  none under reduced motion. Hover only under a fine pointer (`@custom-variant hover`).
+- **The chrome's colours are interim** (`app/palette.ts`, row 1's amendment to §3.1):
+  - light: `ground` `#f4f0e8`, `ink` `#171717`, `accent` `#419dc8` with `ink` on it,
+    `accentEdge` `#0b3c52`, `controlSurface` `#e2d9ca`, `panel` white, `panelInk` black,
+    `success` `#15661a`, `problem` `#a10000`;
+  - dark: §3.1's ground, ink, success and problem already; `accent` `#0f766e`, `accentEdge`
+    `#6fd6cb`, `controlSurface` `#3a3029`, `panel` `#251e19`.
+  - §3.1's roles `surface`, `raisedEdge`, `inkMuted`, `onAccent`, `onSuccess` and
+    `onProblem` don't exist yet.
+- **Muted text is opacity:** the tutorial's secondary note (`Tutorial.tsx:81`, 80%), the
+  load-failure note (`DominoClient.tsx:186`, 70%), the covered clock (`ChallengeClock.tsx:55`,
+  60%), and the component sheet's labels (`app/visual/Sheet.tsx:147`, 60%).
+- **No text sits on a `success` or `problem` fill:** both appear as text or edges only
+  (searched: `bg-success`, `bg-problem`).
+- **The accent on the board** is chrome: the grid's keyboard focus ring
+  (`ClientBoard.tsx:351`), the level arrows' fill, and the chooser's check mark. No board or
+  piece token reads it.
+
+**Two amendments to UI-SPEC,** in this contract's commit:
+1. **`round`, `card` and `switch`, and `app/icons.tsx`, arrive with their first consumers,** as
+   `title` did in row 2. Nothing today has their shape: the round buttons are row 7's action
+   bar, and its icons; the cards are row 6's difficulty cards; the switches are row 8's
+   Settings. A variant drawn by nothing can't be tested as the spec asks, against the controls
+   that wear it. Each icon arrives with the control that draws it, and the module with the
+   first. "No emoji in the interface" (§3.4) is met by the rows that replace them: the streak's
+   flame in row 6, Results' squares in row 11.
+2. **`onSuccess` and `onProblem` arrive with their first consumer,** the first text set on
+   those fills. Row 3 sets none.
+
+**The rules.**
+1. **The chrome's final colours, in both themes,** at §3.1's values: `ground`, `surface`,
+   `raisedEdge`, `ink`, `inkMuted`, `accent` with `onAccent`, `accentEdge`, `success` and
+   `problem`.
+   - `controlSurface`, `panel` and `panelInk` are retired: every consumer moves to `surface`
+     and `ink`, and the tokens are deleted.
+   - Unchanged here: the board's, the pieces' and the cell states' tokens (rows 4 and 5),
+     `hint` and `lineNeutral` (row 4), the archive's marks (row 12), the banner (row 6) and
+     the scrim (row 8). The ones drawn on a chrome colour are re-proved against it.
+   - **The four app icons are regenerated** (`npm run icons`): `scripts/icon.ts:35` paints
+     their background in `ground`, and `tests/icons.test.ts:20` holds each committed file to
+     the generator's bytes. Only the background changes; the drawing's redesign stays in row 4
+     (codex). The files are `public/icon-192.png`, `public/icon-512.png`,
+     `public/icon-512-maskable.png` and `app/apple-icon.png`.
+2. **The variants:**
+   - `primary`: `accent`, with `onAccent` text, and a 4px `accentEdge` edge;
+   - `raised`: `surface`, with `ink` text, and a 3px `raisedEdge` edge. It replaces
+     `secondary` and `quiet`;
+   - `caution`: `raised`, with Reset's text in `problem`. A raised control has no border
+     (§3.3), so the caution moves from the edge to the text;
+   - `chip`: `raised` at radius 8, for Pick a piece's chips, keeping `choice`'s ring and check
+     mark when chosen. It replaces `choice`;
+   - `icon` and `day` stay, on the new colours, until rows 6 and 12 replace them.
+
+   Radius 16 for the text variants, as §3.3 says. Padding 16×14, so a text control is 48px tall.
+   The edge sits beneath the box and adds nothing to its layout.
+3. **The press** (§3.3, §3.5): while a pointer or Space is held, a raised, primary or chip
+   control moves down by its edge's depth and its edge disappears, over 80ms.
+   - Under reduced motion this transient press doesn't move; the edge still goes, instantly.
+     A *selected* toggle's depth (rule 5) is a state, not a motion: it shows under reduced
+     motion too, with no transition into it (codex).
+   - Disabled, there's no press.
+   - `icon` and `day` keep today's press, a pixel and 90%, until their rows.
+4. **Disabled:** no edge, and 45% opacity. A disabled `primary` also gives up the accent for
+   `surface` and `ink`, as today, so it doesn't look like the thing to press.
+5. **A pressed toggle is held down:** sunk by its edge's depth with no edge, on the accent with
+   `onAccent` text. The sunk shape is the channel that isn't colour, so **weight stops being
+   one:** every text control is 800, the role's weight, the primary and pressed toggles
+   included. The archive's days stay 700: their text is the `meta` role, and that is its
+   weight (codex). This ends §3.2's amendment ("until row 3"). Rows 6 and 8 replace the
+   toggles with cards and switches.
+6. **Focus** stays a 3px outline 2px out, in `accentEdge`, which must clear 3:1 against
+   `ground` and `surface` in both themes.
+7. **Hover,** under a fine pointer only, as today: a raised control's or a chip's edge turns
+   `accentEdge`; the primary keeps its 2px `accentEdge` ring.
+8. **Targets:** every control is at least 48×48 CSS px at phone sizes, except the board's
+   cells and the archive's days (§3.3). That includes the level arrows, the archive's arrows
+   and Close, the chips, Skip, and the completion card's and Results' actions.
+   - **The archive's days are excused in width only** (codex): a seventh of the sheet, but
+     48px tall, which §6.5 also requires. They're about 28px today (codex, computed from their
+     type and padding, not measured). They
+     keep today's look until row 12, in a 48px-tall box.
+9. **Muted text is `inkMuted`,** not opacity, at the four places above. The covered clock's
+   60% is a disabled state, not muted text, but `inkMuted` says it the same way and keeps 4.5:1.
+10. **The invariants hold** (§10): the 38px floor, and an 8×8 board at 360px with no sideways
+    scroll at 50–200% zoom. Taller controls take height from the board, and the layout suite
+    decides whether that's allowed. The cell sizes at the suite's viewports are measured before
+    and after and reported. A failing invariant stops the row; it isn't retuned.
+11. **The game column's gap is 12px,** where it was 16 (`DominoClient.tsx:361`, `gap-4`). Added
+    after the build stopped at rule 10 (below): §3.3 allows 12–16px between groups, and the
+    board's budget reads the column's real gap (`useAvailableBoardBox.ts:88-96`), so the 4px
+    a gap gives back goes to the board with no change to how it's sized. Only that column: the
+    rail and the sheets keep theirs. If 12px doesn't clear slice 3a's rule 14 at every viewport
+    and size, the row stops again, and deferring the game page's three rows to 48px in rows 6-7
+    is the fallback (option C below).
+12. **The difficulty's options wrap whole, from their narrowest readable width.** Added after the
+    build stopped at rule 10 a second time, on CI (below). The row (`DifficultySlider.tsx:53`,
+    `flex flex-row gap-2`) wraps. Each option's flex basis is its `min-content` width, the
+    label broken onto two lines, and the options grow to share what's left (codex's design).
+    - At ordinary phone widths the three stay on one row, a label breaking onto two lines
+      where it must, as at 360px on CI today.
+    - Only where even two-line labels can't fit does a whole option move to the next line.
+      The safe-area case is one: 246px of room after the insets and the page's margins
+      (codex), against 244.91 for the row at `min-content` here (measured), and about 2 more on
+      CI's text (inferred from its 2px overflow).
+    - The targets stay at least 48×48, no word is broken, and the keyboard order is the
+      reading order.
+
+    Plain `flex-wrap` isn't it: it breaks a line at the options' one-line widths, 342.73px
+    for the row here (measured), and more on CI's text, where 360px gives 344. So CI's phone
+    would get a second row and this machine's wouldn't. Nor is a fixed `min-content` width,
+    which would leave the options narrower than the row (codex). Unknown until measured: with
+    the growth shared equally, a label that fits on one line at 360 today may break.
+
+**What's not in it.** `round`, `card`, `switch` and the icons (amendment 1); `onSuccess` and
+`onProblem` (amendment 2); the board, the pieces and the cell states (rows 4, 5); the
+composition: the top bar, the action bar, the legend's chooser (rows 6, 7); sheets and the scrim
+(row 8); the archive's marks (row 12).
+
+**The tests.**
+- **`tests/palette.test.ts`:** the key parity covers the new tokens. New: the retired tokens are
+  gone, and no source names `control-surface`, `panel` or `panel-ink` as a utility (Tailwind
+  would draw nothing for it, silently).
+- **`tests/contrast.test.ts`,** both themes, rewritten for §3.1's pairs:
+  - `ink` and `inkMuted` on `ground` and `surface`, 4.5:1;
+  - `onAccent` on `accent`, 4.5:1; `problem` as text on `surface`, 4.5:1;
+  - `accentEdge` as the focus ring on `ground` and `surface`, 3:1;
+  - the line targets' `success`, `problem` and `lineNeutral` on the new `ground`, at their
+    bars;
+  - the banner and the marks under the new light `ink`, at their bars;
+  - disabled contrasts recomputed and pinned as values, not bars. WCAG exempts disabled
+    controls; the pins say what changed.
+- **`tests/controls.test.ts`:** the table's variants and their values; the generated CSS byte
+  for byte.
+- **`e2e/controlVariants.spec.ts`:** every control on every surface is exactly one variant of
+  the new table, computed from it. Pressed is held down and 800 (`:182`, from 900).
+- **New, `e2e/targets.spec.ts`:** every visible button at least 48×48, on the game page, the
+  cover, the completion card, Results, the archive and the tutorial, in the phone-360 project.
+  `[data-cell]` is excused by name. The archive's days are excused in width only, and must be
+  48px tall.
+- **New, the press:** a held pointer on a raised control and on the primary moves it down by its
+  edge and removes the edge; under reduced motion it doesn't move; a disabled control doesn't.
+  A selected toggle is held down under reduced motion as well.
+- **New, the muted-text check** (`tests/typography.test.ts`, as a source audit): no
+  `opacity-*` utility on an element in `app/` that holds text, and each of the four places
+  carries `text-ink-muted`. An opacity on a drawing is allowed by name (`Hover.tsx`'s
+  preview).
+- **Tests that hold today's values, and what each keeps** (codex named the ones I'd missed):
+  - `e2e/controlStates.spec.ts:184-216`: the press was `translate 0 1px` and
+    `brightness(0.9)`. It becomes the edge's depth with the edge gone, for raised, primary and
+    chip controls; `icon` and `day` keep the old press. Kept: Space held shows it, release
+    clears it, Enter has no held state, a disabled control doesn't move, and focus is shown in
+    `accentEdge`, read from the token.
+  - `e2e/colourRoles.spec.ts`: `SURFACES` is `{ accent: 'ink', controlSurface: 'ink' }`, one
+    foreground per background. On `surface` that can't hold: Reset is `problem`, "Solved!" is
+    `success`, the tutorial's note is `inkMuted`, the archive's warning is `problem` (codex).
+    **The expected foreground is chosen by role as well as background:**
+    - the element's own text-colour utility names it (`text-success`, `text-problem`,
+      `text-ink-muted`);
+    - else its variant's ink does (`control-caution` is `problem`, `control-primary`
+      `onAccent`);
+    - else the background's default (`surface` is `ink`, `accent` is `onAccent`).
+
+    The allowed set per background is closed: on `surface`, `ink`, `inkMuted`, `success` and
+    `problem`; on `accent`, `onAccent` only. Each text must be **exactly** its expected token,
+    at 4.5:1 as the browser computes it. Contrast alone never passes a text.
+    **Positive cases:** Reset, "Solved!" and the tutorial's note must each be among the texts
+    checked, and pass, so the check can't pass by finding nothing. Kept: one accent for
+    interactive chrome, each role only where it's allowed.
+  - `e2e/theme.spec.ts:95`: Undo's background is `controlSurface`, and becomes `surface`.
+    Kept: each scheme renders its own tokens, and the advice and a line's target clear 4.5:1
+    on the ground.
+  - `e2e/typography.spec.ts:245-250`: a control at rest and a pressed one, 800 and 900, drawn
+    apart. Both become 800. The pressed one's difference is its depth, held by the variant
+    spec. Kept: every text is a role, at a loaded weight, at least its role's.
+  - `tests/palette.test.ts`: `:154` pins the ground's bytes, `f4f0e8`, which become
+    `fbf3e8`; `:160` and `:254` use `controlSurface` as an example, which becomes `surface`.
+    Kept: the audit, the parity and the generated CSS.
+  - `e2e/accessibility.spec.ts:527` (pressed, 800), `e2e/controlVariants.spec.ts:182` (the
+    same), `e2e/completionCard.spec.ts`'s actions, and `tests/controls.test.ts`'s primary
+    weight.
+  - `tests/icons.test.ts`: unchanged; the regenerated icons must pass it.
+- **The layout suite** must pass unchanged (rule 10).
+- **Visual:** all eight baselines change, regenerated by CI from the marked commit.
+
+**Mutation probes** (planned), each to fail at the assertion named:
+1. `raised`'s edge at 0px, regenerated: the variant spec.
+2. The press keeps the edge: the press test.
+3. The press moves under reduced motion: the press test's reduced-motion case.
+4. A pressed toggle on the accent but not held down: the variant spec's pressed check.
+5. `BOX`'s vertical padding at 12 (44px): the targets audit.
+6. The primary's text back on `ink`: the variant spec, which reads the computed text colour
+   of every primary, and `colourRoles.spec.ts`'s promised foreground on `accent`. Not the
+   contrast test, which reads the `onAccent` token, unchanged by this probe (codex).
+7. The light `accent` back at `#419dc8` with `onAccent` white: the `onAccent` pair.
+8. A `bg-panel` left in a component: the retired-utility audit.
+9. The load-failure note back on `opacity-70`: the muted-text audit.
+10. Reset's text back on `ink`: the variant spec's caution, and `colourRoles.spec.ts`'s
+    foreground check, which expects `problem` for `control-caution`. `ink` clears 4.5:1 on
+    `surface`, so this is the case where contrast alone must not pass (codex).
+11. A disabled primary keeping the accent: the variant spec's disabled case.
+12. The palette changed, the icons not regenerated: `tests/icons.test.ts` (codex).
+13. The archive's days back to their old height: the targets audit's day height (codex).
+14. A selected toggle not held down under reduced motion: the press test's reduced-motion
+    case.
+
+**The gate** before each commit, from cold, as AGENTS.md says. The row is two commits: the
+change, with the visual-update marker, then the baselines CI regenerates.
+
+**Codex's review of `b531d1d`,** every correction made above (the amendments and the hover
+choice were accepted as they stood):
+1. **The app icons:** regenerated in this row, since they're drawn on `ground`; probe 12.
+2. **The tests that hold today's values,** each named with its change and what it keeps; the
+   muted-text check defined; probe 6 moved to the assertions that read the control.
+3. **The archive's days are excused in width only:** 48px tall now; probe 13.
+4. **Clarified:** the days keep `meta`'s 700, and a selected toggle's depth shows under
+   reduced motion, where a transient press doesn't move (probe 14).
+
+**Codex's review of `82d5b8c`:** one correction, made above. `colourRoles.spec.ts` chose a
+text's expected colour by its background alone, which would have rejected Reset, "Solved!" and
+the tutorial's note on `surface`. It now chooses by role as well, keeps exact tokens and 4.5:1,
+has positive cases, and probe 10 names it. And the days' 28px was computed, not measured.
+
+Codex accepted the contract at `7f90b8b`.
+
+**Stopped at rule 10, during the build (2026-10-23).** Built against `7f90b8b`, uncommitted,
+the full browser suite failed two tests and passed 789 (1 skipped):
+`challenge.layout.spec.ts:68` and `challengeResults.layout.spec.ts:99`, slice 3a's rule 14 and
+3b's version of it. At 390x844 with the 8×8 board the casual page still fits, and the challenge
+page's clock row now scrolls it by **4px**. The 48px controls add 36px to a phone's game page
+(three rows at +12), which used up the slack the clock row relied on. §10's invariants held:
+no cell under 38px, no sideways scroll anywhere. Measured, before → after, the board's cell
+in px and the page's vertical overflow, on the challenge page (a scratch measurement through
+the repository's own server harness):
+
+| Viewport | 6×6 cell | 7×7 cell | 8×8 cell | 8×8 overflow |
+|---|---|---|---|---|
+| 360x640 | 38 → 38 | 38 → 38 | 38 → 38 | 172 → 208 |
+| 360x720 | 38 → 38 | 38 → 38 | 38 → 38 | 92 → 128 |
+| 390x844 | 54 → 48 | 47 → 42 | 41 → 38 | **0 → 4** |
+| 393x852 | 55 → 49 | 47 → 43 | 42 → 38 | 0 → 0 |
+| 412x915 | 57 → 57 | 50 → 50 | 44 → 44 | 0 → 0 |
+| 800x400, 640x400 | 38 → 38 | 38 → 38 | 38 → 38 | 364 → 388 |
+| 853x533 | 38 → 38 | 38 → 38 | 38 → 38 | 231 → 255 |
+| 1280x800, 2560x1600 | unchanged | unchanged | unchanged | 0 → 0 |
+
+Three ways on were put to the user: A, accept 4px of scroll until rows 6-7; B, give the 4px
+back from the column's gaps; C, keep the game page's three rows at 36px until rows 6-7 replace
+them. I recommended C, to avoid tuning a layout rows 6-7 replace. Codex recommended B (§3.3
+allows 12px; the sizing already reads the gap; C would add temporary exceptions to the targets
+rule and remove them later), and I agreed after checking both claims in the code. **The user
+chose B (2026-10-23): rule 11 above.** Codex reviews this amendment before it's built.
+
+Codex accepted the amendment at `8ad3e04`, asking for both layout suites unchanged, the table
+measured again, and a probe that rolls rule 11 back. All three were done: with the 12px gap the
+layout project passed 148 of 148, 390x844's 8×8 overflow went back to 0, and putting 16px back
+fails both rule-14 checks at 390x844. Their record goes in the As built notes, once the row is
+done.
+
+**Stopped at rule 10 again, on CI (2026-10-23).** The row was committed as `9fccd31` after a
+gate from cold here with every step 0 (unit 1868, 0 bytes of stderr; browser 791 passed, 1
+skipped). CI's run 39928188750 on it: the visual job passed, and the gate job failed one test,
+three times out of three (two retries), with 1 skipped and 790 passed:
+`layout.spec.ts:322`, "a narrow screen with wide insets wraps the chrome rather than scrolling
+sideways". At 390x844 with 64px insets each side the page scrolls sideways by **2px**, where
+the test allows 1. It passes here.
+- **The cause,** measured here: the difficulty row is the one chrome row that can't wrap. With
+  the insets it has 246px. Its options have already broken their labels onto two lines (each
+  68px tall), and the row's `min-content` is 244.91px: 1.09px to spare. CI's text is wider:
+  the test's own comment records the same gap from row 13, at 3px. Row 3's 16px padding,
+  where it was 12, added 24px to the row.
+- **What CI's 360px phone shows** (its regenerated baseline, read): the row on one line, every
+  label broken onto two.
+- **Four ways on were put to the user:** A, rule 12 above; B, plain `flex-wrap`; C, the
+  difficulty's options at 12px padding until row 6; D, the row's gap at 4px. C and D retune
+  what rule 10 says isn't retuned. I recommended A. Codex recommended A, pending measurement,
+  and corrected the room to 246px (I'd said 262, before the page's margins).
+  **The user chose A (2026-10-23): rule 12 above.** Codex reviews this amendment before it's
+  built.
+
+**Rule 12's tests,** new in `e2e/layout.spec.ts`, which CI runs too, so they hold on both
+machines' text:
+- **Ordinary phones:** at 360x640 and 390x844 with no inset, the three options share one row
+  and span it (their widths and gaps add up to the row's, within 1px).
+- **Where the labels must break:** at 360 wide with 16px insets each side (312px of room,
+  between the row's 244.91 and 342.73 here), the three still share one row.
+- **Where even broken labels can't fit:** at 390 wide with 72px insets each side (230px). The
+  checks run in this order, so each probe below fails at its own:
+  1. each option's text is contained, its `scrollWidth` within its `clientWidth`;
+  2. **every word is whole** (codex): containment alone passes a label split mid-word, as
+     `word-break: break-all` does. A DOM `Range` over each word's characters gives client
+     rects that must all share one top, within 1px. The label as a whole may take two lines;
+  3. no sideways scroll;
+  4. the row on two lines, every option at least 48×48, and Easy, Medium, Hard in reading
+     order.
+- **`layout.spec.ts:322`** unchanged, and slice 3a's rule 14 at every viewport and size.
+
+**Its probes,** each to fail at the assertion named:
+16. The row back to `nowrap`: the 72px case's sideways scroll (check 3). Each option stays
+    at its `min-content`, so its text is contained and its words whole.
+17. Plain `flex-wrap`: the 16px case's one row.
+18. A `min-content` basis that doesn't grow: the ordinary phones' span.
+19. A basis of 0 that may shrink below `min-content`: the 72px case's containment (check 1),
+    a word overflowing its option. (Corrected after codex's review: this probe was named for
+    whole words, which containment doesn't prove.)
+20. `word-break: break-all` on the options: the 72px case's whole words (check 2). The text
+    stays contained, and the row, its `min-content` now a letter wide, stays on one line, so
+    only check 2 can fail first (codex).
+
+**Codex's review of `d4b07cf`:** the design accepted, held for one correction, made above.
+"No word broken" was checked by containment, which a label split mid-word passes. Each word
+must now lie on one line, read through a `Range`, and probe 20 breaks words to fail exactly
+there. Probe 19 moved to containment, which is what it breaks.
+
+**Then,** if they pass: the cell sizes measured again at the ten viewports, each option's
+line count at 360 and 390 reported, the As built notes, and the gate. The fix is its own commit,
+marked for a visual update, since CI's phone baseline may change, followed by the baselines.
+
+Codex accepted rule 12 at `bef319d`, asking for three things, and each holds:
+- probe 16 keeps the options' intrinsic minimum widths: it removes only the row's wrap;
+- each probe fails at its named assertion: probes 16-20 below;
+- no word's range is empty: each word must give at least one rect, and the words read must
+  be the label's.
+
+**As built:** `9fccd31`, the row, and `3b65cc5`, rule 12, both marked for a visual update; then
+the baselines from CI's run on `3b65cc5`.
+- **Rule 11 cleared rule 10.** With the game column at 12px, the layout project passed 148 of
+  148, both rule-14 checks included. The same scratch measurement, before row 3 → at 16px →
+  at 12px:
+
+  | Viewport | 6×6 cell | 7×7 cell | 8×8 cell | 8×8 overflow |
+  |---|---|---|---|---|
+  | 360x640 | 38 → 38 → 38 | 38 → 38 → 38 | 38 → 38 → 38 | 172 → 208 → 184 |
+  | 360x720 | 38 → 38 → 38 | 38 → 38 → 38 | 38 → 38 → 38 | 92 → 128 → 104 |
+  | 390x844 | 54 → 48 → 52 | 47 → 42 → 45 | 41 → 38 → 40 | **0 → 4 → 0** |
+  | 393x852 | 55 → 49 → 53 | 47 → 43 → 46 | 42 → 38 → 41 | 0 → 0 → 0 |
+  | 412x915 | 57 → 57 → 57 | 50 → 50 → 50 | 44 → 44 → 44 | 0 → 0 → 0 |
+  | 800x400, 640x400 | 38 → 38 → 38 | 38 → 38 → 38 | 38 → 38 → 38 | 364 → 388 → 364 |
+  | 853x533 | 38 → 38 → 38 | 38 → 38 → 38 | 38 → 38 → 38 | 231 → 255 → 231 |
+  | 1280x800 | 82 → 82 → 83 | 71 → 71 → 72 | 63 → 63 → 64 | 0 → 0 → 0 |
+  | 2560x1600 | 106 → 106 → 106 | 92 → 92 → 92 | 81 → 81 → 81 | 0 → 0 → 0 |
+
+  No cell is under 38 and nothing scrolls sideways (0 at every row). The pages that already
+  scrolled scroll 12px more than before row 3, where 16px made it 24-36. At 1280x800 the
+  board gained a pixel a cell: the game column holds the board there too, so its gap is the
+  board's to take. The 12px measurement ran with 1021 sockets in TIME_WAIT left by the
+  layout run; all 30 of its cases passed, with no socket error. Measured again with rule 12
+  built, all 30 cases are the same.
+- **Rule 12, measured here** (a scratch measurement through the repository's server harness):
+
+  | Where | Room | The options | Lines in a label |
+  |---|---|---|---|
+  | 360x640, 390x844, 800x400, 853x533 | 342.73 | one row | one |
+  | the rail, at 1280x800 and 2560x1600 | 260 | one row | two |
+  | 360 wide, 16px insets | 312 | one row | two |
+  | 390 wide, 72px insets | 230 | Easy and Medium, then Hard alone | two, Hard's one |
+
+  The rail's options broke their labels before rule 12 too (`DifficultySlider.tsx`'s
+  comment): what changed there is how the three share its width. CI's baseline at 360 shows
+  one row with every label on two lines, as before rule 12, so the phone gained no row on
+  either machine's text (codex's condition). The options are where they were; their widths
+  moved, which changed the phone and desktop baselines between `9fccd31` and `3b65cc5`; the
+  component sheets didn't change.
+- **Choices made inside the contract:**
+  - **The edge is a shadow,** `0 Dpx 0 0`, so it takes no layout and a control sinks into
+    the space it held. A ring is a shadow too, so every rule that draws one draws the edge
+    in the same declaration (`scripts/controls-css.ts`'s `shadow`).
+  - **The hover's conditions are in `:where()`.** Written as `:enabled:hover`, the hover
+    outranked the press, so a pointer pressing a raised control showed the hover's edge
+    instead of the sink. Now the press wins on order.
+  - **Every rule writes `min-width` and `min-height`** from the table's new `min`, as well as
+    the padding, so a control is 48px however its content lays out.
+  - **`PRESSED` and `app/dominoFill/controlStates.ts` are gone.** A pressed toggle is the
+    variant's own `[aria-pressed="true"]` rule; `tests/controls.test.ts` now refuses any
+    `aria-pressed:` utility in `app/`.
+  - **Reset is told apart by its text in `problem`,** the variant spec's own test.
+- **Tests changed on purpose, beyond the contract's list:**
+  - `e2e/controlVariants.spec.ts`:
+    - It reads the edge through the shadow. A border or an outline is compared only where
+      one is drawn: at 0px wide both computed to `currentColor`, which differs per variant.
+    - **`ALIKE_DISABLED`:** a disabled primary and a disabled raised control look the same
+      by rule 4, so each must compute to exactly that pair. As first written the check ran
+      only when more than one variant matched, and probe 11 survived it: a primary that kept
+      the accent matched `primary` alone, and passed. It now requires the pair (`:243`).
+  - `e2e/colourRoles.spec.ts`: on `surface` the allowed set also holds `lineNeutral`, for
+    the tutorial board's line labels, whose expected token is their line's state.
+  - `e2e/controlStates.spec.ts`: the Enter check moved from Hint, disabled on load, to the
+    Archive button.
+  - `e2e/layout.spec.ts`, rule 12's four tests: as first written they read each option's line
+    from its painted box, which includes the chosen option's 3px press-down, so Easy sat
+    on a row of its own and all four failed. They read `offsetTop` and `offsetLeft` now,
+    which a transform doesn't move.
+- **Contrast,** measured from the tokens and pinned in `tests/contrast.test.ts`:
+  - light on chrome 5.31-13.11, dark 6.64-13.91; focus rings light 7.25-8.07, dark 3.32-4.78;
+  - disabled light 2.61 on the ground, 2.56 on a card, where it was 2.30; dark 3.80 and 3.90;
+  - the light `success` on the new ground is 4.83:1, the closest of the line targets to its
+    4.5 bar.
+- **Counts:** unit 1868 in 75 files, 0 bytes of stderr; browser 795 passed, 1 skipped
+  (`e2e/targets.spec.ts`'s 4 tests and rule 12's 4 included).
+- **The full browser suite, every run during the build,** with the failures kept:
+  1. The first full run: 22 failed, 769 passed, 1 skipped. 20 of the failures were in the
+     three specs being rewritten (`colourRoles`, `controlStates`, `controlVariants`, in both
+     projects), and 2 were rule 14's.
+  2. Those three and `targets.spec.ts`, rerun after fixing them: 6 failed (`colourRoles`'s
+     tutorial action, and two of `controlVariants`'s surfaces, in both projects), 60 passed;
+     then 66 of 66.
+  3. The full suite: 789 passed, 2 failed (rule 14, the stop above), 1 skipped.
+  4. With rule 11: 791 passed, 1 skipped, no socket error.
+  5. With rule 12, in its gate: 795 passed, 1 skipped, one socket error recovered (below).
+- **Mutation probes: 20 run, every one caught,** each file restored byte for byte and checked
+  by hash (`row3ui_probes.py` and `row3ui_probes12.py` in the builder's scratchpad). Three
+  planned assertions were wrong, and one test was weak:
+  1. `raised`'s edge at 0px: **not by the variant spec.** It computes what to expect from the
+     table, so a change to the table's values moves its expectation too; it failed only
+     because the browser writes a translate of `0 0px` as `0px`. Caught by
+     `tests/controls.test.ts:35`, the table's pin.
+  2. The press keeps the edge: the press test (`controlStates.spec.ts:233`, motion allowed),
+     and `:202` and `:266`.
+  3. The press moves under reduced motion: `controlStates.spec.ts:202` and `:266`, under the
+     file's reduced motion.
+  4. A pressed toggle not held down: the variant spec's pressed check (`:210`).
+  5. `BOX`'s padding at 12: **an equivalent mutant.** `min-height: 48px` keeps the box 48px
+     tall, so the targets audit rightly passed. Run again with the min height at 44 too:
+     the targets audit failed in all 4 of its tests.
+  6. The primary's text on `ink`: `colourRoles.spec.ts` ("Check" on the accent, `:280`, and
+     its unreadable-text check, `:123`). Not the variant spec, for probe 1's reason; the
+     table's pin, `tests/controls.test.ts:27`, caught it too.
+  7. The light accent at `#419dc8`: the `onAccent` pair, 3.05 against 4.5
+     (`contrast.test.ts:156`).
+  8. A `bg-panel` left in the completion card: the retired-token audit (`palette.test.ts:334`).
+  9. The load-failure note on `opacity-70`: the muted-text audit (`typography.test.ts:222`,
+     `:239`).
+  10. Reset's text on `ink`: the variant spec's caution (`:343`) and `colourRoles.spec.ts`
+      (`:378`), both of which expect `problem` by name.
+  11. A disabled primary keeping the accent: the variant spec's disabled case (`:243`), after
+      the fix above; "Got it!", Undo and Previous month each fail.
+  12. The palette changed, the icons not regenerated: `tests/icons.test.ts:20`, all four.
+  13. The days back to their own height: the targets audit's archive (`targets.spec.ts:66`),
+      and `tests/controls.test.ts:75` and `:94`.
+  14. A selected toggle not held down under reduced motion: `controlStates.spec.ts:271`
+      ("released, and on"), `:209` and `:327`.
+  15. Rule 11 rolled back to 16px (codex): `challenge.layout.spec.ts:94` and
+      `challengeResults.layout.spec.ts:146`, 8×8 at 390x844, "no new vertical scroll".
+  16. Rule 12's row back to `nowrap`, the options keeping their `min-content` basis (codex):
+      the 72px case's sideways scroll (`layout.spec.ts:499`), its containment and words
+      having passed.
+  17. Plain `flex-wrap`: the 16px case's one row (`:476`), and the 72px case's two lines
+      (`:500`), where Easy, Medium and Hard each took a line.
+  18. A `min-content` basis that doesn't grow: the ordinary phones' span, at 360 and 390
+      (`:464`).
+  19. A basis of 0 that may shrink below `min-content`: the 72px case's containment (`:489`),
+      "Medium 7x7".
+  20. `word-break: break-all`: the 72px case's whole words (`:496`), "Medium" on two lines,
+      its text contained.
+
+  The probe script crashed twice while printing a test title with non-ASCII characters: the
+  console was cp1252, and `python -I` ignores `PYTHONIOENCODING`. Each time its `finally`
+  restored every file, checked by hash, and the probes from 5b on were run again with the
+  encoding set inside the script.
+- **The gates, from cold,** every step 0 and unit 1868 with 0 bytes of stderr in each:
+  - `9fccd31`: browser 791 passed, 1 skipped, no socket error;
+  - `d4b07cf` and `bef319d`, the amendments: 791 passed, 1 skipped, no socket error;
+  - `3b65cc5`: 795 passed, 1 skipped, one socket error recovered;
+  - `f41b237`, the baselines: 795 passed, 1 skipped, one socket error recovered (below).
+- **CI:**
+  - `9fccd31` (run 39928188750): the visual job passed; the gate failed `layout.spec.ts:322`,
+    the stop above.
+  - `d4b07cf` and `bef319d` (runs 39931702974, 39942629827): the same failure, the code
+    unchanged; and the visual job failed 16, against the old committed baselines, as a run
+    without the marker does before its baselines are in.
+  - `3b65cc5` (run 39945591050): both jobs passed. Its regenerated baselines are committed:
+    all eight images differ from row 2's, and `environment.json`'s runner image moved from
+    20261018.339.1 to 20261012.334.1 (CI's choice of runner; the system fonts' hash is
+    unchanged).
+- **Recorded on the way:**
+  - **A socket snapshot in `3b65cc5`'s gate,** recovered by the harness's one reload: layout,
+    `layout.spec.ts` › "1280x800 @ 200%" › "the widest label the game can produce still
+    fits": TIME_WAIT 4800, of which the tests' 4761, and the tests' established 0.
+  - **And in `f41b237`'s,** recovered the same way: phone-360, `tutorial.spec.ts` › "the
+    modal itself does not overflow horizontally": TIME_WAIT 4369, of which the tests' 4349,
+    and the tests' established 72.
+
+**Codex's review of `0eae5d8`: held for one correction, made in `780b66a`.** The press could
+cancel a click. Pressed 2px below its top, held for 200ms and released without moving, Archive
+stayed closed: it had sunk 3px from under the pointer, and a click whose press and release land
+on different elements goes to neither. Codex reproduced it in both themes, and in 2 of its 8
+cases. Every test pressed the centre, or released elsewhere on purpose.
+- **The fix** (`scripts/controls-css.ts`): each control is `position: relative`, and while held
+  an empty `::after` reaches up by exactly its press's move, through its top border: the
+  primary 4px, raised, caution and chip 3, the level arrows 1, a day 2 (its pixel and its
+  border). Under reduced motion a sink doesn't move, so its reach is zero; a nudge keeps its
+  pixel there, and its reach. Codex had suggested a layer that sinks inside a still button,
+  and accepted this instead. No pixel changes, so the commit isn't marked for a visual
+  update.
+- **Tests:**
+  - New in `e2e/controlStates.spec.ts`, with motion allowed: Check, the Medium toggle and
+    Archive, each pressed halfway into the band its sink uncovers, held until it settles, and
+    released in place, must act. Before the fix it failed in both projects; with it, the press
+    and variant specs passed 42 of 42.
+  - The nudges aren't in it. Measured: Chromium still hit the level arrow half a pixel above
+    its nudged top, so their band can't be pressed reliably.
+  - New in `tests/controls.test.ts`: every variant reaches back by its own move, and is
+    `position: relative`. The reduced-motion test now holds the zeroed reach.
+  - The regression first failed on phone-360 for a reason of its own: Archive was below the
+    fold, and the pointer pressed where it was told, which was off the page. It scrolls each
+    control into view now.
+- **Probes, 4 of 4 caught** at the assertion intended, each file restored and checked by hash
+  (`row3ui_probes_reach.py`):
+  21. The reach removed: the unit check (`controls.test.ts:159`), and the regression's Check
+      in both projects.
+  22. The reach 1px for every variant: the same two.
+  23. No `position: relative`: the unit check (`:160`). The browser can't see it, since the
+      `::after` then sizes itself from an ancestor and still covers the band.
+  24. The reach kept under reduced motion: the reduced-motion unit test (`:143`).
+- **Two gates, from cold:**
+  1. Failed at lint (1), every other step 0 (unit 1869, browser 797 passed, 1 skipped). The
+     errors were 3 in codex's review script, `edge.spec.ts`, in the git-ignored
+     `playwright-report/`, which ESLint reads. Nothing was committed. The user chose to have
+     codex move it, and codex renamed both of its scripts to `.txt`.
+  2. Every step 0: unit 1869 with 0 bytes of stderr, browser 797 passed and 1 skipped, no
+     socket error. Then `780b66a`.
+  - **CI on `7f90b8b`** (run 39858764317): attempt 1's visual job failed installing
+    Playwright's browser, `packages.microsoft.com` answering 403. Attempt 2 passed, unchanged.
+  - **Two socket snapshots, both recovered** in docs gates, with nothing changed:
+    - touch, `pickAPiece.touch.spec.ts` › "the picker is the switch on touch", on 2026-10-22:
+      TIME_WAIT 3602, of which the tests' 3547, and the tests' established 60;
+    - phone-360, `persistence.spec.ts` › "storage that refuses to be written does not break
+      play", in `8ad3e04`'s gate: TIME_WAIT 3999, of which the tests' 3958, and the tests'
+      established 72.
 
 ## Campaign (future, for the mobile release)
 

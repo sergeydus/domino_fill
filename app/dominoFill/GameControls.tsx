@@ -61,7 +61,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-hint
-            className={control('secondary')}
+            className={control('raised')}
             onClick={() => { void boardsStore.requestHint() }}
             disabled={boardsStore.completed || !boardsStore.canChange}
         >
@@ -70,7 +70,7 @@ const GameControls: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore })
         <button
             type="button"
             data-undo
-            className={control('secondary')}
+            className={control('raised')}
             onClick={() => boardsStore.undo()}
             disabled={!boardsStore.canUndo}
         >

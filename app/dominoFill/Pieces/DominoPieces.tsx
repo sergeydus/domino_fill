@@ -57,8 +57,8 @@ const CheckMark: React.FC = () => (
  *
  * A radio group rather than two toggles, because exactly one piece is always held: neither
  * can be switched off, only the other chosen. So the keyboard is the radio group's -- one tab
- * stop, on the piece held, and an arrow key choosing the other -- and the look is the `choice`
- * variant's, a ring and a check mark, where a toggle's would be the accent's fill.
+ * stop, on the piece held, and an arrow key choosing the other -- and the look is the `chip`
+ * variant's, a ring and a check mark, where a toggle's would be held down on the accent.
  */
 const HeldPieceChoice: React.FC<{ session: PuzzleSession, piece: Piece }> = observer(({ session, piece }) => {
     const controls = session.rootStore.controls
@@ -84,7 +84,7 @@ const HeldPieceChoice: React.FC<{ session: PuzzleSession, piece: Piece }> = obse
             tabIndex={held ? 0 : -1}
             data-held-piece={piece}
             aria-label={`${name}. ${explanation}`}
-            className={`${control('choice')} flex items-center justify-center gap-2 w-36 wide:w-48`}
+            className={`${control('chip')} flex items-center justify-center gap-2 w-36 wide:w-48`}
             onClick={() => controls.setHeld(piece)}
             onKeyDown={onKeyDown}
         >
@@ -156,7 +156,7 @@ const DominoPieces: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore: c
 
     return (
         <div
-            className="flex flex-row bg-control-surface rounded-4xl gap-4 pt-6 px-4 items-center"
+            className="flex flex-row bg-surface rounded-4xl gap-4 pt-6 px-4 items-center"
             data-legend
             role="group"
             aria-label="Scoring key"

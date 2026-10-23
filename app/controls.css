@@ -5,91 +5,206 @@
 @layer components {
   .control-primary {
     background-color: var(--accent);
-    border-radius: 6px;
-    padding: 8px 12px;
-    color: var(--ink);
-    font-weight: 900;
+    border-radius: 16px;
+    padding: 14px 16px;
+    min-width: 48px;
+    min-height: 48px;
+    color: var(--on-accent);
+    font-weight: 800;
+    box-shadow: 0 4px 0 0 var(--accent-edge);
+    transition-duration: 80ms;
+    position: relative;
   }
   .control-primary:focus-visible {
     outline-color: var(--accent-edge);
   }
   .control-primary:disabled {
-    background-color: var(--control-surface);
-    opacity: 0.4;
+    background-color: var(--surface);
+    color: var(--ink);
+    opacity: 0.45;
+    box-shadow: none;
   }
   @media (hover: hover) and (pointer: fine) {
-    .control-primary:enabled:hover {
-      box-shadow: 0 0 0 2px var(--accent-edge);
+    .control-primary:hover:where(:enabled:not([aria-pressed="true"])) {
+      box-shadow: 0 0 0 2px var(--accent-edge), 0 4px 0 0 var(--accent-edge);
     }
   }
-  .control-secondary {
-    background-color: var(--control-surface);
-    border-radius: 6px;
-    padding: 8px 12px;
+  .control-primary:not(:disabled):active {
+    translate: 0 4px;
+    filter: none;
+    box-shadow: none;
+  }
+  .control-primary:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -4px 0 0 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .control-primary:not(:disabled):not([aria-pressed="true"]):active {
+      translate: none;
+    }
+    .control-primary:not(:disabled):not([aria-pressed="true"]):active::after {
+      top: 0;
+    }
+  }
+  .control-raised {
+    background-color: var(--surface);
+    border-radius: 16px;
+    padding: 14px 16px;
+    min-width: 48px;
+    min-height: 48px;
     color: var(--ink);
     font-weight: 800;
+    box-shadow: 0 3px 0 0 var(--raised-edge);
+    transition-duration: 80ms;
+    position: relative;
   }
-  .control-secondary:focus-visible {
+  .control-raised[aria-pressed="true"] {
+    background-color: var(--accent);
+    color: var(--on-accent);
+    translate: 0 3px;
+    filter: none;
+    box-shadow: none;
+  }
+  .control-raised:focus-visible {
     outline-color: var(--accent-edge);
   }
-  .control-secondary:disabled {
-    opacity: 0.4;
+  .control-raised:disabled {
+    opacity: 0.45;
+    box-shadow: none;
   }
   @media (hover: hover) and (pointer: fine) {
-    .control-secondary:enabled:hover {
-      background-color: var(--panel);
+    .control-raised:hover:where(:enabled:not([aria-pressed="true"])) {
+      box-shadow: 0 3px 0 0 var(--accent-edge);
     }
   }
-  .control-secondary:not(:disabled):active {
-    background-color: var(--accent);
+  .control-raised:not(:disabled):active {
+    translate: 0 3px;
+    filter: none;
+    box-shadow: none;
+  }
+  .control-raised:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -3px 0 0 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .control-raised:not(:disabled):not([aria-pressed="true"]):active {
+      translate: none;
+    }
+    .control-raised:not(:disabled):not([aria-pressed="true"]):active::after {
+      top: 0;
+    }
   }
   .control-caution {
-    background-color: var(--control-surface);
-    border: 2px solid var(--problem);
-    border-radius: 6px;
-    padding: 6px 10px;
-    color: var(--ink);
+    background-color: var(--surface);
+    border-radius: 16px;
+    padding: 14px 16px;
+    min-width: 48px;
+    min-height: 48px;
+    color: var(--problem);
     font-weight: 800;
+    box-shadow: 0 3px 0 0 var(--raised-edge);
+    transition-duration: 80ms;
+    position: relative;
+  }
+  .control-caution[aria-pressed="true"] {
+    background-color: var(--accent);
+    color: var(--on-accent);
+    translate: 0 3px;
+    filter: none;
+    box-shadow: none;
   }
   .control-caution:focus-visible {
     outline-color: var(--accent-edge);
   }
   .control-caution:disabled {
-    opacity: 0.4;
+    opacity: 0.45;
+    box-shadow: none;
   }
   @media (hover: hover) and (pointer: fine) {
-    .control-caution:enabled:hover {
-      background-color: var(--panel);
+    .control-caution:hover:where(:enabled:not([aria-pressed="true"])) {
+      box-shadow: 0 3px 0 0 var(--accent-edge);
     }
   }
   .control-caution:not(:disabled):active {
-    background-color: var(--accent);
+    translate: 0 3px;
+    filter: none;
+    box-shadow: none;
   }
-  .control-quiet {
-    border: 1px solid var(--ink);
-    border-radius: 6px;
-    padding: 7px 11px;
-    color: var(--ink);
-    font-weight: 800;
+  .control-caution:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -3px 0 0 0;
   }
-  .control-quiet:focus-visible {
-    outline-color: var(--accent-edge);
-  }
-  .control-quiet:disabled {
-    opacity: 0.4;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .control-quiet:enabled:hover {
-      background-color: var(--control-surface);
+  @media (prefers-reduced-motion: reduce) {
+    .control-caution:not(:disabled):not([aria-pressed="true"]):active {
+      translate: none;
+    }
+    .control-caution:not(:disabled):not([aria-pressed="true"]):active::after {
+      top: 0;
     }
   }
-  .control-quiet:not(:disabled):active {
-    background-color: var(--accent);
+  .control-chip {
+    background-color: var(--surface);
+    border-radius: 8px;
+    padding: 5px 12px;
+    min-width: 48px;
+    min-height: 48px;
+    color: var(--ink);
+    font-weight: 800;
+    box-shadow: 0 3px 0 0 var(--raised-edge);
+    transition-duration: 80ms;
+    position: relative;
+  }
+  .control-chip[aria-checked="true"] {
+    box-shadow: 0 0 0 2px var(--accent-edge), 0 3px 0 0 var(--raised-edge);
+  }
+  .control-chip:focus-visible {
+    outline-color: var(--accent-edge);
+  }
+  .control-chip:disabled {
+    opacity: 0.45;
+    box-shadow: none;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .control-chip:hover:where(:enabled:not([aria-pressed="true"])) {
+      box-shadow: 0 3px 0 0 var(--accent-edge);
+    }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .control-chip[aria-checked="true"]:enabled:hover {
+      box-shadow: 0 0 0 2px var(--accent-edge), 0 3px 0 0 var(--accent-edge);
+    }
+  }
+  .control-chip:not(:disabled):active {
+    translate: 0 3px;
+    filter: none;
+    box-shadow: none;
+  }
+  .control-chip[aria-checked="true"]:not(:disabled):active {
+    box-shadow: 0 0 0 2px var(--accent-edge);
+  }
+  .control-chip:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -3px 0 0 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .control-chip:not(:disabled):not([aria-pressed="true"]):active {
+      translate: none;
+    }
+    .control-chip:not(:disabled):not([aria-pressed="true"]):active::after {
+      top: 0;
+    }
   }
   .control-icon {
     border-radius: 6px;
     padding: 0px 0px;
+    min-width: 48px;
+    min-height: 48px;
     font-weight: 800;
+    position: relative;
   }
   .control-icon:focus-visible {
     outline-color: var(--accent-edge);
@@ -98,16 +213,23 @@
     filter: grayscale(1);
   }
   @media (hover: hover) and (pointer: fine) {
-    .control-icon:enabled:hover {
+    .control-icon:hover:where(:enabled:not([aria-pressed="true"])) {
       scale: 1.2;
     }
+  }
+  .control-icon:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -1px 0 0 0;
   }
   .control-day {
     border: 1px solid var(--ink);
     border-radius: 6px;
     padding: 4px 4px;
+    min-height: 48px;
     color: var(--ink);
     font-weight: 700;
+    position: relative;
   }
   .control-day[data-mark="none"] {
     background-color: var(--mark-none);
@@ -128,27 +250,11 @@
     outline-color: var(--accent-edge);
   }
   .control-day:disabled {
-    opacity: 0.4;
+    opacity: 0.45;
   }
-  .control-choice {
-    border: 1px solid var(--ink);
-    border-radius: 6px;
-    padding: 4px 11px;
-    color: var(--ink);
-    font-weight: 800;
-  }
-  .control-choice[aria-checked="true"] {
-    box-shadow: 0 0 0 2px var(--accent-edge);
-  }
-  .control-choice:focus-visible {
-    outline-color: var(--accent-edge);
-  }
-  .control-choice:disabled {
-    opacity: 0.4;
-  }
-  @media (hover: hover) and (pointer: fine) {
-    .control-choice:enabled:hover {
-      background-color: var(--control-surface);
-    }
+  .control-day:not(:disabled):active::after {
+    content: '';
+    position: absolute;
+    inset: -2px 0 0 0;
   }
 }

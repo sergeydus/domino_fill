@@ -206,6 +206,40 @@ describe('no size, line height or family is declared outside the table', () => {
 const LATIN = 'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, ' +
     'U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD'
 
+/**
+ * Muted text is a colour, `inkMuted`, not an opacity (UI row 3). An opacity takes text below
+ * 4.5:1 wherever it lands, and nothing checks the result; `inkMuted` is held to 4.5:1 on the
+ * ground and the surface by `tests/contrast.test.ts`. A drawing may still be translucent: the
+ * drag's wash is, and is allowed by name.
+ */
+describe('muted text is `inkMuted`, never an opacity', () => {
+    const OPACITY = /(?<![-\w])opacity-\d+(?![\w-])/
+    const DRAWINGS = [join('app', 'dominoFill', 'Hover.tsx')]
+
+    it('no `opacity-*` utility in `app/` but on a drawing named here', () => {
+        const found = sources().filter(([path]) => !DRAWINGS.includes(path))
+            .flatMap(([path, code]) => hits(OPACITY, path, code))
+        expect(found).toEqual([])
+        // And it would see one, however it's written.
+        for (const bad of ['opacity-70', 'text-meta opacity-60', 'hover:opacity-80']) expect(OPACITY.test(bad), bad).toBe(true)
+        for (const fine of ['text-ink-muted', 'disabled-opacity', 'opacity']) expect(OPACITY.test(fine), fine).toBe(false)
+    })
+
+    it('the four texts that were faded are `text-ink-muted`', () => {
+        const muted = (file: string, text: string) => {
+            const code = readFileSync(file, 'utf8')
+            const line = code.split('\n').find(l => l.includes(text))
+            return line?.includes('text-ink-muted') ?? `${file}: no line with ${text}`
+        }
+        expect([
+            muted('app/dominoFill/Tutorial.tsx', '<p className="text-meta text-ink-muted">'),
+            muted('app/dominoFill/DominoClient.tsx', "<p className='text-meta text-ink-muted'>"),
+            muted('app/dominoFill/ChallengeClock.tsx', "isCoveredView(view) ? 'text-ink-muted'"),
+            muted('app/visual/Sheet.tsx', "<h2 className='text-meta text-ink-muted'>"),
+        ]).toEqual([true, true, true, true])
+    })
+})
+
 describe('the font is the repository\'s (U12)', () => {
     it('no build fetches it: nothing the build compiles imports `next/font/google`', () => {
         const GOOGLE = /["']next\/font\/google["']/

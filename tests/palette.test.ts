@@ -150,14 +150,15 @@ describe('every kind of consumer reads the token rather than a copy', () => {
     })
 
     it('rgbBytes reads a token as bytes, and refuses one that is not #rrggbb', () => {
-        // The ground's bytes, written out: `#f4f0e8` since P1-3 moved it from `#e8e7e7`.
-        expect(rgbBytes('ground')).toEqual([0xf4, 0xf0, 0xe8])
+        // The ground's bytes, written out: `#fbf3e8` since UI row 3, `#f4f0e8` from P1-3, and
+        // `#e8e7e7` before that.
+        expect(rgbBytes('ground')).toEqual([0xfb, 0xf3, 0xe8])
         expect(() => rgbBytes('candidateWash')).toThrow(/not #rrggbb/)
     })
 
     it('cssName is the kebab-case Tailwind knows', () => {
         expect(cssName('tileFace')).toBe('tile-face')
-        expect(cssName('controlSurface')).toBe('control-surface')
+        expect(cssName('raisedEdge')).toBe('raised-edge')
     })
 })
 
@@ -251,8 +252,8 @@ describe('no colour outside the palette', () => {
         expect(kinds('outline-black/70')).toEqual(['Tailwind palette utility'])
 
         // And what must not be reported: tokens, sizes, and the two colourless keywords.
-        for (const clean of ['bg-control-surface', 'text-2xl', 'border-4', 'ring-2',
-            'inset-[2px]', 'rounded-[4px]', 'outline-hint', 'bg-panel/60', 'transparent',
+        for (const clean of ['bg-surface', 'text-2xl', 'border-4', 'ring-2',
+            'inset-[2px]', 'rounded-[4px]', 'outline-hint', 'bg-surface/60', 'transparent',
             'currentColor', 'none', 'font-bold', 'Hard 8x8', '#main-content']) {
             expect(kinds(clean), clean).toEqual([])
         }
@@ -316,6 +317,25 @@ describe('no token is dead', () => {
         // Copy with a `//` in it is not a comment, and does not hide the code after it.
         expect(readIn('a.tsx', 'const a = <p>and // or</p>; const y = PALETTE.ghost')).toBe(true)
         expect(readIn('a.tsx', 'const a = <p>// or</p>; const y = PALETTE.ghost')).toBe(true)
+    })
+
+    /*
+     * UI row 3 retired three tokens for `surface` and `ink`. A utility naming one that's gone
+     * still compiles, and Tailwind draws nothing for it, so a missed `bg-panel` would leave a
+     * card see-through without an error anywhere. Read as the dead-token check reads, in code.
+     */
+    it('no source names a retired token (UI row 3)', () => {
+        const RETIRED = ['controlSurface', 'panel', 'panelInk']
+        expect(RETIRED.filter(t => t in PALETTE)).toEqual([])
+        const named = SCOPE.filter(f => !ALLOWED.has(f)).flatMap(f => {
+            const code = codeOf(f, readFileSync(f, 'utf8'))
+            return RETIRED.filter(t => isRead(t, code)).map(t => `${f}: ${t}`)
+        })
+        expect(named).toEqual([])
+        // And it would see one: the utility, its variable, and the token by name.
+        expect(isRead('panel', 'const a = <div className="rounded-xl bg-panel p-4" />')).toBe(true)
+        expect(isRead('panelInk', 'const a = <div className="text-panel-ink" />')).toBe(true)
+        expect(isRead('controlSurface', '.x { background: var(--control-surface) }')).toBe(true)
     })
 
     it('whole names only', () => {
