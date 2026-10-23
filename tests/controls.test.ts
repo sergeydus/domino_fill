@@ -47,10 +47,11 @@ describe('the table is the spec\'s', () => {
         expect(CONTROL.chip).toMatchObject({ surface: 'surface', radius: 8, checked: { ring: 'accentEdge' } })
         // Chosen is not pressed: a chip is one of a radio group, never a toggle.
         expect(CONTROL.chip.pressed).toBeUndefined()
-        // A chip is the upright piece's box, extruded side included, plus the padding: 66px on a
-        // phone and 78px on the desktop composition. The first chips were 46px, and "tiny".
+        // A chip is the upright piece's box, extruded side included, plus the padding: 63px on a
+        // phone and 75px on the desktop composition since UI row 4's shallower side (4 units of
+        // the cell, where it was 14: they were 66 and 78). The first chips were 46px, and "tiny".
         const chip = (cell: number) => Math.round(pieceBox(1, 2, cell).height + 2 * CONTROL.chip.padding.y)
-        expect([chip(CHIP_CELL_PX.narrow), chip(CHIP_CELL_PX.wide)]).toEqual([66, 78])
+        expect([chip(CHIP_CELL_PX.narrow), chip(CHIP_CELL_PX.wide)]).toEqual([63, 75])
     })
 
     it('the `wide:` variant is the desktop composition\'s query, exactly', () => {

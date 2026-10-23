@@ -5,7 +5,9 @@ import { PuzzleSession, GRID_BORDER_PX, GUTTER_FRACTION } from '../stores/Puzzle
 import { definitionFrom } from '../stores/PuzzleDefinition'
 import type { RootStore } from '../stores/RootStore'
 import type { Cell } from '../stores/placement'
-import ClientBoard from '../dominoFill/ClientBoard'
+import ClientBoard, { shellVars } from '../dominoFill/ClientBoard'
+import { ColumnLabels, RowLabels } from '../dominoFill/LineLabels'
+import type { LineState } from '../stores/boardRules'
 import CompletionCard from '../dominoFill/CompletionCard'
 import GameControls from '../dominoFill/GameControls'
 import DifficultySlider from '../dominoFill/DifficultySlider'
@@ -61,12 +63,13 @@ const sessionAt = (root: RootStore, id: string, cell: number, fixture: Fixture) 
 /**
  * One fixture per board specimen.
  *
- * Targets are chosen so that **only** the two target specimens show a line in a non-neutral
- * state: everywhere else every line is short of its target or incomplete. That is what lets
- * the sheet say "satisfied appears exactly once" of the whole page rather than of one box.
- * Pieces, both cell tones and neutral labels cannot be isolated the same way -- a satisfied
- * line needs something on it, and every board has squares of both tones -- so for those the
- * count is scoped to the specimen that exists to show them.
+ * Targets are chosen so that the target specimens show the line states, and the boards
+ * elsewhere show as few as they can: every line short of its target, with one exception. A
+ * 0 line with a cell open is reached from the start (UI row 4), and every hint a 2-by-2 board
+ * can name leaves one -- each domino has a blank half -- so the hint specimen's second row is
+ * reached too. The label fixtures show every state again. So a count of a state is scoped to
+ * the specimen that exists to show it, as it always was for pieces, both well tones and
+ * neutral labels.
  */
 const FIXTURES = {
     // Both checker tones and the neutral target, on nothing: (0,0) is the dark tone.
@@ -75,13 +78,19 @@ const FIXTURES = {
         columns: '2,2', rows: '2,2',
         arrange: s => { s.placeToward([0, 0], 'down') },
     },
+    // 0 and 2 across the top: column 1's target is 3, not 2, so it is not reached (UI row 4).
     'domino-flat': {
-        columns: '2,2', rows: '3,3',
+        columns: '3,3', rows: '3,3',
         arrange: s => { s.placeToward([0, 0], 'right') },
     },
     rock: { rocks: [[1, 1]], columns: '1,1', rows: '1,1' },
     // A column of two rocks is complete and sums to 0 -- satisfied with nothing placed.
     'target-satisfied': { rocks: [[0, 0], [1, 0]], columns: '0,2', rows: '2,2' },
+    // A flat domino scores 0 and 2: the second column reaches its 2 with a cell open.
+    'target-reached': {
+        columns: '1,2', rows: '3,2',
+        arrange: s => { s.placeToward([0, 0], 'right') },
+    },
     // An upright scores 1 in its column; a target of 0 makes that column over.
     'target-over': {
         columns: '0,2', rows: '2,2',
@@ -141,6 +150,33 @@ type BoardSpecimen = keyof typeof FIXTURES
 
 const BOARD_SPECIMENS = Object.keys(FIXTURES) as BoardSpecimen[]
 
+/** The four line states, in the order the label fixtures show them. */
+const LINE_STATES: readonly LineState[] = ['neutral', 'reached', 'satisfied', 'over']
+
+/**
+ * The widest label the game produces, `13` (`e2e/layout.spec.ts`), in every state on both
+ * axes (UI row 4). No board can hold that -- a cell holds at most 2 pips -- so these are the
+ * production renderer given targets and states directly, in a shell with a board's custom
+ * properties and tracks, at a real session's sizes. `e2e/labelBounds.spec.ts` measures them
+ * and ties them to a board's labels; the transitions between states are tested on sessions.
+ */
+const LabelFixtures = ({ session }: { session: PuzzleSession }) => {
+    const sizes = { cell: session.squareSize, gutter: session.gutterSize }
+    const targets = LINE_STATES.map(() => '13')
+    return (
+        <div data-label-fixture style={{
+            display: 'grid',
+            gridTemplateColumns: `${sizes.gutter}px auto`,
+            gridTemplateRows: `${sizes.gutter}px auto`,
+            ...shellVars(sizes.cell, session.labelFontSize),
+        }}>
+            <div />
+            <ColumnLabels targets={targets} states={LINE_STATES} {...sizes} />
+            <RowLabels targets={targets} states={LINE_STATES} {...sizes} />
+        </div>
+    )
+}
+
 /** One labelled box on the sheet. The label is for a person reading a baseline. */
 const Specimen = ({ name, children }: { name: string, children: React.ReactNode }) => (
     <section data-specimen={name} aria-label={name} className='flex flex-col items-start gap-2'>
@@ -171,6 +207,10 @@ const Sheet = ({ cell }: { cell: number }) => {
     const [controlSession] = useState(() =>
         sessionAt(root, 'controls', cell, { columns: '1,1', rows: '1,1' }))
 
+    // The label fixtures' sizes: a session at the sheet's cell, and nothing else of it.
+    const [labelSession] = useState(() =>
+        sessionAt(root, 'labels', cell, { columns: '1,1', rows: '1,1' }))
+
     // The piece tray in Pick a piece mode, where it is the picker.
     const [pickerSession] = useState(() =>
         sessionAt(root, 'picker', cell, {
@@ -188,6 +228,9 @@ const Sheet = ({ cell }: { cell: number }) => {
                     <ClientBoard boardsStore={sessions[name]} />
                 </Specimen>
             ))}
+            <Specimen name='labels-wide'>
+                <LabelFixtures session={labelSession} />
+            </Specimen>
             <Specimen name='completion-card'>
                 <CompletionCard session={controlSession} levels={root.boardsStore} />
             </Specimen>

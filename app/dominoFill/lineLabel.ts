@@ -10,8 +10,9 @@ import { cssVar } from "../palette"
  *
  * 1. **Colour was the only channel** — a WCAG 1.4.1 failure, and roughly one man in twelve
  *    cannot separate that particular red from that particular green. So each state now also
- *    carries a *shape*: satisfied is struck through, like crossing a clue off a list; over
- *    is ringed. Either is legible in greyscale.
+ *    carries a *shape*: since UI row 4 (§4.2), satisfied is a filled pill, over a ringed one,
+ *    and reached a bar under the number -- filled against outlined, and a bar neither pill
+ *    has. Satisfied was struck through until row 4, like crossing a clue off a list.
  * 2. **The contrast was failing 1.4.3**, and worse than the spec recorded. Measured against
  *    the `#e8e7e7` board background: neutral `#ababab` is 1.86:1, and the green — the state
  *    colour, the thing the player is meant to read — is **1.66:1**, the least legible
@@ -22,17 +23,20 @@ import { cssVar } from "../palette"
  *
  * The ring is an `outline`, not a border: outlines are drawn outside the box and take no
  * layout space, which matters because the gutter is 0.7 of a cell and a two-digit label
- * already occupies about 0.61 of it (P0-3). A border would reopen the overflow that row 11
- * closed.
+ * takes 1em of it, 0.5 of a cell (P0-3). A border would reopen the overflow that row 11
+ * closed. Since row 4 it rings the pill, not the label, and `PILL` sizes the pill so the ring
+ * ends inside the label's box: it used to be drawn 2px outside it.
  */
 
 export type LabelPresentation = {
+    /** The label's colour: its number's, unless the pill sets its own, and always its tie's. */
     color: string
-    /** The non-colour channel: struck through, ringed, or neither. */
-    textDecoration: 'line-through' | 'none'
-    outline: string
+    /** The non-colour channel: a filled pill, a ringed one, or none. */
+    pill: 'filled' | 'ringed' | 'none'
+    /** Reached's shape: a bar under the number. */
+    bar: boolean
     /** For tests and for assistive text; never the only signal. */
-    token: 'satisfied' | 'over' | 'neutral'
+    token: LineState
 }
 
 /**
@@ -44,8 +48,63 @@ export type LabelPresentation = {
  */
 export const LABEL_COLORS: Record<LineState, string> = {
     neutral: cssVar('lineNeutral'),
+    reached: cssVar('success'),
     satisfied: cssVar('success'),
     over: cssVar('problem'),
+}
+
+/**
+ * The pill every label's number sits in, drawn or not (UI-SPEC §4.2, UI row 4), so no state
+ * moves the number. Sized against the label's box, which is the gutter one way and the cell
+ * the other: a row label at the 38px floor is 26px wide, and `13` is 19px of it (1em; tabular
+ * figures are 0.5em each, measured in Nunito 900).
+ *
+ * - **Height** 1.15em, but never more than the box less the ring either side.
+ * - **Width** at least the height, so a single digit sits in a circle; for two, the number and
+ *   its padding.
+ * - **Padding** a quarter em a side where the box has room, and only what's left of the box
+ *   after two figures and the ring where it hasn't: a percentage padding is a fraction of the
+ *   label's width, and `2ch` is two figures. 1.5px a side in that 26px row label.
+ * - **The ring** is an outline at no offset, `RING` px outside the pill, so it ends at the
+ *   label's box at the tightest and inside it everywhere else.
+ */
+export const RING = 2
+
+export const PILL = {
+    height: `min(1.15em, 100% - ${2 * RING}px)`,
+    minWidth: '1.15em',
+    paddingInline: `max(0px, min(0.25em, (100% - 2ch) / 2 - ${RING}px))`,
+} as const
+
+/** The pill's style in a state: a filled `success` pill with `onSuccess` text, a `problem` ring, or neither. */
+export const pillStyle = (p: LabelPresentation): CSSProperties => ({
+    position: 'relative',
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: `calc(${PILL.height})`,
+    minWidth: PILL.minWidth,
+    paddingInline: `calc(${PILL.paddingInline})`,
+    borderRadius: '9999px',
+    backgroundColor: p.pill === 'filled' ? cssVar('success') : undefined,
+    // On itself, not on the label: the label's colour is the tie's too, and a satisfied tie
+    // painted in `onSuccess` would be white on the ground.
+    color: p.pill === 'filled' ? cssVar('onSuccess') : undefined,
+    outline: p.pill === 'ringed' ? `${RING}px solid ${LABEL_COLORS.over}` : 'none',
+    outlineOffset: 0,
+})
+
+/** Reached's bar: 2px, in the label's colour, under the number and inside the pill. */
+export const barStyle: CSSProperties = {
+    position: 'absolute',
+    left: '0.2em',
+    right: '0.2em',
+    bottom: '0.05em',
+    height: '2px',
+    borderRadius: '1px',
+    backgroundColor: 'currentColor',
+    pointerEvents: 'none',
 }
 
 /**
@@ -80,13 +139,15 @@ export const tieStyle = (side: 'below' | 'right'): CSSProperties => {
 
 export const labelPresentation = (state: LineState): LabelPresentation => ({
     color: LABEL_COLORS[state],
-    textDecoration: state === 'satisfied' ? 'line-through' : 'none',
-    outline: state === 'over' ? `2px solid ${LABEL_COLORS.over}` : 'none',
+    pill: state === 'satisfied' ? 'filled' : state === 'over' ? 'ringed' : 'none',
+    bar: state === 'reached',
     token: state,
 })
 
 /**
- * What a screen reader should hear, since strikethrough and colour reach neither.
+ * What a screen reader should hear, since a pill, a bar and colour reach none of them. A
+ * reached line is "target reached" (UI row 4): matched, and not finished, which "complete"
+ * would claim.
  *
  * The line is named as well as its target (spec P1-8, row 19). Heard on its own, "7,
  * complete" does not say *which* line is complete, and these labels sit outside the grid
@@ -100,6 +161,7 @@ export const labelPresentation = (state: LineState): LabelPresentation => ({
  */
 export const labelDescription = (line: string, target: string, state: LineState): string => {
     const named = `${line}, target ${target}`
+    if (state === 'reached') return `${named}, target reached`
     if (state === 'satisfied') return `${named}, complete`
     if (state === 'over') return `${named}, over target`
     return named

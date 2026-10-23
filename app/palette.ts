@@ -60,47 +60,67 @@ export const PALETTE = {
 
     // ---- the board -----------------------------------------------------------------------
     /*
-     * The board is a chain of 3:1 steps (P1-3): the tile face over both checker tones, and
-     * both checker tones over every rock tone. The first step caps the checker at a
-     * luminance of about 0.28, which is why the board went from light grey to a mid warm
-     * tan; the second then caps the rock at about 0.037. The two tones are 1.20:1 apart
-     * (`CHECKER_RATIO`), the step that leaves the rock room to be a rock.
+     * A tray of wells (UI-SPEC §4.1, UI row 4). Until row 4 the board was P1-3's chain of 3:1
+     * steps -- the tile face over both checker tones, both tones over every rock tone -- which
+     * forced a mid-brown checker (`#9c8a72`, `#8e7c66`) in a near-black frame (`#4d3f33`).
+     * The silhouette rule replaced it: each tone a piece exposes at its edge clears 3:1 against
+     * both wells and the tray, and a tone that can't sits inside a rim (§3.1). So the wells
+     * can be light, and only 1.09:1 apart (`CHECKER_RATIO`): the gaps between them carry the
+     * grid now.
      */
-    /** Squares where row + column is even (the top-left square is one). */
-    checkerLight: '#9c8a72',
-    /** Squares where row + column is odd. */
-    checkerDark: '#8e7c66',
-    boardFrame: '#4d3f33',
+    /** The tray the wells sit in, and the gaps between them. Its edge is `trayEdge`. */
+    boardTray: '#e2ccae',
+    /** Wells where row + column is even (the top-left well is one). `checkerLight` until row 4. */
+    wellLight: '#f3e6d2',
+    /** Wells where row + column is odd. `checkerDark` until row 4. */
+    wellDark: '#eddcc2',
+    /**
+     * The solid edge beneath the tray, and its inset shadow at 35% (UI row 4's clarification
+     * of §4.1). Decorative, as a raised control's edge is.
+     */
+    trayEdge: '#c9b08c',
 
     // ---- the pieces ----------------------------------------------------------------------
-    tileFace: '#fff3d6',
-    /** The extruded side of a tile, and the body of the icon's tile. */
-    tileSide: '#8d8778',
+    /** The domino's face: 1.18:1 on the light well, so it sits inside the rim. */
+    tileFace: '#fff9ef',
+    /** The domino's raised side, 4 units deep: inside the rim in light, where it fails at the edge. */
+    tileSide: '#c9ae88',
     /**
-     * The rock's four tones: its facing plane, the lit and shaded facets, and the extruded
-     * side (P1-2). Every one clears 3:1 against both checker tones and the tile face, which
-     * is why all four are near-black: against the darker checker since P1-3, 3:1 needs a
-     * luminance under about 0.037.
+     * The light domino's rim, 2 units round the whole silhouette: 4.12 and 3.77:1 on the wells,
+     * 3.25 on the tray. It replaced `pieceOutline`, the 9-unit black outline every piece drew
+     * until row 4. Dark has none: its face and side clear the edge on their own (§3.1).
      */
-    rockFace: '#2c2925',
-    rockLit: '#37332e',
-    rockShade: '#221f1c',
-    rockSide: '#171513',
-    /** The silhouette's edge, on dominoes and rocks alike. */
-    pieceOutline: '#000000',
-    /** The pip: the score. The icon drew `#1a1a1a` until this row; it now draws this. */
-    pip: '#000000',
-    /** The line that makes a domino a domino rather than a tile. */
-    divider: '#000000',
+    tileEdge: '#8a6844',
+    /**
+     * The rock (§4.4). Its face and its rim are `rockFace`, the spec's `rock`: as the rim, 4.35
+     * and 3.98:1 on the wells, 3.43 on the tray and 5.11 on the tile face. The side and the
+     * shaded facet take `rockSide`'s value, and the lit facet is decorative; all three sit
+     * inside the rim. Until row 4 all four were near-black (`#2c2925`, `#37332e`, `#221f1c`,
+     * `#171513`), the only tones that cleared P1-3's mid-brown checker.
+     */
+    rockFace: '#77685e',
+    rockLit: '#8e8075',
+    rockShade: '#5a4d45',
+    rockSide: '#5a4d45',
+    /** The pip: the score. 12.52:1 on the face. Black until row 4. */
+    pip: '#3a2e28',
+    /** The groove that makes a domino a domino rather than a tile: 4.84:1 on the face. */
+    divider: '#8a6844',
 
     // ---- meaning -------------------------------------------------------------------------
-    /** A line label with nothing to report (5.62:1 on the ground, spec §4). */
-    lineNeutral: '#5f5f5f',
     /**
-     * Finished: a finished line, and a finished puzzle -- the completion card's "Solved!"
-     * (P2-3). Nothing else. UI-SPEC §3.1's green since UI row 3; it was `#15661a`.
+     * A line label with nothing to report: UI-SPEC's `boardLabel`, the same role. 7.21:1 on the
+     * ground since UI row 4, where it was the neutral grey `#5f5f5f`.
+     */
+    lineNeutral: '#5e4e44',
+    /**
+     * Finished, or on its way: a satisfied line's pill, a reached line's number and bar
+     * (UI row 4), and a finished puzzle -- the completion card's "Solved!" (P2-3). Nothing
+     * else. UI-SPEC §3.1's green since UI row 3; it was `#15661a`.
      */
     success: '#1e7a4f',
+    /** Text on `success`: the satisfied pill's number (UI row 4). 5.31:1. */
+    onSuccess: '#ffffff',
     /**
      * Something is wrong: an overshot line, the advice strip when it is reporting a problem,
      * and the archive's error message. And `Reset`'s text, the caution variant: not
@@ -110,10 +130,13 @@ export const PALETTE = {
      */
     problem: '#b83a14',
     /**
-     * The cell a hint is pointing at. It shared `success`'s value until P1-3, whose darker
-     * checker it no longer cleared 3:1 against; now a green dark enough to.
+     * The cell a hint is pointing at. The accent's value since UI row 4, as UI-SPEC §3.1's table
+     * gives it: 4.45 and 4.07:1 on the wells. A token of its own all the same, for its role:
+     * `e2e/colourRoles.spec.ts` declares the two as aliases, and `e2e/themeTokens.spec.ts`
+     * proves the diamond reads this one. It shared `success`'s value until P1-3, and was the
+     * dark green `#0b3b10` from then until row 4.
      */
-    hint: '#0b3b10',
+    hint: '#0f766e',
 
     // ---- interactive chrome --------------------------------------------------------------
     /*
@@ -138,7 +161,8 @@ export const PALETTE = {
     // ---- the cell states (P1-5 owns these) -------------------------------------------------
     /**
      * The first half of a two-step move. Tailwind `blue-600` until P1-3, which held it to
-     * 3:1 against the light tone; on the new checker that needs a far darker blue.
+     * 3:1 against the light tone; on that row's mid-brown checker it needed a far darker blue.
+     * On UI row 4's wells it is 11.28 and 10.32:1, and kept.
      */
     anchor: '#16295e',
     /**
@@ -148,24 +172,32 @@ export const PALETTE = {
      * the anchor's value, not its role: the two are told apart by shape (P1-5).
      */
     candidateEdge: '#16295e',
-    candidateWash: 'oklch(88.2% 0.059 254.128)',
+    /**
+     * The candidate's wash, at 40%: what tells a candidate from the anchor without colour, its
+     * ring being the anchor's, dashed. A mid blue since UI row 4. Tailwind's pale `blue-200`,
+     * `oklch(88.2% 0.059 254.128)`, moved no pixel of the new cream wells by the 32 levels of
+     * lightness `e2e/cellStates.spec.ts` counts (it moved P1-3's mid-brown checker by plenty),
+     * and the two states came out 6.6% apart in greyscale, under P1-5's 15%: at any opacity,
+     * since the blue itself was within 15 levels of the wells. This is 35-37% apart. The dark
+     * theme keeps the pale blue, which on the dark wells is.
+     */
+    candidateWash: 'oklch(60% 0.11 254)',
     /**
      * The keyboard's square: its corner brackets, opaque since P1-5 (they were 70%). The
      * accent's edge's hue since the keyboard polish, as the board's own focus ring is, where
      * they were black: the same "the keyboard is here", at two scales. Darkened to 85%: the
-     * accent's edge itself, `#0b3c52`, is 2.93:1 on the dark checker tone, under the 3:1
-     * these have held since P1-5. This is 3.32:1 there and 4.00:1 on the light tone.
+     * accent's edge itself, `#0b3c52`, was 2.93:1 on P1-3's dark checker tone, under the 3:1
+     * these have held since P1-5. On UI row 4's wells this is 10.84 and 9.92:1.
      */
     cellFocus: '#093346',
     /**
      * The halo round the focus brackets (keyboard polish). As with the refused cross's, it
-     * keeps a thin stroke in sight on the dark rock and on a domino's edge, where the colour
-     * alone is too close.
+     * keeps a thin stroke in sight where the colour alone is too close: on the rock's tones.
      */
     cellFocusHalo: '#ffffff',
     /**
-     * The halo round a refused move's cross (P1-6). The halo is what clears 3:1 on both
-     * checker tones and every rock tone; the red, on the tile's face, where the halo does not.
+     * The halo round a refused move's cross (P1-6). On every refusal surface -- both wells,
+     * the tile face, each rock tone -- the halo or the red clears 3:1, and neither alone does.
      */
     refusedHalo: '#ffffff',
     /**
@@ -196,23 +228,23 @@ export const PALETTE = {
 } as const
 
 /**
- * The ratio the two checker tones stand apart, in WCAG contrast (P1-3): stated, and held
- * by `tests/contrast.test.ts` to what the tones compute to.
+ * The ratio the two well tones stand apart, in WCAG contrast, in both themes: stated, and held
+ * by `tests/contrast.test.ts` to what the tones compute to. 1.09 since UI row 4 (§4.1); P1-3's
+ * checker was 1.2, the step that left its near-black rock room to be a rock.
  */
-export const CHECKER_RATIO = 1.2
+export const CHECKER_RATIO = 1.09
 
 export type Token = keyof typeof PALETTE
 
 /**
- * The tokens drawn on the board: its squares, the pieces, and the cell states. Equal in both
- * themes until UI row 4 gives the board its dark values (UI-SPEC §3.1's rollout), and held
- * equal by `tests/palette.test.ts`, so the dark theme changes the chrome round the board and
- * nothing on it.
+ * The tokens drawn on the board: the tray and its wells, the pieces, and the cell states.
+ * Equal in both themes until UI row 4 gave the board its dark values (UI-SPEC §3.1's
+ * rollout); since then only the drag wash is shared, which `tests/palette.test.ts` holds.
  */
 export const BOARD_TOKENS = [
-    'checkerLight', 'checkerDark', 'boardFrame',
-    'tileFace', 'tileSide', 'rockFace', 'rockLit', 'rockShade', 'rockSide',
-    'pieceOutline', 'pip', 'divider',
+    'boardTray', 'wellLight', 'wellDark', 'trayEdge',
+    'tileFace', 'tileSide', 'tileEdge', 'rockFace', 'rockLit', 'rockShade', 'rockSide',
+    'pip', 'divider',
     'hint', 'anchor', 'candidateEdge', 'candidateWash', 'cellFocus', 'cellFocusHalo',
     'refusedHalo', 'refusedCross', 'dragWash',
 ] as const satisfies readonly Token[]
@@ -221,10 +253,9 @@ export const BOARD_TOKENS = [
  * The dark theme (UI row 1), with exactly `PALETTE`'s keys: a token missing or extra is a
  * type error, and `tests/palette.test.ts` says so again at run time.
  *
- * **The board is interim, on purpose.** Its tokens are the light ones, read from `PALETTE`
- * rather than copied, until row 4. The chrome's are UI-SPEC §3.1's final values since row 3,
- * which gave the accent its bright teal with `onAccent` dark text; row 1's interim dark teal
- * carried `ink`. Each pair is computed in `tests/contrast.test.ts`.
+ * Every value is UI-SPEC §3.1's final one since UI row 4, which gave the board and the
+ * pieces theirs; row 3 gave the chrome its own. Each pair is computed in
+ * `tests/contrast.test.ts`.
  */
 export const PALETTE_DARK: Readonly<Record<Token, string>> = {
     // ---- the page: ink 15.87 and inkMuted 8.29:1 on the ground; on the surface 13.91, 7.26
@@ -234,39 +265,52 @@ export const PALETTE_DARK: Readonly<Record<Token, string>> = {
     surface: '#251e19',
     raisedEdge: '#0d0a08',
 
-    // ---- the board, unchanged until row 4
-    checkerLight: PALETTE.checkerLight,
-    checkerDark: PALETTE.checkerDark,
-    boardFrame: PALETTE.boardFrame,
-    tileFace: PALETTE.tileFace,
-    tileSide: PALETTE.tileSide,
-    rockFace: PALETTE.rockFace,
-    rockLit: PALETTE.rockLit,
-    rockShade: PALETTE.rockShade,
-    rockSide: PALETTE.rockSide,
-    pieceOutline: PALETTE.pieceOutline,
-    pip: PALETTE.pip,
-    divider: PALETTE.divider,
+    // ---- the board (UI row 4): the wells 1.09:1 apart
+    boardTray: '#2a221c',
+    wellLight: '#3a3029',
+    wellDark: '#342a23',
+    trayEdge: '#0d0a08',
+
+    // ---- the pieces: the face 10.30 and 11.21:1 on the wells, 12.53 on the tray, and the
+    // side 4.43, 4.83 and 5.39, so the dark domino needs no rim and `tileEdge` draws none.
+    // `transparent` is the palette's one value that is not a colour, allowed here only.
+    tileFace: '#efe5d5',
+    tileSide: '#a8957a',
+    tileEdge: 'transparent',
+    // The rock's rim, `rockFace`: 3.19 and 3.47:1 on the wells, 3.88 on the tray, 3.23 on the
+    // face -- a narrow band (§3.1). Its side fails at the edge, 2.15, so it sits inside the rim.
+    rockFace: '#8b7c70',
+    rockLit: '#a1907f',
+    rockShade: '#6e6156',
+    rockSide: '#6e6156',
+    pip: '#2a211c',
+    divider: '#857158',
 
     // ---- meaning: 10.43, 10.29 and 8.38:1 on the ground
     lineNeutral: '#cdbfb1',
     success: '#5bd69a',
+    onSuccess: '#0b1f14',
     problem: '#ff8f6b',
-    hint: PALETTE.hint,
+    // The accent's value, as in light: 5.91 and 6.43:1 on the wells.
+    hint: '#3cc3b4',
 
     // ---- interactive chrome: onAccent on the accent is 7.86:1
     accent: '#3cc3b4',
     onAccent: '#0b1f1d',
     accentEdge: '#2a8f84',
 
-    // ---- the cell states, unchanged until row 5
-    anchor: PALETTE.anchor,
-    candidateEdge: PALETTE.candidateEdge,
-    candidateWash: PALETTE.candidateWash,
-    cellFocus: PALETTE.cellFocus,
-    cellFocusHalo: PALETTE.cellFocusHalo,
-    refusedHalo: PALETTE.refusedHalo,
-    refusedCross: PALETTE.refusedCross,
+    // ---- the cell states, kept legible on the dark wells by UI row 4; row 5 restyles them.
+    // The light values were dark marks on light wells, and on these would vanish: the anchor's
+    // `#16295e` is 1.08 and 1.01:1 on them.
+    anchor: '#8fb0ff',
+    candidateEdge: '#8fb0ff',
+    candidateWash: 'oklch(88.2% 0.059 254.128)',
+    cellFocus: '#8ed1ee',
+    cellFocusHalo: '#16110e',
+    // As in light, the halo or the cross clears 3:1 on every refusal surface, and neither
+    // alone does: the closest is the cross on the rock's side, 3.13.
+    refusedHalo: '#16110e',
+    refusedCross: '#ff8f6b',
     dragWash: PALETTE.dragWash,
 
     // ---- dialogs

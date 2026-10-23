@@ -2,7 +2,7 @@ import { observer } from "mobx-react"
 import DominoPieceOne from "./DominoPieceOne"
 import DominoPieceTwo from "./DominoPieceTwo"
 import { motion } from "motion/react"
-import Rock from "./Rock"
+import Obstacle from "./Obstacle"
 import { PuzzleSession } from "@/app/stores/PuzzleSession"
 import { MOTION, entryOffset } from "../motion"
 
@@ -71,7 +71,7 @@ const Hover: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
         {rocks.map(([i, j]) =>
             <div key={`${i},${j}`} className="absolute" data-piece="rock" data-at={`${i},${j}`}
                 style={{ top: `${i * size}px`, left: `${j * size}px`, zIndex: 30 + i }}>
-                <Rock boardsStore={boardsStore}
+                <Obstacle boardsStore={boardsStore} skin='rock'
                     key={`rock_${i},${j}`}
                 />
             </div>

@@ -33,7 +33,9 @@ const texts = (page: Page): Promise<Text[]> => page.evaluate(() => {
         const own = Array.from(el.childNodes).filter(n => n.nodeType === Node.TEXT_NODE && n.textContent!.trim() !== '')
         if (own.length === 0 || !el.checkVisibility()) continue
         const cs = getComputedStyle(el)
-        const shell = el.closest<HTMLElement>('[data-board-shell]')
+        // A board's shell, or the sheet's label fixtures, which set a board's `--label-font`
+        // (UI row 4).
+        const shell = el.closest<HTMLElement>('[data-board-shell], [data-label-fixture]')
         const labelFont = shell ? parseFloat(getComputedStyle(shell).getPropertyValue('--label-font')) : NaN
         out.push({
             text: own.map(n => n.textContent!.trim()).join(' ').slice(0, 40),

@@ -81,8 +81,23 @@ describe('two themes, the same tokens (UI row 1)', () => {
         expect([THEMES.light, THEMES.dark]).toEqual([PALETTE, PALETTE_DARK])
     })
 
-    it('the board\'s tokens are equal in both themes, until row 4 gives the board its own', () => {
-        expect(BOARD_TOKENS.filter(t => PALETTE_DARK[t] !== PALETTE[t])).toEqual([])
+    it('the board\'s tokens have dark values of their own since row 4, but for the drag wash', () => {
+        // Equal in both themes until UI row 4, so the dark theme changed the chrome round the
+        // board and nothing on it. The drag wash is white at 70% in both, and carries no ratio
+        // rule; the candidate's wash is a mid blue in light and the old pale one in dark.
+        expect(BOARD_TOKENS.filter(t => PALETTE_DARK[t] === PALETTE[t])).toEqual(['dragWash'])
+    })
+
+    it('every value is a colour, but for the dark domino\'s rim, which is `transparent` (UI row 4)', () => {
+        /*
+         * The dark domino has no rim (UI-SPEC §3.1): its face and its side clear the edge on
+         * their own, so `tileEdge` draws nothing there. The palette's one value that is not a
+         * colour, and allowed in that one place: anywhere else a `transparent` token is a
+         * drawing that silently stopped being drawn.
+         */
+        const notColours = Object.entries(THEMES).flatMap(([theme, values]) =>
+            Object.entries(values).filter(([, v]) => !/^(#[0-9a-f]{6}|oklch\(.+\))$/.test(v)).map(([t, v]) => `${theme} ${t} ${v}`))
+        expect(notColours).toEqual(['dark tileEdge transparent'])
     })
 
     it('and every other token is the chrome\'s, which the dark theme does change', () => {
@@ -104,6 +119,7 @@ describe('every kind of consumer reads the token rather than a copy', () => {
         // As references since UI row 1, so a label follows the theme.
         expect(LABEL_COLORS).toEqual({
             neutral: cssVar('lineNeutral'),
+            reached: cssVar('success'),
             satisfied: cssVar('success'),
             over: cssVar('problem'),
         })
@@ -206,7 +222,7 @@ const audit = (files: readonly string[]) => files.flatMap(file => {
 describe('no colour outside the palette', () => {
     it('the scope is the visual source, and covers what it claims to', () => {
         // A walk that silently found nothing would pass the audit below vacuously.
-        for (const expected of ['app/globals.css', 'app/dominoFill/Pieces/Rock.tsx',
+        for (const expected of ['app/globals.css', 'app/dominoFill/Pieces/Obstacle.tsx',
             'app/dominoFill/Archive.tsx', 'app/siteMetadata.ts', 'scripts/icon.ts', 'app/palette.ts']) {
             expect(SCOPE, expected).toContain(expected)
         }
@@ -336,6 +352,23 @@ describe('no token is dead', () => {
         expect(isRead('panel', 'const a = <div className="rounded-xl bg-panel p-4" />')).toBe(true)
         expect(isRead('panelInk', 'const a = <div className="text-panel-ink" />')).toBe(true)
         expect(isRead('controlSurface', '.x { background: var(--control-surface) }')).toBe(true)
+    })
+
+    /*
+     * UI row 4 renamed the checker's two tones and the frame for the spec's wells and tray, and
+     * retired the black outline for the light domino's rim, `tileEdge`. As above: a utility or a
+     * `cssVar` naming one that's gone compiles, and draws nothing.
+     */
+    it('no source names a retired token (UI row 4)', () => {
+        const RETIRED = ['checkerLight', 'checkerDark', 'boardFrame', 'pieceOutline']
+        expect(RETIRED.filter(t => t in PALETTE)).toEqual([])
+        const named = SCOPE.filter(f => !ALLOWED.has(f)).flatMap(f => {
+            const code = codeOf(f, readFileSync(f, 'utf8'))
+            return RETIRED.filter(t => isRead(t, code)).map(t => `${f}: ${t}`)
+        })
+        expect(named).toEqual([])
+        expect(isRead('boardFrame', 'const a = <div className="border-board-frame" />')).toBe(true)
+        expect(isRead('pieceOutline', "const a = <rect style={{ stroke: cssVar('pieceOutline') }} />")).toBe(true)
     })
 
     it('whole names only', () => {

@@ -93,14 +93,18 @@ export const rowComplete = (board: Board, size: number, i: number): boolean => {
  *
  * `satisfied` requires the sum to match **and** the line to be full; `over` is a sum past
  * its target, which is unrecoverable without removing something and is worth saying
- * immediately. Everything else is `neutral` -- including a sum that happens to match with
- * gaps left, which is the case the old rule mistook for success.
+ * immediately. A sum that matches with gaps left is `reached` (UI-SPEC §4.2, UI row 4): the
+ * rest of the line must be blanks, which is worth saying, but it is not finished, which is
+ * the case the old rule mistook for success (D10-g). So a line whose target is 0 is reached
+ * from the start, while any cell in it is open -- a hint (user, 2026-10-23) -- and a 0 line
+ * of rocks only is full, so satisfied. Everything else, a sum short of its target, is
+ * `neutral`.
  */
-export type LineState = 'neutral' | 'satisfied' | 'over'
+export type LineState = 'neutral' | 'reached' | 'satisfied' | 'over'
 
 export const lineState = (sum: number, target: number, complete: boolean): LineState => {
     if (sum > target) return 'over'
-    if (sum === target && complete) return 'satisfied'
+    if (sum === target) return complete ? 'satisfied' : 'reached'
     return 'neutral'
 }
 

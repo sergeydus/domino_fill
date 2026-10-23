@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import DominoPieceOne from '@/app/dominoFill/Pieces/DominoPieceOne'
 import DominoPieceTwo from '@/app/dominoFill/Pieces/DominoPieceTwo'
-import Rock from '@/app/dominoFill/Pieces/Rock'
+import Obstacle from '@/app/dominoFill/Pieces/Obstacle'
 import { PIECE, UNIT, fraction } from '@/app/dominoFill/Pieces/geometry'
 import { MOTION } from '@/app/dominoFill/motion'
 import { readArt } from '@/e2e/artGeometry'
@@ -24,9 +24,10 @@ import { renderPieces, sessionAt } from './pieceFixture'
  *     the same fraction of the cell at 38, 53, 75 and 106, and every geometric attribute on
  *     the layer is its 53px value times the cell ratio.
  *
- * P1-1 (row 7) then moved the fractions, and moved them here: the written-out values below
- * are its, at a 100px cell where each is its percentage of the cell. The next row to move
- * one has to move it here too. P1-1's bounds themselves are `tests/proportions.test.tsx`.
+ * P1-1 (row 7) then moved the fractions, and moved them here, and UI row 4 moved them again
+ * (UI-SPEC §4.3): the written-out values below are row 4's, at a 100px cell where each is its
+ * percentage of the cell. The next row to move one has to move it here too. The bounds
+ * themselves are `tests/proportions.test.tsx`.
  *
  * The layer is rendered by `tests/pieceFixture.tsx`, which says why a server render of the
  * whole layer.
@@ -64,45 +65,47 @@ type Constant = Exclude<keyof ReturnType<typeof measure>, 'counts'>
  * §1.1's table, as the drawing now states it.
  *
  * `units` is each constant in the drawing's own units (`UNIT` to a cell); `fraction` is
- * written out, as §1.1's columns were, and is every size's since row 6 -- P1-1's values
- * since row 7 (row 6's were 0.113, 0.151, 0.302, 0.396, 0.302, 0.302 and 0.491, row 2's
- * 53px column). `count` is how many instances the layer draws: three
- * outlines, three rects per domino (the rock has had no rect, and so no corner radius,
+ * written out, as §1.1's columns were, and is every size's since row 6 -- UI row 4's values
+ * since that row (P1-1's were 0.09, 0.14, 0.24, 0.6, 0.14, 0.14; row 6's 0.113, 0.151, 0.302,
+ * 0.396, 0.302, 0.302 and 0.491, row 2's 53px column). `count` is how many instances the
+ * layer draws: three rims (the outline until row 4), three rects per domino (the rock has had
+ * no rect, and so no corner radius,
  * since P1-2 made it a faceted polygon), one pip on the upright and two on the flat, one
  * divider per domino, one side and one lift per piece, and an x and a y offset for each
  * domino that enters.
  */
 const TABLE: Record<Constant, { label: string, count: number, units: number, fraction: number }> = {
-    outline: { label: 'outline stroke', count: 3, units: PIECE.outline, fraction: 0.09 },
-    radius: { label: 'corner radius', count: 6, units: PIECE.radius, fraction: 0.14 },
-    pip: { label: 'pip diameter', count: 3, units: 2 * PIECE.pipRadius, fraction: 0.24 },
+    rim: { label: 'rim stroke', count: 3, units: PIECE.rim, fraction: 0.02 },
+    radius: { label: 'corner radius', count: 6, units: PIECE.radius, fraction: 0.12 },
+    pip: { label: 'pip diameter', count: 3, units: 2 * PIECE.pipRadius, fraction: 0.22 },
     divider: { label: 'divider span', count: 2, units: UNIT - 2 * PIECE.dividerInset, fraction: 0.6 },
-    extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.14 },
-    lift: { label: 'lift out of the cell', count: 3, units: PIECE.extrusion, fraction: 0.14 },
+    extrusion: { label: 'extrusion depth', count: 3, units: PIECE.extrusion, fraction: 0.04 },
+    lift: { label: 'lift out of the cell', count: 3, units: PIECE.extrusion, fraction: 0.04 },
     entry: { label: 'entry offset', count: 4, units: UNIT * MOTION.entry.offset / Math.SQRT2, fraction: 0.071 },
 }
 
 const CONSTANTS = Object.keys(TABLE) as Constant[]
 
 /**
- * P1-1's values at a 100px cell, written out rather than derived, as the fixed point: at
- * 100px each is its percentage of the cell. The entry offset is not P1-1's but P1-6's: a
- * tenth of a cell along the diagonal, so each axis is 10/sqrt(2) -- not a round number. It
- * was row 6's 26/53 of a cell, 0.491, until P1-6 limited it.
+ * UI row 4's values at a 100px cell (UI-SPEC §4.3), written out rather than derived, as the
+ * fixed point: at 100px each is its percentage of the cell. P1-1's were an outline of 9, a
+ * radius of 14, a pip of 24, the same divider, and an extrusion and lift of 14. The entry
+ * offset is not theirs but P1-6's: a tenth of a cell along the diagonal, so each axis is
+ * 10/sqrt(2) -- not a round number. It was row 6's 26/53 of a cell, 0.491, until P1-6 limited it.
  */
-const P1_1_AT_100: Record<Constant, number> = {
-    outline: 9, radius: 14, pip: 24, divider: 60, extrusion: 14, lift: 14, entry: 10 / Math.SQRT2,
+const AT_100: Record<Constant, number> = {
+    rim: 2, radius: 12, pip: 22, divider: 60, extrusion: 4, lift: 4, entry: 10 / Math.SQRT2,
 }
 
-describe(`at 100px, each constant is P1-1's value, as a percentage of the cell`, () => {
+describe(`at 100px, each constant is UI row 4's value, as a percentage of the cell`, () => {
     let measured: ReturnType<typeof measure>
     beforeAll(() => { measured = measure(100) })
 
     for (const name of CONSTANTS) {
-        it(`${TABLE[name].label} is ${P1_1_AT_100[name].toFixed(2)}px on every piece`, () => {
+        it(`${TABLE[name].label} is ${AT_100[name].toFixed(2)}px on every piece`, () => {
             expect(measured.counts).toEqual({ ones: 1, twos: 1, rocks: 1 })
             expect(measured[name]).toHaveLength(TABLE[name].count)
-            for (const value of measured[name]) expect(value, TABLE[name].label).toBeCloseTo(P1_1_AT_100[name], 9)
+            for (const value of measured[name]) expect(value, TABLE[name].label).toBeCloseTo(AT_100[name], 9)
         })
     }
 })
@@ -199,9 +202,9 @@ describe('a piece takes no SVG props', () => {
             // @ts-expect-error -- no style
             <DominoPieceTwo key='2' boardsStore={s} style={{ translate: '0 0' }} />,
             // @ts-expect-error -- no className
-            <Rock key='3' boardsStore={s} className='-translate-y-4' />,
+            <Obstacle key='3' boardsStore={s} skin='rock' className='-translate-y-4' />,
             // @ts-expect-error -- no viewBox
-            <Rock key='4' boardsStore={s} viewBox='0 0 1 1' />,
+            <Obstacle key='4' boardsStore={s} skin='rock' viewBox='0 0 1 1' />,
         ]
         expect(typeof attempts).toBe('function')
     })

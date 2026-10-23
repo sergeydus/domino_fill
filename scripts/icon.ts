@@ -1,6 +1,6 @@
 import { deflateSync } from 'node:zlib'
 import { rgbBytes } from '../app/palette'
-import { PIECE, UNIT } from '../app/dominoFill/Pieces/geometry'
+import { PIECE, PIP_LIP, UNIT } from '../app/dominoFill/Pieces/geometry'
 
 /**
  * The app's icon, drawn rather than pasted (spec P2-2, row 20b).
@@ -30,12 +30,13 @@ import { PIECE, UNIT } from '../app/dominoFill/Pieces/geometry'
  *
  * Since P2-4 (row 16) the tile is the board's tile, layer for layer: a `tileFace` face over a
  * `tileSide` extrusion. Until then its whole body was `tileSide`, the extrusion colour, with
- * no face at all.
+ * no face at all. Since UI row 4 it is the light domino: a `tileEdge` rim where the black
+ * outline was, a groove, and each pip on its `tileSide` lip.
  */
 const BACKGROUND = rgbBytes('ground')
 const FACE = rgbBytes('tileFace')
 const SIDE = rgbBytes('tileSide')
-const OUTLINE = rgbBytes('pieceOutline')
+const RIM = rgbBytes('tileEdge')
 const DIVIDER = rgbBytes('divider')
 const PIP = rgbBytes('pip')
 
@@ -60,7 +61,7 @@ export const MASKABLE_SCALE = 0.70
  * 0.8 (graphics P2-4, row 16; it was 0.89). The board's pip is a smaller fraction of its piece
  * than the old icon's, so at 0.89 the pip no longer reached down to where
  * `tests/icons.test.ts` samples it -- 0.3 of the icon, every size alike -- and at 64px the
- * sampled pixel fell on the pip's anti-aliased edge. At 0.8 the pip is centred at 0.284, and
+ * sampled pixel fell on the pip's anti-aliased edge. At 0.8 the pip is centred at 0.286, and
  * that pixel is inside it at every size; the corners still reach past the 40% a maskable
  * icon must keep inside, which is what makes the ordinary icon a different file.
  */
@@ -68,21 +69,21 @@ export const MARK_HEIGHT = 0.8
 
 /*
  * The board's upright domino (`DominoPieceOne`), in the board's own units (`Pieces/geometry.ts`):
- * one cell of `UNIT` wide, two tall, with its extrusion below. The outline weight, the corner
- * radius, the pip, the divider's span and weight and the extrusion are `PIECE`'s, so the icon
- * changes when those constants do.
+ * one cell of `UNIT` wide, two tall, with its extrusion below. The rim's weight, the corner
+ * radius, the pip and its lip, the divider's span and weight and the extrusion are `PIECE`'s,
+ * so the icon changes when those constants do.
  *
  * The rest is this file's own copy of `DominoPieceOne.tsx`, not a rendering of it: the pip at
- * the centre of the top cell, the divider on the line between the cells, and the order of the
- * layers. A change to any of those in the component would not reach the icon, and no test
- * compares them (P2-4's amendment says so).
+ * the centre of the top cell, the divider on the line between the cells with round ends, and
+ * the order of the layers. A change to any of those in the component would not reach the
+ * icon, and no test compares them (P2-4's amendment says so).
  */
-const { outline: O, radius: R, inset: I, extrusion: E, pipRadius, dividerInset, dividerWidth } = PIECE
+const { rim: W, radius: R, inset: I, extrusion: E, pipRadius, dividerInset, dividerWidth } = PIECE
 
-/** The box the outline's stroke covers: the piece's own box, and half the stroke outside it. */
-const BOX = { left: I - O / 2, top: I - O / 2, right: UNIT - I + O / 2, bottom: 2 * UNIT - I + E + O / 2 }
+/** The box the rim's stroke covers: the piece's own box, and half the stroke outside it. */
+const BOX = { left: I - W / 2, top: I - W / 2, right: UNIT - I + W / 2, bottom: 2 * UNIT - I + E + W / 2 }
 
-/** The mark's size in units, outline to outline. */
+/** The mark's size in units, rim to rim. */
 export const MARK = { width: BOX.right - BOX.left, height: BOX.bottom - BOX.top }
 
 /** Whether (u, v) is inside the rounded rectangle from (x0, y0) to (x1, y1), corner radius r. */
@@ -95,15 +96,18 @@ const inRounded = (u: number, v: number, x0: number, y0: number, x1: number, y1:
 
 /**
  * The domino's colour at a point of the drawing, in units, layered as the board layers it:
- * the side, the face over it, the outline -- a stroke `O` wide, centred on the edge of the
- * face and side together, so its outer corners are `R + O/2` round and its inner `R - O/2` --
- * and the divider and the pip on top.
+ * the side, the face over it, the rim -- a stroke `W` wide, centred on the edge of the face
+ * and side together, so its outer corners are `R + W/2` round and its inner `R - W/2` -- and
+ * the divider, the pip's lip and the pip on top. The divider's ends are round, as the
+ * component's `strokeLinecap` draws them: within half its width of the segment.
  */
 const paint = (u: number, v: number): Rgb => {
-    if (!inRounded(u, v, BOX.left, BOX.top, BOX.right, BOX.bottom, R + O / 2)) return BACKGROUND
-    if (!inRounded(u, v, I + O / 2, I + O / 2, UNIT - I - O / 2, 2 * UNIT - I + E - O / 2, R - O / 2)) return OUTLINE
-    if (Math.abs(v - UNIT) <= dividerWidth / 2 && u >= dividerInset && u <= UNIT - dividerInset) return DIVIDER
+    if (!inRounded(u, v, BOX.left, BOX.top, BOX.right, BOX.bottom, R + W / 2)) return BACKGROUND
+    if (!inRounded(u, v, I + W / 2, I + W / 2, UNIT - I - W / 2, 2 * UNIT - I + E - W / 2, R - W / 2)) return RIM
+    const along = Math.min(Math.max(u, dividerInset), UNIT - dividerInset)
+    if ((u - along) ** 2 + (v - UNIT) ** 2 <= (dividerWidth / 2) ** 2) return DIVIDER
     if ((u - UNIT / 2) ** 2 + (v - UNIT / 2) ** 2 <= pipRadius ** 2) return PIP
+    if ((u - UNIT / 2) ** 2 + (v - UNIT / 2 + PIP_LIP) ** 2 <= pipRadius ** 2) return SIDE
     if (inRounded(u, v, I, I, UNIT - I, 2 * UNIT - I, R)) return FACE
     return SIDE
 }

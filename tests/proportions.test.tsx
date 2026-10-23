@@ -16,16 +16,22 @@ import { renderPieces } from './pieceFixture'
  * Row 6's art -- today's art until this row, scaled -- failed four of them: the pip was
  * 0.302 of the cell, the extrusion 0.302, the divider 0.47 of the flat tile it crosses,
  * and the flat domino's pips sat 0.05 of the cell from its top edge.
+ *
+ * UI row 4 amended two (UI-SPEC §4.3): the extrusion is 0.03 to 0.06 of the cell, a
+ * shallower toy, where P1-1's was 0.10 to 0.18; and P1-1's outline, at most 0.12, is the
+ * light domino's rim, 2 units round the silhouette. The pip's clearance now counts its lip.
  */
 
 type Rect = { x: number, y: number, w: number, h: number }
 type Piece = {
     name: string
     face: Rect
-    outline: number
+    rim: number
     extrusion: number
     divider: { x1: number, y1: number, x2: number, y2: number, width: number } | null
     pips: { cx: number, cy: number, r: number }[]
+    /** Each pip's lip: a disc of the pip's size above it, which reaches closer to the edge. */
+    lips: { cx: number, cy: number, r: number }[]
 }
 
 /** Every piece in the layer, in CSS px: the numbers the browser draws. */
@@ -42,20 +48,23 @@ const pieces = (cell: number): Piece[] =>
             const [x, y] = [Math.min(...xs), Math.min(...ys)]
             return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
         }
-        // Drawing order, as the geometry reader uses: the side, then the face, then the outline.
+        // Drawing order, as the geometry reader uses: the side, then the face, then the rim.
         const [side, face] = [...svg.querySelectorAll('rect:not([data-outline]), polygon:not([data-outline])')].map(box)
         const line = svg.querySelector('line')
+        const discs = (selector: string) =>
+            [...svg.querySelectorAll(selector)].map(c => ({ cx: n(c, 'cx'), cy: n(c, 'cy'), r: n(c, 'r') }))
         return {
             name: `${el.dataset.piece}@${el.dataset.at}`,
             face,
-            outline: n(svg.querySelector('[data-outline]')!, 'stroke-width'),
+            rim: n(svg.querySelector('[data-outline]')!, 'stroke-width'),
             // Bottom to bottom: how far the side shows below the face, for every shape.
             extrusion: (side.y + side.h) - (face.y + face.h),
             divider: line && {
                 x1: n(line, 'x1'), y1: n(line, 'y1'), x2: n(line, 'x2'), y2: n(line, 'y2'),
                 width: n(line, 'stroke-width'),
             },
-            pips: [...svg.querySelectorAll('circle')].map(c => ({ cx: n(c, 'cx'), cy: n(c, 'cy'), r: n(c, 'r') })),
+            pips: discs('circle[data-pip]'),
+            lips: discs('circle[data-pip-lip]'),
         }
     })
 
@@ -79,16 +88,21 @@ describe('P1-1: proportions that hold at 38px, and at every size', () => {
             it('draws what it should, or every bound below would pass on nothing', () => {
                 expect(all().map(p => p.name)).toEqual(['one@0,0', 'two@0,3', 'rock@3,3'])
                 expect(dominoes().flatMap(p => p.pips)).toHaveLength(3)
+                expect(dominoes().flatMap(p => p.lips)).toHaveLength(3)
             })
 
-            it('outline weight is at most 0.12 of the cell', () => {
-                for (const p of all()) expect(p.outline / cell, p.name).toBeLessThanOrEqual(0.12)
+            it('the rim is 2 units, 0.02 of the cell, round every silhouette (UI-SPEC §4.3)', () => {
+                // P1-1's outline was at most 0.12; the rim is a fifth of its 9 units. Whether a
+                // rim is painted -- the light domino and the rock, not the dark domino -- is the
+                // palette's, and `e2e/art.spec.ts` checks it as drawn.
+                for (const p of all()) expect(p.rim / cell, p.name).toBeCloseTo(0.02, 9)
             })
 
-            it('extrusion depth is 0.10 to 0.18 of the cell', () => {
+            it('extrusion depth is 0.03 to 0.06 of the cell (UI-SPEC §4.3)', () => {
+                // P1-1's 0.10 to 0.18 until UI row 4: a shallower toy.
                 for (const p of all()) {
-                    expect(p.extrusion / cell, p.name).toBeGreaterThanOrEqual(0.10)
-                    expect(p.extrusion / cell, p.name).toBeLessThanOrEqual(0.18)
+                    expect(p.extrusion / cell, p.name).toBeGreaterThanOrEqual(0.03)
+                    expect(p.extrusion / cell, p.name).toBeLessThanOrEqual(0.06)
                 }
             })
 
@@ -120,18 +134,19 @@ describe('P1-1: proportions that hold at 38px, and at every size', () => {
             it('every pip is clear of the divider and of the tile edge by at least 0.06 of the cell', () => {
                 /*
                  * Clear means from the pip's edge to the nearest edge of what it must not touch:
-                 * the divider's stroke, and the visible face -- inside the outline's stroke on
-                 * the three sides that have one, and at the face's own bottom edge, where the
-                 * extruded side begins and there is no stroke.
+                 * the divider's stroke, and the visible face -- inside the rim's stroke on the
+                 * three sides that have one, and at the face's own bottom edge, where the
+                 * extruded side begins and there is no stroke. The pip and its lip both: the
+                 * lip is part of the mark, and reaches a unit nearer the top.
                  */
                 for (const p of dominoes()) {
                     const inner = {
-                        left: p.face.x + p.outline / 2,
-                        right: p.face.x + p.face.w - p.outline / 2,
-                        top: p.face.y + p.outline / 2,
+                        left: p.face.x + p.rim / 2,
+                        right: p.face.x + p.face.w - p.rim / 2,
+                        top: p.face.y + p.rim / 2,
                         bottom: p.face.y + p.face.h,
                     }
-                    for (const pip of p.pips) {
+                    for (const pip of [...p.pips, ...p.lips]) {
                         const toDivider = toSegment(pip.cx, pip.cy, p.divider!) - pip.r - p.divider!.width / 2
                         const toEdge = Math.min(pip.cx - inner.left, inner.right - pip.cx,
                             pip.cy - inner.top, inner.bottom - pip.cy) - pip.r

@@ -27,7 +27,7 @@ import ts from 'typescript'
 const PIECES = [
     'app/dominoFill/Pieces/DominoPieceOne.tsx',
     'app/dominoFill/Pieces/DominoPieceTwo.tsx',
-    'app/dominoFill/Pieces/Rock.tsx',
+    'app/dominoFill/Pieces/Obstacle.tsx',
 ]
 
 /** The names a cell size in px goes by in these components. */
@@ -124,7 +124,7 @@ describe('no pixel length in the drawing', () => {
         expect(piece('<rect style={{ strokeWidth: 3 }} />')).toEqual([expect.stringMatching(/style on an element/)])
 
         // A paint is the one style allowed (UI row 1), and only a paint.
-        expect(piece("<rect style={{ fill: cssVar('tileFace'), stroke: cssVar('pieceOutline') }} />")).toEqual([])
+        expect(piece("<rect style={{ fill: cssVar('tileFace'), stroke: cssVar('tileEdge') }} />")).toEqual([])
         for (const style of [
             "{{ fill: cssVar('tileFace'), strokeWidth: 3 }}",
             "{{ fill: cssVar('tileFace'), translate: '0 4px' }}",

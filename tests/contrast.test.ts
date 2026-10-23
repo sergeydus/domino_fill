@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { BOARD_TOKENS, CHECKER_RATIO, PALETTE, THEMES, type Theme, type Token } from '@/app/palette'
+import { BOARD_TOKENS, CHECKER_RATIO, THEMES, type Theme, type Token } from '@/app/palette'
 import { contrast, luminance, over, toRgb, type Rgb } from './colour'
 import { CONTROL, type Variant } from '@/app/controls'
 
@@ -19,8 +19,8 @@ import { CONTROL, type Variant } from '@/app/controls'
  * regression. Neither can happen quietly.
  *
  * **Two themes since UI row 1,** so every table runs in each (`THEMES`), and each theme pins
- * its own values. The board's tokens are equal in both until row 4 (`tests/palette.test.ts`
- * holds them so), so the board's pairs come out the same twice; the chrome's differ. What is
+ * its own values. The board's tokens were equal in both until UI row 4, which gave the board
+ * its own dark values and replaced P1-3's chain with UI-SPEC §3.1's silhouette rule. What is
  * history -- what a pair was before a row changed it -- is light's only, as that is the only
  * theme there was.
  */
@@ -32,26 +32,41 @@ type Pair = { a: Side, b: Side, min: number, owner: string, holds: boolean }
 type Pins = {
     invariants: string[], onChrome: string[], focus: string[],
     disabledOnGround: string, disabledOnSurface: string,
+    silhouette: string[], inside: string[], cellStates: string[],
 }
 
 const PINS: Record<Theme, Pins> = {
-    // Computed from the tokens at UI row 3, which gave the chrome UI-SPEC §3.1's final values.
-    // The light chrome was P1-4's through row 2: the invariants were 5.62, 6.27, 7.35 and 15.77,
-    // and a disabled control 2.30:1.
+    // Computed from the tokens at UI row 3, which gave the chrome UI-SPEC §3.1's final values,
+    // and at UI row 4, which gave the board and the pieces theirs. The light chrome was P1-4's
+    // through row 2: the invariants were 5.62, 6.27, 7.35 and 15.77, and a disabled control
+    // 2.30:1. The neutral label was 5.80 until row 4 moved it to §3.1's warm `boardLabel`.
     light: {
-        invariants: ['5.80', '4.83', '5.22', '11.92'],
-        onChrome: ['13.11', '5.97', '6.57', '5.47', '5.31', '5.75', '11.78', '13.11', '10.52', '7.64', '6.78'],
+        invariants: ['7.21', '4.83', '5.22', '11.92'],
+        onChrome: ['13.11', '5.97', '6.57', '5.47', '5.31', '5.75', '11.78', '13.11', '10.52', '7.64', '6.78', '5.31'],
         focus: ['7.33', '8.07', '7.25'],
         disabledOnGround: '2.61', disabledOnSurface: '2.56',
+        // The rim, on both wells and the tray; the rock's rim, and on the tile face.
+        silhouette: ['4.12', '3.77', '3.25', '4.35', '3.98', '3.43', '5.11'],
+        inside: ['12.52', '4.84'],
+        // The hint, the anchor, the candidate's edge and the focus, each on both wells.
+        cellStates: ['4.45', '4.07', '11.28', '10.32', '11.28', '10.32', '10.84', '9.92'],
     },
-    // Row 1 gave dark its ground, ink, success and problem; row 3 the rest of the chrome.
+    // Row 1 gave dark its ground, ink, success and problem; row 3 the rest of the chrome; row 4
+    // the board and the pieces.
     dark: {
         invariants: ['10.43', '10.29', '8.38', '15.87'],
-        onChrome: ['13.91', '8.29', '7.26', '7.86', '9.02', '7.35', '11.02', '13.23', '9.02', '6.64', '6.93'],
+        onChrome: ['13.91', '8.29', '7.26', '7.86', '9.02', '7.35', '11.02', '13.23', '9.02', '6.64', '6.93', '9.45'],
         focus: ['4.78', '4.19', '3.32'],
         disabledOnGround: '3.80', disabledOnSurface: '3.90',
+        // No rim: the face and the side, each on both wells and the tray; then the rock's rim.
+        silhouette: ['10.30', '11.21', '12.53', '4.43', '4.83', '5.39', '3.19', '3.47', '3.88', '3.23'],
+        inside: ['12.63', '3.74'],
+        cellStates: ['5.91', '6.43', '6.01', '6.54', '6.01', '6.54', '7.65', '8.33'],
     },
 }
+
+/** Each well tone, and the tray: everything a piece's silhouette can touch (UI-SPEC §3.1). */
+const EDGE_GROUNDS = ['wellLight', 'wellDark', 'boardTray'] as const
 
 for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme`, () => {
     const P = THEMES[theme]
@@ -70,33 +85,43 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
         { a: 'ink', b: 'ground', min: 4.5, owner: 'P1-5, the advice strip', holds: true },
     ]
 
-    /** §6: the art rows' bars, 3:1 for graphics that carry information. */
-    const OWED: Pair[] = [
-        ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
-            // P1-1 lists this bar, but only the checker tones could meet it, and they were
-            // P1-3's (see P1-1's amendment). Held since P1-3 darkened and warmed the checker.
-            { a: 'tileFace', b: checker, min: 3, owner: 'P1-3', holds: true } as Pair,
-            { a: 'pieceOutline', b: checker, min: 3, owner: 'P1-1', holds: true } as Pair,
-        ]),
+    /**
+     * The tones each piece's silhouette exposes (UI-SPEC §3.1, UI row 4): a rim where one is
+     * drawn, and otherwise what the rim would enclose. The light domino's rim is `tileEdge`; the
+     * dark one's is `transparent`, so it exposes its face and its side. The rock's rim is its
+     * face tone in both themes. `e2e/art.spec.ts` checks the rendered page exposes these.
+     */
+    const domino: Token[] = P.tileEdge === 'transparent' ? ['tileFace', 'tileSide'] : ['tileEdge']
+
+    /**
+     * UI-SPEC §3.1's silhouette rule, which replaced P1-3's chain in UI row 4: every tone a
+     * piece's silhouette exposes clears 3:1 against everything it can touch -- both wells and
+     * the tray, since pieces sit inside their cells' margins and never touch each other. The
+     * rock's rim also clears the tile face, as a margin. P1-3's chain held the tile face 3:1
+     * over both checker tones and every rock tone over those and the face, which forced the
+     * mid-brown checker and the near-black rock.
+     */
+    const SILHOUETTE: Pair[] = [
+        ...domino.flatMap(tone => EDGE_GROUNDS.map(b =>
+            ({ a: tone, b, min: 3, owner: 'UI row 4: the domino\'s edge', holds: true }) as Pair)),
+        ...([...EDGE_GROUNDS, 'tileFace'] as const).map(b =>
+            ({ a: 'rockFace', b, min: 3, owner: 'UI row 4: the rock\'s rim', holds: true }) as Pair),
+    ]
+
+    /** Inside the silhouette, on the face: the pip and the divider (P1-1's bars). */
+    const INSIDE: Pair[] = [
         { a: 'pip', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
         { a: 'divider', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
-        { a: 'pieceOutline', b: 'tileFace', min: 3, owner: 'P1-1', holds: true },
-        // Every tone the rock shows, not only its face: each is part of the rock against the
-        // board, and against a domino beside it. Held since P1-2 (row 8); P1-3 moves the
-        // checker tones and must keep them held.
-        ...(['rockFace', 'rockLit', 'rockShade', 'rockSide'] as const).flatMap(rock =>
-            (['checkerLight', 'checkerDark', 'tileFace'] as const).map(b =>
-                ({ a: rock, b, min: 3, owner: 'P1-2', holds: true }) as Pair)),
-        ...(['checkerLight', 'checkerDark'] as const).flatMap(checker => [
-            // P1-5's four states, each held on both tones since row 11. The anchor held on the
-            // light tone only until P1-3; the candidate edge on neither until P1-5; the focus
-            // was a 70% wash of black until P1-5 drew it opaque.
-            { a: 'hint', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-            { a: 'anchor', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-            { a: 'candidateEdge', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-            { a: 'cellFocus', b: checker, min: 3, owner: 'P1-5', holds: true } as Pair,
-        ]),
     ]
+
+    /**
+     * P1-5's four states, each held on both well tones, in both themes (UI row 4 moved them onto
+     * the new wells). Light keeps every value it had on P1-3's checker; dark took lighter ones,
+     * where its dark marks would have vanished on the dark wells -- the anchor's `#16295e` is
+     * 1.08:1 on one. The hint is the accent's value (§3.1).
+     */
+    const CELL_STATES: Pair[] = (['hint', 'anchor', 'candidateEdge', 'cellFocus'] as const).flatMap(state =>
+        (['wellLight', 'wellDark'] as const).map(b => ({ a: state, b, min: 3, owner: 'P1-5', holds: true }) as Pair))
 
     const ratio = (p: Pair) => contrast(paint(p.a), paint(p.b))
 
@@ -117,16 +142,47 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
         })
     })
 
-    describe('§6: each art row\'s bar, and whether it holds yet', () => {
-        for (const pair of OWED) {
-            it(`${label(pair.a)} on ${label(pair.b)}: ${pair.min}:1 ${pair.holds ? 'holds' : `owed by ${pair.owner}`}`, () => {
-                const r = ratio(pair)
-                const message = pair.holds
-                    ? `${r.toFixed(2)}:1 no longer clears ${pair.min}:1`
-                    : `${r.toFixed(2)}:1 now clears ${pair.min}:1 -- ${pair.owner} should mark it held`
-                expect(r >= pair.min, message).toBe(pair.holds)
+    describe('the silhouette rule: each exposed tone clears 3:1 on what it can touch (UI row 4)', () => {
+        for (const pair of SILHOUETTE) {
+            it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
+                expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
             })
         }
+
+        it('at the values the tokens give', () => {
+            expect(SILHOUETTE.map(p => ratio(p).toFixed(2))).toEqual(pins.silhouette)
+        })
+
+        // Why each rim is there: the tone it encloses fails at the edge.
+        if (theme === 'light') it('and the light domino needs its rim: its face and its side fail at the edge', () => {
+            expect(contrast(P.tileFace, P.wellLight)).toBeLessThan(3)
+            expect(contrast(P.tileSide, P.wellLight)).toBeLessThan(3)
+        })
+        if (theme === 'dark') it('and the dark rock needs its rim: its side fails at the edge', () => {
+            expect(contrast(P.rockSide, P.wellLight)).toBeLessThan(3)
+        })
+
+        for (const pair of INSIDE) {
+            it(`inside it, ${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
+                expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
+            })
+        }
+
+        it('inside it, at the values the tokens give', () => {
+            expect(INSIDE.map(p => ratio(p).toFixed(2))).toEqual(pins.inside)
+        })
+    })
+
+    describe('P1-5: the cell states clear 3:1 on both wells', () => {
+        for (const pair of CELL_STATES) {
+            it(`${label(pair.a)} on ${label(pair.b)} clears ${pair.min}:1 (${pair.owner})`, () => {
+                expect(ratio(pair)).toBeGreaterThanOrEqual(pair.min)
+            })
+        }
+
+        it('at the values the tokens give', () => {
+            expect(CELL_STATES.map(p => ratio(p).toFixed(2))).toEqual(pins.cellStates)
+        })
     })
 
     /**
@@ -148,6 +204,8 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
         { a: 'ink', b: 'bannerSurface', min: 4.5, owner: 'the day banner, until row 6', holds: true },
         ...(['markNone', 'markStarted', 'markPartial', 'markComplete'] as const).map(b =>
             ({ a: 'ink', b, min: 4.5, owner: 'an archive day, until row 12', holds: true }) as Pair),
+        // The satisfied line's pill (UI row 4): its number on the green.
+        { a: 'onSuccess', b: 'success', min: 4.5, owner: 'UI row 4: a satisfied line\'s pill', holds: true },
     ]
 
     describe('UI-SPEC §3.1: text on the chrome\'s surfaces', () => {
@@ -169,19 +227,20 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
     /**
      * P1-6's colours (row 12).
      *
-     * **A refused move's cross** lands on whatever the refused square holds: either checker
-     * tone, a domino's face, or any of a rock's tones. No one colour clears 3:1 on all of them
-     * -- the red is 2.08 on the dark tone and 1.73 on the rock's face -- so it is drawn red on a
-     * white halo, and on every surface one of the two must clear 3:1, with the red clearing it
-     * on the halo so the cross reads inside it. The red is `refusedCross`, the board's own, since
-     * UI row 1; it was the chrome's `problem`, which the dark theme changes.
+     * **A refused move's cross** lands on whatever the refused square holds: either well, a
+     * domino's face, or any of a rock's tones. No one colour clears 3:1 on all of them -- in
+     * light the red is 1.56 on the rock's face, in dark 1.79 on the tile face -- so it is drawn on
+     * a halo, and on every surface one of the two must clear 3:1, with the cross clearing it on
+     * the halo so it reads inside it. The red is `refusedCross`, the board's own, since UI row 1;
+     * it was the chrome's `problem`. In dark both are UI row 4's: the dark `problem` on the dark
+     * ground, the closest pair the halo on the rock's side, 3.13.
      *
      * **A control's focus ring** is drawn outside the control, on what it sits on: every surface a
      * control has, all of them light since P2-3 (row 15) took the completion card off its green,
      * where the ring had been white. The accent's edge since P2-2 (row 14), which asks for the
      * accent on focus; black until then.
      */
-    const REFUSAL_SURFACES = ['checkerLight', 'checkerDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
+    const REFUSAL_SURFACES = ['wellLight', 'wellDark', 'tileFace', 'rockFace', 'rockLit', 'rockShade', 'rockSide'] as const
 
     const FOCUS_RINGS: Pair[] = [
         ...(['ground', 'surface', 'bannerSurface'] as const).map(b =>
@@ -209,7 +268,7 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
         /*
          * The keyboard polish's soft corners, held as the cross is: the keyboard reaches every
          * square, so the brackets land on the same surfaces a refusal does. Their colour clears
-         * 3:1 on both checker tones on its own (the §6 rows above); the halo is what edges a thin
+         * 3:1 on both wells on its own (the cell states above); the halo is what edges a thin
          * stroke everywhere else, and it only can if it contrasts with the brackets themselves.
          */
         for (const surface of REFUSAL_SURFACES) {
@@ -268,20 +327,23 @@ for (const theme of Object.keys(THEMES) as Theme[]) describe(`the ${theme} theme
 })
 
 describe('the pairs that cross themes', () => {
-    it('the board is painted alike in both, so its pairs are the same twice', () => {
-        // The reason the board's tables above pass identically: until row 4, nothing on the
-        // board changes with the theme. Checked here as well as in palette.test.ts, so a
-        // board token moved without moving the board's pairs fails beside them.
-        expect(BOARD_TOKENS.filter(t => THEMES.dark[t] !== THEMES.light[t])).toEqual([])
+    it('the board is painted in each theme\'s own values since UI row 4, but for the drag wash', () => {
+        // Until row 4 nothing on the board changed with the theme, and its pairs above came out
+        // the same twice. Checked here as well as in palette.test.ts, so a board token left at
+        // its light value fails beside the pairs it should have moved.
+        expect(BOARD_TOKENS.filter(t => THEMES.dark[t] === THEMES.light[t])).toEqual(['dragWash'])
     })
 })
 
-describe('P1-3: the two checker tones', () => {
-    it(`stand ${CHECKER_RATIO}:1 apart, as stated, the light tone the lighter`, () => {
-        // Stated as a ratio, so a later retune has to move the statement with the tones.
-        expect(luminance(PALETTE.checkerLight)).toBeGreaterThan(luminance(PALETTE.checkerDark))
-        expect(contrast(PALETTE.checkerLight, PALETTE.checkerDark).toFixed(2)).toBe(CHECKER_RATIO.toFixed(2))
-    })
+describe('the two well tones (P1-3\'s checker, UI row 4\'s wells)', () => {
+    for (const theme of Object.keys(THEMES) as Theme[]) {
+        it(`stand ${CHECKER_RATIO}:1 apart in the ${theme} theme, as stated, the light tone the lighter`, () => {
+            // Stated as a ratio, so a later retune has to move the statement with the tones.
+            const P = THEMES[theme]
+            expect(luminance(P.wellLight)).toBeGreaterThan(luminance(P.wellDark))
+            expect(contrast(P.wellLight, P.wellDark).toFixed(2)).toBe(CHECKER_RATIO.toFixed(2))
+        })
+    }
 })
 
 describe('the colour maths, checked against values it did not produce', () => {

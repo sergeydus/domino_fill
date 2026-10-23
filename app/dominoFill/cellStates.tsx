@@ -45,8 +45,14 @@ export const STATE = {
      * cross and stays whole -- and stop short of the focus brackets, which share it too.
      * Kept inside the ring, the cross could not be told from the hint's diamond: measured
      * 14.9% apart in greyscale at its largest that fits, under P1-5's 15%.
+     *
+     * UI row 4 made the red 12 wide and the halo 3.5, where they were 9 and 5: the same 19
+     * overall, so it reaches no further. On the new wells the halo no longer counts in
+     * greyscale -- the light one is as light as the cream wells, the dark one as dark as the
+     * dark ones -- so only the red did, and it came out 13.6-14.1% from the diamond. With the
+     * heavier red it is 15.9-16.3%. The halo still does its work on the rock and the tile.
      */
-    refused: { reach: 25, stroke: 9, halo: 5 },
+    refused: { reach: 25, stroke: 12, halo: 3.5 },
 } as const
 
 const U = 100

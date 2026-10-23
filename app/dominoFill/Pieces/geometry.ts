@@ -15,21 +15,21 @@
  * to keep identical, and the unit is chosen for reading instead: P1-1's bounds are written
  * as fractions of the cell, and so are these.
  *
- * **The proportions are P1-1's, tuned against the 38px phone cell** (§2.1): the size the
- * design is for, not the size it degrades to. Each value is chosen inside a bound the spec
- * sets and `tests/proportions.test.tsx` measures from the rendered markup:
+ * **The proportions are UI-SPEC §4.3's since UI row 4, tuned against the 38px phone cell**:
+ * the size the design is for, not the size it degrades to. Each value is inside a bound the
+ * spec sets and `tests/proportions.test.tsx` measures from the rendered markup:
  *
- *   - outline 9: at most 12 (at 38px, 3.4px -- chunky, without swallowing the tile);
- *   - extrusion 14: 10 to 18 ("slightly exaggerated", where it was 30);
- *   - pip diameter 24: 18 to 30 (it was 30.2), clear of the divider and the tile edge by at
- *     least 6 -- the flat domino's two pips, on the thirds of its half, are the tight case,
- *     at 10.8;
- *   - divider span 60 of the cell, 68% of the tile it crosses: at least 55% (it was 47%
- *     on the flat domino and 51% on the upright).
+ *   - rim 2, in light only: a fifth of P1-1's 9-unit black outline, round the whole
+ *     silhouette (at 38px, 0.76px);
+ *   - extrusion 4: 3 to 6, a shallower toy (P1-1's was 14, in 10 to 18);
+ *   - pip diameter 22: 18 to 30, clear of the divider and the tile's edge by at least 6 --
+ *     the flat domino's two pips, on the thirds of its half, are the tight case, at 15.3
+ *     from the rim's inner edge;
+ *   - divider span 60 of the cell, 68% of the tile it crosses: at least 55%.
  *
- * The rest are unbounded and chosen to go with them: the rounder corners of a toy (14), the
- * divider's weight (5) and the margin to the cell edge (6). The entry offset lived here until
- * P1-6 limited it; it is motion, not drawing, and is in `motion.ts` now.
+ * The rest are unbounded and chosen to go with them: the corners (12), the divider's groove
+ * (3) and the margin to the cell edge (6). The entry offset lived here until P1-6 limited it;
+ * it is motion, not drawing, and is in `motion.ts` now.
  *
  * **Plain TypeScript with no imports**, as the palette is: since P2-4 (row 16) the app's icon
  * is drawn from `PIECE` too, by `scripts/icon.ts` under tsx in Node at build time, where a
@@ -40,23 +40,42 @@
 export const UNIT = 100
 
 export const PIECE = {
-    /** The silhouette's outline, as a stroke width. */
-    outline: 9,
-    /** Every corner radius: face, side and outline. */
-    radius: 14,
-    pipRadius: 12,
+    /**
+     * The rim round the silhouette, as a stroke width (§4.3): the light domino's in `tileEdge`,
+     * the rock's in its face tone in both themes. The dark domino's `tileEdge` is transparent.
+     */
+    rim: 2,
+    /** Every corner radius: face, side and rim. */
+    radius: 12,
+    pipRadius: 11,
     /** How far the divider stops short of each edge of the cell it crosses. */
     dividerInset: 20,
-    dividerWidth: 5,
+    /** The divider's groove. */
+    dividerWidth: 3,
     /**
      * How far the extruded side shows below the face -- and so how far every piece stands
      * up out of its cell, since the drawing is that much taller than the cell and lifted by
      * it to keep the face on the square.
      */
-    extrusion: 14,
-    /** The margin between a cell's edge and the piece's box: face, side and outline alike. */
+    extrusion: 4,
+    /** The margin between a cell's edge and the piece's box: face, side and rim alike. */
     inset: 6,
 } as const
+
+/**
+ * The pip's lip (§4.3's "slight inset look"): a `tileSide` disc of the pip's own size, this
+ * many units above it and drawn under it, so a crescent of it shows along the pip's top edge.
+ */
+export const PIP_LIP = 1
+
+/**
+ * The board's wells, in the same units (UI-SPEC §4.1, UI row 4). Each cell's box is unchanged --
+ * it is still what the pointer and the layout resolve -- and draws a well inside it, inset this
+ * far on every side, so `2 * inset` of the tray shows between neighbours, and rounded this much.
+ * The four corner wells round their outer corner to the tray's inner radius less the inset,
+ * concentric with it, so the gap stays even round the curve.
+ */
+export const WELL = { inset: 1.5, radius: 10 } as const
 
 /** A point of the drawing, in units. */
 export type Point = readonly [number, number]
@@ -76,7 +95,8 @@ export type Point = readonly [number, number]
  * shape the solid is everything the face passes through on the way down, and because
  * each chain is a function of x that is exactly the top chain, then the base shifted down,
  * joined at the two ends. That swept outline is the silhouette: the side is filled with
- * it, and the outline strokes it.
+ * it, and the rim strokes it. Since UI row 4 the sweep is 4 units, where it was 14, so the
+ * silhouette is a different shape and `tests/rock.test.tsx` holds a witness found for it.
  *
  * **Facets are flat tones, not lines.** One lit plane across the crown and one shaded plane
  * down the right, over the face's own tone -- no gradients, and no inner strokes to crowd a
@@ -91,7 +111,7 @@ const inner = (chain: readonly Point[]) => chain.slice(1, -1)
 export const ROCK = {
     /** The face: the top chain, then back along the base. */
     face: [...ROCK_TOP, ...inner(ROCK_BASE).reverse()],
-    /** The face swept down by the extrusion: the side's fill, and the outline's path. */
+    /** The face swept down by the extrusion: the side's fill, and the rim's path. */
     silhouette: [
         ...ROCK_TOP,
         down(ROCK_TOP[ROCK_TOP.length - 1]),
@@ -103,6 +123,18 @@ export const ROCK = {
     /** The plane down the right, turned away from it. */
     shade: [[76, 16], [86, 40], [94, 60], [94, 90], [78, 94], [70, 60], [62, 40]],
 } as const satisfies Record<string, readonly Point[]>
+
+/**
+ * The obstacles' skins (UI-SPEC §4.4, UI row 4): what `Obstacle` draws, by name. One today, the
+ * rock; the map is the seam for L2's seasonal skins. Each is four polygons -- the swept
+ * silhouette, the face, a lit facet and a shaded one -- in the rock's tones, under a rim in
+ * the face tone, and each must meet what §4.4 asks of any skin: inside the cell's box, every
+ * tone it exposes clear of the wells and the tray, and never read as a domino
+ * (`tests/rock.test.tsx` runs its checks for every skin here).
+ */
+export const SKINS = { rock: ROCK } as const satisfies Record<string, typeof ROCK>
+
+export type Skin = keyof typeof SKINS
 
 /** A polygon's `points` attribute. */
 export const points = (polygon: readonly Point[]) => polygon.map(([x, y]) => `${x},${y}`).join(' ')

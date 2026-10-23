@@ -5,6 +5,7 @@ import { PuzzleSession } from "../stores/PuzzleSession";
 import { cellDescription } from "./cellLabel";
 import { cssVar } from "../palette";
 import { HintMark } from "./cellStates";
+import { UNIT, WELL } from "./Pieces/geometry";
 
 type Props = {
     i: number
@@ -35,7 +36,7 @@ const BoardSquare: React.FC<Props2> = observer((
     const size = boardsStore.board.length
     // Named for what it tests: it was `isDark`, and it picks the lighter tone.
     const isEven = (i + j) % 2 === 0;
-    const color = isEven ? cssVar('checkerLight') : cssVar('checkerDark')
+    const color = isEven ? cssVar('wellLight') : cssVar('wellDark')
     const squareStyle: CSSProperties = useMemo(() => {
         return {
             aspectRatio: 1,
@@ -43,7 +44,6 @@ const BoardSquare: React.FC<Props2> = observer((
             width: `${boardsStore.squareSize}px`
         }
     }, [boardsStore.squareSize])
-    const style = useMemo(() => ({ ...squareStyle, backgroundColor: color }), [color, squareStyle])
     /*
      * No click handler any more (spec D10-f).
      *
@@ -52,16 +52,30 @@ const BoardSquare: React.FC<Props2> = observer((
      * built a new `Audio` per click. Sound now follows the *outcome*, in feedback.ts,
      * driven from the session so the keyboard is treated identically.
      */
-    // Round only the four corners of the board, not of every cell -- by the board's one
-    // corner token, which the frame's inner edge also follows (ClientBoard, P1-3).
-    const cornerStyle = useMemo(() => {
-        const r = 'var(--board-corner)'
-        if (i === 0 && j === 0) return { borderTopLeftRadius: r }
-        if (i === 0 && j === size - 1) return { borderTopRightRadius: r }
-        if (i === size - 1 && j === 0) return { borderBottomLeftRadius: r }
-        if (i === size - 1 && j === size - 1) return { borderBottomRightRadius: r }
-        return {}
-    }, [i, j, size])
+    /*
+     * The well (UI-SPEC §4.1, UI row 4): drawn inside the cell's box, which stays square and
+     * unpainted, so the tray shows in the gaps. The box is what the pointer resolves, and it
+     * keeps every point of the square: until row 4 the four corner cells rounded their own
+     * box by `--board-corner`, and at the tray's 18px a point 5px in from the corner would lie
+     * outside it, a press on the board that named no square (`e2e/art.spec.ts`'s probes).
+     *
+     * Every well is rounded by `WELL.radius`; the four corner wells round their outer corner
+     * to the tray's inner radius less the inset, so they stay concentric with the tray.
+     */
+    const wellStyle: CSSProperties = useMemo(() => {
+        const inset = boardsStore.squareSize * WELL.inset / UNIT
+        const r = `${boardsStore.squareSize * WELL.radius / UNIT}px`
+        const outer = `calc(var(--board-corner) - ${inset}px)`
+        const last = size - 1
+        return {
+            inset: `${inset}px`,
+            backgroundColor: color,
+            borderTopLeftRadius: i === 0 && j === 0 ? outer : r,
+            borderTopRightRadius: i === 0 && j === last ? outer : r,
+            borderBottomLeftRadius: i === last && j === 0 ? outer : r,
+            borderBottomRightRadius: i === last && j === last ? outer : r,
+        }
+    }, [boardsStore.squareSize, color, i, j, size])
 
     /*
      * The roving tabindex, made real (spec P1-8).
@@ -134,8 +148,9 @@ const BoardSquare: React.FC<Props2> = observer((
             aria-label={cellDescription([i, j], value, { isAnchor, isCandidate, isHinted })}
             aria-selected={isAnchor || undefined}
             key={i}
-            style={{ ...style, ...cornerStyle }}
+            style={squareStyle}
         >
+            <div aria-hidden className="pointer-events-none absolute" data-well style={wellStyle} />
             {/*
               * The hint's diamond (graphics P1-5; `cellStates.tsx`). It was a 3px outline
               * inset 2px -- a pixel constant, and the same shape as the anchor and the

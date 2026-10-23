@@ -28,14 +28,27 @@ import { CONTROL } from '../app/controls'
 const ROLES = ['accent', 'accentEdge', 'success', 'problem', 'hint'] as const
 type Role = typeof ROLES[number]
 
+/**
+ * Roles that share a value by design, declared (UI row 4). UI-SPEC §3.1 gives the hint the
+ * accent's value, so no colour on the page can say which of the two a drawing reads: a value
+ * that matches both reads as both, `accent|hint`, and is allowed where either role is -- the
+ * same places the two allowed apart. Which token the hint's diamond reads is proved by its
+ * sentinel instead (`e2e/themeTokens.spec.ts`), and any coincidence not declared here fails.
+ */
+const ALIASES: readonly (readonly Role[])[] = [['accent', 'hint']]
+
+/** How a value the accent and the hint share reads: as both. */
+const ACCENT = 'accent|hint'
+
 /** Where each role may appear: the closest ancestor (or the element) must match. */
 const ALLOWED: Record<Role, string> = {
     // Interactive chrome: a control, or the board's own focus ring on the grid.
     accent: 'button, [role="grid"]',
     accentEdge: 'button, [role="grid"]',
-    // A satisfied line, and the solved puzzle's outcome line -- not the card around it,
-    // since P2-3 (row 15) took the card off its green.
-    success: '[data-line-state="satisfied"], [data-completion-message]',
+    // A satisfied line -- its pill since UI row 4 -- and a reached one, its number and its bar
+    // (UI row 4); and the solved puzzle's outcome line -- not the card around it, since P2-3
+    // (row 15) took the card off its green.
+    success: '[data-line-state="satisfied"], [data-line-state="reached"], [data-completion-message]',
     // The advice strip only while it reports a problem (`adviceIsProblem`), not the strip.
     // And a refused move's cross (P1-6, row 12): something is wrong with that move. And the
     // caution variant's edge, `Reset` (P2-2, row 14): something that cannot be taken back.
@@ -45,7 +58,8 @@ const ALLOWED: Record<Role, string> = {
     hint: '[data-hinted]',
 }
 
-type Finding = { role: Role, property: string, element: string, allowed: boolean }
+/** A role colour found: `role` is every role its value matches, joined by `|`. */
+type Finding = { role: string, property: string, element: string, allowed: boolean }
 
 /**
  * Every role colour the page paints, and whether where it is allowed. Self-contained: it is
@@ -66,13 +80,14 @@ const scan = (page: Page) => page.evaluate(({ roles, allowed }) => {
         }
         return cache.get(colour)!
     }
+    // Every role the value matches, not the first: two roles can share a value (`ALIASES`).
     const roleOf = (colour: string): string | null => {
         const [r, g, b, a] = bytes(colour)
         if (a === 0) return null
-        for (const [name, [tr, tg, tb]] of Object.entries(roles)) {
-            if (Math.abs(r - tr) <= 2 && Math.abs(g - tg) <= 2 && Math.abs(b - tb) <= 2) return name
-        }
-        return null
+        const matched = Object.entries(roles)
+            .filter(([, [tr, tg, tb]]) => Math.abs(r - tr) <= 2 && Math.abs(g - tg) <= 2 && Math.abs(b - tb) <= 2)
+            .map(([name]) => name)
+        return matched.length === 0 ? null : matched.join('|')
     }
     const colours = /(rgba?|color|oklab|oklch|lab|lch|hsla?)\([^)]*\)/g
     const describe = (el: Element) => {
@@ -103,7 +118,9 @@ const scan = (page: Page) => page.evaluate(({ roles, allowed }) => {
         }
         for (const [property, value] of paints) {
             const role = roleOf(value)
-            if (role !== null) found.push({ role, property, element: describe(el), allowed: el.closest((allowed as Record<string, string>)[role]) !== null })
+            // Allowed where any of the roles it matches is.
+            const where = role?.split('|').map(r => (allowed as Record<string, string>)[r]).join(', ')
+            if (role !== null) found.push({ role, property, element: describe(el), allowed: el.closest(where!) !== null })
         }
     }
     return found
@@ -153,6 +170,8 @@ const expectRolesKept = async (page: Page, state: string) => {
  */
 const SURFACES = {
     accent: { fallback: 'onAccent', allowed: ['onAccent'] },
+    // The satisfied line's pill (UI row 4): its number, and nothing else.
+    success: { fallback: 'onSuccess', allowed: ['onSuccess'] },
     // `lineNeutral` too: the tutorial's practice board puts its line targets on its card.
     surface: { fallback: 'ink', allowed: ['ink', 'inkMuted', 'success', 'problem', 'lineNeutral'] },
 } as const satisfies Record<string, { fallback: Token, allowed: readonly Token[] }>
@@ -163,8 +182,11 @@ const TEXT_UTILITIES: Record<string, Token> = {
     'text-ink': 'ink', 'text-ink-muted': 'inkMuted', 'text-success': 'success', 'text-problem': 'problem',
 }
 
-/** A line target's colour is its state's (`app/dominoFill/lineLabel.ts`). */
-const LINE_STATES: Record<string, Token> = { neutral: 'lineNeutral', satisfied: 'success', over: 'problem' }
+/**
+ * A line target's colour is its state's (`app/dominoFill/lineLabel.ts`), but on the satisfied
+ * pill, whose number is `onSuccess` (UI row 4).
+ */
+const LINE_STATES: Record<string, Token> = { neutral: 'lineNeutral', reached: 'success', satisfied: 'success', over: 'problem' }
 
 /** Each variant's ink, by state: the variant table's, read here so the page needn't import it. */
 const VARIANT_INKS = Object.fromEntries(Object.entries(CONTROL).map(([name, c]) => [name, {
@@ -195,6 +217,7 @@ const foregrounds = (page: Page) => page.evaluate(({ surfaces, utilities, lines,
     /** The token a text is expected to be: by utility, then by variant and state, then none. */
     const byRole = (el: Element, behind: Element): string | null => {
         for (let at: Element | null = el; at !== null; at = at.parentElement) {
+            if (at.getAttribute('data-label-pill') === 'filled') return 'onSuccess'
             const line = at.getAttribute('data-line-state')
             if (line !== null && line in lines) return lines[line]
             const utility = Array.from(at.classList).find(c => c in utilities)
@@ -237,12 +260,13 @@ const foregrounds = (page: Page) => page.evaluate(({ surfaces, utilities, lines,
     return out
 }, {
     surfaces: SURFACES, utilities: TEXT_UTILITIES, lines: LINE_STATES, inks: VARIANT_INKS,
-    tokens: Object.fromEntries((['accent', 'surface', 'ink', 'inkMuted', 'onAccent', 'success', 'problem', 'lineNeutral'] as const).map(t => [t, rgbBytes(t)])),
+    tokens: Object.fromEntries((['accent', 'surface', 'ink', 'inkMuted', 'onAccent', 'success', 'onSuccess', 'problem', 'lineNeutral'] as const).map(t => [t, rgbBytes(t)])),
 }) as Promise<Foreground[]>
 
 /** The role colours one element paints, as `property: role`. */
 const rolesOn = (locator: Locator) => locator.evaluate((el, roles) => {
     const ctx = document.createElement('canvas').getContext('2d')!
+    // As the scan reads it: every role the value matches, joined by `|`.
     const roleOf = (colour: string) => {
         ctx.clearRect(0, 0, 1, 1)
         ctx.fillStyle = '#000000'
@@ -250,8 +274,9 @@ const rolesOn = (locator: Locator) => locator.evaluate((el, roles) => {
         ctx.fillRect(0, 0, 1, 1)
         const [r, g, b, a] = Array.from(ctx.getImageData(0, 0, 1, 1).data)
         if (a === 0) return null
-        return Object.entries(roles).find(([, [tr, tg, tb]]) =>
-            Math.abs(r - tr) <= 2 && Math.abs(g - tg) <= 2 && Math.abs(b - tb) <= 2)?.[0] ?? null
+        const matched = Object.entries(roles).filter(([, [tr, tg, tb]]) =>
+            Math.abs(r - tr) <= 2 && Math.abs(g - tg) <= 2 && Math.abs(b - tb) <= 2).map(([name]) => name)
+        return matched.length === 0 ? null : matched.join('|')
     }
     const cs = getComputedStyle(el)
     const out: Record<string, string> = {}
@@ -297,8 +322,9 @@ test.describe('on the component sheet, where every state is on screen at once', 
     test('no role colour appears outside its role, at rest or under the pointer', async ({ page }) => {
         const atRest = await expectRolesKept(page, 'the sheet at rest')
         // Every role is on the sheet somewhere, so "outside its role" was checked against
-        // something rather than against a page with no colour on it.
-        expect([...new Set(atRest.map(f => f.role))].sort()).toEqual([...ROLES].sort())
+        // something rather than against a page with no colour on it. A shared value counts
+        // for each role it matches.
+        expect([...new Set(atRest.flatMap(f => f.role.split('|')))].sort()).toEqual([...ROLES].sort())
 
         const buttons = page.locator('main button:not([disabled])')
         const count = await buttons.count()
@@ -324,11 +350,11 @@ test.describe('on the component sheet, where every state is on screen at once', 
         // knows a pressed toggle's state (codex).
         const sound = page.locator('[data-mute]')
         await expect(sound).toHaveAttribute('aria-pressed', 'true')
-        expect(await rolesOn(sound)).toEqual({ background: 'accent' })
+        expect(await rolesOn(sound)).toEqual({ background: ACCENT })
         await expectForeground(page, await sound.innerText(), 'accent', 'onAccent')
         const selected = page.locator('[data-difficulty][data-selected]')
         await expect(selected).toHaveCount(1)
-        expect(await rolesOn(selected)).toEqual({ background: 'accent' })
+        expect(await rolesOn(selected)).toEqual({ background: ACCENT })
         await expectForeground(page, await selected.innerText(), 'accent', 'onAccent')
         for (const other of await page.locator('[data-difficulty]:not([data-selected])').all()) {
             expect(await rolesOn(other)).toEqual({})
@@ -341,7 +367,7 @@ test.describe('on the component sheet, where every state is on screen at once', 
 
         // The level arrows: the accent, filled and outlined, enabled or not.
         for (const arrow of await page.locator('[data-level] path').all()) {
-            expect(await rolesOn(arrow)).toMatchObject({ fill: 'accent', stroke: 'accentEdge' })
+            expect(await rolesOn(arrow)).toMatchObject({ fill: ACCENT, stroke: 'accentEdge' })
         }
 
         /*
@@ -368,8 +394,8 @@ test.describe('on the component sheet, where every state is on screen at once', 
         await expectForeground(page, 'Hint', 'surface', 'ink')
 
         const check = page.locator('[data-check]')
-        expect(await rolesOn(check)).toEqual({ background: 'accent', ring: 'accentEdge' })
-        expect(await hovered(check)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        expect(await rolesOn(check)).toEqual({ background: ACCENT, ring: 'accentEdge' })
+        expect(await hovered(check)).toEqual({ background: ACCENT, ring: 'accentEdge' })
         await expectForeground(page, 'Check', 'accent', 'onAccent')
 
         // A positive case codex asked for: Reset is `problem` on the surface, and the reader
@@ -397,15 +423,34 @@ test.describe('on the component sheet, where every state is on screen at once', 
             await expectForeground(page, await button.innerText(), 'surface', 'ink')
         }
 
-        // The target labels, one per state.
-        expect(await rolesOn(page.locator('[data-line-state="satisfied"]'))).toEqual({ color: 'success' })
-        expect(await rolesOn(page.locator('[data-line-state="over"]'))).toEqual({ color: 'problem', outline: 'problem' })
+        // The target labels, one per state, each in the specimen that exists to show it (the
+        // hint's 2-by-2 board has a 0 row, reached from the start, and the label fixtures hold
+        // every state). The label's colour is its tie's; the shapes are the pill and the bar
+        // (UI row 4): the satisfied pill `success` with `onSuccess` text, which is no role, the
+        // over pill ringed in `problem`, and the reached number and its bar in `success`.
+        const label = (specimen: string, state: string) => page.locator(`[data-specimen="${specimen}"] [data-line-state="${state}"]`)
+        expect(await rolesOn(label('target-satisfied', 'satisfied'))).toEqual({ color: 'success' })
+        expect(await rolesOn(label('target-satisfied', 'satisfied').locator('[data-label-pill]'))).toEqual({ background: 'success' })
+        await expectForeground(page, '0', 'success', 'onSuccess')
+        expect(await rolesOn(label('target-over', 'over'))).toEqual({ color: 'problem' })
+        expect(await rolesOn(label('target-over', 'over').locator('[data-label-pill]'))).toEqual({ color: 'problem', outline: 'problem' })
+        expect(await rolesOn(label('target-reached', 'reached'))).toEqual({ color: 'success' })
+        expect(await rolesOn(label('target-reached', 'reached').locator('[data-label-bar]'))).toEqual({ background: 'success', color: 'success' })
         for (const neutral of await page.locator('[data-line-state="neutral"]').all()) {
             expect(await rolesOn(neutral)).toEqual({})
         }
 
         // The hinted square, and only it: its diamond since P1-5 (row 11), an outline before.
-        expect(await rolesOn(page.locator('[data-hinted] [data-diamond]'))).toEqual({ fill: 'hint' })
+        // The accent's value since UI row 4, so it reads as both; the sentinel proves `hint`.
+        expect(await rolesOn(page.locator('[data-hinted] [data-diamond]'))).toEqual({ fill: ACCENT })
+    })
+
+    test('the role values are distinct, but for the aliases declared (UI row 4)', () => {
+        // A coincidence nobody declared -- `success` moved onto `problem`'s value, say -- would
+        // otherwise merge two meanings silently: every finding of one would read as both.
+        const same = (a: Role, b: Role) => rgbBytes(a).every((v, i) => Math.abs(v - rgbBytes(b)[i]) <= 2)
+        const shared = ROLES.flatMap((a, i) => ROLES.slice(i + 1).filter(b => same(a, b)).map(b => `${a}|${b}`))
+        expect(shared).toEqual(ALIASES.map(pair => pair.join('|')))
     })
 })
 
@@ -496,7 +541,7 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         const action = page.locator('[data-go-to-today]')
         await expect(action).toBeVisible()
         // The primary: the accent, on the accent's edge (UI row 3).
-        expect(await rolesOn(action)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        expect(await rolesOn(action)).toEqual({ background: ACCENT, ring: 'accentEdge' })
         await expectForeground(page, 'Play today', 'accent', 'onAccent')
         await expectRolesKept(page, 'an earlier day, with the banner')
     })
@@ -526,7 +571,7 @@ test.describe('on the real page, in the states the sheet does not hold', () => {
         await page.mouse.move(0, 0)
         await waitForRest(page)
         // The primary: the accent, on the accent's edge (UI row 3).
-        expect(await rolesOn(gotIt)).toEqual({ background: 'accent', ring: 'accentEdge' })
+        expect(await rolesOn(gotIt)).toEqual({ background: ACCENT, ring: 'accentEdge' })
         await expectForeground(page, 'Got it!', 'accent', 'onAccent')
         await expectRolesKept(page, 'the tutorial, solved')
     })

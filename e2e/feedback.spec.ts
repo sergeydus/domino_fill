@@ -1,6 +1,7 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect, type Locator, type Page } from '@playwright/test'
 import { openBoard } from './openBoard'
-import { playSolution } from './play'
+import { drag, playSolution } from './play'
+import { LATE_IN_A_MONTH, pinDay } from './calendar'
 
 /**
  * Honest feedback in a real browser (spec P1-5, D10-f and D10-g).
@@ -9,7 +10,35 @@ import { playSolution } from './play'
  * a browser is that the state reaches the screen: that a label carries a shape and not only
  * a colour, that the computed contrast is what the palette promises, and that a refused move
  * visibly moves the board.
+ *
+ * Since UI row 4 the shapes are a filled pill (satisfied), a ringed one (over) and a bar
+ * (reached, the target met with cells still open), where satisfied was struck through.
  */
+
+/** What a label draws, as the browser computes it: its pill's fill and ring, and a bar. */
+const channels = (label: Locator) => label.evaluate(el => {
+    const pill = el.querySelector<HTMLElement>('[data-label-pill]')!
+    const cs = getComputedStyle(pill)
+    const bar = el.querySelector<HTMLElement>('[data-label-bar]')
+    const barBox = bar?.getBoundingClientRect()
+    return {
+        filled: cs.backgroundColor !== 'rgba(0, 0, 0, 0)',
+        ringed: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0,
+        bar: barBox !== undefined && barBox.width > 0 && barBox.height > 0,
+        struck: getComputedStyle(el).textDecorationLine !== 'none' || cs.textDecorationLine !== 'none',
+    }
+})
+
+const SHAPES = {
+    neutral: { filled: false, ringed: false, bar: false, struck: false },
+    reached: { filled: false, ringed: false, bar: true, struck: false },
+    satisfied: { filled: true, ringed: false, bar: false, struck: false },
+    over: { filled: false, ringed: true, bar: false, struck: false },
+} as const
+
+/** Every label's state, columns then rows, in order. */
+const allStates = (page: Page) => page.locator('[data-col-label], [data-row-label]').evaluateAll(
+    els => els.map(el => `${el.hasAttribute('data-col-label') ? 'col' : 'row'} ${el.getAttribute('data-col-label') ?? el.getAttribute('data-row-label')}: ${el.getAttribute('data-line-state')}`))
 
 const occupied = async (page: Page) => {
     const pieces = await page.locator('[data-piece]').evaluateAll(
@@ -74,10 +103,66 @@ test('every label starts neutral and says so in the DOM', async ({ page }) => {
     const states = await labels.evaluateAll(els => els.map(el => el.getAttribute('data-line-state')))
 
     expect(states.length).toBeGreaterThan(0)
-    // A fresh board may legitimately have a satisfied line if a target is 0 and the line is
-    // all rocks, so this asserts the attribute exists and is one of the three, not that it
-    // is neutral everywhere.
-    for (const state of states) expect(['neutral', 'satisfied', 'over']).toContain(state)
+    // A fresh board may legitimately have a reached line -- a target of 0, with a cell open
+    // (UI row 4) -- or a satisfied one, a 0 line of rocks only, so this asserts the attribute
+    // exists and is one of the four, not that it is neutral everywhere.
+    for (const state of states) expect(['neutral', 'reached', 'satisfied', 'over']).toContain(state)
+})
+
+test.describe('a target of 0, and a line that reaches its target (UI row 4)', () => {
+    test.beforeEach(async ({ page }) => {
+        // The pinned day's board, reloaded: its second row's target is 0, with cells open.
+        await pinDay(page, LATE_IN_A_MONTH)
+        await openBoard(page)
+    })
+
+    test('on the pinned day, the 0 row is reached at load, and shows and says it', async ({ page }) => {
+        const zero = page.locator('[data-row-label="1"]')
+        await expect(zero).toHaveText('0')
+        await expect(zero).toHaveAttribute('data-line-state', 'reached')
+        expect(await channels(zero)).toEqual(SHAPES.reached)
+        await expect(zero).toHaveAttribute('aria-label', 'Row 2, target 0, target reached')
+    })
+
+    test('a placement that meets a target with cells open shows reached, and Undo takes it back', async ({ page }) => {
+        /*
+         * Found on the board rather than written down: a column whose target is 1 with three
+         * free cells takes an upright -- 1 over 0 -- and is left reached with a cell open; or
+         * else a row whose target is 2 with three free cells takes a flat domino, 0 then 2.
+         */
+        const read = await page.evaluate(() => ({
+            columns: Array.from(document.querySelectorAll('[data-col-label]'), el => Number(el.textContent)),
+            rows: Array.from(document.querySelectorAll('[data-row-label]'), el => Number(el.textContent)),
+            rocks: Array.from(document.querySelectorAll('[data-piece="rock"]'), el => el.getAttribute('data-at')!),
+        }))
+        const n = read.columns.length
+        const free = (i: number, j: number) => !read.rocks.includes(`${i},${j}`)
+        let move: { line: string, from: [number, number], to: [number, number] } | null = null
+        for (let j = 0; j < n && move === null; j++) {
+            const open = Array.from({ length: n }, (_, i) => i).filter(i => free(i, j))
+            const top = open.find(i => free(i + 1, j) && i + 1 < n)
+            if (read.columns[j] === 1 && open.length >= 3 && top !== undefined) move = { line: `[data-col-label="${j}"]`, from: [top, j], to: [top + 1, j] }
+        }
+        for (let i = 0; i < n && move === null; i++) {
+            const open = Array.from({ length: n }, (_, j) => j).filter(j => free(i, j))
+            const left = open.find(j => free(i, j + 1) && j + 1 < n)
+            if (read.rows[i] === 2 && open.length >= 3 && left !== undefined) move = { line: `[data-row-label="${i}"]`, from: [i, left], to: [i, left + 1] }
+        }
+        expect(move, 'the pinned board has no line to reach in one move').not.toBeNull()
+
+        const line = page.locator(move!.line)
+        const before = await allStates(page)
+        await expect(line).toHaveAttribute('data-line-state', 'neutral')
+
+        await drag(page, move!.from, move!.to)
+        await expect(line).toHaveAttribute('data-line-state', 'reached')
+        expect(await channels(line)).toEqual(SHAPES.reached)
+
+        await page.locator('[data-undo]').click()
+        await expect(line).toHaveAttribute('data-line-state', 'neutral')
+        expect(await channels(line)).toEqual(SHAPES.neutral)
+        expect(await allStates(page), 'Undo restores every label').toEqual(before)
+    })
 })
 
 test('label state reaches the screen as contrast, not just as colour', async ({ page }) => {
@@ -112,7 +197,7 @@ test('label state reaches the screen as contrast, not just as colour', async ({ 
     expect(contrast).toBeGreaterThanOrEqual(4.5)
 })
 
-test('a satisfied line is struck through, so colour is not the only channel', async ({ page }) => {
+test('a satisfied line is a filled pill, so colour is not the only channel', async ({ page }) => {
     /*
      * This used to walk the labels and assert *inside* `if (state === 'satisfied')`, which
      * meant it asserted nothing at all unless the served puzzle happened to start with a
@@ -131,17 +216,16 @@ test('a satisfied line is struck through, so colour is not the only channel', as
 
     for (let k = 0; k < n; k++) {
         const label = satisfied.nth(k)
-        await expect(label).toHaveCSS('text-decoration-line', 'line-through')
+        expect(await channels(label)).toEqual(SHAPES.satisfied)
         // The shape is not the only extra channel: a screen reader reaches neither colour
-        // nor strikethrough, so the state is in the accessible name too.
+        // nor a pill, so the state is in the accessible name too.
         await expect(label).toHaveAttribute('aria-label', /complete/i)
     }
 
-    // And a neutral label carries neither shape, so the channels actually distinguish.
+    // And a neutral label carries no shape, so the channels actually distinguish.
     const neutral = page.locator('[data-line-state="neutral"]')
     for (let k = 0; k < await neutral.count(); k++) {
-        await expect(neutral.nth(k)).not.toHaveCSS('text-decoration-line', 'line-through')
-        await expect(neutral.nth(k)).toHaveCSS('outline-style', 'none')
+        expect(await channels(neutral.nth(k))).toEqual(SHAPES.neutral)
     }
 })
 
@@ -166,9 +250,9 @@ test('an overshot line is ringed, which is a different shape from a finished one
             await page.locator(`[data-cell="${i},${j + 1}"]`).hover()
             await page.mouse.up()
             if (await over.count() > 0) {
-                await expect(over.first()).toHaveCSS('outline-style', 'solid')
-                // And it is a different shape from satisfied, not merely a different colour.
-                await expect(over.first()).not.toHaveCSS('text-decoration-line', 'line-through')
+                // Ringed and not filled: a different shape from satisfied, not merely a
+                // different colour.
+                expect(await channels(over.first())).toEqual(SHAPES.over)
                 return
             }
         }

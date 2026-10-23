@@ -14,8 +14,9 @@ import { THEME_KEY } from '../app/themeScript'
  * case here checks is still that the text the game gives is readable on the ground it is
  * drawn on, as the browser computes both.
  *
- * Row 1's dark theme is the chrome's only: the board's tokens are the light ones until row 4,
- * so a cell is the same colour in both themes, and these tests say so.
+ * Row 1's dark theme was the chrome's only: the board's tokens were the light ones until UI
+ * row 4, so a cell was the same colour in both themes, and these tests said so. Since row 4 the
+ * board has its own dark values, and a cell's well follows the theme as the chrome does.
  *
  * Every case that reads the board pins its day, as AGENTS.md requires: the cell and the line
  * read here are the pinned puzzle's.
@@ -70,7 +71,8 @@ const computed = (page: Page) => page.evaluate(() => {
         ground: getComputedStyle(shell).backgroundColor,
         body: getComputedStyle(document.body).backgroundColor,
         advice: of('[data-advice]', 'color'),
-        cell: of('[data-cell="0,0"]', 'background-color'),
+        // The well since UI row 4: the cell's own box is unpainted, over the tray.
+        cell: of('[data-cell="0,0"] [data-well]', 'background-color'),
         target: of('[data-row-label="0"]', 'color'),
         targetState: document.querySelector('[data-row-label="0"]')?.getAttribute('data-line-state') ?? 'MISSING',
         control: of('[data-undo]', 'background-color'),
@@ -82,8 +84,8 @@ const computed = (page: Page) => page.evaluate(() => {
 type Computed = Awaited<ReturnType<typeof computed>>
 
 /**
- * What the board's page computes in `theme`: the chrome in that theme's tokens, and the cell
- * in the light one's, which row 1 leaves on the board in both.
+ * What the board's page computes in `theme`: the chrome and, since UI row 4, the cell in that
+ * theme's tokens. Until row 4 the cell was the light one's in both.
  */
 const painted = (c: Computed) => ({
     ground: rgb(c.ground), body: rgb(c.body), advice: rgb(c.advice), cell: rgb(c.cell),
@@ -91,7 +93,7 @@ const painted = (c: Computed) => ({
 })
 const expected = (theme: Theme) => ({
     ground: bytes(theme, 'ground'), body: bytes(theme, 'ground'), advice: bytes(theme, 'ink'),
-    cell: bytes('light', 'checkerLight'), target: bytes(theme, 'lineNeutral'),
+    cell: bytes(theme, 'wellLight'), target: bytes(theme, 'lineNeutral'),
     control: bytes(theme, 'surface'),
 })
 
@@ -117,7 +119,7 @@ test.describe('with nothing stored, the phone decides', () => {
         expect(c.scheme, 'the page says it can be either').toBe('light dark')
     })
 
-    test('2. with the system dark, the chrome computes the dark tokens, and the cell its light one', async ({ page }) => {
+    test('2. with the system dark, the chrome and the cell compute the dark tokens', async ({ page }) => {
         await open(page, 'dark')
         const c = await computed(page)
         expect(painted(c)).toEqual(expected('dark'))
@@ -250,7 +252,7 @@ test.describe('7. the browser chrome\'s colour', () => {
 test('8. on one page, the system going light, dark and light again moves the chrome each time', async ({ page }) => {
     /*
      * Not a reload: a phone that changes theme at sunset changes it under an open page. The
-     * ground and a line's target follow each time; the cell, on the board, stays put.
+     * ground, a line's target and, since UI row 4, the cell's well follow each time.
      */
     await open(page, 'light')
     for (const scheme of ['light', 'dark', 'light'] as const) {
@@ -259,7 +261,7 @@ test('8. on one page, the system going light, dark and light again moves the chr
             const c = await computed(page)
             return { ground: rgb(c.ground), target: rgb(c.target), cell: rgb(c.cell) }
         }, `in ${scheme}`).toEqual({
-            ground: bytes(scheme, 'ground'), target: bytes(scheme, 'lineNeutral'), cell: bytes('light', 'checkerLight'),
+            ground: bytes(scheme, 'ground'), target: bytes(scheme, 'lineNeutral'), cell: bytes(scheme, 'wellLight'),
         })
     }
 })

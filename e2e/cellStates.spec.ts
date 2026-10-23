@@ -18,6 +18,10 @@ import { STATE } from '../app/dominoFill/cellStates'
  * Greyscale is the strictest reading of "without colour": it is what is left to someone
  * who sees no hue at all, and any pair it can tell apart, a partial colour deficiency can
  * too.
+ *
+ * **In both themes** since UI row 4 (UI-SPEC §4.5), which gave the board dark wells and the
+ * states dark values of their own. Every bar is the same in each: a lightness change is a
+ * difference between two shots, and reads the same on a dark board as on a light one.
  */
 
 test.use({ baseURL: VISUAL_URL })
@@ -114,10 +118,11 @@ const footprints = async <K extends string>(
 const FOOTPRINT = 0.05
 const APART = 0.15
 
-for (const cell of [38, 53]) {
-    test(`at ${cell}px, each state draws a footprint of its own, in greyscale`, async ({ page }) => {
+for (const scheme of ['light', 'dark'] as const) for (const cell of [38, 53]) {
+    test(`${scheme}, at ${cell}px, each state draws a footprint of its own, in greyscale`, async ({ page }) => {
         // The sheet's own viewport, as the baselines take it.
         await page.setViewportSize({ width: 1280, height: 800 })
+        await page.emulateMedia({ colorScheme: scheme })
         const marks = await footprints(page, cell, STATES)
         const area = cell * cell
         const states = Object.keys(marks) as State[]
@@ -134,8 +139,9 @@ for (const cell of [38, 53]) {
         }
     })
 
-    test(`at ${cell}px, the focus stays in sight over a rock and over both dominoes`, async ({ page }) => {
+    test(`${scheme}, at ${cell}px, the focus stays in sight over a rock and over both dominoes`, async ({ page }) => {
         await page.setViewportSize({ width: 1280, height: 800 })
+        await page.emulateMedia({ colorScheme: scheme })
         for (const [occupant, target] of Object.entries(OCCUPIED) as [Occupant, Target][]) {
             const marks = await footprints(page, cell, { [occupant]: target }, async () => {
                 // Through the square itself, as the keyboard does -- a key first, so the
@@ -151,13 +157,14 @@ for (const cell of [38, 53]) {
         }
     })
 
-    test(`at ${cell}px, a refused move's cross stays in sight over a rock and over both dominoes`, async ({ page }) => {
+    test(`${scheme}, at ${cell}px, a refused move's cross stays in sight over a rock and over both dominoes`, async ({ page }) => {
         /*
          * A refusal lands on whatever the square holds (P1-6): a tap on a rock, a drag that
          * starts on a domino. The cross is drawn with the other states, above the pieces,
          * and red on a white halo so that one of the two reads on every surface.
          */
         await page.setViewportSize({ width: 1280, height: 800 })
+        await page.emulateMedia({ colorScheme: scheme })
         const square = (specimen: string, at: string) => page.locator(`[data-specimen="${specimen}"] [data-cell="${at}"]`)
         const press = async (specimen: string, from: string, to: string) => {
             await square(specimen, from).hover()
@@ -180,7 +187,7 @@ for (const cell of [38, 53]) {
         }
     })
 
-    test(`at ${cell}px, each state's drawing is the cell's size, its lengths fractions of it`, async ({ page }) => {
+    test(`${scheme}, at ${cell}px, each state's drawing is the cell's size, its lengths fractions of it`, async ({ page }) => {
         /*
          * Each mark is drawn in a 100-unit viewBox and sized to its square, so a length in
          * it is that many hundredths of the cell. Asserted from the browser's own layout:
@@ -188,6 +195,7 @@ for (const cell of [38, 53]) {
          * and the diamond's reach come out at their fractions of the cell in pixels.
          */
         await page.setViewportSize({ width: 1280, height: 800 })
+        await page.emulateMedia({ colorScheme: scheme })
         await page.goto(`/visual?cell=${cell}`)
         await waitForRest(page, 'main')
         const measured = await page.evaluate(() => Array.from(document.querySelectorAll<SVGSVGElement>('svg[data-mark]'), svg => {

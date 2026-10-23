@@ -17,9 +17,9 @@ test.use({ baseURL: VISUAL_URL })
 
 /** The sheet, in order. A specimen missing, added or doubled is a change to the baselines. */
 const SPECIMENS = [
-    'empty', 'domino-upright', 'domino-flat', 'rock', 'target-satisfied', 'target-over',
+    'empty', 'domino-upright', 'domino-flat', 'rock', 'target-satisfied', 'target-reached', 'target-over',
     'anchor', 'hint', 'focus', 'refused', 'held-preview',
-    'completion-card', 'controls-game', 'controls-difficulty', 'controls-level',
+    'labels-wide', 'completion-card', 'controls-game', 'controls-difficulty', 'controls-level',
     'control-archive', 'control-sound', 'control-mode', 'piece-picker',
 ]
 
@@ -38,8 +38,7 @@ const ISOLATED: [selector: string, specimen: string, count: number][] = [
     ['[data-focus]', 'focus', 1],
     ['[data-focus-visible]', 'focus', 1],
     ['[data-refused]', 'refused', 1],
-    ['[data-line-state="satisfied"]', 'target-satisfied', 1],
-    ['[data-line-state="over"]', 'target-over', 1],
+    ['[data-label-fixture]', 'labels-wide', 1],
     ['[data-completion-card]', 'completion-card', 1],
     ['[data-check]', 'controls-game', 1],
     ['[data-hint]', 'controls-game', 1],
@@ -77,6 +76,35 @@ test('each state is shown by its own specimen and nowhere else', async ({ page }
     }
 })
 
+/**
+ * Where each line state other than neutral is on the sheet, specimen by specimen (UI row 4).
+ *
+ * Since row 4 the line states can't each be isolated to one specimen: a 0 line with a cell open
+ * is reached from the start, and every hint a 2-by-2 board can name leaves one -- each domino
+ * has a blank half -- and the label fixtures show every state twice, on a column and a row.
+ * So the count is per specimen, every specimen, and a state that leaked anywhere else fails.
+ */
+const LINE_STATES: Record<string, Record<string, number>> = {
+    'target-satisfied': { satisfied: 1 },
+    'target-reached': { reached: 1 },
+    'target-over': { over: 1 },
+    hint: { reached: 1 },
+    'labels-wide': { reached: 2, satisfied: 2, over: 2 },
+}
+
+test('each line state is where its specimens show it, and nowhere else', async ({ page }) => {
+    await openSheet(page)
+    const found = await page.locator('[data-specimen]').evaluateAll(els => Object.fromEntries(els.map(el => {
+        const counts: Record<string, number> = {}
+        for (const label of el.querySelectorAll('[data-line-state]:not([data-line-state="neutral"])')) {
+            const state = label.getAttribute('data-line-state')!
+            counts[state] = (counts[state] ?? 0) + 1
+        }
+        return [el.getAttribute('data-specimen'), counts]
+    })))
+    expect(found).toEqual(Object.fromEntries(SPECIMENS.map(name => [name, LINE_STATES[name] ?? {}])))
+})
+
 test('each piece, and the empty board, is exactly what its specimen names', async ({ page }) => {
     /*
      * Pieces, the two cell tones and the neutral target are context on other boards -- a
@@ -92,8 +120,9 @@ test('each piece, and the empty board, is exactly what its specimen names', asyn
     expect(await pieces('rock')).toEqual(['rock'])
     expect(await pieces('empty')).toEqual([])
 
-    // Both tones, twice each, and every line short of its target.
-    const tones = await specimen(page, 'empty').locator('[data-cell]').evaluateAll(
+    // Both tones, twice each, and every line short of its target. Read from the wells since
+    // UI row 4; the cell's own box is unpainted.
+    const tones = await specimen(page, 'empty').locator('[data-cell] [data-well]').evaluateAll(
         els => els.map(el => getComputedStyle(el).backgroundColor))
     expect(tones).toHaveLength(4)
     const counts = Object.values(tones.reduce<Record<string, number>>(

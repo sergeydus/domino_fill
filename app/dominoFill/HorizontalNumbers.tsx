@@ -1,48 +1,18 @@
 import { observer } from "mobx-react"
-import { motion } from 'motion/react'
 import { PuzzleSession } from "../stores/PuzzleSession"
-import { MOTION } from "./motion"
-import { labelPresentation, labelDescription, LABEL_COLORS, tieStyle } from "./lineLabel"
+import { ColumnLabels } from "./LineLabels"
 
 /**
- * The column labels, along the top of the board. See VerticalNumbers for why the font is
- * derived from `--cell`, why `min-w-0 min-h-0` is required, and why the padding is there
- * -- here it is `padding-left`, clearing the grid's left border.
+ * The column labels, along the top of the board: the session's targets and states, passed to
+ * the one renderer (`LineLabels`, UI row 4) and nothing else, so what the sheet's fixtures
+ * measure of that renderer is what the board draws.
  */
-const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => {
-    const size = boardsStore.squareSize
-    const gutter = boardsStore.gutterSize
-    const split = boardsStore.definition.columnTargets.split(',')
-    const states = boardsStore.columnStates
-    return <div
-        className="flex flex-row min-w-0 min-h-0 text-board-label tabular-nums"
-        style={{ paddingLeft: 'var(--grid-border)' }}
-    >
-        {split.map((el: string, index: number) => {
-            const presentation = labelPresentation(states[index])
-            return (
-                <motion.div className="relative flex items-center justify-center min-w-0 min-h-0"
-                    initial={{ color: LABEL_COLORS.neutral }}
-                    animate={{ color: presentation.color }}
-                    // Placement feedback, so inside P1-6's limits (`motion.ts`).
-                    transition={{ duration: MOTION.label.duration }}
-                    key={index}
-                    data-col-label={index}
-                    data-line-state={presentation.token}
-                    role="img"
-                    aria-label={labelDescription(`Column ${index + 1}`, el, states[index])}
-                    style={{
-                        ...{ width: `${size}px`, height: `${gutter}px` },
-                        textDecoration: presentation.textDecoration,
-                        outline: presentation.outline,
-                        borderRadius: '4px',
-                    }}
-                >{el}
-                    {/* The tie to the line (P1-3): see `LABEL_TIE`. */}
-                    <span aria-hidden data-label-tie style={tieStyle('below')} />
-                </motion.div>
-            )
-        })}
-    </div>
-}
+const HorizontalNumbers: React.FC<{ boardsStore: PuzzleSession }> = ({ boardsStore }) => (
+    <ColumnLabels
+        targets={boardsStore.definition.columnTargets.split(',')}
+        states={boardsStore.columnStates}
+        cell={boardsStore.squareSize}
+        gutter={boardsStore.gutterSize}
+    />
+)
 export default observer(HorizontalNumbers)

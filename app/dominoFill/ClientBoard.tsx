@@ -25,13 +25,27 @@ type Seen = { session: PuzzleSession, count: number }
 const BORDER_SIDE_PX = GRID_BORDER_PX / 2
 
 /**
- * The radius of the board's four outer squares, and so of the frame's inner edge (graphics
- * spec P1-3). One number for both, by construction: the corner squares read it as
- * `--board-corner`, and the frame draws its outer edge at that plus its own width, so its
- * inner edge lands on the squares' curve. Until P1-3 they were two literals that happened
- * to agree -- the squares' `12px` and the frame's `rounded-2xl`, 16px, less a 4px border.
+ * The radius of the tray's inner edge, and so of the corner wells' outer corners (graphics
+ * spec P1-3; UI-SPEC §4.1). One number for both, by construction: the corner wells read it
+ * as `--board-corner`, less their inset, so they stay concentric with the curve, and the
+ * tray draws its outer edge at that plus its own width -- 22px since UI row 4, where it was
+ * 16. Until P1-3 they were two literals that happened to agree -- the squares' `12px` and the
+ * frame's `rounded-2xl`, 16px, less a 4px border.
  */
-export const BOARD_CORNER_PX = 12
+export const BOARD_CORNER_PX = 18
+
+/**
+ * The custom properties the board's shell sets for everything inside it: the cell, the
+ * labels' font, the border the labels clear, and the tray's corner. Exported so the
+ * component sheet's label fixtures sit in exactly what a board's labels do (UI row 4).
+ */
+export const shellVars = (cell: number, labelFont: number): CSSProperties => ({
+    // Custom properties are not in CSSProperties' type.
+    ['--cell' as keyof CSSProperties]: `${cell}px`,
+    ['--label-font' as keyof CSSProperties]: `${labelFont}px`,
+    ['--grid-border' as keyof CSSProperties]: `${BORDER_SIDE_PX}px`,
+    ['--board-corner' as keyof CSSProperties]: `${BOARD_CORNER_PX}px`,
+} as CSSProperties)
 
 const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
     const size = boardsStore.board.length
@@ -59,12 +73,8 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
         gridTemplateRows: `${gutter}px auto`,
         width: boardsStore.shellWidth,
         height: boardsStore.shellHeight,
-        // Custom properties are not in CSSProperties' type.
-        ['--cell' as keyof CSSProperties]: `${cell}px`,
-        ['--label-font' as keyof CSSProperties]: `${boardsStore.labelFontSize}px`,
-        ['--grid-border' as keyof CSSProperties]: `${BORDER_SIDE_PX}px`,
-        ['--board-corner' as keyof CSSProperties]: `${BOARD_CORNER_PX}px`,
-    } as CSSProperties
+        ...shellVars(cell, boardsStore.labelFontSize),
+    }
 
     /*
      * Which cell a pointer event is over, asked of the browser rather than worked out.
@@ -305,11 +315,24 @@ const ClientBoard: React.FC<Props> = ({ boardsStore }: Props) => {
             <div />
             <HorizontalNumbers boardsStore={boardsStore} />
             <VerticalNumbers boardsStore={boardsStore} />
+            {/*
+              * The tray (UI-SPEC §4.1, UI row 4): `boardTray`, behind the wells and in the gaps
+              * between them, with a solid `trayEdge` 4px beneath and an inset shadow of it at
+              * 35%, 2px down. Both are box shadows, so neither takes layout: the tray's rim is
+              * the border it always had, inside `GRID_BORDER_PX` (§3.3). It was the frame, a
+              * near-black border round a checker that filled it.
+              */}
             <div
-                className="border-board-frame"
-                style={{ borderWidth: 'var(--grid-border)', borderRadius: 'calc(var(--board-corner) + var(--grid-border))' }}
+                className="relative bg-board-tray border-board-tray"
+                style={{
+                    borderWidth: 'var(--grid-border)',
+                    borderRadius: 'calc(var(--board-corner) + var(--grid-border))',
+                    boxShadow: '0 4px 0 var(--tray-edge)',
+                }}
                 data-board-frame
             >
+                {/* The inset shadow, under the grid, which comes after it (globals.css). */}
+                <div aria-hidden data-tray-shadow className="board-tray-shadow" />
                 {/* `cursor-pointer` lives here now: it used to be on the piece overlay,
                     which no longer takes pointer events and so no longer sets a cursor. */}
                 {/* `board-grid` carries the static touch policy; see globals.css. */}

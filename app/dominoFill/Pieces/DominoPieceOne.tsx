@@ -1,9 +1,9 @@
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
 import { cssVar } from "@/app/palette";
-import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
+import { PIECE, PIP_LIP, UNIT as U, pieceBox, viewBox } from "./geometry";
 
-const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
+const { rim: W, radius: R, inset: I, extrusion: E, pipRadius: P } = PIECE
 
 /**
  * Exactly what a piece needs, and no SVG props (graphics row 6). A spread of caller props
@@ -32,9 +32,10 @@ const DominoPieceOne: React.FC<PieceProps> = (props) => {
         <svg {...pieceBox(1, 2, size)} viewBox={viewBox(1, 2)}>
             <rect x={I} y={I + E} width={U - 2 * I} height={2 * U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileSide') }} />
             <rect x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileFace') }} />
-            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I + E} fill="none" strokeWidth={O} rx={R} ry={R} style={{ stroke: cssVar('pieceOutline') }} />
-            <line x1={PIECE.dividerInset} y1={U} x2={U - PIECE.dividerInset} y2={U} strokeWidth={PIECE.dividerWidth} style={{ stroke: cssVar('divider') }} />
-            <circle cx={U / 2} cy={U / 2} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
+            <rect data-outline x={I} y={I} width={U - 2 * I} height={2 * U - 2 * I + E} fill="none" strokeWidth={W} rx={R} ry={R} style={{ stroke: cssVar('tileEdge') }} />
+            <line x1={PIECE.dividerInset} y1={U} x2={U - PIECE.dividerInset} y2={U} strokeWidth={PIECE.dividerWidth} strokeLinecap="round" style={{ stroke: cssVar('divider') }} />
+            <circle data-pip-lip cx={U / 2} cy={U / 2 - PIP_LIP} r={P} style={{ fill: cssVar('tileSide') }} />
+            <circle data-pip cx={U / 2} cy={U / 2} r={P} style={{ fill: cssVar('pip') }} />
         </svg>
     );
 };

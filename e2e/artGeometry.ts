@@ -60,9 +60,11 @@ export const readArt = (root: ParentNode) => {
 
     return {
         counts: { ones: ones.length, twos: twos.length, rocks: rocks.length },
-        outline: pieces.map(el => px(el, num(el.querySelector('[data-outline]'), 'stroke-width'))),
+        // The rim since UI row 4 (`data-outline` stays its marker); P1-1's outline before.
+        rim: pieces.map(el => px(el, num(el.querySelector('[data-outline]'), 'stroke-width'))),
         radius: pieces.flatMap(el => Array.from(el.querySelectorAll('rect'), r => px(el, num(r, 'rx')))),
-        pip: pieces.flatMap(el => Array.from(el.querySelectorAll('circle'), c => px(el, 2 * num(c, 'r')))),
+        // The pips, not their lips (UI row 4), which are discs of the same size under them.
+        pip: pieces.flatMap(el => Array.from(el.querySelectorAll('circle[data-pip]'), c => px(el, 2 * num(c, 'r')))),
         divider: [
             ...ones.map(el => px(el, num(el.querySelector('line'), 'x2') - num(el.querySelector('line'), 'x1'))),
             ...twos.map(el => px(el, num(el.querySelector('line'), 'y2') - num(el.querySelector('line'), 'y1'))),

@@ -187,12 +187,14 @@ const rectOf = (v: number[]): RoundedRect =>
 /**
  * The closest rounded rectangle found: the least deviation over a descent from every
  * combination of corner radius, rotation and scale below, each started on the polygon's
- * bounding box and refined with smaller steps.
+ * bounding box and refined twice with smaller steps.
  *
- * Measured on the rock, more iterations change little: 300, 600 and 1,200 per descent found
- * 0.0749, 0.0749 and 0.0747 of the cell. The starting points matter more than the descent.
- * `stopBelow` ends the search at the first fit under it, for a caller that only needs to
- * know one exists.
+ * Measured on row 8's rock, more iterations changed little: 300, 600 and 1,200 per descent
+ * found 0.0749, 0.0749 and 0.0747 of the cell. The starting points matter more than the
+ * descent. UI row 4's rock, with its shallower sweep, needed the third, finer pass: with two,
+ * the search stopped at 0.0692, short of the 0.0675 its witness stands off it; with three it
+ * finds 0.0653 (`tests/rock.test.tsx`). `stopBelow` ends the search at the first fit under
+ * it, for a caller that only needs to know one exists.
  */
 export const closestRoundedRect = (
     polygon: readonly Point[],
@@ -210,7 +212,8 @@ export const closestRoundedRect = (
                 const start = [(x0 + x1) / 2, (y0 + y1) / 2, scale * (x1 - x0) / 2, scale * (y1 - y0) / 2, k, turn]
                 const coarse = descend(objective, start, [0.1 * size, 0.1 * size, 0.1 * size, 0.1 * size, 0.2, 0.15], iterations)
                 const fine = descend(objective, coarse.at, [0.03 * size, 0.03 * size, 0.03 * size, 0.03 * size, 0.1, 0.05], iterations)
-                if (fine.value < best.value) best = fine
+                const finer = descend(objective, fine.at, [0.01 * size, 0.01 * size, 0.01 * size, 0.01 * size, 0.03, 0.015], iterations)
+                if (finer.value < best.value) best = finer
                 if (best.value < stopBelow) return { deviation: best.value, rect: rectOf(best.at) }
             }
     return { deviation: best.value, rect: rectOf(best.at) }

@@ -2,9 +2,9 @@ import React from "react";
 import { observer } from "mobx-react";
 import { PuzzleSession } from "@/app/stores/PuzzleSession";
 import { cssVar } from "@/app/palette";
-import { PIECE, UNIT as U, pieceBox, viewBox } from "./geometry";
+import { PIECE, PIP_LIP, UNIT as U, pieceBox, viewBox } from "./geometry";
 
-const { outline: O, radius: R, inset: I, extrusion: E } = PIECE
+const { rim: W, radius: R, inset: I, extrusion: E, pipRadius: P } = PIECE
 
 /**
  * Exactly what a piece needs, and no SVG props (graphics row 6). A spread of caller props
@@ -33,11 +33,13 @@ const DominoPieceTwo: React.FC<PieceProps> = (props) => {
         <svg {...pieceBox(2, 1, size)} viewBox={viewBox(2, 1)}>
             <rect x={I} y={I + E} width={2 * U - 2 * I} height={U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileSide') }} />
             <rect x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I} rx={R} ry={R} style={{ fill: cssVar('tileFace') }} />
-            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} fill="none" strokeWidth={O} rx={R} ry={R} style={{ stroke: cssVar('pieceOutline') }} />
+            <rect data-outline x={I} y={I} width={2 * U - 2 * I} height={U - 2 * I + E} fill="none" strokeWidth={W} rx={R} ry={R} style={{ stroke: cssVar('tileEdge') }} />
 
-            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} strokeWidth={PIECE.dividerWidth} style={{ stroke: cssVar('divider') }} />
-            <circle cx={U + U / 3} cy={U / 3} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
-            <circle cx={U + U * 2 / 3} cy={U * 2 / 3} r={PIECE.pipRadius} style={{ fill: cssVar('pip') }} />
+            <line x1={U} y1={PIECE.dividerInset} x2={U} y2={U - PIECE.dividerInset} strokeWidth={PIECE.dividerWidth} strokeLinecap="round" style={{ stroke: cssVar('divider') }} />
+            <circle data-pip-lip cx={U + U / 3} cy={U / 3 - PIP_LIP} r={P} style={{ fill: cssVar('tileSide') }} />
+            <circle data-pip cx={U + U / 3} cy={U / 3} r={P} style={{ fill: cssVar('pip') }} />
+            <circle data-pip-lip cx={U + U * 2 / 3} cy={U * 2 / 3 - PIP_LIP} r={P} style={{ fill: cssVar('tileSide') }} />
+            <circle data-pip cx={U + U * 2 / 3} cy={U * 2 / 3} r={P} style={{ fill: cssVar('pip') }} />
         </svg>
     );
 };

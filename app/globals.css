@@ -91,6 +91,21 @@
 }
 
 /*
+ * The tray's inset shadow (UI-SPEC §4.1, UI row 4): `trayEdge` at 35%, 2px down, on a layer of
+ * its own under the grid, so it needs no colour function. Here rather than inline: an inline
+ * opacity reads as a fade still running to the tests' rest check (`e2e/rest.ts`), and an
+ * `opacity-*` utility is kept for drawings that fade (`tests/typography.test.ts`).
+ */
+.board-tray-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 2px 0 var(--tray-edge);
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/*
  * Hover only where there is a hover (graphics spec P1-6, row 12).
  *
  * Tailwind's own `hover:` waits for `(hover: hover)` only, and some touch devices report
