@@ -6716,6 +6716,46 @@ the baselines from CI's run on `3b65cc5`.
   - **And in `f41b237`'s,** recovered the same way: phone-360, `tutorial.spec.ts` › "the
     modal itself does not overflow horizontally": TIME_WAIT 4369, of which the tests' 4349,
     and the tests' established 72.
+
+**Codex's review of `0eae5d8`: held for one correction, made in `780b66a`.** The press could
+cancel a click. Pressed 2px below its top, held for 200ms and released without moving, Archive
+stayed closed: it had sunk 3px from under the pointer, and a click whose press and release land
+on different elements goes to neither. Codex reproduced it in both themes, and in 2 of its 8
+cases. Every test pressed the centre, or released elsewhere on purpose.
+- **The fix** (`scripts/controls-css.ts`): each control is `position: relative`, and while held
+  an empty `::after` reaches up by exactly its press's move, through its top border: the
+  primary 4px, raised, caution and chip 3, the level arrows 1, a day 2 (its pixel and its
+  border). Under reduced motion a sink doesn't move, so its reach is zero; a nudge keeps its
+  pixel there, and its reach. Codex had suggested a layer that sinks inside a still button,
+  and accepted this instead. No pixel changes, so the commit isn't marked for a visual
+  update.
+- **Tests:**
+  - New in `e2e/controlStates.spec.ts`, with motion allowed: Check, the Medium toggle and
+    Archive, each pressed halfway into the band its sink uncovers, held until it settles, and
+    released in place, must act. Before the fix it failed in both projects; with it, the press
+    and variant specs passed 42 of 42.
+  - The nudges aren't in it. Measured: Chromium still hit the level arrow half a pixel above
+    its nudged top, so their band can't be pressed reliably.
+  - New in `tests/controls.test.ts`: every variant reaches back by its own move, and is
+    `position: relative`. The reduced-motion test now holds the zeroed reach.
+  - The regression first failed on phone-360 for a reason of its own: Archive was below the
+    fold, and the pointer pressed where it was told, which was off the page. It scrolls each
+    control into view now.
+- **Probes, 4 of 4 caught** at the assertion intended, each file restored and checked by hash
+  (`row3ui_probes_reach.py`):
+  21. The reach removed: the unit check (`controls.test.ts:159`), and the regression's Check
+      in both projects.
+  22. The reach 1px for every variant: the same two.
+  23. No `position: relative`: the unit check (`:160`). The browser can't see it, since the
+      `::after` then sizes itself from an ancestor and still covers the band.
+  24. The reach kept under reduced motion: the reduced-motion unit test (`:143`).
+- **Two gates, from cold:**
+  1. Failed at lint (1), every other step 0 (unit 1869, browser 797 passed, 1 skipped). The
+     errors were 3 in codex's review script, `edge.spec.ts`, in the git-ignored
+     `playwright-report/`, which ESLint reads. Nothing was committed. The user chose to have
+     codex move it, and codex renamed both of its scripts to `.txt`.
+  2. Every step 0: unit 1869 with 0 bytes of stderr, browser 797 passed and 1 skipped, no
+     socket error. Then `780b66a`.
   - **CI on `7f90b8b`** (run 39858764317): attempt 1's visual job failed installing
     Playwright's browser, `packages.microsoft.com` answering 403. Attempt 2 passed, unchanged.
   - **Two socket snapshots, both recovered** in docs gates, with nothing changed:
