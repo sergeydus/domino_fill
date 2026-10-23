@@ -369,7 +369,9 @@ them:
 - **Reached** *(added 2026-10-23, user)*: the pips add up to exactly the target, with cells in
   the line still open. The number in `success`, with a 2px `success` bar under it. It tells the
   player the rest of the line must be blanks, without saying the line is finished: D10-g's
-  rule, that only a full line is complete, stands.
+  rule, that only a full line is complete, stands. **A line whose target is 0 is reached from
+  the start,** before any piece is in it, and shows it: a hint that it takes only blanks
+  (user, 2026-10-23, choosing this over waiting for a first piece).
 - **Satisfied:** a filled `success` pill with the number in `onSuccess`. The pips match the
   target and the line is full.
 - **Over:** an outlined pill (a 2px `problem` ring) with the number in `problem`. The pips add
