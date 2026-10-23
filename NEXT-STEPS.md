@@ -6323,6 +6323,13 @@ controls are row 14's flat, bordered set on interim colours: a pale blue accent,
     scroll at 50–200% zoom. Taller controls take height from the board, and the layout suite
     decides whether that's allowed. The cell sizes at the suite's viewports are measured before
     and after and reported. A failing invariant stops the row; it isn't retuned.
+11. **The game column's gap is 12px,** where it was 16 (`DominoClient.tsx:361`, `gap-4`). Added
+    after the build stopped at rule 10 (below): §3.3 allows 12–16px between groups, and the
+    board's budget reads the column's real gap (`useAvailableBoardBox.ts:88-96`), so the 4px
+    a gap gives back goes to the board with no change to how it's sized. Only that column: the
+    rail and the sheets keep theirs. If 12px doesn't clear slice 3a's rule 14 at every viewport
+    and size, the row stops again, and deferring the game page's three rows to 48px in rows 6-7
+    is the fallback (option C below).
 
 **What's not in it.** `round`, `card`, `switch` and the icons (amendment 1); `onSuccess` and
 `onProblem` (amendment 2); the board, the pieces and the cell states (rows 4, 5); the
@@ -6432,6 +6439,36 @@ choice were accepted as they stood):
 text's expected colour by its background alone, which would have rejected Reset, "Solved!" and
 the tutorial's note on `surface`. It now chooses by role as well, keeps exact tokens and 4.5:1,
 has positive cases, and probe 10 names it. And the days' 28px was computed, not measured.
+
+Codex accepted the contract at `7f90b8b`.
+
+**Stopped at rule 10, during the build (2026-10-23).** Built against `7f90b8b`, uncommitted,
+the full browser suite failed two tests and passed 789 (1 skipped):
+`challenge.layout.spec.ts:68` and `challengeResults.layout.spec.ts:99`, slice 3a's rule 14 and
+3b's version of it. At 390x844 with the 8×8 board the casual page still fits, and the challenge
+page's clock row now scrolls it by **4px**. The 48px controls add 36px to a phone's game page
+(three rows at +12), which used up the slack the clock row relied on. §10's invariants held:
+no cell under 38px, no sideways scroll anywhere. Measured, before → after, the board's cell
+in px and the page's vertical overflow, on the challenge page (a scratch measurement through
+the repository's own server harness):
+
+| Viewport | 6×6 cell | 7×7 cell | 8×8 cell | 8×8 overflow |
+|---|---|---|---|---|
+| 360x640 | 38 → 38 | 38 → 38 | 38 → 38 | 172 → 208 |
+| 360x720 | 38 → 38 | 38 → 38 | 38 → 38 | 92 → 128 |
+| 390x844 | 54 → 48 | 47 → 42 | 41 → 38 | **0 → 4** |
+| 393x852 | 55 → 49 | 47 → 43 | 42 → 38 | 0 → 0 |
+| 412x915 | 57 → 57 | 50 → 50 | 44 → 44 | 0 → 0 |
+| 800x400, 640x400 | 38 → 38 | 38 → 38 | 38 → 38 | 364 → 388 |
+| 853x533 | 38 → 38 | 38 → 38 | 38 → 38 | 231 → 255 |
+| 1280x800, 2560x1600 | unchanged | unchanged | unchanged | 0 → 0 |
+
+Three ways on were put to the user: A, accept 4px of scroll until rows 6-7; B, give the 4px
+back from the column's gaps; C, keep the game page's three rows at 36px until rows 6-7 replace
+them. I recommended C, to avoid tuning a layout rows 6-7 replace. Codex recommended B (§3.3
+allows 12px; the sizing already reads the gap; C would add temporary exceptions to the targets
+rule and remove them later), and I agreed after checking both claims in the code. **The user
+chose B (2026-10-23): rule 11 above.** Codex reviews this amendment before it's built.
 
 ## Campaign (future, for the mobile release)
 
