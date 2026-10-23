@@ -435,6 +435,18 @@ them:
 - **Both themes:** each gets its ratio rule in both themes, and `e2e/cellStates.spec.ts` and the
   contrast tests run in dark as well as light.
 
+*Amended 2026-10-23, in row 4's As built notes (NEXT-STEPS).* Row 4 changed two of the states to
+keep P1-5's greyscale bars on the new wells, both measured in `e2e/cellStates.spec.ts`:
+- **The light candidate wash is a mid blue,** `oklch(60% 0.11 254)`, at 40%. Tailwind's pale
+  `blue-200` was within 15 levels of lightness of the cream wells, so the candidate read as its
+  dashed ring alone: 6.6% from the anchor in greyscale, under 15%. It is now 35-37%. The dark
+  theme keeps the pale blue.
+- **The refused cross is heavier:** its red is 12 units wide and its halo 3.5, where they were 9
+  and 5, the same 19 overall. Neither halo counts in greyscale on the new wells, and the red
+  alone was 13.6-14.1% from the hint's diamond; it is now 15.9-16.3%.
+
+Row 5 restyles the states and starts from these.
+
 ### 4.6 The legend
 
 - **One compact line under the board,** 48px tall in both modes, so switching Pick a piece on

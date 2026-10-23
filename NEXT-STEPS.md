@@ -7143,6 +7143,164 @@ three cells give 6, not 13. The bounds test now uses presentation fixtures on th
 renderer, split into pure strips with session wrappers, and tied to a real board label. The
 transitions stay on real sessions. Probe 26.
 
+**As built** (2026-10-23). The change is `78bd886`, marked for a visual update; the baselines
+CI regenerated from it are `4f0f964` (run 40019927591).
+
+*What the row built, against the rules:*
+- **Rule 1, the tokens.** `app/palette.ts` holds §3.1's final values in both themes, with the
+  four clarifications. The rock's tones keep their names: `rockFace` is the spec's `rock`, and
+  `rockShade` takes `rockSide`'s value. `onSuccess` and `trayEdge` are new. Every ratio the
+  contract quotes was recomputed from the tokens in `tests/contrast.test.ts` and matched.
+- **Rule 2, the silhouette rule** replaces `OWED`'s chain in `tests/contrast.test.ts`, with a
+  check of why each rim is there: the light face and side fail at the edge (1.18, 1.72), and
+  the dark rock's side does (2.15).
+- **Rule 3, the tray and wells.** The frame is the tray: `bg-board-tray`, its border in the same
+  token, radius 22px, and `trayEdge` 4px beneath as a box shadow. Its inset shadow is a layer of
+  its own, `.board-tray-shadow` in `globals.css`. A `color-mix()` at 35% would have been a
+  colour function, which the palette audit refuses. An inline opacity reads as a fade still
+  running to `e2e/rest.ts`, and an `opacity-*` utility is kept for drawings that fade
+  (`tests/typography.test.ts`). Each cell draws `data-well` inside its square, unpainted box.
+  `WELL = { inset: 1.5, radius: 10 }` is in `Pieces/geometry.ts`. The corner wells round to
+  `calc(var(--board-corner) - inset)`. `data-board-frame` stays the tray's marker.
+- **Rule 4, the domino.** `PIECE` is the contract's exactly. The lip is its own export,
+  `PIP_LIP = 1`, since the contract listed `PIECE`'s keys: a `tileSide` disc of the pip's size, a
+  unit above it and drawn under it. The divider's ends are round (`strokeLinecap`), and the icon
+  copies them. New markers: `data-pip` and `data-pip-lip`.
+- **Rule 5, the obstacle.** `Obstacle.tsx` takes a `skin`. `SKINS = { rock: ROCK }` is in
+  `geometry.ts`, and the svg carries `data-skin`. The board still marks the piece
+  `data-piece="rock"`.
+- **Rules 6 to 8, the states.**
+  - `lineState` returns `reached` when the sum matches with a cell open.
+  - Each label's number sits in a pill (`data-label-pill="none|filled|ringed"`), and reached
+    adds `data-label-bar`.
+  - `PILL` in `lineLabel.ts` sizes the pill against the label's box: its height is
+    `min(1.15em, 100% - 4px)`, it's at least as wide as it is tall, and its padding is
+    `min(0.25em, (100% - 2ch) / 2 - 2px)`.
+  - The ring is an outline at no offset.
+  - The bar is 2px, 0.2em in from each side, 0.05em from the pill's foot, in `currentColor`.
+- **The strips.** `LineLabels.tsx` holds `ColumnLabels` and `RowLabels`. `HorizontalNumbers`
+  and `VerticalNumbers` only pass the session's targets, states and sizes through.
+  `ClientBoard.tsx` exports `shellVars`, which the sheet's fixtures use.
+- **The sheet.**
+  - New specimens: `target-reached`, and `labels-wide`, which holds the two fixture strips.
+  - `domino-flat`'s columns are `3,3`, where they were `2,2`. Its flat domino scores 2 in
+    column 1, which would have shown reached.
+  - The hint specimen's second row is reached from the start. Every hint a 2-by-2 board can
+    name leaves a 0 line, because each domino has a blank half. `e2e/sheet.spec.ts` counts the
+    states specimen by specimen for that reason.
+- **Rule 12, the icons** are regenerated from `scripts/icon.ts`'s new layers.
+- **The challenge cover** draws its border in `boardTray`, where it was `boardFrame`.
+
+*Corrections made while building, each beyond what the contract said:*
+1. **The rock's search gained a third pass** (`tests/roundedRect.ts`), and its witness is from
+   a stronger pattern search. Re-derived as planned (3,000 seeded random starts, sampled at 240
+   points):
+   - a compass search stood **0.0679** off the new rock;
+   - a generating-set pattern search (the axis moves and twelve random directions, the best
+     taken) stood **0.06755**, and is the witness.
+
+   The test's search with its two passes found **0.0692**, short of either. The rock still
+   clears 0.05, but the calibration assertion, which the contract keeps, failed. So the search
+   gained a third, finer descent pass and finds **0.0653** (about 0.4s more). Against the
+   witness, the search fails when cut to 5, 10 or 20 iterations per descent (0.0804, 0.0756,
+   0.0755), and passes from 40 (0.0660). Row 8's witness caught 40 as well, so this calibration
+   is weaker than row 8's, and is reported as such. Scripts: `scratchpad/r4/witness.ts`,
+   `witness2.ts`, `searchvariants.ts`, not committed.
+2. **Two cell-state values changed to keep P1-5's greyscale bars,** both measured
+   (`e2e/cellStates.spec.ts`, now in both themes). Rule 10 kept `candidateWash`, and the
+   cross's shape was row 5's, so these are deviations, made as the contract allowed ("its
+   drawing or tone changes, not the bar"):
+   - **The light candidate wash is a mid blue,** `oklch(60% 0.11 254)`. The pale `blue-200` was
+     within 15 levels of lightness of the cream wells, so no opacity of it moved a pixel by the
+     32 the spec counts. The anchor and the candidate came out **6.6% and 7.8%** apart, under
+     15%; now they're **35 to 37%**. Dark keeps the pale wash. So only `dragWash` is shared
+     between the themes now, which the palette and contrast tests hold.
+   - **The refused cross's red is 12 wide and its halo 3.5,** where they were 9 and 5. The
+     overall width is still 19, so its reach and its relation to the ring and the brackets
+     don't change. On the new wells neither halo counts in greyscale, so only the red did, and
+     it was **13.6 to 14.1%** from the hint's diamond; now **15.9 to 16.3%**. That's the
+     closest pair on the sheet, under a point clear of the bar.
+3. **A label mounts in its state's colour** (`initial={false}`). It used to start neutral and
+   animate to its state, which was harmless while every label mounted neutral. A 0 line now
+   mounts reached. On the tutorial's board that first animation was read mid-fade on desktop,
+   and once ended at `rgb(0, 0, 0)` and stayed there on phone-360, between two `var()` colours.
+   Probe 27 holds it.
+4. **The corner hit probes moved from 5px to 2px in** (`e2e/art.spec.ts`), a strengthening of
+   probes the contract said would run unchanged. At 5px a probe sat 0.38px outside an 18px
+   arc, and Chromium still resolved the square: probe 25, which left the rounding on the box,
+   passed. At 2px it fails.
+5. **The label bounds check ink, not the pill's vertical scroll size**
+   (`e2e/labelBounds.spec.ts`). The font's content area, 1.36em of Nunito, is taller than any
+   pill the label has room for, and scroll sizes count it: the pill's vertical overflow is 1px
+   at 38 and 6px at 106 in every state. So the number's ink, from the canvas's glyph metrics,
+   must sit inside the pill. The rest of the readable check stands: the range inside the label,
+   and no overflow on the label or across the pill.
+   - `13` measures **1.2em** in the app (22.81px at 38), where the contract's arithmetic
+     assumed 1em. A row label at 38px is 26px wide, so its pill gets no padding, and the ring
+     reaches **0.4px** past the label's box, within the half-pixel the test allows.
+6. **Rule 9 named Redo,** and the app has none. Placing, removing, Undo and Reset are what the
+   tests drive.
+7. **Probe 4 mutates `columnComplete`,** not `rowComplete`: the zero-target rock line in the
+   tests is a column.
+
+*Tests changed that the contract didn't list:*
+- `tests/controls.test.ts`: the chip is the upright piece's box plus padding, so 63px and 75px,
+  where it was 66px and 78px. Kept: it follows the piece.
+- `tests/geometryRule.test.ts`: reads `Obstacle.tsx`.
+- `tests/roundedRect.ts`: the third pass (correction 1).
+- `e2e/typography.spec.ts`: a label's font is read from its board shell or the fixtures' shell.
+- `e2e/sheet.spec.ts`: the two new specimens, and the line states counted per specimen.
+
+*Counts.*
+- Unit: **1,877**, from 1,869.
+- Browser: **838** passed and 1 skipped in the gate, from 797.
+- New: `e2e/labelBounds.spec.ts` (5 tests), the rim and silhouette checks (4), the wells
+  (`boardChrome`, replacing the frame's 2), the feedback cases (2), `cellStates` in dark (8 more).
+
+*Mutation probes: 27 of 27 caught at the assertion named, after two corrections.* The 26
+planned and one for correction 3, each run, then restored byte for byte (checked by hash). In
+the first run 25 of 27 were caught:
+- **Probe 24's mutation drew nothing wrong.** A flex item may shrink, so `width: 120%` shrank
+  back into the label. Rerun with `flex-shrink: 0`, it fails "the pill leaves the label".
+- **Probe 25 survived, because the test was weak** (correction 4). After the fix it fails
+  "a press on a square resolved to another".
+
+The probes:
+1. `lineState` without `reached`: the rule's table, and the pinned day's 0 row at load.
+2. Reached on a full line: the table's satisfied cases.
+3. A 0 line that waits for a piece: the fresh board's 0 line, and the pinned day.
+4. A rock counted as open: a 0 line of rocks only, satisfied.
+5. Reached without its bar: the presentation test, and the pinned day's channels.
+6. The pill's number in `success`: `colourRoles`' text on the `success` surface.
+7. The satisfied tie in `onSuccess`: the sheet's tie colours.
+8. The dark rim in `#efe5d5`: "the dark domino has a rim" (the contrast check passes it).
+9. The light rim removed: "a rim".
+10. The rock's rim in `rockSide`: dark, `rgb(110, 97, 86)` on the well.
+11. The dark anchor at `#16295e`: "anchor draws too little to read" in dark, and the dark pairs.
+12. The extrusion at 14: 0.03 to 0.06.
+13. The pip changed, the icons not: the four icon files.
+14. Wells with no gap: "no gap: the tray does not show".
+15. The corner wells at the tray's radius: "corner 0: radius".
+16. The search at five iterations: the calibration, 0.0804 against 0.0675.
+17. The rock's witness removed: every skin has a witness.
+18. The rim dashed: "the rim is dashed".
+19. The rim's path open: "the rim is not one closed shape".
+20. The rim round the face only: "outside the rim".
+21. The diamond from `accent`: the sentinels.
+22. `hint` on `success`'s value: the distinctness check.
+23. The ring 3px out: "the ring, 5px out, leaves the label".
+24. The pill 120% and not shrinking: "the pill leaves the label".
+25. The corner rounding on the box: "a press on a square resolved to another".
+26. The label font on the session's wrapper: "column neutral: font".
+27. A label animating from neutral at mount: the tutorial's text on its card, in both projects.
+
+*The gates,* each from cold, every step's exit code 0:
+- **Before `78bd886`:** unit 1,877 (0 bytes of stderr), browser 838 passed and 1 skipped. One
+  socket error was recovered by the harness's reload. Its snapshot: layout, "the whole shell fits
+  the viewport width"; TIME_WAIT 5,041, of which the tests' 5,018.
+- **Before `4f0f964`:** the same counts, and no socket errors.
+- **CI:** run 40019927591 on `78bd886` passed both jobs. Its baselines are `4f0f964`.
+
 ## Campaign (future, for the mobile release)
 
 A campaign is a long numbered path of levels, like the mobile puzzle games with thousands of
