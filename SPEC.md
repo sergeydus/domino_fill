@@ -912,6 +912,13 @@ entire audio channel, so haptics *are* the feel budget.
 > column unplayed — is `neutral`, where it used to go green and tell the player they had finished a
 > line they had not.
 >
+> **Amended (2026-10-23, user): such a line is `reached`, a fourth state.** The sum matching with
+> cells still open is worth showing, since it means the rest of the line must be blanks, but not as
+> finished. `satisfied` still requires a full line, so D10-g's rule stands. `reached` has a look of
+> its own (`UI-SPEC.md` §4.2: the number in `success` with a bar under it, a shape neither
+> satisfied nor over has), and the screen reader says "target reached". It's built with UI row 4,
+> which redraws the line targets.
+>
 > **Colour is no longer the only channel.** Satisfied is struck through, like crossing a clue off a
 > list; over is ringed. Both are legible in greyscale, and the ring is an `outline` rather than a
 > border precisely because outlines take no layout space — a border would reopen the gutter overflow

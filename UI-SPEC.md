@@ -365,12 +365,22 @@ them:
 
 ### 4.2 Line targets
 
-- **Neutral:** the number in `boardLabel`.
-- **Satisfied:** a filled `success` pill with the number in `onSuccess`.
-- **Over:** an outlined pill (a 2px `problem` ring) with the number in `problem`.
-- **Not by colour alone:** filled versus outlined tells the two states apart without colour,
-  and both are a shape the neutral number doesn't have. That keeps P1-8's rule. The screen
-  reader text is `lineLabel.ts`'s, unchanged.
+- **Neutral:** the number in `boardLabel`. The line's pips add up to less than its target.
+- **Reached** *(added 2026-10-23, user)*: the pips add up to exactly the target, with cells in
+  the line still open. The number in `success`, with a 2px `success` bar under it. It tells the
+  player the rest of the line must be blanks, without saying the line is finished: D10-g's
+  rule, that only a full line is complete, stands.
+- **Satisfied:** a filled `success` pill with the number in `onSuccess`. The pips match the
+  target and the line is full.
+- **Over:** an outlined pill (a 2px `problem` ring) with the number in `problem`. The pips add
+  up to more than the target, full or not.
+- **Not by colour alone:** filled versus outlined tells satisfied and over apart without colour,
+  and the bar is a shape neither pill has, so reached is told from both. All three are a shape
+  the neutral number doesn't have. That keeps P1-8's rule.
+- **The screen reader text** is `lineLabel.ts`'s, with one addition: a reached line is read as
+  "target reached", where a full one stays "complete".
+- **Contrast:** `success` as the reached number on the ground is 4.83:1 light and 10.29:1 dark
+  (measured from the tokens, `tests/contrast.test.ts`), so it clears 4.5 as text.
 
 ### 4.3 The domino
 
@@ -736,7 +746,7 @@ then the regenerated baselines. Each row gets its implementation contract in NEX
 | 1 | Two themes: the palette's shape, the generated CSS with its `data-theme` override and the pre-paint script, `color-scheme`, theme colours, every browser drawing reading its token through CSS, an interim dark set with light unchanged (amended, §3.1), the contrast tests in both themes, and the eight baselines | dark only |
 | 2 | Type: Nunito and the new roles | yes |
 | 3 | Controls and icons: the raised, primary, round, chip, card and switch variants, the press, 48px targets, `app/icons.tsx`, and the chrome's final colours with the new roles, in both themes (§3.1). *Amended in row 3's contract:* `round`, `card`, `switch`, the icons, `onSuccess` and `onProblem` arrive with their first consumers (rows 6–8) | yes |
-| 4 | The board and the pieces, together (§3.1 says why they can't be split): the tray, the wells and the line targets' states; the domino redrawn with its rim; the `Obstacle` component with its rock skin; their tokens at final values; the silhouette rule in place of P1-3's chain; the amended proportions; and the icon generator | yes |
+| 4 | The board and the pieces, together (§3.1 says why they can't be split): the tray, the wells and the line targets' four states (§4.2, reached added 2026-10-23); the domino redrawn with its rim; the `Obstacle` component with its rock skin; their tokens at final values; the silhouette rule in place of P1-3's chain; the amended proportions; and the icon generator | yes |
 | 5 | Cell states in both themes | yes |
 | 6 | The top of the screen: the top bar, the difficulty cards and the puzzle row | yes |
 | 7 | The bottom of the screen: the action bar, the advice slot, the legend line and Pick a piece's chooser in it | yes |
