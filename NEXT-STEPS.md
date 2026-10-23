@@ -6849,7 +6849,12 @@ and 1.26:1. The row also builds the fourth line-target state, `reached` (§4.2, 
    draws a well inside its own box, inset 1.5 units a side, so 3 units of tray show between
    wells, radius 10 units. The four corner wells round their outer corner to the tray's inner
    radius less the inset, so the gap stays even round the curve. The cell's box, and with it
-   hit-testing, the cell size and every layout number, doesn't change.
+   hit-testing, the cell size and every layout number, doesn't change. **The corner rounding
+   moves from the cell's box to its well** (codex): today the four corner cells round their own
+   box by `--board-corner` (`BoardSquare.tsx:56-64`), and at 18px a point 5px in from a corner
+   lies 18.38px from the arc's centre, outside the rounded box, so `art.spec.ts:131-150`'s
+   corner probes would resolve to no square. The cell's box stays square, transparent over the
+   tray, and those probes run unchanged.
 4. **The domino** (§4.3): `PIECE` becomes `{ rim: 2, radius: 12, pipRadius: 11, dividerInset:
    20, dividerWidth: 3, extrusion: 4, inset: 6 }`. The side, then the face, then the rim
    (`data-outline` stays its marker), 2 units round the whole silhouette in `tileEdge`. The
@@ -6857,7 +6862,9 @@ and 1.26:1. The row also builds the fourth line-target state, `reached` (§4.2, 
    `tileSide` lip above it for the inset look.
 5. **The obstacle** (§4.4): `Rock.tsx` becomes `Obstacle.tsx`, taking `skin`; `SKINS` has one,
    `rock`. The rock keeps today's outline points, extruded by the new 4 units, with its rim in
-   `rock`, 2 units, round joins. The polygons draw in rule 1's three tones.
+   `rock`, 2 units, round joins. The polygons draw in rule 1's three tones. **The silhouette
+   changes with the extrusion,** since the swept base moves, so P1-2's reference fit is
+   re-derived for it (the tests, below).
 6. **The four line states** (§4.2), from `lineState(sum, target, complete)`:
    - `over` when the sum passes the target, full or not;
    - `satisfied` when it matches and the line is full;
@@ -6905,7 +6912,10 @@ and 1.26:1. The row also builds the fourth line-target state, `reached` (§4.2, 
     scroll, the grid's roles, labels and one tab stop, `touch-action`, reduced motion, state
     never by colour alone. The layout suite runs unchanged; nothing here changes a cell's size.
     The pill sits inside the label's box, so the widest two-digit label must still fit
-    (`layout.spec.ts:211`).
+    (`layout.spec.ts:211`). That test doesn't prove it for the new shapes: `labelOverflow`
+    replaces the label's whole `textContent`, removing the pill, the bar and the tie, and an
+    outline takes no layout, so scroll sizes can't see it (codex). The rendered shapes have a
+    test of their own (the tests, below).
 14. **No generation change** (P7: not now, user 2026-10-23).
 
 **What's not in it.** The cell states' shapes and look (row 5); the legend line and its chooser
@@ -6941,15 +6951,91 @@ the puzzle generator (P7).
   domino's and the rock's exposed tones (the rim's stroke where one is drawn, else the face's
   and the side's fills, as computed) clear 3:1 against the wells' and the tray's computed
   colours; the rock's also against the tile face.
+- **The rim's drawing, new in `e2e/art.spec.ts`,** in each theme, at 38px and 53px. Contrast
+  alone can't hold rule 2: a dark rim in the tile face's own `#EFE5D5` clears 10.30, 11.21 and
+  12.53 on the wells and the tray, and a removed rim leaves every token pair unchanged (codex).
+  So the drawing is checked directly, every element read as the browser computes it:
+  - **present:** the light domino and the rock, in both themes, each have exactly one
+    `[data-outline]`, with display not `none`, visibility `visible`, and an **effective
+    opacity** of 1. That is the stroke colour's alpha × `stroke-opacity` × the `opacity` of the
+    element and every ancestor up to the piece. Its stroke width is 2 units in px, and its fill
+    is `none`;
+  - **closed and unbroken:** the rim is one closed shape (a `polygon`, a `rect`, or a `path`
+    with one subpath that ends in `Z`), and its computed `stroke-dasharray` is `none`;
+  - **round the whole silhouette:** points sampled along the side's and the face's outlines
+    (64 each, `getPointAtLength`) all fall in the rim's fill or stroke (`isPointInFill`,
+    `isPointInStroke`). The rim's box matches the union of the side's and the face's boxes to
+    0.5 units;
+  - **absent on the dark domino:** every `[data-outline]` on a dark domino has an effective
+    opacity of 0, or stroke width 0, or display `none`. That rejects an opaque rim in any
+    colour.
 - **The tray and wells, `e2e/boardChrome.spec.ts`:** the tray's outer radius 22px; each well
   inset 1.5 units with the tray showing between neighbours; the corner wells concentric with
   the tray; the tie in each of the four states, in that state's colour, on the sheet.
 - **`tests/palette.test.ts`:** the parity with the new tokens; the retired names
   (`checkerLight`, `checkerDark`, `boardFrame`, `pieceOutline`) gone from every source;
   `transparent` allowed for dark `tileEdge` only.
-- **`tests/rock.test.tsx`:** every check runs for every skin in `SKINS`.
+- **`tests/rock.test.tsx`:** every check runs for every skin in `SKINS`. **The reference fit
+  is re-derived for the new silhouette** (codex). `WITNESS` (`:55-66`) was found for today's
+  14-unit sweep, and its comment says a redrawn rock re-derives it. Codex measured the 4-unit
+  shape with the test's sampling: the old witness stands 0.1543 off it, a five-iteration
+  search finds 0.0847 and passes against it, and the regular 400-iteration search finds
+  0.0692. Kept as it is, it would stop guarding against a search that stops short. So:
+  - a new witness, found as row 8 found the first (`GRAPHICS-SPEC.md:1150-1160`): 3,000 random
+    starting rectangles, each refined by a pattern search, with the outline sampled twice as
+    finely. It's found by a scratch script, outside the suite. Its parameters and deviation go
+    in the As built notes, and the comment's numbers are updated;
+  - one witness per skin, `WITNESSES`, keyed by `SKINS`. A check asserts that every skin has
+    one, so a new skin can't reuse the rock's;
+  - kept: the 0.05 bar, `SAMPLING` (0.25 apart, 120 samples), the calibration assertion that
+    the search comes at least as close as the witness (`:130`), and the shapes the search
+    must find (`:134-174`).
+- **The cell states as drawn, in both themes, `e2e/cellStates.spec.ts`** (§4.5, codex). Today
+  it picks no colour scheme, so it runs in light only. Each of its four tests at 38px and 53px
+  runs in light and in dark (`emulateMedia({ colorScheme })` before the sheet loads): the
+  footprints and their distinction in greyscale, the focus over a rock and both dominoes,
+  the refused cross over them, and each drawing's size. Kept: every bar (`FOOTPRINT` 0.05,
+  `APART` 0.15, `MOVED` 32) and every target. The measure is the lightness change between
+  two screenshots (`:79-99`), so it reads the same in either theme. If a dark state misses a
+  bar, its drawing or tone changes, not the bar.
+- **The hint shares the accent's value, `e2e/colourRoles.spec.ts`** (codex). Both scanners
+  (`roleOf` at `:69` and `:246`) return the first role whose value matches, and `ROLES` lists
+  `accent` before `hint`. So once `hint` takes the accent's value, the diamond reads as
+  `accent`, and the positive case `{ fill: 'hint' }` (`:408`) fails. Treated by declaration,
+  not by dropping the case:
+  - `ALIASES = [['accent', 'hint']]`, with UI-SPEC §3.1 cited. A new assertion: the role
+    values are pairwise distinct except for declared aliases, so an accidental coincidence
+    (say `success` and `problem`) fails instead of merging silently;
+  - both scanners return every role a value matches, so the shared value reads as
+    `accent|hint`. A finding is allowed where any of its roles is allowed: on controls, on
+    the grid, or on the hinted square. That's the same set the two roles allowed separately,
+    and nowhere else;
+  - the positive case becomes `{ fill: 'accent|hint' }` on `[data-hinted] [data-diamond]`.
+    The check that every role appears on the sheet counts a finding toward each of its roles;
+  - colour can no longer tell the two tokens apart, so the proof that the diamond reads
+    `hint` is the sentinel, `themeTokens.spec.ts:56`: each token is given a colour of its own,
+    and the diamond must take `hint`'s. It stays, unchanged.
+- **The labels' shapes, as drawn, new in `e2e/labelBounds.spec.ts`** (rule 7 and rule 13,
+  codex). The layout suite stays unchanged. On the sheet at 38px, the floor, new specimens
+  show the widest label the game produces, `13` (`layout.spec.ts:126`), in each of the four
+  states, on a column label and a row label alike. The specimens are sized to what the sums
+  need: a reached 13 needs three cells of pips and an open fourth. Their pieces go in the As
+  built notes. For every such label:
+  - **fixed:** its box's size, and its offset from its line's first cell, equal the neutral
+    label's on the same axis, to 0.5px;
+  - **readable:** a `Range` over its number reads `13` and lies inside the label's box, with
+    no scroll overflow on the label or the pill;
+  - **inside:** each drawn shape stays inside the label's box, to 0.5px. The shapes are the
+    pill's border box, the ring's outline (the border box grown by `outline-width` plus
+    `outline-offset`, where `outline-style` isn't `none`), any `box-shadow` spread, and the
+    reached bar's box.
+
+  The sheet's targets are kept neutral outside the specimens that exist to show a state
+  (`Sheet.tsx:62-69`). The new specimens join that list, and every count of non-neutral
+  labels is scoped to its specimen.
 - **The component sheet** (`app/visual/Sheet.tsx`) gains a `target-reached` specimen (columns
-  `1,2`, rows `3,2`, a flat domino at the origin: column 2 reaches 2 with a cell open).
+  `1,2`, rows `3,2`, a flat domino at the origin: column 2 reaches 2 with a cell open), and the
+  two-digit label specimens above.
 - **Tests that hold today's values, and what each keeps:**
   - `tests/proportions.test.tsx:84-91`: the outline's weight bound and the 0.10–0.18 extrusion
     become the rim's 2 units and 0.03–0.06 (§4.3). Kept: every other bound.
@@ -6967,6 +7053,14 @@ the puzzle generator (P7).
     both tones, two of each.
   - `e2e/feedback.spec.ts:140-144`: the strike-through's checks become the pill's.
   - `tests/icons.test.ts`: unchanged; the regenerated icons must pass it.
+  - `tests/rock.test.tsx:55-66`: `WITNESS` becomes `WITNESSES`, re-derived (above). Kept: the
+    bar, the sampling, the calibration assertion.
+  - `e2e/cellStates.spec.ts`: each test runs in both themes. Kept: every bar.
+  - `e2e/colourRoles.spec.ts:28-110, :244-268, :301, :408`: declared aliases, scanners that
+    return every matching role, the diamond read as `accent|hint`. Kept: each role only where
+    it's allowed, every role on the sheet, the diamond's case.
+  - `e2e/art.spec.ts:129-136`: the comment's "rounded by 12px" becomes the square box (rule 3).
+    Kept: every probe, 5px inside each corner, unchanged.
 - **The layout suite** passes unchanged.
 - **Visual:** all eight baselines change, regenerated by CI from the marked commit.
 
@@ -6980,18 +7074,50 @@ the puzzle generator (P7).
 5. Reached drawn without its bar: the presentation unit test, and the page's channel check.
 6. The satisfied pill's number in `success`, not `onSuccess`: `colourRoles.spec.ts`'s pill.
 7. The tie painted in the pill's `onSuccess`: the sheet's tie check, in each state's colour.
-8. The dark `tileEdge` given a colour, so the dark domino has a rim: the silhouette check in
-   dark.
-9. The light rim removed: the silhouette check in light, and the rim's contrast pairs.
+8. The dark `tileEdge` given the dark tile face's `#EFE5D5`, opaque and high in contrast, so the
+   dark domino has a rim: the rim's absence on the dark domino. The silhouette's contrast check
+   passes this one (codex's counterexample), so it isn't the intended catch.
+9. The light rim's element removed, its token unchanged: the rim's presence in light. The token
+   pairs can't see a drawing removed.
 10. The rock's rim in `rockSide`: the silhouette check in dark.
-11. Dark `anchor` back at `#16295e`: the cell-state pairs in dark.
+11. Dark `anchor` back at `#16295e`: the dark footprint in `cellStates.spec.ts` ("anchor draws
+    too little to read") and the cell-state pairs in dark. That the footprint vanishes is
+    inferred from its 1.08 and 1.01 ratios on the dark wells; the probe confirms it.
 12. The extrusion back at 14: the proportions bound.
 13. The domino changed, the icons not regenerated: `tests/icons.test.ts`.
 14. Wells on the whole cell box, with no gap: the tray-and-wells check.
 15. The corner wells not concentric with the tray: the corner check.
+16. The search cut to five iterations per descent: the rock's calibration assertion, against the
+    new witness (codex measured 0.0847 for it, against 0.0692 from the regular search).
+17. The rock's entry removed from `WITNESSES`: the check that every skin has a witness.
+18. The light rim dashed (`stroke-dasharray: 4 4`): the rim's `stroke-dasharray` check.
+19. The light rim's path left open, its closing segment dropped: the closed-shape check.
+20. The light rim drawn round the face only, not the side: the enclosure check's samples.
+21. The hinted diamond filled from `accent`, not `hint`: the sentinel, `themeTokens.spec.ts:56`.
+22. `hint` given `success`'s value, an undeclared coincidence: the role values' distinctness.
+23. The over ring's `outline-offset` at 3px, outset: the label-bounds check's ring extent.
+24. The satisfied pill 120% of the label's width: the label-bounds check's pill extent.
+25. The corner rounding left on the cell's box at 18px, not moved to the well: `art.spec.ts`'s
+    hit probe 5px inside the corner.
 
 **The gate** before each commit, from cold. The row is three commits: the change, marked for a
 visual update; the baselines CI regenerates; the As built notes.
+
+**Corrections after review** (codex, of `f056a1c`: a hold for four corrections to the test
+plan, the design and the four states otherwise accepted). Each is made above:
+1. **The rock's reference fit** is re-derived for the new silhouette, with one witness per
+   skin. Probes 16 and 17.
+2. **The cell states as drawn** run in both themes. The hint's shared value with the accent
+   is declared in the role audit, and the diamond's token is still proved by its sentinel.
+   Probes 11 (retargeted), 21 and 22.
+3. **The rim's drawing** is checked for presence, closure, continuity, enclosure, and its
+   absence on the dark domino, besides its contrast. Probes 8 and 9 are retargeted; 18, 19
+   and 20 are new.
+4. **The labels' rendered shapes** get a bounds test of their own, two-digit, every state,
+   both axes, at 38px. Probes 23 and 24.
+
+And codex's non-blocking note: the corner rounding moves to the well, so the hit probes run
+unchanged (rule 3). Probe 25.
 
 ## Campaign (future, for the mobile release)
 
