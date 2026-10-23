@@ -199,6 +199,18 @@ What the table changes about the board's contrast model:
 - `CHECKER_RATIO` (1.2 today) is restated as about 1.09. The checker only helps the eye count
   across a row, and the gaps between wells (§4.1) now carry the grid.
 
+*Amended 2026-10-23, in row 4's contract (NEXT-STEPS).* Four clarifications of the table:
+- **The rock's three tones** (§4.4): the face and rim are `rock`; the side and the shaded facet
+  take `rockSide`'s value; the lit facet is decorative, inside the rim, at `#8E8075` light and
+  `#A1907F` dark.
+- **The dark domino has no rim:** dark `tileEdge` is `transparent`, the palette's one
+  non-colour value. The divider is its own token, `#8A6844` light and `#857158` dark.
+- **The tray's edge and inset shadow** (§4.1) are a new decorative token, `trayEdge`: `#C9B08C`
+  light, `#0D0A08` dark.
+- **Names:** `checkerLight` and `checkerDark` become `wellLight` and `wellDark`, `boardFrame`
+  becomes `boardTray`, and `pieceOutline` retires for `tileEdge`. `boardLabel` is today's
+  `lineNeutral`, the same role, and keeps that name.
+
 The remaining tokens (the cell states, the archive's marks, the scrim, the drag wash) are
 redefined by the rows that restyle them, each with its ratio rule in both themes.
 

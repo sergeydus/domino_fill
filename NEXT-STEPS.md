@@ -121,6 +121,7 @@ Evidence levels:
 | 2026-10-23 | **A line target that is reached shows it** (user, 2026-10-23): a line whose pips add up to its target, with cells still open, gets an effect of its own. Of three ways put to the user (a fourth state; reversing D10-g; the complete look without the screen reader's "complete"), the user chose **a fourth state, `reached`**. | D10-g stands: only a full line is `satisfied`. `UI-SPEC.md` §4.2 specifies `reached` (the number in `success`, with a bar under it; read as "target reached"), and `SPEC.md` amends D10-g's note. It is built with UI row 4, which redraws the line targets. |
 | 2026-10-23 | **PR #23, the `reached` line state (spec), merged** (user, 2026-10-23, after codex's acceptance of `94dbb3c`), at `2c0b41b`. CI on `master` (run 39980295258) passed both jobs. | Built with UI row 4. |
 | 2026-10-23 | **A line whose target is 0 shows `reached` from the start** (user, 2026-10-23), as a hint that it takes only blanks. Of two ways shown as mock-ups (show it from the start; wait for a first piece in the line), the user chose to show it. **And zero-target lines shouldn't be common, but generation stays as it is for now** (user). | `UI-SPEC.md` §4.2 says so. The generation question is P7, measured: 23.9% of published boards have at least one 0 line. |
+| 2026-10-23 | **PR #24, a 0 line shows `reached` from the start (spec), merged** (user, 2026-10-23, after codex's acceptance of `82e1b39`), at `9a8c9c0`. CI on `master` (run 39998760528) passed both jobs. | **Row 4, the board and the pieces, next** (user, 2026-10-23): Claude builds, codex reviews; its contract covers the zero-target cases and the transitions through placement, removal and Undo, with generation changes deferred (P7). |
 
 ## Principles
 
@@ -6769,6 +6770,228 @@ cases. Every test pressed the centre, or released elsewhere on purpose.
     - phone-360, `persistence.spec.ts` › "storage that refuses to be written does not break
       play", in `8ad3e04`'s gate: TIME_WAIT 3999, of which the tests' 3958, and the tests'
       established 72.
+
+### UI row 4, the board and the pieces: implementation contract
+
+**Why.** `UI-SPEC.md` row 4: the board and the pieces in the soft tactile style, together,
+because neither half can land alone (§3.1). The new dark wells under today's pieces would expose
+their black outline at 1.63 and 1.50:1, and the new rims on today's checker would stand at 1.52
+and 1.26:1. The row also builds the fourth line-target state, `reached` (§4.2, PRs #23 and #24).
+
+**How it works today** (read, unless marked):
+- **The board** (`ClientBoard.tsx:302-344`): a 2×2 grid shell of the corner, the column labels,
+  the row labels and a frame. The frame is `border-board-frame`, `--grid-border` (4px) wide, its
+  radius `--board-corner` (12px, `BOARD_CORNER_PX`) plus the border. Inside it, the `role="grid"`
+  holds square cells.
+- **A cell** (`BoardSquare.tsx:38-45`) is its whole box, painted `checkerLight` or `checkerDark`
+  by `(i + j) % 2`. The four corner cells round their outer corner by `--board-corner`.
+- **The pieces** (`Pieces/geometry.ts`, `DominoPieceOne.tsx`, `DominoPieceTwo.tsx`, `Rock.tsx`)
+  are SVGs in 100-unit cells, `PIECE = { outline: 9, radius: 14, pipRadius: 12, dividerInset: 20,
+  dividerWidth: 5, extrusion: 14, inset: 6 }`. Each draws its side, then its face, then a
+  `data-outline` stroke in `pieceOutline` (black) round the silhouette.
+- **The rock** is four polygons (`ROCK.silhouette`, `face`, `lit`, `shade`) in `rockSide`,
+  `rockFace`, `rockLit` and `rockShade`, all near-black, under the same black outline.
+- **The board's tokens** (`app/palette.ts:63-98`, and `PALETTE_DARK:229-270`): `checkerLight`,
+  `checkerDark`, `boardFrame`, `tileFace`, `tileSide`, the four rock tones, `pieceOutline`, `pip`,
+  `divider`, `lineNeutral` and the cell states. Dark holds today's light values for every board
+  and cell-state token (row 1), except `lineNeutral`.
+- **P1-3's chain** (`tests/contrast.test.ts:73-98`, `OWED`): the tile face clears 3:1 on both
+  checker tones, and every rock tone clears 3:1 on both tones and the tile face. `CHECKER_RATIO`
+  is 1.2 (`palette.ts:202`).
+- **A line's state** (`boardRules.ts:99-105`): `over` when the sum passes the target, `satisfied`
+  when it matches and the line is full (D10-g), else `neutral`. The session derives every
+  label's state from the board on each read (`PuzzleSession.ts:548-562`), so a placement, a
+  removal, an Undo and a Reset all reach the labels through the board.
+- **A label** (`lineLabel.ts`, `HorizontalNumbers.tsx`, `VerticalNumbers.tsx`): satisfied is
+  struck through in `success`, over is outlined 2px in `problem`, neutral is `lineNeutral`. Each
+  label carries a tie, a short tick in `currentColor` pointing at its line (P1-3,
+  `LABEL_TIE`). Screen readers hear "complete" or "over target".
+- **The icon generator** (`scripts/icon.ts:35-106`) copies the domino layer for layer from
+  `PIECE` and the light tokens, so a change to the domino changes all four app icons, which
+  `tests/icons.test.ts` holds byte for byte.
+- **The cell states** (`cellStates.tsx`): `hint`, `anchor`, `candidateEdge`, `cellFocus` each
+  clear 3:1 on both checker tones (`OWED`). The refused cross and the focus brackets clear 3:1
+  on every refusal surface through their colour or their halo, `REFUSAL_SURFACES`
+  (`contrast.test.ts:186-222`).
+
+**Four clarifications of UI-SPEC,** recorded in its §3.1 in this contract's commit:
+1. **The rock's tones.** §4.4 names three tones (face, lit facet, side), and §3.1's table gives
+   `rock` and "`rockSide`, and the facet tones". So the face and the rim are `rock`, the side
+   and the shaded facet are `rockSide`'s value, and the lit facet takes a decorative value of
+   its own, inside the rim: `#8E8075` light (1.40:1 on the face) and `#A1907F` dark (1.31:1).
+2. **The dark domino's missing rim.** The table leaves dark `tileEdge` blank. The dark set holds
+   `transparent` there, the palette's one non-colour value, so the rim element draws nothing.
+   The divider is its own token: `#8A6844` light, `#857158` dark.
+3. **The tray's edge and shadow.** §4.1 gives the tray "an inset shadow, a solid edge beneath"
+   with no colour. A new decorative token, `trayEdge`, draws both: `#C9B08C` light and
+   `#0D0A08` dark. The edge is 4px deep, as a box shadow, so it takes no layout. The shadow is
+   `trayEdge` at 35%, inset 2px down.
+4. **Token names.** The spec's names are adopted where the role changes: `checkerLight` and
+   `checkerDark` become `wellLight` and `wellDark`, `boardFrame` becomes `boardTray`, and
+   `pieceOutline` is retired for `tileEdge`. The spec's `boardLabel` is today's `lineNeutral`,
+   the same role, and keeps that name. `onSuccess` arrives, as row 3's amendment said it would,
+   with its first consumer: the satisfied pill.
+
+**The rules.**
+1. **The tokens at §3.1's final values, in both themes:** `boardTray`, `wellLight`, `wellDark`,
+   `lineNeutral` (`#5E4E44` / `#CDBFB1`), `tileFace`, `tileSide`, `tileEdge`, `divider`, the
+   rock's four, `pip`, and the new `trayEdge` and `onSuccess`. `CHECKER_RATIO` becomes 1.09.
+   Measured from the values, each matching the table to two decimals: the wells 1.09:1 apart,
+   the light rim 4.12, 3.77 and 3.25 on the wells and the tray, the dark face 10.30, 11.21 and
+   12.53, the dark side 4.43, 4.83 and 5.39, the rock's rim 4.35, 3.98, 3.43 and 5.11 light
+   and 3.19, 3.47, 3.88 and 3.23 dark.
+2. **The silhouette rule replaces P1-3's chain:** every tone a piece's rendered silhouette
+   exposes clears 3:1 against both wells and the tray; the rock's also clears the tile face.
+   Where a tone fails at the edge, a continuous rim encloses the whole silhouette: the light
+   domino's in `tileEdge`, the rock's in `rock`, both themes. The dark domino has none.
+3. **The tray and its wells** (§4.1): the frame becomes the tray, `boardTray`, its outer radius
+   22px (`--board-corner` becomes 18, plus the 4px border), with `trayEdge` beneath. Each cell
+   draws a well inside its own box, inset 1.5 units a side, so 3 units of tray show between
+   wells, radius 10 units. The four corner wells round their outer corner to the tray's inner
+   radius less the inset, so the gap stays even round the curve. The cell's box, and with it
+   hit-testing, the cell size and every layout number, doesn't change.
+4. **The domino** (§4.3): `PIECE` becomes `{ rim: 2, radius: 12, pipRadius: 11, dividerInset:
+   20, dividerWidth: 3, extrusion: 4, inset: 6 }`. The side, then the face, then the rim
+   (`data-outline` stays its marker), 2 units round the whole silhouette in `tileEdge`. The
+   divider is a 3-unit groove in `divider`. Each pip is `pip`, 22 across, with a 1-unit
+   `tileSide` lip above it for the inset look.
+5. **The obstacle** (§4.4): `Rock.tsx` becomes `Obstacle.tsx`, taking `skin`; `SKINS` has one,
+   `rock`. The rock keeps today's outline points, extruded by the new 4 units, with its rim in
+   `rock`, 2 units, round joins. The polygons draw in rule 1's three tones.
+6. **The four line states** (§4.2), from `lineState(sum, target, complete)`:
+   - `over` when the sum passes the target, full or not;
+   - `satisfied` when it matches and the line is full;
+   - **`reached` when it matches and the line has an open cell.** A line with target 0 is
+     therefore reached from the start, while any cell in it is open, and shows it: a hint
+     (user, 2026-10-23). A 0 line of rocks only is full, so satisfied;
+   - `neutral` below the target.
+7. **Each state's look,** inside the label's box, so no state moves a label:
+   - neutral: the number in `lineNeutral`;
+   - reached: the number in `success`, with a 2px `success` bar under it, `data-label-bar`;
+   - satisfied: a filled `success` pill with the number in `onSuccess`;
+   - over: a pill with a 2px `problem` ring, the number in `problem`. The ring is an
+     `outline`, as today, so it takes no layout.
+   - **The tie stays** (P1-3), in the state's colour: the label's box carries that colour and
+     the tie paints `currentColor`, while the pill's text sets `onSuccess` on itself. Without
+     that split, a satisfied tie would paint `onSuccess` on the ground.
+   - The strike-through retires, replaced by the pill.
+8. **Screen readers:** "target reached" for a reached line; "complete" and "over target" as
+   today (`labelDescription`).
+9. **Transitions.** A label's state is derived from the board on each read, so placing,
+   removing, Undo, Redo and Reset each move it in either direction with no state of its own.
+   The tests prove the paths, not a new mechanism.
+10. **The cell states hold on the new wells, in both themes** (§3.1's rollout). Measured on the
+    new wells, light keeps every value: the anchor 11.28 and 10.32, the focus 10.84 and 9.92,
+    the refused cross 6.78 and 6.21, and with the rock's new tones every refusal surface still
+    clears 3:1 by colour or halo, the closest the lit facet at 3.82. Dark needs new ones:
+    - `hint` becomes the accent's value in both themes, as §3.1's table says: 4.45 and 4.07
+      light, 5.91 and 6.43 dark;
+    - dark `anchor` and `candidateEdge` become `#8FB0FF` (6.01, 6.54 on the wells), from
+      `#16295e` (1.08, 1.01);
+    - dark `cellFocus` becomes `#8ED1EE` (7.65, 8.33), and its halo the dark ground,
+      `#16110E` (11.16 against the brackets);
+    - dark `refusedCross` becomes the dark `problem`, `#FF8F6B`, and its halo `#16110E`: on
+      every refusal surface the colour or the halo clears 3:1, the closest the rock's side at
+      3.13, and neither alone covers them all, as today.
+    - `candidateWash` and `dragWash` keep their values; neither carries a ratio rule today.
+    Row 5 restyles the states' shapes; this row only keeps them legible.
+11. **The proportions** (§4.3): the extrusion bound becomes 0.03–0.06 of the cell, and the
+    outline's checks become the rim's (2 units, round the silhouette, light only). Pip
+    diameter 0.18–0.30, pips 0.06 clear of the divider and the edge, and the divider's 0.55 span
+    stay.
+12. **The icon generator** draws the new domino: the light rim, the 4-unit side, the groove, the
+    pip and its lip, from `PIECE` and the light tokens. The four icons are regenerated.
+13. **The invariants hold** (§10): the 38px cell and the 8×8 board at 360px with no sideways
+    scroll, the grid's roles, labels and one tab stop, `touch-action`, reduced motion, state
+    never by colour alone. The layout suite runs unchanged; nothing here changes a cell's size.
+    The pill sits inside the label's box, so the widest two-digit label must still fit
+    (`layout.spec.ts:211`).
+14. **No generation change** (P7: not now, user 2026-10-23).
+
+**What's not in it.** The cell states' shapes and look (row 5); the legend line and its chooser
+(row 7); any obstacle skin but the rock, and choosing one by date (L2); the label's size or font;
+the puzzle generator (P7).
+
+**The tests.**
+- **Line states, `tests/lineFeedback.test.ts`:**
+  - the rule's table, with `reached`;
+  - zero targets: a fresh line with target 0 and an open cell is reached; a 0 line of rocks
+    only is satisfied; a 0 line filled with blanks becomes satisfied; a pip in a 0 line makes it
+    over;
+  - **transitions, on a real session:** `placeToward` takes a line neutral → reached →
+    satisfied, and reached → over; `removePiece` takes satisfied → reached and over → reached;
+    `undo` after each step restores exactly the previous states, both axes; `reset` restores
+    the fresh board's;
+  - the presentation of each state, and "target reached".
+- **The real page, `e2e/feedback.spec.ts`:**
+  - on the pinned day (`LATE_IN_A_MONTH`, 2026-09-29), easy board 1's second row has target 0.
+    It is reached at load: `data-line-state="reached"`, its bar drawn, "target reached" read;
+  - each state's channels as the browser draws them: the bar, the filled pill, the ring, and
+    none of the three on neutral;
+  - **transitions through the pointer and the Undo button:** a placement that brings a line
+    to its target with cells open shows reached, and Undo returns it to its previous state;
+  - "every label starts neutral" (`:72`) accepts the four states.
+- **Contrast, `tests/contrast.test.ts`,** both themes:
+  - the silhouette rule's pairs (rule 1's numbers) replace `OWED`'s chain;
+  - the cell states on both wells, with rule 10's values; the refusal and bracket tests read
+    the new surfaces (`REFUSAL_SURFACES`: the wells, the tile face, the rock's tones);
+  - `onSuccess` on `success`, 4.5:1; `success` and `lineNeutral` as numbers on the ground;
+  - pins updated, the old values in a comment, as row 3 did.
+- **Silhouettes, new in `e2e/art.spec.ts`:** in each theme, on the component sheet, each
+  domino's and the rock's exposed tones (the rim's stroke where one is drawn, else the face's
+  and the side's fills, as computed) clear 3:1 against the wells' and the tray's computed
+  colours; the rock's also against the tile face.
+- **The tray and wells, `e2e/boardChrome.spec.ts`:** the tray's outer radius 22px; each well
+  inset 1.5 units with the tray showing between neighbours; the corner wells concentric with
+  the tray; the tie in each of the four states, in that state's colour, on the sheet.
+- **`tests/palette.test.ts`:** the parity with the new tokens; the retired names
+  (`checkerLight`, `checkerDark`, `boardFrame`, `pieceOutline`) gone from every source;
+  `transparent` allowed for dark `tileEdge` only.
+- **`tests/rock.test.tsx`:** every check runs for every skin in `SKINS`.
+- **The component sheet** (`app/visual/Sheet.tsx`) gains a `target-reached` specimen (columns
+  `1,2`, rows `3,2`, a flat domino at the origin: column 2 reaches 2 with a cell open).
+- **Tests that hold today's values, and what each keeps:**
+  - `tests/proportions.test.tsx:84-91`: the outline's weight bound and the 0.10–0.18 extrusion
+    become the rim's 2 units and 0.03–0.06 (§4.3). Kept: every other bound.
+  - `tests/iconParity.test.ts`: its pixel classes (ground, face, side, black) become ground,
+    face, side, rim and pip, the divider now in the rim's colour. Kept: the icon is the board's
+    domino, measured in its own pixels.
+  - `tests/pieceGeometry.test.tsx`, `tests/geometryRule.test.ts`, `e2e/artGeometry.ts`: the
+    outline's name and weight become the rim's. Kept: what each measures.
+  - `e2e/themeTokens.spec.ts`: the sentinel list takes the new names and `trayEdge`. Kept: every
+    drawing follows its token.
+  - `e2e/theme.spec.ts`, `e2e/colourRoles.spec.ts`: `checkerLight` → `wellLight`; the
+    satisfied pill is a new surface, `success`, allowing `onSuccess` only; reached's role is
+    `success`. Kept: each text exactly its role's token, at 4.5:1.
+  - `e2e/sheet.spec.ts:98`: the two tones are read from the wells, not the cell's box. Kept:
+    both tones, two of each.
+  - `e2e/feedback.spec.ts:140-144`: the strike-through's checks become the pill's.
+  - `tests/icons.test.ts`: unchanged; the regenerated icons must pass it.
+- **The layout suite** passes unchanged.
+- **Visual:** all eight baselines change, regenerated by CI from the marked commit.
+
+**Mutation probes** (planned), each to fail at the assertion named:
+1. `lineState` without `reached`, a matched sum with gaps back to neutral: the rule's table, and
+   the pinned day's 0 row at load.
+2. `reached` on a full line too: the rule's table, satisfied only when full.
+3. A 0 line that waits for a piece before it's reached: the zero-target unit case, and the
+   pinned day at load.
+4. `rowComplete` counting a rock as open: the 0 line of rocks, satisfied.
+5. Reached drawn without its bar: the presentation unit test, and the page's channel check.
+6. The satisfied pill's number in `success`, not `onSuccess`: `colourRoles.spec.ts`'s pill.
+7. The tie painted in the pill's `onSuccess`: the sheet's tie check, in each state's colour.
+8. The dark `tileEdge` given a colour, so the dark domino has a rim: the silhouette check in
+   dark.
+9. The light rim removed: the silhouette check in light, and the rim's contrast pairs.
+10. The rock's rim in `rockSide`: the silhouette check in dark.
+11. Dark `anchor` back at `#16295e`: the cell-state pairs in dark.
+12. The extrusion back at 14: the proportions bound.
+13. The domino changed, the icons not regenerated: `tests/icons.test.ts`.
+14. Wells on the whole cell box, with no gap: the tray-and-wells check.
+15. The corner wells not concentric with the tray: the corner check.
+
+**The gate** before each commit, from cold. The row is three commits: the change, marked for a
+visual update; the baselines CI regenerates; the As built notes.
 
 ## Campaign (future, for the mobile release)
 
