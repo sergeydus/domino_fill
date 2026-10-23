@@ -6521,16 +6521,33 @@ machines' text:
   and span it (their widths and gaps add up to the row's, within 1px).
 - **Where the labels must break:** at 360 wide with 16px insets each side (312px of room,
   between the row's 244.91 and 342.73 here), the three still share one row.
-- **Where even broken labels can't fit:** at 390 wide with 72px insets each side (230px), no
-  sideways scroll, the row on two lines, every option at least 48×48, no word broken (each
-  option's `scrollWidth` within its `clientWidth`), and Easy, Medium, Hard in reading order.
+- **Where even broken labels can't fit:** at 390 wide with 72px insets each side (230px). The
+  checks run in this order, so each probe below fails at its own:
+  1. each option's text is contained, its `scrollWidth` within its `clientWidth`;
+  2. **every word is whole** (codex): containment alone passes a label split mid-word, as
+     `word-break: break-all` does. A DOM `Range` over each word's characters gives client
+     rects that must all share one top, within 1px. The label as a whole may take two lines;
+  3. no sideways scroll;
+  4. the row on two lines, every option at least 48×48, and Easy, Medium, Hard in reading
+     order.
 - **`layout.spec.ts:322`** unchanged, and slice 3a's rule 14 at every viewport and size.
 
 **Its probes,** each to fail at the assertion named:
-16. The row back to `nowrap`: the 72px case's sideways scroll.
+16. The row back to `nowrap`: the 72px case's sideways scroll (check 3). Each option stays
+    at its `min-content`, so its text is contained and its words whole.
 17. Plain `flex-wrap`: the 16px case's one row.
 18. A `min-content` basis that doesn't grow: the ordinary phones' span.
-19. A basis of 0 that may shrink below `min-content`: the 72px case's whole words.
+19. A basis of 0 that may shrink below `min-content`: the 72px case's containment (check 1),
+    a word overflowing its option. (Corrected after codex's review: this probe was named for
+    whole words, which containment doesn't prove.)
+20. `word-break: break-all` on the options: the 72px case's whole words (check 2). The text
+    stays contained, and the row, its `min-content` now a letter wide, stays on one line, so
+    only check 2 can fail first (codex).
+
+**Codex's review of `d4b07cf`:** the design accepted, held for one correction, made above.
+"No word broken" was checked by containment, which a label split mid-word passes. Each word
+must now lie on one line, read through a `Range`, and probe 20 breaks words to fail exactly
+there. Probe 19 moved to containment, which is what it breaks.
 
 **Then,** if they pass: the cell sizes measured again at the ten viewports, each option's
 line count at 360 and 390 reported, the As built notes, and the gate. The fix is its own commit,
