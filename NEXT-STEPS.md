@@ -7301,6 +7301,55 @@ The probes:
 - **Before `4f0f964`:** the same counts, and no socket errors.
 - **CI:** run 40019927591 on `78bd886` passed both jobs. Its baselines are `4f0f964`.
 
+*Correction after review (2026-10-24): the over ring at 41px.* Codex held `296b38f` for one
+fit. At a 41px cell the row label is 28px wide and its font 21px, so `13` is 25.2px, and its
+pill and ring took 29.2px: the ring reached **0.609px** past each side of the label, beyond the
+half-pixel the tests allow (codex, measured; `labelBounds` loaded 38px only, where it was 0.4).
+The gutter and the font are rounded to whole pixels apart, so a padding that bottoms out at 0
+can't absorb it.
+- **The fix is the font, not the slot or the ring.** `labelFontFor` (`PuzzleSession.ts`) is half
+  the cell, as before, or the largest whole size that leaves two figures and both sides of the
+  ring inside the gutter, whichever is smaller: `floor((gutter - 2 * RING) / TWO_FIGURES_EM)`.
+  `TWO_FIGURES_EM = 1.2` sits beside `RING` in `lineLabel.ts`. That's a pixel less at 38, 39,
+  41 to 45, 47 and 51, and no change from 52 up. The gutter, the 2px ring and the half-pixel
+  tolerance are unchanged; `gutterFor` is the gutter's rule, now shared by the getter.
+- **Measured after,** on the fixtures' over row label at every cell from 38 to 60, and 75 and
+  106: the ring ends at the label's box or inside it at each, never past it by a thousandth of
+  a pixel, and `13` measures 1.2000 to 1.2007em. At 38 the font is 18px, and the pill's
+  padding 0.19px a side.
+- **`lineLabel.ts`'s note** said two figures are 1em and leave 1.5px a side at the floor; it
+  now says 1.2em and 0.19px (codex's cleanup).
+- **Tests changed:**
+  - `tests/geometry.test.ts`: every cell from 38 to 200 fits two figures and the ring, and the
+    font gives up a pixel only where a pixel more would not fit; the capped cells are listed.
+  - `e2e/labelBounds.spec.ts`: its five tests run at 38 and 41, and two figures, as drawn, are
+    at most `TWO_FIGURES_EM` of the font, or each figure on a whole pixel (below).
+  - `e2e/typography.spec.ts`: the game page's label font is half the cell unless the cap
+    applies, read against the row label's gutter.
+- **Pixels:** the label font is smaller at those sizes, so the change is marked for a visual
+  update. It's `2912b52`; the baselines CI regenerated from it (run 40123168131) are
+  `ae1f5f4`. Four differ, `phone`, `sheet-38` and their dark twins; the other four and
+  `environment.json` are byte for byte the same.
+- **CI failed on `2912b52`,** at the width check alone, on desktop and phone-360 at 38: on
+  Linux, Chromium set `13` at 18px on **22px**, where Windows sets 21.61. It puts each figure on
+  a whole pixel (inferred from that measurement: 10.8 rounds to 11). The ring checks passed
+  there at 38 and 41. `8f93ee5` lets the width check take either. The cap holds either way: a
+  whole gutter that holds two exact figures holds two rounded ones, since they're at most the
+  next whole pixel above. A unit check of the rounded case was written and then replaced by
+  that reason, in a comment: no mutation of the cap could fail it alone, and it can't.
+- **Probes: 6 of 6 caught at the assertion named,** each restored byte for byte (by hash):
+  1. No cap: "row over: the ring, 2px out, leaves the label" at 41, and the sweep at 38.
+  2. `TWO_FIGURES_EM` at 1.1: "two figures are wider than TWO_FIGURES_EM", at 38 and 41; rerun
+     against `8f93ee5`'s bound, with the same result.
+  3. The cap leaving room for one side of the ring: the ring at 41, and the sweep at 38.
+  4. The cap a pixel smaller than it needs: "cell 38: a pixel more".
+  5. The cap at the 38px floor only: the ring at 41 fails while 38 passes, and the sweep at 39.
+     This is the case the 41px tests are for.
+  6. The board's font half its cell, the fixtures' capped: "column neutral: font", at 38 and 41.
+- **The gates,** each from cold, every step's exit code 0, and no socket errors: unit 1,878 (0
+  bytes of stderr), browser 848 passed and 1 skipped, before each of `2912b52`, `8f93ee5` and
+  `ae1f5f4`. Browser tests rose from 838 by labelBounds' five at 41, in both projects.
+
 ## Campaign (future, for the mobile release)
 
 A campaign is a long numbered path of levels, like the mobile puzzle games with thousands of

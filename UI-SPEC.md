@@ -308,6 +308,14 @@ planning the row:
   tutorial's bare `<strong>`s become 800. The card titles' `font-bold` gives way to `display`,
   at 900.
 
+*Amended 2026-10-24, in row 4's As built notes (NEXT-STEPS).* **`boardLabel` is
+`LABEL_FONT_FRACTION` of the cell, or less where the widest label would not fit with its ring.**
+The gutter and the font are rounded to whole pixels apart, so at some cells two figures (1.2em
+of Nunito 900) and the over state's 2px ring took more than the gutter: 0.6px past the label's
+box at 41px (codex, measured). The font is now the smaller of half the cell and the largest
+whole size that fits them (`labelFontFor`), which is a pixel less at 38, 39, 41 to 45, 47 and 51,
+and no change from 52 up.
+
 ### 3.3 Shape, depth and space
 
 - **Radii:** 8 for chips, 16 for buttons and cards, 22 for the board tray, 24 for a sheet's top
