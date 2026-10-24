@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { VISUAL_URL } from './server'
 import { waitForRest } from './rest'
+import { TWO_FIGURES_EM } from '../app/dominoFill/lineLabel'
 
 /**
  * The line targets' shapes stay inside their labels (UI row 4, UI-SPEC §4.2; codex).
@@ -8,8 +9,14 @@ import { waitForRest } from './rest'
  * Each state draws inside the label's box, so no state moves a label: the pill, its ring and
  * the reached bar. `e2e/layout.spec.ts`'s widest-label check can't see that: it replaces the
  * label's whole text, taking the pill and the bar with it, and an outline takes no layout, so
- * no scroll size shows it. So this measures the shapes as drawn, at the 38px floor, with the
- * widest label the game produces, `13`, in every state on both axes.
+ * no scroll size shows it. So this measures the shapes as drawn, with the widest label the
+ * game produces, `13`, in every state on both axes, at the 38px floor and at 41px.
+ *
+ * 41 because the gutter and the font are rounded apart: there the gutter is 28 and half the
+ * cell 21, and the ring reached 0.6px past the label (codex, measured), where at 38 it was
+ * 0.4. The font is now capped so it can't (`labelFontFor`), and `tests/geometry.test.ts`
+ * checks that arithmetic at every cell; this checks it as drawn, and the figures' width the
+ * arithmetic assumes.
  *
  * No board holds that -- a cell holds at most 2 pips -- so the sheet's label fixtures render
  * the production strips (`ColumnLabels`, `RowLabels`) with targets and states given, in a
@@ -67,6 +74,7 @@ const read = (page: Page) => page.evaluate(() => {
             ring, shadow,
             bar: bar && box(bar.getBoundingClientRect()),
             text: range.toString(),
+            fontSize: parseFloat(ps.fontSize),
             textBox: box(range.getBoundingClientRect()),
             ink,
             // The pill's height is not here: a line box of 1em sits in it, but the font's content
@@ -92,86 +100,91 @@ const inside = (inner: Box, outer: Box, grow = 0) =>
     inner.left - grow >= outer.left - SLACK && inner.top - grow >= outer.top - SLACK
     && inner.right + grow <= outer.right + SLACK && inner.bottom + grow <= outer.bottom + SLACK
 
-const at38 = async (page: Page) => {
+const at = async (page: Page, cell: number) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/visual?cell=38')
+    await page.goto(`/visual?cell=${cell}`)
     await expect(page.locator('main[data-sheet]')).toBeVisible()
     await waitForRest(page, 'main')
     return read(page)
 }
 
-test('at the 38px floor, the fixtures show 13 in every state, on both axes', async ({ page }) => {
-    const { fixtures } = await at38(page)
-    for (const axis of ['column', 'row']) {
-        const strip = fixtures.filter(l => l.axis === axis)
-        expect(strip.map(l => l.state), axis).toEqual(STATES)
-        expect(strip.map(l => l.text), axis).toEqual(STATES.map(() => '13'))
-        expect(strip.map(l => l.pillState), axis).toEqual(['none', 'none', 'filled', 'ringed'])
-        expect(strip.map(l => l.bar !== null), axis).toEqual([false, true, false, false])
-    }
-})
-
-test('every state\'s label is the neutral one\'s box, in the same place in its slot', async ({ page }) => {
-    // No state moves a label: its size, and where it sits in its slot along the strip.
-    const { fixtures } = await at38(page)
-    for (const axis of ['column', 'row']) {
-        const strip = fixtures.filter(l => l.axis === axis)
-        const cell = axis === 'column' ? strip[0].box.right - strip[0].box.left : strip[0].box.bottom - strip[0].box.top
-        const slot = (l: Label) => {
-            const along = axis === 'column' ? l.box.left - l.strip.left : l.box.top - l.strip.top
-            const across = axis === 'column' ? l.box.top - l.strip.top : l.box.left - l.strip.left
-            return [along - l.index * cell, across, l.box.right - l.box.left, l.box.bottom - l.box.top]
+for (const cell of [38, 41]) test.describe(`at ${cell}px`, () => {
+    test('the fixtures show 13 in every state, on both axes', async ({ page }) => {
+        const { fixtures } = await at(page, cell)
+        for (const axis of ['column', 'row']) {
+            const strip = fixtures.filter(l => l.axis === axis)
+            expect(strip.map(l => l.state), axis).toEqual(STATES)
+            expect(strip.map(l => l.text), axis).toEqual(STATES.map(() => '13'))
+            expect(strip.map(l => l.pillState), axis).toEqual(['none', 'none', 'filled', 'ringed'])
+            expect(strip.map(l => l.bar !== null), axis).toEqual([false, true, false, false])
         }
-        const neutral = slot(strip[0])
-        for (const l of strip) {
-            slot(l).forEach((v, k) => expect(Math.abs(v - neutral[k]), `${axis} ${l.state}: [offset, offset, width, height][${k}]`).toBeLessThanOrEqual(SLACK))
+    })
+
+    test('every state\'s label is the neutral one\'s box, in the same place in its slot', async ({ page }) => {
+        // No state moves a label: its size, and where it sits in its slot along the strip.
+        const { fixtures } = await at(page, cell)
+        for (const axis of ['column', 'row']) {
+            const strip = fixtures.filter(l => l.axis === axis)
+            const cell = axis === 'column' ? strip[0].box.right - strip[0].box.left : strip[0].box.bottom - strip[0].box.top
+            const slot = (l: Label) => {
+                const along = axis === 'column' ? l.box.left - l.strip.left : l.box.top - l.strip.top
+                const across = axis === 'column' ? l.box.top - l.strip.top : l.box.left - l.strip.left
+                return [along - l.index * cell, across, l.box.right - l.box.left, l.box.bottom - l.box.top]
+            }
+            const neutral = slot(strip[0])
+            for (const l of strip) {
+                slot(l).forEach((v, k) => expect(Math.abs(v - neutral[k]), `${axis} ${l.state}: [offset, offset, width, height][${k}]`).toBeLessThanOrEqual(SLACK))
+            }
         }
-    }
-})
+    })
 
-test('every state reads its number inside the label, its ink on the pill, with nothing overflowing', async ({ page }) => {
-    const { fixtures } = await at38(page)
-    for (const l of fixtures) {
-        expect(l.text, `${l.axis} ${l.state}`).toBe('13')
-        expect(inside(l.textBox, l.box), `${l.axis} ${l.state}: the number leaves the label`).toBe(true)
-        // On the pill, where it is read: a filled pill's `onSuccess` is white off it.
-        expect(inside(l.ink, l.pill), `${l.axis} ${l.state}: the number's ink leaves the pill`).toBe(true)
-        expect(l.overflow, `${l.axis} ${l.state}: [label x, label y, pill x] overflow`).toEqual([0, 0, 0])
-    }
-})
-
-test('the pill, its ring and the bar are drawn inside the label\'s box', async ({ page }) => {
-    const { fixtures } = await at38(page)
-    for (const l of fixtures) {
-        const name = `${l.axis} ${l.state}`
-        expect(inside(l.pill, l.box), `${name}: the pill leaves the label`).toBe(true)
-        expect(inside(l.pill, l.box, l.ring), `${name}: the ring, ${l.ring}px out, leaves the label`).toBe(true)
-        expect(inside(l.pill, l.box, l.shadow), `${name}: a shadow leaves the label`).toBe(true)
-        if (l.bar !== null) expect(inside(l.bar, l.box), `${name}: the bar leaves the label`).toBe(true)
-    }
-    // The ring is measured where there is one: the positive case, so this isn't vacuous.
-    expect(fixtures.filter(l => l.state === 'over').map(l => l.ring)).toEqual([2, 2])
-})
-
-test('the fixtures are a board\'s labels: the same font, padding and box, axis by axis', async ({ page }) => {
-    /*
-     * The tie between the fixtures and what a board draws: a real board's labels at the same
-     * cell (the `target-reached` specimen's), read the same way. A fixture whose strip were
-     * styled apart from the board's -- the font set on the session's wrapper only, say --
-     * would measure something the board never draws.
-     */
-    const { fixtures, board } = await at38(page)
-    for (const axis of ['column', 'row']) {
-        const ours = fixtures.filter(l => l.axis === axis)
-        const theirs = board.filter(l => l.axis === axis)
-        expect(theirs.length, `the board has ${axis} labels`).toBeGreaterThan(0)
-        for (const l of ours) {
-            expect(l.style.font, `${axis} ${l.state}: font`).toBe(theirs[0].style.font)
-            expect(l.style.pillHeight, `${axis} ${l.state}: pill height`).toBe(theirs[0].style.pillHeight)
-            expect(l.style.size, `${axis} ${l.state}: box`).toEqual(theirs[0].style.size)
+    test('every state reads its number inside the label, its ink on the pill, with nothing overflowing', async ({ page }) => {
+        const { fixtures } = await at(page, cell)
+        for (const l of fixtures) {
+            expect(l.text, `${l.axis} ${l.state}`).toBe('13')
+            // The width the font's cap assumes, against the figures as drawn.
+            expect(l.textBox.right - l.textBox.left, `${l.axis} ${l.state}: two figures are wider than TWO_FIGURES_EM`)
+                .toBeLessThanOrEqual(TWO_FIGURES_EM * l.fontSize + 0.05)
+            expect(inside(l.textBox, l.box), `${l.axis} ${l.state}: the number leaves the label`).toBe(true)
+            // On the pill, where it is read: a filled pill's `onSuccess` is white off it.
+            expect(inside(l.ink, l.pill), `${l.axis} ${l.state}: the number's ink leaves the pill`).toBe(true)
+            expect(l.overflow, `${l.axis} ${l.state}: [label x, label y, pill x] overflow`).toEqual([0, 0, 0])
         }
-        // The padding depends on the number's width only through the box, so it is the same
-        // for a one-digit board label as for `13`.
-        expect(ours.map(l => l.style.padding), `${axis}: padding`).toEqual(ours.map(() => theirs[0].style.padding))
-    }
+    })
+
+    test('the pill, its ring and the bar are drawn inside the label\'s box', async ({ page }) => {
+        const { fixtures } = await at(page, cell)
+        for (const l of fixtures) {
+            const name = `${l.axis} ${l.state}`
+            expect(inside(l.pill, l.box), `${name}: the pill leaves the label`).toBe(true)
+            expect(inside(l.pill, l.box, l.ring), `${name}: the ring, ${l.ring}px out, leaves the label`).toBe(true)
+            expect(inside(l.pill, l.box, l.shadow), `${name}: a shadow leaves the label`).toBe(true)
+            if (l.bar !== null) expect(inside(l.bar, l.box), `${name}: the bar leaves the label`).toBe(true)
+        }
+        // The ring is measured where there is one: the positive case, so this isn't vacuous.
+        expect(fixtures.filter(l => l.state === 'over').map(l => l.ring)).toEqual([2, 2])
+    })
+
+    test('the fixtures are a board\'s labels: the same font, padding and box, axis by axis', async ({ page }) => {
+        /*
+         * The tie between the fixtures and what a board draws: a real board's labels at the same
+         * cell (the `target-reached` specimen's), read the same way. A fixture whose strip were
+         * styled apart from the board's -- the font set on the session's wrapper only, say --
+         * would measure something the board never draws.
+         */
+        const { fixtures, board } = await at(page, cell)
+        for (const axis of ['column', 'row']) {
+            const ours = fixtures.filter(l => l.axis === axis)
+            const theirs = board.filter(l => l.axis === axis)
+            expect(theirs.length, `the board has ${axis} labels`).toBeGreaterThan(0)
+            for (const l of ours) {
+                expect(l.style.font, `${axis} ${l.state}: font`).toBe(theirs[0].style.font)
+                expect(l.style.pillHeight, `${axis} ${l.state}: pill height`).toBe(theirs[0].style.pillHeight)
+                expect(l.style.size, `${axis} ${l.state}: box`).toEqual(theirs[0].style.size)
+            }
+            // The padding depends on the number's width only through the box, so it is the same
+            // for a one-digit board label as for `13`.
+            expect(ours.map(l => l.style.padding), `${axis}: padding`).toEqual(ours.map(() => theirs[0].style.padding))
+        }
+    })
 })

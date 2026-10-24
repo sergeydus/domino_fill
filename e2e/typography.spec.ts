@@ -3,6 +3,7 @@ import { openBoard } from './openBoard'
 import { LATE_IN_A_MONTH, pinDay } from './calendar'
 import { VISUAL_URL } from './server'
 import { TYPE, WEIGHTS, type Role, type Weight } from '../app/typography'
+import { RING, TWO_FIGURES_EM } from '../app/dominoFill/lineLabel'
 
 /**
  * Every text surface is one of the roles, in one family (graphics spec P2-1, row 13; in Nunito,
@@ -234,12 +235,14 @@ test('the game page: labels, controls, the clock, and the advice strip with its 
     for (const label of await page.locator('[data-col-label], [data-row-label]').all()) {
         expect(await roleIn(label)).toBe('boardLabel')
     }
-    // And the label's size is the cell's fraction, not a constant that happens to match.
-    const [cell, font] = await page.locator('[data-board-shell]').evaluate(shell => [
+    // And the label's size is the cell's fraction, not a constant that happens to match: half
+    // the cell, unless two figures and the over ring would not then fit the gutter (UI row 4).
+    const [cell, gutter, font] = await page.locator('[data-board-shell]').evaluate(shell => [
         shell.querySelector('[data-cell]')!.getBoundingClientRect().width,
+        shell.querySelector('[data-row-label]')!.getBoundingClientRect().width,
         parseFloat(getComputedStyle(shell).getPropertyValue('--label-font')),
     ])
-    expect(font).toBe(Math.round(cell * 0.5))
+    expect(font).toBe(Math.min(Math.round(cell * 0.5), Math.floor((gutter - 2 * RING) / TWO_FIGURES_EM)))
     for (const label of await page.locator('[data-col-label], [data-row-label]').all()) expect(await weightOf(label)).toBe(900)
     await expectControls(page.locator('body'))
     expect(await roleIn(page.locator('[data-advice]'))).toBe('body')

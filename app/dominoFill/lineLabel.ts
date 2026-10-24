@@ -23,7 +23,7 @@ import { cssVar } from "../palette"
  *
  * The ring is an `outline`, not a border: outlines are drawn outside the box and take no
  * layout space, which matters because the gutter is 0.7 of a cell and a two-digit label
- * takes 1em of it, 0.5 of a cell (P0-3). A border would reopen the overflow that row 11
+ * takes 1.2em of it, 0.6 of a cell (P0-3). A border would reopen the overflow that row 11
  * closed. Since row 4 it rings the pill, not the label, and `PILL` sizes the pill so the ring
  * ends inside the label's box: it used to be drawn 2px outside it.
  */
@@ -56,19 +56,27 @@ export const LABEL_COLORS: Record<LineState, string> = {
 /**
  * The pill every label's number sits in, drawn or not (UI-SPEC §4.2, UI row 4), so no state
  * moves the number. Sized against the label's box, which is the gutter one way and the cell
- * the other: a row label at the 38px floor is 26px wide, and `13` is 19px of it (1em; tabular
- * figures are 0.5em each, measured in Nunito 900).
+ * the other: a row label at the 38px floor is 26px wide, and `13` is 21.6px of it
+ * (`TWO_FIGURES_EM` of the 18px font there).
  *
  * - **Height** 1.15em, but never more than the box less the ring either side.
  * - **Width** at least the height, so a single digit sits in a circle; for two, the number and
  *   its padding.
  * - **Padding** a quarter em a side where the box has room, and only what's left of the box
  *   after two figures and the ring where it hasn't: a percentage padding is a fraction of the
- *   label's width, and `2ch` is two figures. 1.5px a side in that 26px row label.
+ *   label's width, and `2ch` is two figures. 0.19px a side in that 26px row label (measured).
  * - **The ring** is an outline at no offset, `RING` px outside the pill, so it ends at the
- *   label's box at the tightest and inside it everywhere else.
+ *   label's box at the tightest and inside it everywhere else. That needs the font to leave
+ *   room for it, which `labelFontFor` does (`PuzzleSession.ts`).
  */
 export const RING = 2
+
+/**
+ * Two figures' width in em, the widest label: tabular figures are 0.6em each in Nunito 900
+ * (measured in the app: `13` is 22.81px at 19px and 25.20px at 21px, so 1.2005em). The label
+ * font is capped by it; `e2e/labelBounds.spec.ts` measures it against the font as drawn.
+ */
+export const TWO_FIGURES_EM = 1.2
 
 export const PILL = {
     height: `min(1.15em, 100% - ${2 * RING}px)`,

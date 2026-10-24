@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { RootStore } from '@/app/stores/RootStore'
 import {
     PuzzleSession, GRID_BORDER_PX, GUTTER_FRACTION, LABEL_FONT_FRACTION, MIN_CELL_PX,
+    gutterFor, labelFontFor,
 } from '@/app/stores/PuzzleSession'
+import { RING, TWO_FIGURES_EM } from '@/app/dominoFill/lineLabel'
 import { definitionFrom } from '@/app/stores/PuzzleDefinition'
 
 /**
@@ -157,6 +159,22 @@ describe('derived label geometry', () => {
         const s = make(8, { width: 360 - 16, height: 640 })
 
         expect(s.labelFontSize * 1.3).toBeLessThanOrEqual(s.gutterSize)
+    })
+
+    it('leaves two figures and the over ring inside the gutter at every cell, and only then gives up a pixel', () => {
+        // Codex, measured: at 41px the gutter is 28 and half the cell 21, so `13` and its ring
+        // took 29.2px. Both are rounded, so every cell is checked, not a sample.
+        const capped: number[] = []
+        for (let cell = MIN_CELL_PX; cell <= 200; cell++) {
+            const font = labelFontFor(cell)
+            expect(font * TWO_FIGURES_EM + 2 * RING, `cell ${cell}: two figures and the ring`).toBeLessThanOrEqual(gutterFor(cell))
+            const half = Math.round(cell * LABEL_FONT_FRACTION)
+            if (font === half) continue
+            capped.push(cell)
+            // The largest that fits: a pixel more would not.
+            expect((font + 1) * TWO_FIGURES_EM + 2 * RING, `cell ${cell}: a pixel more`).toBeGreaterThan(gutterFor(cell))
+        }
+        expect(capped).toEqual([38, 39, 41, 42, 43, 44, 45, 47, 51])
     })
 
     it('keeps the font fraction below what the gutter can hold', () => {

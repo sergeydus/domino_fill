@@ -12,6 +12,7 @@ import {
     placementForHeld, placementFrom, type Piece, type Placement,
 } from "./placement"
 import { checkPosition, hintFor, type Advice } from "./advice"
+import { RING, TWO_FIGURES_EM } from "../dominoFill/lineLabel"
 import type { ControlMode } from "./ControlStore"
 import { CASUAL_VIEW, type BoardView } from "../challenge/coordinator"
 
@@ -41,6 +42,23 @@ export const GUTTER_FRACTION = 0.7
  * fraction has to stay below `GUTTER_FRACTION / 1.3` = 0.538.
  */
 export const LABEL_FONT_FRACTION = 0.5
+
+/** The label gutter for a cell, in CSS px. Integer, so it cannot smear the alignment. */
+export const gutterFor = (cell: number) => Math.floor(cell * GUTTER_FRACTION)
+
+/**
+ * The label font for a cell, in CSS px: `LABEL_FONT_FRACTION` of it, but never more than
+ * leaves the widest label, two figures, and the over state's ring inside the gutter (UI row 4).
+ *
+ * Both are rounded to whole pixels, so their ratio wanders: at 41px the gutter is 28 and
+ * half the cell 21, two figures 25.2px of it, and the ring reached 0.6px past the label's
+ * box (codex, measured). So the font is the smaller of the two, which costs a pixel at
+ * some sizes under 52 (38, 39, 41 to 45, 47 and 51) and none from there up.
+ */
+export const labelFontFor = (cell: number) => Math.min(
+    Math.round(cell * LABEL_FONT_FRACTION),
+    Math.floor((gutterFor(cell) - 2 * RING) / TWO_FIGURES_EM),
+)
 
 /**
  * Cell floor, in CSS px. Declared in `cellFloor.ts`, which is not a client module, so a
@@ -603,14 +621,14 @@ export class PuzzleSession {
         return Math.max(1, Math.min(byWidth, Math.max(byHeight, MIN_CELL_PX)))
     }
 
-    /** Width of the label gutter, in CSS px. Integer, so it cannot smear the alignment. */
+    /** Width of the label gutter, in CSS px: `gutterFor`. */
     get gutterSize() {
-        return Math.floor(this.squareSize * GUTTER_FRACTION)
+        return gutterFor(this.squareSize)
     }
 
-    /** Label font size in CSS px, derived from the cell rather than a fixed `text-6xl`. */
+    /** Label font size in CSS px, derived from the cell rather than a fixed `text-6xl`: `labelFontFor`. */
     get labelFontSize() {
-        return Math.round(this.squareSize * LABEL_FONT_FRACTION)
+        return labelFontFor(this.squareSize)
     }
 
     /**
