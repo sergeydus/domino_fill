@@ -168,6 +168,9 @@ describe('derived label geometry', () => {
         for (let cell = MIN_CELL_PX; cell <= 200; cell++) {
             const font = labelFontFor(cell)
             expect(font * TWO_FIGURES_EM + 2 * RING, `cell ${cell}: two figures and the ring`).toBeLessThanOrEqual(gutterFor(cell))
+            // Where the platform sets each figure on a whole pixel, as Chromium on Linux does (CI:
+            // 22px at 18), this still holds: two rounded figures are at most the next whole pixel
+            // above two exact ones, and the gutter is whole, so if one fits the other does.
             const half = Math.round(cell * LABEL_FONT_FRACTION)
             if (font === half) continue
             capped.push(cell)

@@ -142,9 +142,11 @@ for (const cell of [38, 41]) test.describe(`at ${cell}px`, () => {
         const { fixtures } = await at(page, cell)
         for (const l of fixtures) {
             expect(l.text, `${l.axis} ${l.state}`).toBe('13')
-            // The width the font's cap assumes, against the figures as drawn.
+            // The width the font's cap assumes, against the figures as drawn: `TWO_FIGURES_EM`, or
+            // each figure on a whole pixel where the platform sets them so (Linux: 22px at 18).
+            const figure = TWO_FIGURES_EM / 2 * l.fontSize
             expect(l.textBox.right - l.textBox.left, `${l.axis} ${l.state}: two figures are wider than TWO_FIGURES_EM`)
-                .toBeLessThanOrEqual(TWO_FIGURES_EM * l.fontSize + 0.05)
+                .toBeLessThanOrEqual(Math.max(2 * figure, 2 * Math.round(figure)) + 0.05)
             expect(inside(l.textBox, l.box), `${l.axis} ${l.state}: the number leaves the label`).toBe(true)
             // On the pill, where it is read: a filled pill's `onSuccess` is white off it.
             expect(inside(l.ink, l.pill), `${l.axis} ${l.state}: the number's ink leaves the pill`).toBe(true)
